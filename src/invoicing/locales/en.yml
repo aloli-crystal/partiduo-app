@@ -2,3 +2,25 @@ en:
   invoicing:
     module:
       name: "Invoicing"
+    permissions:
+      invoice:
+        read: "View quotes and invoices"
+        write: "Create and edit drafts"
+        issue: "Issue invoices"
+      credit_note:
+        issue: "Issue credit notes"
+      payment:
+        record: "Record payments"
+      reminder:
+        send: "Send reminders"
+      template:
+        manage: "Manage document templates"
+      export:
+        read: "Send to the accountant"
+    menu:
+      inv_documents: "Quotes and invoices"
+      inv_new_invoice: "New invoice"
+      inv_payments: "Payments"
+      inv_reminders: "Reminders"
+      inv_export: "Send to the accountant"
+      inv_templates: "Document templates"

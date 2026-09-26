@@ -2,3 +2,12 @@ fr:
   cards:
     module:
       name: "Fiches"
+    permissions:
+      card:
+        read: "Consulter les fiches"
+        write: "Créer et modifier les fiches"
+      category:
+        manage: "Gérer les catégories de fiches"
+    menu:
+      cards_list: "Tiers et articles"
+      cards_categories: "Catégories de fiches"

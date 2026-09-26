@@ -5,6 +5,10 @@
 *.dwarf
 /.shards/
 /lib/
-/bin/
+/bin/*
+!/bin/partiduo-provision
+# Configuration et inventaire réels du parc (voir deploy/*.example).
+/deploy/fleet.conf
+/deploy/inventory
 /tmp/
 /media/

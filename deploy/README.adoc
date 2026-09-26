@@ -1,0 +1,155 @@
+= Déploiement et exploitation du parc Partiduo
+:toc: left
+:toc-title: Table des matières
+:icons: font
+
+Partiduo sert *une instance par dossier* : une application, une base
+PostgreSQL, une URL `<dossier>.<domaine>` (ADR-001 D2). Ce répertoire outille
+la création d'une instance et l'exploitation du parc, sur le modèle de
+`prod-quimeo/capistrano-quimeo` (une version déployée, N plateformes, un vhost
+par plateforme, `init` / `backup` / `drop` / `clone`), transposé à un binaire
+Crystal et à systemd.
+
+[cols="1,3",options="header"]
+|===
+|Fichier |Rôle
+
+|`../bin/partiduo-provision`
+|Crée une instance : base, migrations, société et jeu de données initial,
+fichiers de service. N'installe rien sur le système.
+
+|`templates/instance.env.tmpl`
+|Environnement de l'instance : base, modules, domaine, clé secrète, port.
+
+|`templates/nginx-vhost.conf.tmpl`
+|Vhost nginx : redirection HTTPS, certificat générique du parc, mandataire
+vers le port local de l'instance.
+
+|`templates/partiduo-instance.service.tmpl`
+|Unité systemd `partiduo-<dossier>.service`, durcie.
+
+|`bin/partiduo-fleet`
+|Exploitation du parc : construction, envoi, provisionnement, montée de
+version progressive, retour arrière, état, sauvegardes, retrait.
+
+|`fleet.conf.example`, `inventory.example`
+|Configuration du parc et inventaire des instances (à copier en `fleet.conf`
+et `inventory`, ignorés par git).
+|===
+
+== Créer une instance : `partiduo-provision`
+
+[source,sh]
+----
+bin/partiduo-provision --name "Exemple SARL" --regime fr --siren 732829320 \
+  --modules accounting,invoicing --with skel --admin-email admin@exemple.fr \
+  exemple-sarl
+----
+
+Étapes (ADR-001 D2 § Provisionnement) :
+
+. `createdb --owner=<rôle> --encoding=UTF8 partiduo_<dossier>` (`--owner`,
+  `--database`, `--skip-createdb`) ;
+. `migrate` sur cette base, avec `PARTIDUO_MODULES` = modules + extensions ;
+. commande Marten `provision` : société (`Settings`, ligne unique) puis jeu de
+  données initial des pièces actives, selon le régime (`--regime fr|be`), par
+  `Partiduo::Api::Core.provision` — une seule transaction ;
+. génération, dans `--output-dir` (défaut `./tmp/instances/<dossier>/`), de
+  `<dossier>.env` (mode 600, clé secrète aléatoire), `<dossier>.nginx.conf`,
+  `partiduo-<dossier>.service` et `INSTALL.txt`, la liste des commandes
+  d'installation — *non exécutées*.
+
+`--dry-run` affiche les étapes sans rien exécuter. La ligne de commande Marten
+utilisée est `--manage`, sinon `$PARTIDUO_MANAGE`, sinon `bin/partiduo-manage`
+à côté du script (archive de version), sinon `crystal run manage.cr --`
+(développement). En production, c'est le binaire `partiduo-ui-manage` de la
+distribution (interface + cœur + extensions), renommé `partiduo-manage` dans
+l'archive : il connaît les migrations *et* les extensions.
+
+Le port HTTP local est le premier libre à partir de 8101 parmi les instances
+déjà générées dans le répertoire de sortie (`--port` pour le fixer).
+
+=== Développement
+
+Base locale (préfixe `partiduo_`) et fichiers générés dans `./tmp/instances/` :
+
+[source,sh]
+----
+bin/partiduo-provision --name "Démo" --regime be demo
+# puis, dans partiduo-ui-bulma :
+DATABASE_URL='postgres:///partiduo_demo?host=/tmp' crystal run src/server.cr
+# http://demo.partiduo.localhost:8000/
+----
+
+== Exploiter le parc : `partiduo-fleet`
+
+Par défaut, *chaque commande affiche son plan* (commandes locales, et
+distantes préfixées du serveur) sans rien exécuter ; `--execute` exécute.
+
+[source,sh]
+----
+cp deploy/fleet.conf.example deploy/fleet.conf       # domaine, chemins, comptes
+cp deploy/inventory.example deploy/inventory         # « <dossier> <serveur> »
+
+deploy/bin/partiduo-fleet build 0.2.0                # archive de la distribution
+deploy/bin/partiduo-fleet upload 0.2.0               # sur chaque serveur ; current -> 0.2.0
+deploy/bin/partiduo-fleet provision deploy@srv1 exemple-sarl --name="Exemple SARL" --regime=fr
+deploy/bin/partiduo-fleet upgrade 0.2.0 --canary 3   # trois premières instances
+deploy/bin/partiduo-fleet upgrade 0.2.0 --all        # le reste
+deploy/bin/partiduo-fleet status
+----
+
+=== Arborescence sur un serveur
+
+[source]
+----
+/opt/partiduo/
+├── releases/<version>/      # bin/partiduo-server, bin/partiduo-manage,
+│                            # bin/partiduo-provision, assets/, deploy/templates/
+├── current -> releases/<v>  # version des nouvelles instances
+└── instances/<dossier>/
+    ├── release -> ../../releases/<v>           # version de CETTE instance
+    ├── release.previous -> ../../releases/<v-1>
+    └── media/                                  # pièces jointes
+/etc/partiduo/<dossier>.env                     # root:partiduo, 640
+/etc/systemd/system/partiduo-<dossier>.service
+/etc/nginx/sites-available/partiduo-<dossier>.conf
+/var/backups/partiduo/<dossier>/*.dump          # pg_dump -Fc
+----
+
+=== La mise à jour est une opération de parc
+
+ADR-001 : « passer 300 dossiers en version N+1 suppose un outillage de
+déploiement et une stratégie de migration progressive ». La stratégie retenue :
+
+* *un seul binaire* pour tout le parc (ADR-003 D1) ; les extensions sont
+  compilées dedans, activées par instance (`PARTIDUO_MODULES`, puis écran
+  d'administration) ;
+* *chaque instance pointe sur sa version* (`instances/<dossier>/release`) :
+  un parc temporairement hétérogène est explicite, visible par `status` ;
+* `upgrade` exige une sélection (`--canary N`, `--only a,b`, `--all`), vérifie
+  toute la sélection avant de commencer, puis traite les instances *une par
+  une* : sauvegarde `pre-<version>-<date>.dump`, arrêt, `migrate` avec la
+  nouvelle version, bascule du lien (l'ancien devient `release.previous`),
+  démarrage, contrôle de santé HTTP ;
+* *au premier échec*, l'instance est remise dans son état d'avant (lien et
+  base restaurée depuis sa sauvegarde) et la vague s'arrête : les instances
+  suivantes n'ont pas bougé ;
+* `rollback <dossier>` rebascule le lien ; la base n'est restaurée que par
+  `restore <dossier> <fichier>`, explicitement ;
+* `cleanup` supprime les versions qu'aucune instance n'utilise, en gardant les
+  `KEEP_RELEASES` plus récentes.
+
+=== Prérequis d'un serveur
+
+* PostgreSQL 18, joint *par socket Unix* (`PG_SOCKET`) ; un rôle `partiduo`
+  avec `CREATEDB` (`provision` le crée au besoin), authentification `peer` ;
+* un compte système `partiduo` ; l'utilisateur ssh de déploiement peut
+  `sudo` ;
+* nginx, un certificat générique `*.<domaine>` dans
+  `/etc/letsencrypt/live/<domaine>/` ;
+* `curl` pour le contrôle de santé.
+
+Rien de cet outillage n'a été exécuté contre un serveur réel au lot 0 : les
+specs (`spec/deploy/scripts_spec.cr`) vérifient les plans et la génération
+des fichiers.

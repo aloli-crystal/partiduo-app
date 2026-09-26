@@ -1,0 +1,333 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# partiduo-provision — crée une instance Partiduo vierge (ADR-001 D2) :
+#
+#   1. createdb --owner=<rôle> --encoding=UTF8 <base>
+#   2. migrations Marten sur cette base
+#   3. société (Settings) et jeu de données initial selon le régime
+#      (commande `provision`, par Partiduo::Api::Core.provision)
+#   4. génération, depuis deploy/templates/, du fichier d'environnement, du
+#      vhost nginx et de l'unité systemd de l'instance
+#
+# Rien n'est installé sur le système : les fichiers générés et les commandes
+# d'installation sont écrits dans <sortie>/<dossier>/ (INSTALL.txt). Leur
+# installation sur un serveur est le travail de deploy/bin/partiduo-fleet.
+#
+# Voir `partiduo-provision --help` et deploy/README.adoc.
+set -eu
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+TEMPLATES="${PARTIDUO_TEMPLATES:-$ROOT/deploy/templates}"
+
+usage() {
+  cat <<'EOF'
+Usage : partiduo-provision [options] <dossier>
+
+Crée l'instance <dossier> (minuscules, chiffres, tirets), servie en
+<dossier>.<domaine>, avec sa base PostgreSQL.
+
+Société :
+  --name TEXTE            raison sociale (obligatoire)
+  --regime fr|be          régime fiscal (obligatoire) : plan comptable, taux
+  --country CC            pays ISO 3166-1 (défaut : selon le régime)
+  --locale fr|en|nl       langue par défaut (défaut : fr)
+  --vat NUMÉRO            numéro de TVA intracommunautaire
+  --siren NUMÉRO          SIREN (régime fr)
+  --legal-form TEXTE      forme juridique
+  --capital MONTANT       capital social (point décimal)
+  --rcs TEXTE             immatriculation (RCS, RPM)
+  --street, --street-number, --postcode, --city, --phone, --email TEXTE
+  --auth-methods LISTE    méthodes autorisées (défaut : password,passkey)
+  --auth-level N          niveau d'authentification minimum, 1 à 3 (défaut : 1)
+  --session MINUTES       durée de session (défaut : 480)
+  --admin-email ADRESSE   administrateur à inviter
+
+Modules et extensions :
+  --modules LISTE         modules activés (défaut : accounting,invoicing)
+  --with LISTE            extensions activées (einvoicing,sepa…)
+
+Base et service :
+  --domain DOMAINE        domaine du parc (défaut : $PARTIDUO_DOMAIN ou partiduo.localhost)
+  --owner RÔLE            propriétaire de la base (défaut : l'utilisateur courant)
+  --database NOM          nom de la base (défaut : partiduo_<dossier>)
+  --pg-socket RÉP         répertoire du socket PostgreSQL (défaut : /tmp)
+  --skip-createdb         la base existe déjà (vide)
+  --port N                port HTTP local de l'instance (défaut : premier libre dès 8101)
+  --install-root RÉP      racine d'installation sur le serveur (défaut : /opt/partiduo)
+  --etc-dir RÉP           répertoire des fichiers d'environnement (défaut : /etc/partiduo)
+  --system-user NOM       compte système du service (défaut : partiduo)
+  --output-dir RÉP        où écrire les fichiers générés (défaut : ./tmp/instances)
+  --manage COMMANDE       ligne de commande Marten de la distribution
+                          (défaut : $PARTIDUO_MANAGE, sinon bin/partiduo-manage,
+                          sinon « crystal run manage.cr -- »)
+
+  --dry-run               affiche les étapes sans rien exécuter ni écrire
+  -h, --help              cette aide
+EOF
+}
+
+die() {
+  echo "partiduo-provision : $*" >&2
+  exit 1
+}
+
+# Affiche une commande (citée) puis l'exécute, sauf en --dry-run.
+run() {
+  printf '+'
+  for arg in "$@"; do printf ' %s' "$(quote "$arg")"; done
+  printf '\n'
+  [ "$DRY_RUN" = 1 ] || "$@"
+}
+
+# Citation shell d'un argument, pour l'affichage et INSTALL.txt.
+quote() {
+  case "$1" in
+    '' | *[!A-Za-z0-9_./:=,@%+-]*) printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+# Remplace les {{CLÉ}} d'un gabarit par les variables d'environnement
+# TPL_CLÉ ; échoue si une clé reste sans valeur.
+render() {
+  template="$1"
+  output="$2"
+  [ -f "$template" ] || die "gabarit introuvable : $template"
+  if [ "$DRY_RUN" = 1 ]; then
+    echo "+ gabarit $(basename "$template") -> $output"
+    return 0
+  fi
+  awk '
+    {
+      line = $0
+      while (match(line, /\{\{[A-Z_]+\}\}/)) {
+        key = "TPL_" substr(line, RSTART + 2, RLENGTH - 4)
+        if (!(key in ENVIRON)) { print "clé sans valeur : " key > "/dev/stderr"; exit 2 }
+        printf "%s%s", substr(line, 1, RSTART - 1), ENVIRON[key]
+        line = substr(line, RSTART + RLENGTH)
+      }
+      print line
+    }
+  ' "$template" >"$output" || die "rendu impossible : $template"
+  echo "+ gabarit $(basename "$template") -> $output"
+}
+
+secret_key() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 32
+  else
+    od -An -N32 -tx1 /dev/urandom | tr -d ' \n'
+  fi
+}
+
+# Premier port libre à partir de 8101, d'après les instances déjà générées.
+next_port() {
+  max=8100
+  for env in "$OUTPUT_DIR"/*/*.env; do
+    [ -f "$env" ] || continue
+    port=$(sed -n 's/^PORT=//p' "$env" | head -n 1)
+    case "$port" in '' | *[!0-9]*) continue ;; esac
+    [ "$port" -gt "$max" ] && max=$port
+  done
+  echo $((max + 1))
+}
+
+# --- Options -----------------------------------------------------------------
+
+DRY_RUN=0
+SKIP_CREATEDB=0
+DOSSIER=""
+MODULES="accounting,invoicing"
+EXTENSIONS=""
+DOMAIN="${PARTIDUO_DOMAIN:-partiduo.localhost}"
+OWNER="${USER:-$(id -un)}"
+DATABASE=""
+PG_SOCKET="/tmp"
+PORT=""
+INSTALL_ROOT="/opt/partiduo"
+ETC_DIR="/etc/partiduo"
+SYSTEM_USER="partiduo"
+OUTPUT_DIR="./tmp/instances"
+MANAGE="${PARTIDUO_MANAGE:-}"
+LOCALE=""
+PROVISION_ARGS=""
+
+# Ajoute « --option=valeur » aux arguments de la commande `provision`, un par
+# ligne (les valeurs peuvent contenir des espaces, pas de saut de ligne).
+add_provision_arg() {
+  case "$2" in *'
+'*) die "valeur sur plusieurs lignes refusée pour $1" ;; esac
+  PROVISION_ARGS="$PROVISION_ARGS
+$1=$2"
+}
+
+need_value() {
+  [ $# -ge 2 ] || die "option $1 : valeur manquante"
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h | --help) usage; exit 0 ;;
+    --dry-run) DRY_RUN=1 ;;
+    --skip-createdb) SKIP_CREATEDB=1 ;;
+    --*=*)
+      option="${1%%=*}"
+      value="${1#*=}"
+      shift
+      set -- "$option" "$value" "$@"
+      continue
+      ;;
+    --name | --regime | --country | --vat | --siren | --legal-form | --capital | --rcs | --street | \
+      --street-number | --postcode | --city | --phone | --email | --auth-methods | --auth-level | \
+      --session | --admin-email)
+      need_value "$@"
+      add_provision_arg "$1" "$2"
+      shift
+      ;;
+    --locale) need_value "$@"; LOCALE="$2"; add_provision_arg "$1" "$2"; shift ;;
+    --modules) need_value "$@"; MODULES="$2"; shift ;;
+    --with) need_value "$@"; EXTENSIONS="$2"; shift ;;
+    --domain) need_value "$@"; DOMAIN="$2"; shift ;;
+    --owner) need_value "$@"; OWNER="$2"; shift ;;
+    --database) need_value "$@"; DATABASE="$2"; shift ;;
+    --pg-socket) need_value "$@"; PG_SOCKET="$2"; shift ;;
+    --port) need_value "$@"; PORT="$2"; shift ;;
+    --install-root) need_value "$@"; INSTALL_ROOT="$2"; shift ;;
+    --etc-dir) need_value "$@"; ETC_DIR="$2"; shift ;;
+    --system-user) need_value "$@"; SYSTEM_USER="$2"; shift ;;
+    --output-dir) need_value "$@"; OUTPUT_DIR="$2"; shift ;;
+    --manage) need_value "$@"; MANAGE="$2"; shift ;;
+    -*) die "option inconnue : $1 (voir --help)" ;;
+    *)
+      [ -z "$DOSSIER" ] || die "un seul dossier à la fois ($DOSSIER, $1)"
+      DOSSIER="$1"
+      ;;
+  esac
+  shift
+done
+
+[ -n "$DOSSIER" ] || { usage >&2; exit 1; }
+
+# --- Contrôles -----------------------------------------------------------------
+
+printf '%s' "$DOSSIER" | grep -Eq '^[a-z][a-z0-9-]{0,39}$' ||
+  die "nom de dossier invalide : « $DOSSIER » (minuscule en tête, puis minuscules, chiffres, tirets ; 40 caractères au plus)"
+case "$DOSSIER" in *-) die "nom de dossier invalide : « $DOSSIER » (tiret final)" ;; esac
+
+printf '%s' "$DOMAIN" | grep -Eq '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$' ||
+  die "domaine invalide : « $DOMAIN »"
+
+[ -n "$DATABASE" ] || DATABASE="partiduo_$(printf '%s' "$DOSSIER" | tr '-' '_')"
+printf '%s' "$DATABASE" | grep -Eq '^[a-z_][a-z0-9_]{0,62}$' || die "nom de base invalide : « $DATABASE »"
+printf '%s' "$OWNER" | grep -Eq '^[A-Za-z_][A-Za-z0-9_]*$' || die "rôle PostgreSQL invalide : « $OWNER »"
+
+for code in $(printf '%s' "$MODULES,$EXTENSIONS" | tr ',' ' '); do
+  printf '%s' "$code" | grep -Eq '^[a-z][a-z0-9_]*$' || die "code de module ou d'extension invalide : « $code »"
+done
+
+if [ -z "$PORT" ]; then PORT=$(next_port); fi
+case "$PORT" in '' | *[!0-9]*) die "port invalide : « $PORT »" ;; esac
+[ "$PORT" -ge 1024 ] && [ "$PORT" -le 65535 ] || die "port hors limites : $PORT"
+
+if [ -z "$MANAGE" ]; then
+  if [ -x "$ROOT/bin/partiduo-manage" ]; then
+    MANAGE="$ROOT/bin/partiduo-manage"
+  else
+    MANAGE="crystal run $ROOT/manage.cr --"
+  fi
+fi
+
+HOST="$DOSSIER.$DOMAIN"
+DATABASE_URL="postgres:///$DATABASE?host=$PG_SOCKET"
+ACTIVE="$MODULES"
+[ -z "$EXTENSIONS" ] || ACTIVE="${ACTIVE:+$ACTIVE,}$EXTENSIONS"
+[ -n "$ACTIVE" ] || ACTIVE="none"
+INSTANCE_DIR="$OUTPUT_DIR/$DOSSIER"
+
+echo "== Instance $DOSSIER : https://$HOST/ (base $DATABASE, modules $ACTIVE, port $PORT)"
+
+# --- 1. Base -------------------------------------------------------------------
+
+if [ "$SKIP_CREATEDB" = 1 ]; then
+  echo "== 1. Base : $DATABASE existante (--skip-createdb)"
+else
+  echo "== 1. Base"
+  run createdb --owner="$OWNER" --encoding=UTF8 "$DATABASE"
+fi
+
+# --- 2. Migrations -------------------------------------------------------------
+
+echo "== 2. Migrations"
+export DATABASE_URL
+export PARTIDUO_MODULES="$ACTIVE"
+export PARTIDUO_DOMAIN="$DOMAIN"
+# shellcheck disable=SC2086 # $MANAGE est une ligne de commande
+run $MANAGE migrate
+
+# --- 3. Société et jeu de données initial --------------------------------------
+
+echo "== 3. Société et jeu de données initial"
+set -- --domain="$HOST" --modules="$MODULES"
+[ -z "$EXTENSIONS" ] || set -- "$@" --with="$EXTENSIONS"
+OLD_IFS=$IFS
+IFS='
+'
+for arg in $PROVISION_ARGS; do
+  [ -n "$arg" ] && set -- "$@" "$arg"
+done
+IFS=$OLD_IFS
+# shellcheck disable=SC2086
+run $MANAGE provision "$@"
+
+# --- 4. Fichiers de service ----------------------------------------------------
+
+echo "== 4. Fichiers de service ($INSTANCE_DIR)"
+if [ "$DRY_RUN" = 1 ]; then
+  TPL_SECRET_KEY="(généré)"
+else
+  mkdir -p "$INSTANCE_DIR"
+  TPL_SECRET_KEY=$(secret_key)
+fi
+
+TPL_DOSSIER="$DOSSIER"
+TPL_HOST="$HOST"
+TPL_DOMAIN="$DOMAIN"
+TPL_PORT="$PORT"
+TPL_DATABASE_URL="$DATABASE_URL"
+TPL_MODULES="$ACTIVE"
+TPL_LOCALE="${LOCALE:-fr}"
+TPL_INSTALL_ROOT="$INSTALL_ROOT"
+TPL_ETC_DIR="$ETC_DIR"
+TPL_ENV_FILE="$ETC_DIR/$DOSSIER.env"
+TPL_SYSTEM_USER="$SYSTEM_USER"
+export TPL_SECRET_KEY TPL_DOSSIER TPL_HOST TPL_DOMAIN TPL_PORT TPL_DATABASE_URL TPL_MODULES TPL_LOCALE \
+  TPL_INSTALL_ROOT TPL_ETC_DIR TPL_ENV_FILE TPL_SYSTEM_USER
+
+OLD_UMASK=$(umask)
+umask 077
+render "$TEMPLATES/instance.env.tmpl" "$INSTANCE_DIR/$DOSSIER.env"
+umask "$OLD_UMASK"
+render "$TEMPLATES/nginx-vhost.conf.tmpl" "$INSTANCE_DIR/$DOSSIER.nginx.conf"
+render "$TEMPLATES/partiduo-instance.service.tmpl" "$INSTANCE_DIR/partiduo-$DOSSIER.service"
+
+INSTALL="$INSTANCE_DIR/INSTALL.txt"
+if [ "$DRY_RUN" = 0 ]; then
+  cat >"$INSTALL" <<EOF
+# Installation de l'instance $DOSSIER ($HOST) — à exécuter sur le serveur,
+# en root, depuis ce répertoire. partiduo-provision ne l'a PAS fait.
+install -d -o root -g $SYSTEM_USER -m 750 $ETC_DIR
+install -o root -g $SYSTEM_USER -m 640 $DOSSIER.env $ETC_DIR/$DOSSIER.env
+install -d -o $SYSTEM_USER -g $SYSTEM_USER $INSTALL_ROOT/instances/$DOSSIER/media
+ln -sfn $INSTALL_ROOT/current $INSTALL_ROOT/instances/$DOSSIER/release
+install -m 644 partiduo-$DOSSIER.service /etc/systemd/system/partiduo-$DOSSIER.service
+install -m 644 $DOSSIER.nginx.conf /etc/nginx/sites-available/partiduo-$DOSSIER.conf
+ln -sfn /etc/nginx/sites-available/partiduo-$DOSSIER.conf /etc/nginx/sites-enabled/partiduo-$DOSSIER.conf
+systemctl daemon-reload
+systemctl enable --now partiduo-$DOSSIER.service
+nginx -t && systemctl reload nginx
+EOF
+fi
+echo "+ instructions d'installation -> $INSTALL"
+
+echo "== Instance $DOSSIER provisionnée$([ "$DRY_RUN" = 1 ] && echo ' (simulation)')."

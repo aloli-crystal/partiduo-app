@@ -2,3 +2,9 @@ fr:
   modules:
     module:
       name: "Modules"
+    errors:
+      activation:
+        socle: "%{module} fait partie du socle : il est toujours actif."
+        missing_dependency: "%{module} requiert %{dependency}, qui n'est pas actif."
+        required_by: "%{dependent} requiert %{module} : désactivez d'abord %{dependent}."
+        incompatible: "%{module} est incompatible avec cette instance : %{detail}"

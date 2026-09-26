@@ -2,6 +2,148 @@ en:
   core:
     module:
       name: "Core"
+    permissions:
+      settings:
+        manage: "Manage company settings"
+      users:
+        manage: "Manage users and profiles"
+      modules:
+        manage: "Enable and disable modules"
+    menu:
+      dashboard: "Dashboard"
+      billing: "Invoicing"
+      entry: "Entry"
+      consult: "Inquiry"
+      reference: "Master data"
+      reports: "Reports"
+      vat: "VAT"
+      analytic: "Analytic accounting"
+      settings: "Settings"
+      extension: "Extensions"
+      core_company: "Company"
+      core_fiscal_years: "Fiscal years and periods"
+      core_users: "Users and profiles"
+      core_modules: "Modules"
+    settings:
+      name: "Company"
+      fields:
+        company_name: "Company name"
+        legal_form: "Legal form"
+        share_capital: "Share capital"
+        rcs: "Registration (RCS, RPM)"
+        siren: "SIREN"
+        vat_number: "VAT number"
+        street: "Street"
+        street_number: "Number"
+        postcode: "Postcode"
+        city: "City"
+        country_code: "Country"
+        phone: "Phone"
+        email: "Email address"
+        tax_regime: "Tax regime"
+        default_locale: "Default language"
+        domain: "Company file address"
+        auth_methods: "Allowed authentication methods"
+        auth_minimum_level: "Minimum authentication level"
+        session_duration_minutes: "Session duration (minutes)"
+      tax_regimes:
+        fr: "France"
+        be: "Belgium"
+      locales:
+        fr: "French"
+        en: "English"
+        nl: "Dutch"
+      auth_methods:
+        password: "Password (TOTP as second factor)"
+        passkey: "Passkey"
+        federated: "Federated identity (SSO)"
+      auth_levels:
+        level_1: "Level 1 — password only"
+        level_2: "Level 2 — password and TOTP"
+        level_3: "Level 3 — passkey"
+      session_duration:
+        one: "%{count} minute"
+        other: "%{count} minutes"
+    errors:
+      settings:
+        company_name:
+          blank: "The company name is required."
+          too_long: "The company name cannot exceed %{max} characters."
+        legal_form:
+          too_long: "The legal form cannot exceed %{max} characters."
+        share_capital:
+          negative: "The share capital cannot be negative."
+          too_precise: "The share capital cannot have more than %{decimals} decimal places."
+          too_large: "The share capital is too large."
+        rcs:
+          too_long: "The registration cannot exceed %{max} characters."
+        siren:
+          invalid: "The SIREN “%{value}” is not valid (9 digits, check digit)."
+          not_applicable: "The SIREN only applies to the French tax regime."
+        vat_number:
+          invalid: "The VAT number “%{value}” is not valid."
+          country_mismatch: "The VAT number must start with %{prefix}, the prefix of the company's country."
+          siren_mismatch: "The VAT number does not match SIREN %{siren}."
+        street:
+          too_long: "The street cannot exceed %{max} characters."
+        street_number:
+          too_long: "The number cannot exceed %{max} characters."
+        postcode:
+          too_long: "The postcode cannot exceed %{max} characters."
+        city:
+          too_long: "The city cannot exceed %{max} characters."
+        country_code:
+          invalid: "The country code “%{value}” is not valid (two letters, ISO 3166-1)."
+          regime_mismatch: "Country %{country} is not compatible with the %{regime} tax regime."
+        phone:
+          too_long: "The phone number cannot exceed %{max} characters."
+        email:
+          invalid: "The email address is not valid."
+          too_long: "The email address cannot exceed %{max} characters."
+        tax_regime:
+          blank: "The tax regime is required."
+          invalid: "Unknown tax regime “%{value}” (fr or be)."
+          immutable: "The tax regime cannot be changed once the company file has been created."
+        default_locale:
+          invalid: "The language “%{value}” is not available."
+        domain:
+          blank: "The company file address is required."
+          invalid: "The company file address “%{value}” is not a valid host name."
+          too_long: "The company file address cannot exceed %{max} characters."
+        auth_methods:
+          blank: "At least one authentication method must be allowed."
+          unknown: "Unknown authentication method: %{methods}."
+        auth_minimum_level:
+          out_of_range: "The authentication level must be between %{min} and %{max}."
+          unreachable: "No allowed method can reach level %{level}."
+        session_duration_minutes:
+          out_of_range: "The session duration must be between %{min} and %{max} minutes."
+      provision:
+        already_provisioned: "This company file already exists."
+        admin_email:
+          invalid: "The administrator's email address is not valid."
+        modules:
+          unknown: "Unknown module: %{code}."
+          wrong_kind: "%{code} is not a module (use --with for extensions)."
+          inactive: "Module %{code} is not active in the instance configuration."
+        extensions:
+          unknown: "Unknown extension: %{code}."
+          wrong_kind: "%{code} is not an extension (use --modules)."
+          inactive: "Extension %{code} is not active in the instance configuration."
+    provision:
+      done: "Company file “%{name}” created: %{domain}."
+      regime: "Tax regime: %{regime}."
+      modules:
+        one: "%{count} module enabled: %{codes}."
+        other: "%{count} modules enabled: %{codes}."
+      loaders:
+        zero: "No initial data set to load."
+        one: "%{count} initial data set loaded: %{names}."
+        other: "%{count} initial data sets loaded: %{names}."
+      failed:
+        one: "Company file creation refused: %{count} error."
+        other: "Company file creation refused: %{count} errors."
+      invalid_number: "Unreadable numeric value (capital, level or session duration)."
   partiduo:
     api:
       errors:

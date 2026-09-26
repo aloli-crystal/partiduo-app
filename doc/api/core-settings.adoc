@@ -1,0 +1,122 @@
+= Société (Settings) et provisionnement
+:toc: left
+:toc-title: Table des matières
+:toclevels: 3
+:icons: font
+:source-language: crystal
+
+Référence de la configuration société (`Partiduo::Core::Settings`, ligne
+unique, héritière de la table `parameter` de NOALYSS), du provisionnement
+d'une instance et du point d'accroche du jeu de données initial (ADR-001 D2,
+ADR-002 D1). Le contrat est `Partiduo::Api::Core` et
+`Partiduo::Api::InitialData`.
+
+== Contrat
+
+[cols="2,1,3",options="header"]
+|===
+|Appel |Droit |Rôle
+
+|`Api::Core.provisioned?(actor) : Bool`
+|authentifié
+|L'instance a-t-elle sa société ?
+
+|`Api::Core.settings(actor) : SettingsView`
+|authentifié
+|La société ; `NotFound` avant le provisionnement.
+
+|`Api::Core.check_settings(actor, SettingsInput) : Result(Nil)`
+|`core.settings.manage`
+|Contrôle instantané, même règle que la modification.
+
+|`Api::Core.update_settings(actor, SettingsInput) : Result(SettingsView)`
+|`core.settings.manage`
+|Modifie la société (ligne verrouillée `FOR UPDATE`).
+
+|`Api::Core.provision(Actor.system, ProvisionInput) : Result(ProvisionView)`
+|acteur système
+|Crée la société et charge le jeu de données initial, en une transaction.
+|===
+
+Constantes pour l'interface : `Api::Core::TAX_REGIMES` (`fr`, `be`),
+`AUTH_METHODS` (`password`, `passkey`, `federated`), `AUTH_LEVELS` (1..3),
+`SESSION_MINUTES` (5..1440).
+
+=== Saisie
+
+`SettingsInput` décrit *la ligne entière* : un champ texte `nil` vaut chaîne
+vide, `share_capital` `nil` efface le capital. Les champs à valeur par défaut
+(`country_code`, `default_locale`, `domain`, `auth_methods`,
+`auth_minimum_level`, `session_duration_minutes`) gardent, s'ils valent `nil`,
+la valeur enregistrée — ou prennent le défaut à la création. Pour modifier un
+seul champ : `Api::Core.settings(actor).to_input.copy_with(city: "Namur")`.
+
+=== Champs
+
+[cols="2,2,3",options="header"]
+|===
+|Champ |NOALYSS |Règle
+
+|`company_name` |`MY_NAME` |obligatoire, 255 caractères
+|`legal_form` |— |64 caractères
+|`share_capital` |— |`BigDecimal`, ≥ 0, 2 décimales au plus
+|`rcs` |— |immatriculation (RCS, RPM), 128 caractères
+|`siren` |— |régime `fr` seulement ; 9 chiffres, clé de Luhn
+|`vat_number` |`MY_TVA` |normalisé (majuscules, sans espace ni ponctuation) ;
+préfixe du pays (`EL` pour la Grèce, `FR` pour Monaco) ; FR : clé numérique
+contrôlée, SIREN cohérent ; BE : modulo 97
+|`street`, `street_number`, `postcode`, `city` |`MY_STREET`, `MY_NUMBER`, `MY_CP`, `MY_COMMUNE` |longueurs
+|`country_code` |`MY_PAYS` |ISO 3166-1 alpha-2 ; `fr` : FR ou MC ; `be` : BE
+|`phone`, `email` |`MY_TEL` |format de l'adresse
+|`tax_regime` |`MY_COUNTRY` |`fr` ou `be` ; *immuable* après création
+|`default_locale` |— |`fr`, `en`, `nl` (`Partiduo::LOCALES`)
+|`domain` |— |nom d'hôte de l'instance (`<dossier>.<domaine>`)
+|`auth_methods` |— |sous-ensemble non vide de `AUTH_METHODS`
+|`auth_minimum_level` |— |1 à 3, atteignable par une méthode autorisée
+(mot de passe + TOTP : 2 ; passkey, fédérée : 3)
+|`session_duration_minutes` |— |5 à 1440
+|===
+
+Erreurs : `core.errors.settings.<champ>.<code>` (`blank`, `too_long`,
+`invalid`, `regime_mismatch`, `country_mismatch`, `siren_mismatch`,
+`not_applicable`, `immutable`, `negative`, `too_precise`, `unknown`,
+`out_of_range`, `unreachable`) et `core.errors.provision.…`. Libellés des
+champs : `core.settings.fields.<champ>` ; régimes, langues, méthodes et
+niveaux : `core.settings.tax_regimes.*`, `locales.*`, `auth_methods.*`,
+`auth_levels.level_<n>`.
+
+En base : ligne unique (index `core_settings_single_row` sur `(true)`),
+régime, niveau et capital contraints par `CHECK`.
+
+== Jeu de données initial
+
+Chaque pièce (socle, module, extension) déclare ses chargeurs ; seuls ceux des
+pièces actives s'exécutent, par `order` croissant, dans la transaction de
+`provision`. Un chargeur qui lève annule tout.
+
+[source]
+----
+Partiduo::Api::InitialData.register("ACCOUNTING", "chart_of_accounts", order: 10) do |context|
+  # context.tax_regime ("fr" | "be"), context.country_code, context.locale,
+  # context.admin_email, context.module_codes, context.actor (système)
+  Partiduo::Api::Accounting.load_chart(context.actor, regime: context.tax_regime)
+end
+----
+
+Ordres conseillés : 10 plan comptable, 20 taux de TVA, 30 journaux,
+40 catégories de fiches, 90 profils et invitation de l'administrateur.
+
+== Ligne de commande
+
+`manage provision` (commande Marten, `src/core/commands/provision.cr`) est la
+dernière étape de `bin/partiduo-provision` (voir `deploy/README.adoc`) :
+
+[source,sh]
+----
+PARTIDUO_MODULES=accounting,invoicing crystal run manage.cr -- provision \
+  --name="Exemple SARL" --regime=fr --domain=exemple.partiduo.localhost \
+  --modules=accounting,invoicing --admin-email=admin@exemple.fr
+----
+
+Elle rend compte dans la langue par défaut du dossier, pluriels compris
+(`core.provision.modules`, `count:`).

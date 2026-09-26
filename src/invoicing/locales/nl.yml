@@ -2,3 +2,25 @@ nl:
   invoicing:
     module:
       name: "Facturatie"
+    permissions:
+      invoice:
+        read: "Offertes en facturen raadplegen"
+        write: "Ontwerpen aanmaken en wijzigen"
+        issue: "Facturen uitreiken"
+      credit_note:
+        issue: "Creditnota's uitreiken"
+      payment:
+        record: "Betalingen registreren"
+      reminder:
+        send: "Herinneringen versturen"
+      template:
+        manage: "Documentsjablonen beheren"
+      export:
+        read: "Aan de boekhouder bezorgen"
+    menu:
+      inv_documents: "Offertes en facturen"
+      inv_new_invoice: "Nieuwe factuur"
+      inv_payments: "Betalingen"
+      inv_reminders: "Herinneringen"
+      inv_export: "Bezorging aan de boekhouder"
+      inv_templates: "Documentsjablonen"

@@ -2,3 +2,12 @@ fr:
   analytic:
     module:
       name: "Analytique"
+    permissions:
+      plan:
+        read: "Consulter les plans analytiques"
+        write: "Modifier les plans analytiques"
+      report:
+        read: "Consulter les éditions analytiques"
+    menu:
+      ana_plans: "Plans et postes"
+      ana_reports: "Éditions analytiques"

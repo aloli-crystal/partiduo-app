@@ -2,3 +2,12 @@ en:
   analytic:
     module:
       name: "Analytic accounting"
+    permissions:
+      plan:
+        read: "View analytic plans"
+        write: "Edit analytic plans"
+      report:
+        read: "View analytic reports"
+    menu:
+      ana_plans: "Plans and activities"
+      ana_reports: "Analytic reports"

@@ -131,18 +131,37 @@ est interne et peut changer.
   extensions gardent le défaut `Kind::Extension`.
 * Au démarrage (`Partiduo::Modules::App#setup`), `Partiduo::Modules.check!`
   refuse un module actif inconnu, une dépendance (`depends_on`,
-  `depends_on_any`) inactive ou une version du cœur hors de `requires_core`.
-* Événements : liste fermée `Partiduo::Events::NAMES` — `entry.posted`,
-  `entry.cancelled`, `invoice.issued`, `credit_note.issued`,
-  `payment.recorded`, `payment.matched`, `card.saved`, `period.closed`.
+  `depends_on_any`) inconnue, inactive ou de version incompatible, une
+  version du cœur hors de `requires_core`, une version mal formée, une
+  permission ou un code de menu déclarés deux fois, un menu orphelin ou
+  exigeant une permission non déclarée.
+* Référence complète : `doc/api/modules.adoc`.
+* Permissions : chaque `permission "<app>.<objet>.<action>"` a son libellé
+  i18n `<app>.permissions.<objet>.<action>` en fr, en et nl ; chaque
+  `menu "CODE"` son libellé `<code du manifeste>.menu.<code>` (minuscules).
+  Vérifié par `spec/modules/registry_spec.cr`.
+* Menus : rubriques de premier niveau déclarées par `CORE` (`DASHBOARD`,
+  `BILLING`, `ENTRY`, `CONSULT`, `REFERENCE`, `REPORTS`, `VAT`, `ANALYTIC`,
+  `SETTINGS`, `EXTENSION`) ; `route` est un nom de route résolu par
+  l'interface (`accounting:chart`).
+* Profils : les permissions effectives d'un profil sont
+  `Partiduo::Modules.effective_permissions(noms)` ; un nom inconnu
+  (`unknown_permissions`) est refusé.
+* Événements : liste fermée `Partiduo::Events::SCHEMA` (nom → clés de charge
+  utile obligatoires) — `entry.posted` (`entry_id`), `entry.cancelled`
+  (`entry_id`), `invoice.issued` (`invoice_id`), `credit_note.issued`
+  (`credit_note_id`), `payment.recorded` (`payment_id`), `payment.matched`
+  (`matching_id`), `card.saved` (`card_id`), `period.closed` (`period_id`).
 ** publication *dans la transaction* de la commande :
-   `Partiduo::Events.publish("entry.posted", {"entry_id" => id.to_s})` ;
+   `Partiduo::Events.publish("entry.posted", {"entry_id" => id.to_s}, actor_user_id: actor.user_id)` ;
+   hors transaction, `publish` en ouvre une ;
 ** charge utile : identifiants et scalaires en chaînes (montants en
    `BigDecimal#to_s`) ; l'abonné relit ce qu'il lui faut par `Partiduo::Api` ;
 ** abonnement dans le manifeste : `on("entry.posted") { |event| … }` ; seuls
    les abonnés des pièces actives sont appelés ; un abonné qui lève annule
-   l'opération ; un abonné agit avec `Actor.system`.
-** ajouter un événement = compléter `NAMES` et le noter ici.
+   l'opération ; un abonné agit avec `Actor.system` ; un effet extérieur
+   (courriel, réseau) passe par `Partiduo::Events.after_commit { … }` ;
+** ajouter un événement = compléter `SCHEMA` et le noter ici.
 
 === C5 — Specs
 
@@ -430,3 +449,686 @@ un contrat stable.
 
 *Alternative écartée.* Un `partiduo-skel` minimal dès maintenant : à réécrire
 aussitôt le registre étoffé.
+
+=== D-018 — Activation des modules enregistrée en base, `PARTIDUO_MODULES` en valeur initiale (lot 0, modules)
+
+*Contexte.* L'ADR-006 D2 fait activer les modules par l'administrateur de
+l'instance ; D-005 lisait l'ensemble actif dans `PARTIDUO_MODULES` seulement
+et prévoyait de le persister au lot 0. Les specs et la CI changent de
+configuration par cette variable (`with_active_modules`).
+
+*Choix.* Table `modules_activation` (`code`, `active`, `changed_by_id`),
+écrite par `Partiduo::Api::Modules.activate` / `deactivate`. Dès qu'elle
+contient une ligne, elle décrit *tout* l'ensemble actif (une pièce sans ligne
+est inactive, extension nouvellement compilée comprise) ; vide, c'est
+`PARTIDUO_MODULES` (ou son défaut) qui s'applique. La table est relue à
+chaque appel (une requête courte, `to_regclass` pour tolérer une base pas
+encore migrée) : plusieurs processus voient le même état sans cache à
+invalider. Les specs gardent `PARTIDUO_MODULES` : les tables sont vidées
+après chaque exemple.
+
+*Alternative écartée.* Cache en mémoire invalidé à l'écriture : faux dès
+qu'une instance tourne sur plusieurs processus. Variable d'environnement
+seule : l'administrateur ne pourrait rien changer sans redéploiement.
+
+=== D-019 — Menus déclarés par les manifestes, routes nommées par convention (lot 0, modules)
+
+*Contexte.* ADR-003 D2 déclare des menus avec `parent: "VENMENU"` (codes
+NOALYSS) et une route ; ADR-005 D1 interdit toute route dans le cœur ; la
+maquette et l'ADR-005 fixent les rubriques du menu latéral.
+
+*Choix.* `CORE` déclare dix rubriques (`DASHBOARD` … `EXTENSION`, ordre de
+l'ADR-005) ; chaque pièce y rattache ses entrées, avec un *nom de route*
+(`accounting:chart`) que l'interface résout, et une permission. Les codes
+NOALYSS (`VENMENU`, `MENUACH`) ne sont pas repris. `Api::Modules.menu(actor)`
+rend l'arbre filtré (pièces actives, permissions) ; une rubrique vide est
+omise. Libellé par défaut : `<code du manifeste>.menu.<code>`.
+
+*Alternative écartée.* Reprendre `menu_ref` de NOALYSS (≈ 200 entrées) :
+structure propre à l'ancienne interface, contraire à l'ADR-005.
+
+*Amendement proposé.* ADR-003 D2 : dans l'exemple, lire
+`parent: "BILLING"` / `"EXTENSION"` au lieu de `VENMENU` / `MENUACH`.
+
+=== D-020 — Permissions : libellés i18n, catalogue public, effectives selon l'activation (lot 0, modules)
+
+*Contexte.* ADR-003 D4 : permissions nommées, rattachées aux profils
+d'ADR-002, cochées par l'administrateur. Le modèle `Profile` est écrit par
+l'application `auth`.
+
+*Choix.* Une permission a un nom `<préfixe>.<objet>.<action>`, une pièce
+propriétaire et un libellé i18n (`<préfixe>.permissions.<objet>.<action>`) ;
+un nom déclaré deux fois empêche le démarrage. Le registre expose à
+`Profile` : `permission_catalog`, `active_permissions`,
+`unknown_permissions`, `effective_permissions`. Un profil *garde* les
+permissions d'un module désactivé ; elles sont simplement ignorées tant que
+le module est inactif. `Api::Modules.permissions` (catalogue des pièces
+actives) est lisible par tout utilisateur authentifié : il découle du code
+source, il n'a rien de confidentiel.
+
+*Alternative écartée.* Supprimer les permissions d'un module à sa
+désactivation : contraire à l'ADR-006 D2 (« rien n'est supprimé ») et
+irréversible.
+
+=== D-021 — Événements : clés de charge utile obligatoires, `after_commit` (lot 0, modules)
+
+*Contexte.* D-008 fixe une charge utile `Hash(String, String)` sans en
+préciser les clés ; un abonné d'extension doit savoir quoi relire. Certains
+abonnés (facturation électronique) auront des effets hors base.
+
+*Choix.* `Partiduo::Events::SCHEMA` associe à chaque événement ses clés
+obligatoires (l'identifiant principal) ; `publish` refuse une charge utile
+incomplète (`ArgumentError`), accepte des clés supplémentaires, porte
+l'auteur (`actor_user_id`) et rejoint ou ouvre une transaction. L'exception
+d'un abonné est propagée telle quelle. `Partiduo::Events.after_commit`
+diffère un effet extérieur après la validation.
+
+*Alternative écartée.* Envelopper l'exception d'un abonné dans une erreur
+propre au bus : masque son type aux appelants et aux specs.
+
+=== D-SET-001 — `Settings` : identité et politique d'authentification, ligne unique garantie en base (lot 0, settings)
+
+*Contexte.* ADR-001 : `Settings` (ligne unique) hérite de `parameter`
+(`MY_NAME`, `MY_TVA`, `MY_STREET`, `MY_NUMBER`, `MY_CP`, `MY_COMMUNE`,
+`MY_TEL`, `MY_FAX`, `MY_PAYS`, `MY_COUNTRY` et une douzaine d'options
+comptables `MY_STRICT`, `MY_ANALYTIC`…). ADR-002 D1 y place la politique
+d'authentification. La numérotation de ces décisions prend le préfixe
+`D-SET-` : plusieurs agents écrivent ce fichier en parallèle.
+
+*Choix.* Table `core_settings` à colonnes typées : identité (raison sociale,
+forme juridique, capital, RCS/RPM, SIREN, TVA), adresse (rue, numéro, code
+postal, localité, pays), dossier (régime `fr`/`be`, langue par défaut, nom
+d'hôte), politique (`auth_methods` en liste séparée par des virgules,
+`auth_minimum_level`, `session_duration_minutes` — les noms que lit déjà
+`Partiduo::Auth::Policy`). Ligne unique par un index unique sur l'expression
+constante `(true)` ; régime, niveau et capital contraints par `CHECK`.
+`MY_FAX` est abandonné ; les options comptables arriveront avec les modules
+qui les lisent (lot 1 et suivants), dans leurs propres tables ou colonnes.
+
+*Alternative écartée.* Table clé/valeur à la manière de `parameter` : aucun
+typage, aucune contrainte, c'est ce que l'ADR-001 D3 reproche à l'EAV.
+
+=== D-SET-002 — Saisie de la société : ligne entière, régime immuable (lot 0, settings)
+
+*Contexte.* Une commande de modification peut être partielle (`nil` = inchangé)
+ou complète ; la partielle ne sait pas effacer un champ facultatif typé
+(capital).
+
+*Choix.* `SettingsInput` décrit la ligne entière : texte `nil` = vide, capital
+`nil` = effacé ; seuls les champs à valeur par défaut (pays, langue, domaine,
+politique) gardent la valeur enregistrée s'ils valent `nil`.
+`SettingsView#to_input` sert de point de départ. Le régime fiscal ne change
+plus après le provisionnement (`core.errors.settings.tax_regime.immutable`) :
+il a déterminé le plan comptable et les taux chargés.
+
+*Alternative écartée.* Changement de régime autorisé : il faudrait migrer plan
+comptable, taux et déclarations — un chantier de reprise, pas une saisie.
+
+=== D-SET-003 — Contrôle des identifiants de la société (lot 0, settings)
+
+*Contexte.* NOALYSS n'impose aucun contrôle sur `MY_TVA` ; ADR-004 D5 place
+SIREN et SIRET au cœur.
+
+*Choix.* SIREN : 9 chiffres, clé de Luhn ; SIRET (fourni pour les lots 1 et
+2) : Luhn, exception de La Poste. TVA normalisée (majuscules, sans espaces,
+points ni tirets), préfixe du pays de la société (`EL` pour la Grèce, `FR` pour
+Monaco) ; FR : clé numérique `(12 + 3 × (SIREN mod 97)) mod 97` et SIREN
+cohérent, clé alphanumérique contrôlée dans sa seule forme ; BE : 10 chiffres
+commençant par 0 ou 1, modulo 97. Les contrôles nationaux de TVA vivent dans
+`vat/fr/vat_number.cr` et `vat/be/vat_number.cr` (arbitrage 7 du prompt).
+Régime `fr` : pays FR ou MC ; régime `be` : BE. Capital : ≥ 0, deux décimales
+au plus (refusé, pas arrondi, convention C1).
+
+*Alternative écartée.* Interroger VIES : dépendance réseau au provisionnement,
+hors du périmètre du socle (extension possible).
+
+=== D-SET-004 — Politique d'authentification par défaut (lot 0, settings)
+
+*Contexte.* ADR-002 D1 : méthodes autorisées, niveau minimum, durée de session,
+sans valeurs par défaut fixées.
+
+*Choix.* Défauts : `password,passkey` (la fédération suppose un fournisseur
+configuré), niveau 1 (amorçage par invitation et mot de passe ; la société
+relève le niveau), 480 minutes (bornes 5 à 1440). Un niveau minimum doit être
+atteignable par une méthode autorisée : mot de passe + TOTP = 2, passkey = 3,
+fédérée = 3 au plus (le niveau effectif d'un fournisseur est fixé côté
+`auth`). Au moins une méthode.
+
+*Alternative écartée.* Niveau 2 par défaut : bloquerait le premier
+administrateur tant qu'il n'a pas enrôlé de TOTP ; c'est à la société de
+l'exiger.
+
+=== D-SET-005 — Jeu de données initial : `Partiduo::Api::InitialData` (lot 0, settings)
+
+*Contexte.* Convention C6 : le jeu de données initial (plans BE/FR, journaux,
+taux, profil administrateur) est chargé par `partiduo-provision` via le
+contrat ; les plans comptables n'arrivent qu'au lot 1, et un module n'appelle
+pas un autre module (ADR-006 D3).
+
+*Choix.* Registre de chargeurs au socle :
+`Partiduo::Api::InitialData.register(owner, name, order:) { |context| … }`.
+`Api::Core.provision` crée la société puis exécute, dans la même transaction,
+les chargeurs des pièces *actives* (ordre, pièce, nom). Le contexte porte le
+régime, le pays, la langue, l'adresse de l'administrateur à inviter, les
+modules actifs et l'acteur système. Le lot 1 y branche le plan comptable
+(`ACCOUNTING`), les taux (`VAT`), les journaux ; `auth` y branche le profil
+administrateur et l'invitation (`context.admin_email`). Une extension fait de
+même depuis son shard.
+
+*Alternative écartée.* Un bloc `on_provision` dans le manifeste : le
+manifeste appartient à l'application `modules`, retouchée en parallèle ; le
+registre dédié est réversible (le manifeste pourra le déléguer).
+
+=== D-SET-006 — `bin/partiduo-provision` : script shell + commande Marten `provision` (lot 0, settings)
+
+*Contexte.* ADR-001 D2 : createdb, migrate, jeu de données initial, vhost,
+unité de service ; ADR-006 D2 : `--modules` ; ADR-003 D1 : `--with`. La base
+d'une instance ne peut être choisie qu'avant `Marten.setup`.
+
+*Choix.* Un script POSIX (`bin/partiduo-provision`) orchestre des processus :
+`createdb --owner --encoding=UTF8`, `manage migrate` puis `manage provision`
+avec `DATABASE_URL` et `PARTIDUO_MODULES` (= modules + extensions) posés, puis
+rend les gabarits `deploy/templates/` (environnement avec clé secrète
+aléatoire en mode 600, vhost nginx, unité systemd) et écrit `INSTALL.txt` —
+sans rien installer. La commande Marten `provision`
+(`src/core/commands/provision.cr`, requise par `partiduo/cli`, donc présente
+dans la distribution) appelle `Api::Core.provision` avec l'acteur système,
+vérifie que chaque code demandé est un module (`--modules`) ou une extension
+(`--with`) enregistré et actif, et rend compte dans la langue du dossier.
+L'activation n'est pas écrite dans `modules_activation` : `PARTIDUO_MODULES`
+fait foi tant que l'administrateur n'a rien changé (D-018). Port local : le
+premier libre dès 8101 parmi les instances générées. Base : `partiduo_<dossier>`.
+
+*Alternative écartée.* Un binaire Crystal unique qui ferait tout : il faudrait
+reconfigurer Marten après coup ou compiler un second point d'entrée ; le
+script garde chaque étape rejouable à la main.
+
+=== D-SET-007 — Parc : `deploy/bin/partiduo-fleet` plutôt que Capistrano (lot 0, settings)
+
+*Contexte.* ADR-001 : « la mise à jour devient une opération de parc », à
+outiller dès le lot 0, sur le modèle de `capistrano-quimeo`.
+
+*Choix.* Reprendre le modèle (une version, N plateformes, un vhost par
+plateforme, tâches init / backup / drop / clone / ng_on / ng_off) dans un
+script POSIX sans Ruby : `build`, `upload` (lien `current`), `provision`,
+`upgrade` progressif (`--canary N`, `--only`, `--all` obligatoire ; sélection
+vérifiée d'abord ; par instance : `pg_dump -Fc`, arrêt, `migrate`, bascule du
+lien `instances/<dossier>/release`, démarrage, contrôle HTTP ; au premier
+échec, restauration de l'instance et arrêt de la vague), `rollback`,
+`restore`, `status`, `backup`, `retire` (base conservée), `cleanup`.
+Inventaire hors application (`deploy/inventory`, ADR-001 D2). *Plan affiché
+par défaut*, `--execute` pour agir : aucun déploiement réel au lot 0.
+
+*Alternative écartée.* Capistrano : ajoute Ruby et ses gems à la chaîne de
+déploiement d'un binaire Crystal ; ses « releases » partagées ne permettent pas
+un parc volontairement hétérogène pendant la montée de version.
+
+=== D-SET-008 — Lecture des `numeric` en `BigDecimal` : ordre des `require` et correctif (lot 0, settings)
+
+*Contexte.* Marten ne charge `pg/pg_ext/big_decimal` que si `PG` est défini
+quand il est requis ; `src/partiduo.cr` requérait `marten` avant `pg`, d'où
+`DB::ColumnTypeMismatchError` à la lecture de toute colonne `decimal`. En
+outre, `PG::Numeric#to_big_d` lève `OverflowError` sur un multiple de 10 000
+(B-SET-001).
+
+*Choix.* `src/partiduo.cr` requiert `src/partiduo/ext/pg_numeric.cr`, qui
+charge l'extension et redéfinit `to_big_d` (échelle négative convertie en
+entier). Spec : relecture de 10 000, 20 000 000, −30 000, 0,0001…
+
+*Alternative écartée.* Stocker les montants en centimes entiers : contraire à
+la convention C1 et à l'ADR-001 (Marten 0.7 pour le type `decimal`).
+
+=== D-AUTH-001 — Authentification et droits dans l'application `auth`, préfixe `D-AUTH-` (lot 0, auth)
+
+*Contexte.* L'ADR-001 place `User` et `Profile` dans `core/` ; D-001 a déjà
+placé l'utilisateur dans `src/auth/`. Le lot 0 ajoute profils, droits par
+journal, sessions, méthodes d'authentification et audit ; plusieurs agents
+écrivent ce fichier en parallèle.
+
+*Choix.* Tout ce qui touche à l'identité et aux droits vit dans `src/auth/`,
+espace `Partiduo::Auth` (modèles, services internes) et `Partiduo::Api::Auth`
+(contrat, référence `doc/api/auth.adoc`) : `Profile`, `ProfilePermission`,
+`LedgerAccess`, `Session`, `Challenge`, `Passkey`, `RecoveryCode`, `Token`,
+`IdentityProvider`, `FederatedIdentity`, `AuditEvent`. `AUTH` est une pièce du
+socle (`Kind::Socle`) avec ses permissions `auth.users.manage`,
+`auth.profiles.manage`, `auth.audit.view`, `auth.providers.manage`.
+
+*Alternative écartée.* Profils dans `core/` : dépendance circulaire
+utilisateur ↔ profil entre deux applications, pour aucun gain.
+
+*Amendement proposé.* ADR-001 § Organisation du code : lire `auth/` (User,
+Profile, droits) à côté de `core/` (Settings, Period, FiscalYear, Currency).
+`core.users.manage` (déclarée par `CORE`) fait doublon avec
+`auth.users.manage` : à retirer du manifeste `CORE` par son auteur.
+
+=== D-AUTH-002 — Interface avec le registre des modules (lot 0, auth)
+
+*Contexte.* Les permissions viennent du registre `Partiduo::Modules`, écrit en
+parallèle (D-020) ; les profils héritent de `profile_menu` (ADR-003 D4 : la
+visibilité des menus découle des permissions).
+
+*Choix.* Un profil stocke des *noms* de permission (`auth_profile_permission`).
+`auth` n'utilise que trois appels du registre, stables depuis le lot P :
+`permission_declared?(nom)` (validation d'un profil),
+`active_permissions` (droits effectifs : intersection avec le profil ; toutes
+pour un profil `admin`) et `manifests` (profil `ACCOUNTANT` par défaut).
+L'acteur est construit par `Partiduo::Api::Auth.actor(jeton)` ; le menu de
+l'utilisateur reste `Partiduo::Api::Modules.menu(actor)`.
+
+*Alternative écartée.* Un champ `admin: true` sur `permission` dans le
+manifeste pour désigner les permissions administratives : il aurait fallu
+modifier le manifeste en cours d'écriture ; la règle est posée côté `auth`
+(`Permissions.administrative?` : tout `auth.*`, et les `core.*.manage`).
+Proposé au registre pour un lot ultérieur.
+
+=== D-AUTH-003 — Niveau de session porté par l'acteur ; session sous le niveau exigé sans droit (lot 0, auth)
+
+*Contexte.* ADR-002 D2, D4, D6 : niveaux 1 à 3, niveau minimum d'instance,
+niveau 3 pour le `comptable`, parcours d'élévation.
+
+*Choix.* `Partiduo::Api::Actor` reçoit un champ `level` (défaut 0, 3 pour
+`Actor.system`), rétrocompatible. Une session dont le niveau est inférieur au
+niveau exigé (`max(politique, 3 si comptable)`) donne un acteur *authentifié
+sans aucune permission* : il ne peut qu'enrôler une méthode ou élever sa
+session (`elevate_with_passkey`, `elevate_with_totp`). Niveau 0 : session
+d'enrôlement ouverte par une invitation. Les opérations qui affaiblissent le
+compte (retrait de passkey, désactivation du TOTP, nouveaux codes) exigent le
+niveau 2 (`Api::Auth::ElevationRequired`).
+
+*Alternative écartée.* Refuser la connexion sous le niveau exigé : le comptable
+ne pourrait jamais enrôler sa première passkey.
+
+=== D-AUTH-004 — Sessions tenues par le cœur (lot 0, auth)
+
+*Contexte.* ADR-002 D4 exige une révocation *immédiate* ; `authn` fournit des
+sessions par cookie signé, sans état serveur.
+
+*Choix.* Table `auth_session` : jeton aléatoire de 256 bits remis à
+l'interface (cookie), seule son empreinte SHA-256 est stockée ; durée absolue
+`Core::Settings#session_duration_minutes` (480 min par défaut), inactivité
+60 min. Chaque requête passe par `Api::Auth.actor(jeton)`, qui revérifie
+l'utilisateur (actif, non révoqué, date de fin) : révocation, changement de
+rôle ou de profil et remise à zéro du mot de passe coupent les sessions.
+
+*Alternative écartée.* Cookie JWT d'`authn` : une révocation attendrait
+l'expiration du jeton.
+
+=== D-AUTH-005 — Limitation des tentatives (lot 0, auth)
+
+*Contexte.* ADR-001 (CAPTCHA abandonné), CNIL 2022-100 : le palier à 50 bits
+suppose une temporisation ou un blocage après 10 échecs avec déblocage.
+
+*Choix.* Par compte : temporisation à partir du 3ᵉ échec consécutif (5 s,
+doublée à chaque échec, plafond 15 min ; tentative refusée *sans examen* du
+secret pendant le délai), blocage au 10ᵉ. Comptent : mot de passe, code TOTP,
+code de récupération. Déblocage : administrateur (`unlock_user`), jeton à
+usage unique (`request_unlock` / `unlock_with_token`), remise à zéro du mot de
+passe. Incrément atomique en SQL. La passkey n'est pas concernée. Les
+commandes de connexion ne passent pas par `Transaction.run`, qui annulerait le
+compteur et l'audit d'un échec. Adresse inconnue : même réponse, même coût
+BCrypt (empreinte leurre).
+
+*Alternative écartée.* Limitation par adresse IP : contournable par un
+réseau d'adresses, et pénalise un cabinet derrière une seule adresse.
+
+=== D-AUTH-006 — `authn` limité au hachage ; règles de `password-policy` (lot 0, auth)
+
+*Contexte.* `require "authn"` charge `jwt`, dont `openssl_ext` entre en conflit
+avec `jose` (B-AUTH-002) ; ADR-002 D1 cite `marten-auth` pour BCrypt.
+
+*Choix.* `require "authn/password"` : `Authn::Password.hash(policy:)` (coût 12,
+4 en test, `PARTIDUO_BCRYPT_COST`) et `verify`. Politique :
+`PasswordPolicy::Policy.long` au palier `WithAccessRestriction` (14
+caractères, majuscule, minuscule, chiffre, pas de caractère spécial imposé,
+71 octets au plus) ; en plus, refus d'un mot de passe qui contient le prénom,
+le nom ou la partie locale de l'adresse (4 caractères et plus). Motifs de
+refus : `auth.errors.password.<motif>`. Le `set_password` de `marten-auth`
+n'est pas utilisé.
+
+*Alternative écartée.* `MartenAuth::User#set_password` : aucune politique.
+
+*Amendement proposé.* ADR-002 D1 : « BCrypt via `authn` (`password-policy`) ».
+
+=== D-AUTH-007 — TOTP : secret en clair en base, QR code calculé par le cœur (lot 0, auth)
+
+*Contexte.* Prompt, arbitrage 4 : QR code et secret base32, SHA-1, 6 chiffres,
+30 s ; `last_otp_counter` repassé en `after:`. Le cœur ne produit aucune
+interface (ADR-005).
+
+*Choix.* Secret de 160 bits en base32 dans `auth_user.totp_secret`, activé
+seulement après un premier code valide ; le compteur accepté est stocké, et
+repassé en `after:` (le code de l'enrôlement ne sert pas à la connexion).
+`begin_totp_enrollment` renvoie l'URI `otpauth://`, le secret base32 *et* la
+matrice du QR code (`QrCodeView`, booléens) ; l'interface la dessine (SVG).
+Encodeur QR écrit dans le cœur (`Partiduo::Auth::QrCode` : octet, correction
+M, versions 1 à 15), aucun shard QR n'existant en Crystal. Codes de
+récupération : 10 codes de 79 bits, empreinte SHA-256, générés au premier
+second facteur ou à la première passkey (D7), régénérables au niveau 2.
+
+*Alternative écartée.* Chiffrer le secret avec `MARTEN_SECRET_KEY` : une
+rotation de la clé invaliderait tous les enrôlements ; à reconsidérer avec un
+coffre de clés. QR code dessiné par l'interface seule : il faudrait un
+encodeur en Opal, sans gain.
+
+=== D-AUTH-008 — Passkeys : origine admise par suffixe du RP ID, clé COSE brute stockée (lot 0, auth)
+
+*Contexte.* ADR-002 D5 : `rp.id` au domaine parent, instances en
+`<dossier>.<domaine>` ; `webauthn` exige une liste d'origines exacte.
+
+*Choix.* `rp.id` = `PARTIDUO_RP_ID`, sinon `Partiduo::Config.domain`
+(`partiduo.localhost`). L'origine annoncée dans `clientDataJSON` est admise si
+son hôte est le RP ID ou l'un de ses sous-domaines, en `https`, ou en `http`
+pour `*.localhost` ; `PARTIDUO_WEBAUTHN_ORIGINS` impose une liste exacte. La
+partie de confiance est alors construite avec cette seule origine, et le shard
+recontrôle origine, défi, empreinte du RP ID, UP et UV. La clé publique est
+conservée sous sa forme COSE (base64), relue par `COSE.decode_key`. Poignée
+d'utilisateur : 16 octets de SHA-256(`partiduo:<rp id>:<id>`), vérifiée si
+présente. On n'enrôle jamais une passkey seule : des codes de récupération
+sont générés s'il n'en reste plus.
+
+*Alternative écartée.* Liste d'origines figée par instance : il faudrait
+connaître le nom du dossier dans la configuration du cœur.
+
+=== D-AUTH-009 — Fédération : niveau déclaré par fournisseur, SAML vérifié par le cœur (lot 0, auth)
+
+*Contexte.* ADR-002 D3 (pas d'auto-provisionnement) ; les niveaux de D2 ne
+disent rien d'une identité fédérée ; le validateur de `saml` est défaillant
+(B-AUTH-001).
+
+*Choix.* `auth_identity_provider` porte un `level` (2 par défaut, 3 si l'IdP
+impose une authentification résistante à l'hameçonnage) : c'est la société qui
+déclare sa confiance. Identité fédérée = `provider` + `subject` rattachée par
+l'administrateur (`link_federated_identity`) ; inconnue = refus. Adaptateurs
+pluggables (`Partiduo::Auth::Federation::Adapter`, `Federation.register`) :
+SAML intégré, OIDC prévu par la même interface (spec avec un adaptateur fictif).
+SAML : requête construite par le shard ; réponse contrôlée par le cœur (pas de
+DTD, statut, `InResponseTo` obligatoire — pas de connexion à l'initiative de
+l'IdP —, destination, émetteur, validité ±60 s, audience, signature
+enveloppée vérifiée contre le seul certificat configuré, SHA-256 au moins, une
+seule assertion, identifiants uniques).
+
+Dépendance `saml` ajoutée en `path: ../../saml` (D-012) et au clonage de la
+CI ; les dépôts qui embarquent le cœur (`partiduo-ui-bulma`, `partiduo-skel`)
+doivent relancer `SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install`.
+
+*Alternative écartée.* `CrystalSaml::Response#valid?` : accepte une signature
+faite par n'importe quel certificat embarqué.
+
+=== D-AUTH-010 — Rôle comptable, droits par journal, audit (lot 0, auth)
+
+*Contexte.* ADR-002 D4 ; `user_sec_jrn`, `user_active_security`,
+`audit_connect` de NOALYSS.
+
+*Choix.* `auth_user.role` : `member` ou `accountant` (contrainte en base). Un
+`comptable` est nominatif (prénom et nom obligatoires), peut porter une date de
+fin (accès jusqu'au jour inclus), est révocable et rouvrable ; ses droits sont
+ceux de son profil moins les permissions administratives. Droits par journal :
+`auth_ledger_access` (`W`, `R`, `X`, contrainte en base) sans clé étrangère
+vers les journaux (module Comptabilité), actifs si `ledger_security` ; profil
+`admin` non comptable = écriture partout ; défaut `ledger_security = false`,
+comme NOALYSS sans ligne `user_active_security`. Le module Comptabilité appelle
+`Api::Auth.ledger_access(actor, ledger_id)`. Audit : `auth_audit_event`
+nominatif (identifiant et libellé figé), états `SUCCESS`, `FAIL`, `AUDIT`,
+`ADMIN` ; *ajout seul*, garanti par un déclencheur ; les modules y écrivent
+par `Api::Auth.audit(actor, action, module, détail)`.
+
+*Alternative écartée.* Droits par journal portés par le profil : NOALYSS les
+porte par utilisateur, et le comptable externe est souvent seul de son profil.
+
+=== D-AUTH-011 — Création des comptes : invitation d'abord (lot 0, auth)
+
+*Contexte.* ADR-002 D6 : à la création, la passkey d'abord, le mot de passe en
+repli ; D7 : la société rouvre l'accès d'un utilisateur bloqué.
+
+*Choix.* `create_user` crée le compte sans mot de passe (sauf s'il est fourni)
+et renvoie un jeton d'invitation (7 jours) que l'interface envoie par
+courriel ; `accept_invitation` ouvre une session d'enrôlement (niveau 0) où
+l'utilisateur enrôle une passkey ou choisit un mot de passe.
+`issue_invitation` rouvre l'accès. Le provisionnement (`InitialData`,
+D-SET-005) crée les profils `ADMIN` et `ACCOUNTANT` et l'administrateur
+désigné ; `partiduo-provision` obtient son invitation par
+`Api::Auth.user_by_email` puis `issue_invitation`. Les jetons (invitation,
+remise à zéro 1 h, déblocage 1 h) ne sont stockés que par empreinte ;
+l'envoi du courriel appartient à l'interface.
+
+*Alternative écartée.* `Authn::PasswordReset` (JWT par SMTP, textes en
+français codés en dur) : contraire à ADR-005 D7.
+
+=== D-UI-001 — Session dans un cookie, langue, préfixe `D-UI-` (lot 0, interface)
+
+*Contexte.* Le cœur tient les sessions (D-AUTH-004) et remet un jeton ;
+l'interface doit le conserver et choisir la langue d'affichage (ADR-005 D7).
+Plusieurs agents écrivent ce fichier en parallèle.
+
+*Choix.* Cookie `partiduo_session` (`HttpOnly`, `SameSite=Lax`, `Secure` en
+HTTPS, expiration de la session du cœur) ; entre le mot de passe et le second
+facteur, cookie `partiduo_pending` de 10 minutes. `PartiduoUi::Current`
+convertit le jeton en acteur une fois par requête (`Api::Auth.session`, puis
+`Api::Auth.actor`). Langue : cookie de langue de Marten (choix explicite dans
+la barre supérieure), sinon langue de l'utilisateur connecté, sinon celle du
+navigateur. Les décisions de l'interface prennent le préfixe `D-UI-`.
+
+*Alternative écartée.* Session Marten (cookie signé) portant le jeton : un
+second état côté interface, sans gain puisque le cœur fait foi.
+
+=== D-UI-002 — Adresses des écrans, noms de route des manifestes (lot 0, interface)
+
+*Contexte.* Les manifestes citent des noms de route (`core:dashboard`,
+`accounting:chart`) que l'interface résout (D-019) ; la plupart des écrans
+arrivent aux lots suivants.
+
+*Choix.* Adresses courtes et neutres (`/login`, `/account/security`,
+`/password/forgotten`) ; les écrans du socle sont montés sous leur nom de
+manifeste (`core:dashboard` = `/`). Une entrée de menu dont l'interface ne
+fournit pas encore la route est affichée *désactivée* (comme dans la maquette),
+avec « bientôt disponible » pour les lecteurs d'écran.
+
+*Alternative écartée.* Adresses traduites (`TranslatedPath` de Marten) :
+24 langues à terme, liens partagés entre utilisateurs de langues différentes.
+
+=== D-UI-003 — Routes d'extension : point d'entrée unique et règle de permission (lot 0, interface)
+
+*Contexte.* ADR-003 D3, ADR-005 D4 : routes `/ext/<code>/` montées par
+l'interface, contrôle d'accès avant le handler, à partir du manifeste. Le
+contrat expose, pour une pièce, ses permissions déclarées
+(`Api::Modules.get`) et, pour un acteur, son menu (`Api::Modules.menu`), mais
+pas la permission d'une route.
+
+*Choix.* Une extension monte sa carte de routes par
+`PartiduoUi::Extensions.mount "SKEL", ROUTES, permission:, permissions:`. Toute
+requête `/ext/<CODE>/…` est reçue par `PartiduoUi::ExtensionHandler`, qui
+décide puis appelle le handler de l'extension ; les cartes sont inscrites
+après, pour le seul nommage (`skel:index`). Règle : non connecté → connexion ;
+pièce inconnue, inactive ou qui n'est pas une extension → 404 ; session
+d'enrôlement ou sous le niveau exigé → enrôlement ou sécurité du compte ;
+permission donnée au montage pour la route (qui doit être déclarée par le
+manifeste de l'extension) ; à défaut, la route doit figurer dans le menu de
+l'acteur, donc sous la permission de son entrée de manifeste ; sinon 403. Une
+route que ni le montage ni le manifeste ne couvrent n'est jamais ouverte.
+
+*Alternative écartée.* Middleware Marten : les réponses anticipées d'un
+middleware ne sont pas vues par le client de test de Marten (B-UI-003), et
+l'ordre des middlewares devenait une condition de sécurité.
+
+*Amendement proposé.* Ajouter au contrat une requête
+`Api::Modules.route_access(actor, route) : Bool` (ou la permission dans
+`MenuView`) pour que l'interface n'ait pas à déduire la permission du menu.
+
+=== D-UI-004 — Parcours d'élévation dans l'interface (lot 0, interface)
+
+*Contexte.* ADR-002 D6 : passkey proposée d'abord à la création du compte,
+invitation après une connexion par mot de passe, page « sécurité du compte »,
+niveau exigé.
+
+*Choix.* Lien d'invitation : une page qui confirme (un `GET` ne consomme pas
+le jeton, à cause des aperçus de liens), puis session d'enrôlement cantonnée à
+`/account/enrollment` (passkey d'abord, mot de passe replié dans un
+`<details>`). Après l'enrôlement, la session d'enrôlement est fermée et
+l'utilisateur se connecte avec ce qu'il vient de créer (passkey : codes de
+récupération affichés d'abord). Après une connexion : session sous le niveau
+exigé → page de sécurité (élévation par passkey ou TOTP), seule page
+accessible ; sinon, si le cœur le suggère, `/account/passkey-prompt`
+(« Plus tard » appelle `dismiss_passkey_prompt`). Les actions de niveau 2
+(codes, retrait de passkey, désactivation du TOTP) ne sont proposées qu'à une
+session de niveau 2, avec l'explication sinon.
+
+*Alternative écartée.* Élever la session d'enrôlement juste après la création
+de la passkey : une seconde cérémonie WebAuthn immédiate, sans gain.
+
+=== D-UI-005 — JavaScript de liaison au navigateur écrit à la main (lot 0, interface)
+
+*Contexte.* ADR-005 D5 : Opal est la seule compilation côté client ;
+WebAuthn (`navigator.credentials`) et le repli du menu ont besoin de quelques
+lignes de JavaScript.
+
+*Choix.* Deux scripts courts, non compilés, sans logique métier :
+`ui/js/passkey.js` (conversion base64url, appel de `navigator.credentials`,
+envoi au serveur, affichage du résultat) et `ui/js/shell.js` (menu repliable,
+raccourci `/`, envoi du choix de langue, impression). Les écrans restent
+utilisables sans JavaScript (sauf la passkey, qui l'exige par nature). Toute
+logique d'écran reste en HTMX puis Opal.
+
+*Alternative écartée.* Écrire la liaison WebAuthn en Opal : le paquet autonome
+pèse 780 Ko (D-013), à charger sur la page de connexion pour 80 lignes.
+
+=== D-UI-006 — Confirmation du TOTP en HTMX (lot 0, interface)
+
+*Contexte.* `begin_totp_enrollment` crée un nouveau secret à chaque appel : un
+code refusé ne doit pas obliger à rescanner.
+
+*Choix.* Le formulaire de confirmation est envoyé par HTMX : un refus ne
+remplace que le message d'erreur (le QR code affiché reste valable) ; le
+succès renvoie la page des codes de récupération (`HX-Retarget: body`). Sans
+JavaScript, un refus réaffiche la page avec un nouveau secret. QR code dessiné
+en SVG à partir de la matrice du cœur (noir sur blanc quel que soit le thème),
+secret base32 par groupes de quatre, paramètres (6 chiffres, 30 s) affichés ;
+aucune application nommée.
+
+*Alternative écartée.* Garder le secret dans un champ caché : il faudrait
+recalculer le QR code dans l'interface.
+
+=== D-UI-007 — Codes de récupération affichés une fois, jamais conservés (lot 0, interface)
+
+*Choix.* Les codes sont rendus dans la réponse de la commande qui les crée
+(TOTP, passkey, régénération), avec « Télécharger » (lien `data:` en texte
+brut, sans script) et « Imprimer ». L'interface ne les stocke nulle part
+(ni session, ni cookie, ni flash).
+
+*Alternative écartée.* Redirection vers une page qui relirait les codes en
+session : secrets à usage unique conservés côté serveur ou navigateur.
+
+=== D-UI-008 — Extension factice des specs exemptée du garde-fou (lot 0, interface)
+
+*Contexte.* Tester le contrôle d'accès des extensions demande une extension
+enregistrée, que seul `Partiduo::Modules.register` permet de déclarer ; le
+garde-fou de l'interface (D-014) refuse toute référence hors de
+`Partiduo::Api`.
+
+*Choix.* L'extension `UITEST` vit dans `spec/fixtures/uitest/` (manifeste,
+application Marten pour ses libellés, routes, montage) : ce dossier
+représente le dépôt d'une extension, qui a le droit de déclarer son
+manifeste ; `scripts/api_boundary.cr` l'ignore.
+
+*Alternative écartée.* Attendre `partiduo-skel` : écrit en parallèle, et les
+specs de l'interface ne doivent pas dépendre d'un autre dépôt.
+
+=== D-UI-009 — Informations que le contrat n'expose pas encore (lot 0, interface)
+
+*Contexte.* La barre supérieure affiche exercice et période courants et une
+recherche globale ; l'écran de connexion afficherait volontiers le nom du
+dossier. Le contrat n'expose ni exercices (lot 1), ni recherche, et
+`Api::Core.settings` exige un acteur authentifié.
+
+*Choix.* Exercice « aucun exercice », période « — », recherche qui annonce
+son arrivée avec les écrans ; écran de connexion titré par le nom d'hôte. Les
+emplacements sont prêts (`Shell#fiscal_year`, `Shell#period`).
+
+*Amendement proposé.* Au lot 1 : `Api::Core.current_period(actor)` (exercice,
+période, bornes) et une requête de recherche ; une requête anonyme
+`Api::Core.public_identity` (nom du dossier) pour l'écran de connexion.
+
+=== D-UI-010 — Particularités des gabarits Marten (lot 0, interface)
+
+*Constat.* Dans un gabarit Marten, une liste vide est *vraie* dans un
+`{% if %}`, et la clé d'un dictionnaire de plus de huit entrées n'est pas
+retrouvée (B-UI-004).
+
+*Choix.* Les handlers passent `nil` pour une liste vide (`Handler#listed`) et
+des variables à plat au-delà de quelques clés (`security_*`). Les objets
+exposés aux gabarits (`Shell`) incluent `Marten::Template::Object::Auto`.
+
+*Alternative écartée.* Corriger Marten : hors des shards modifiables.
+
+=== D-UI-011 — Connexion fédérée non câblée dans l'interface (lot 0, interface)
+
+*Contexte.* Le cœur fournit SAML (`begin_federated_login`,
+`login_federated`) ; la réponse de l'IdP arrive par un `POST` intersite, qui
+ne porte pas un cookie `SameSite=Lax` et n'a pas de jeton CSRF.
+
+*Choix.* Reporté : écran et point de retour (ACS) à écrire quand un
+fournisseur sera configuré (cookie `SameSite=None; Secure` pour
+l'identifiant de requête, ACS exempté de CSRF, contrôlé par `InResponseTo`).
+
+*Alternative écartée.* Livrer l'ACS sans l'avoir essayé contre un IdP.
+
+=== D-UI-012 — Icônes ajoutées au jeu Lucide (lot 0, interface)
+
+*Choix.* `key-round`, `shield-check`, `lock`, `log-in`, `smartphone`, `clock`
+ajoutées à `icons/lucide/`, transcrites à la main (pas d'accès au réseau
+depuis le bac à sable), même en-tête de licence ISC, planche régénérée.
+
+*Alternative écartée.* Une autre famille d'icônes : ADR-005 D5, un seul jeu.
+
+=== D-UI-013 — Courriels des liens à usage unique (lot 0, interface)
+
+*Choix.* `PartiduoUi::TokenEmail` (texte brut, libellés fr/en/nl) pour la
+remise à zéro, le déblocage et l'invitation ; lien absolu construit sur l'hôte
+de la requête (validé par `allowed_hosts`). Même réponse que l'adresse existe
+ou non, et que le compte soit bloqué ou non.
+
+*Alternative écartée.* Adresse de base configurée : une instance est servie
+sous son propre sous-domaine (ADR-002 D5), l'hôte de la requête est le bon.
+
+=== D-UI-014 — Trois tailles d'écran (lot 0, interface)
+
+*Choix.* Points de rupture à 1280 et 768 px (ADR-005 D5). Tablette : menu
+latéral visible, repliable par le bouton de menu (choix mémorisé dans le
+navigateur). Téléphone : menu fermé par défaut, barre supérieure non figée
+sur trois lignes (marque et compte ; dossier et période ; recherche), colonnes
+secondaires masquées (`pd-hide-s`). Cibles de 44 px, menu du compte en
+`<details>` (aucune fonction réservée au survol).
+
+*Alternative écartée.* Menu latéral en tiroir superposé sur tablette : la
+saisie au clavier y reste un usage complet, le menu doit rester à côté.
+
+=== D-022 — Relecture du lot 0 sans objet (lot 0, clôture)
+
+*Contexte.* La seule remarque de relecture transmise à la clôture (« bloquant »)
+constate que la session de relecture n'avait ni lecture de fichiers ni shell :
+elle ne porte sur aucun code et n'appelle aucune correction.
+
+*Choix.* Aucune modification de code ; la clôture repose sur les vérifications
+rejouées : format, Ameba, garde-fous ADR-005 D3 (cœur et interface), specs dans
+les trois configurations de modules, specs de l'interface, `opal-build --check`,
+`migrate` sur base vierge depuis les deux dépôts. Une relecture outillée du
+lot 0 reste souhaitable ; elle peut être faite au début du lot 1.
+
+*Alternative écartée.* Bloquer la clôture jusqu'à une nouvelle relecture :
+aucune remarque ne désigne de défaut, et les commits restent locaux, donc
+reprenables.
+
+=== D-023 — `partiduo-skel` reporté au début du lot 1 (lot 0, clôture)
+
+*Contexte.* D-017 plaçait `partiduo-skel` au début du lot 0. Le lot 0 a été
+exécuté par périmètres parallèles (modules, auth, settings, interface) dont
+aucun ne couvrait l'extension de référence ; le dépôt n'existe pas à la
+clôture. Le contrat qu'elle doit illustrer (manifeste, menus, permissions,
+événements, `Partiduo::Api`) est en revanche stable et documenté
+(`doc/api/modules.adoc`), et une extension factice l'exerce déjà dans les specs
+de l'interface (D-UI-008).
+
+*Choix.* Créer `partiduo-skel` en première tâche du lot 1, à partir de
+`doc/api/modules.adoc` et de l'extension factice de `partiduo-ui-bulma`.
+
+*Alternative écartée.* L'écrire pendant la clôture : hors du périmètre de
+clôture fixé, et sans relecture.

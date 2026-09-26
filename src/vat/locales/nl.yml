@@ -2,3 +2,9 @@ nl:
   vat:
     module:
       name: "Btw"
+    permissions:
+      rate:
+        read: "Btw-tarieven raadplegen"
+        write: "Btw-tarieven wijzigen"
+    menu:
+      vat_rates: "Btw-tarieven"

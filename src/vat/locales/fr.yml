@@ -2,3 +2,9 @@ fr:
   vat:
     module:
       name: "TVA"
+    permissions:
+      rate:
+        read: "Consulter les taux de TVA"
+        write: "Modifier les taux de TVA"
+    menu:
+      vat_rates: "Taux de TVA"

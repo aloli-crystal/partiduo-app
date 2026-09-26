@@ -2,6 +2,148 @@ fr:
   core:
     module:
       name: "Socle"
+    permissions:
+      settings:
+        manage: "Gérer les paramètres du dossier"
+      users:
+        manage: "Gérer les utilisateurs et les profils"
+      modules:
+        manage: "Activer et désactiver les modules"
+    menu:
+      dashboard: "Tableau de bord"
+      billing: "Facturation"
+      entry: "Saisie"
+      consult: "Consultation"
+      reference: "Référentiel"
+      reports: "Éditions"
+      vat: "TVA"
+      analytic: "Analytique"
+      settings: "Paramètres"
+      extension: "Extensions"
+      core_company: "Société"
+      core_fiscal_years: "Exercices et périodes"
+      core_users: "Utilisateurs et profils"
+      core_modules: "Modules"
+    settings:
+      name: "Société"
+      fields:
+        company_name: "Raison sociale"
+        legal_form: "Forme juridique"
+        share_capital: "Capital social"
+        rcs: "Immatriculation (RCS, RPM)"
+        siren: "SIREN"
+        vat_number: "Numéro de TVA"
+        street: "Rue"
+        street_number: "Numéro"
+        postcode: "Code postal"
+        city: "Localité"
+        country_code: "Pays"
+        phone: "Téléphone"
+        email: "Adresse électronique"
+        tax_regime: "Régime fiscal"
+        default_locale: "Langue par défaut"
+        domain: "Adresse du dossier"
+        auth_methods: "Méthodes d'authentification autorisées"
+        auth_minimum_level: "Niveau d'authentification minimum"
+        session_duration_minutes: "Durée de session (minutes)"
+      tax_regimes:
+        fr: "France"
+        be: "Belgique"
+      locales:
+        fr: "Français"
+        en: "Anglais"
+        nl: "Néerlandais"
+      auth_methods:
+        password: "Mot de passe (TOTP en second facteur)"
+        passkey: "Passkey"
+        federated: "Identité fédérée (SSO)"
+      auth_levels:
+        level_1: "Niveau 1 — mot de passe seul"
+        level_2: "Niveau 2 — mot de passe et TOTP"
+        level_3: "Niveau 3 — passkey"
+      session_duration:
+        one: "%{count} minute"
+        other: "%{count} minutes"
+    errors:
+      settings:
+        company_name:
+          blank: "La raison sociale est obligatoire."
+          too_long: "La raison sociale ne peut dépasser %{max} caractères."
+        legal_form:
+          too_long: "La forme juridique ne peut dépasser %{max} caractères."
+        share_capital:
+          negative: "Le capital social ne peut être négatif."
+          too_precise: "Le capital social ne peut avoir plus de %{decimals} décimales."
+          too_large: "Le capital social est trop élevé."
+        rcs:
+          too_long: "L'immatriculation ne peut dépasser %{max} caractères."
+        siren:
+          invalid: "Le SIREN « %{value} » n'est pas valide (9 chiffres, clé de contrôle)."
+          not_applicable: "Le SIREN ne concerne que le régime français."
+        vat_number:
+          invalid: "Le numéro de TVA « %{value} » n'est pas valide."
+          country_mismatch: "Le numéro de TVA doit commencer par %{prefix}, le préfixe du pays de la société."
+          siren_mismatch: "Le numéro de TVA ne correspond pas au SIREN %{siren}."
+        street:
+          too_long: "La rue ne peut dépasser %{max} caractères."
+        street_number:
+          too_long: "Le numéro ne peut dépasser %{max} caractères."
+        postcode:
+          too_long: "Le code postal ne peut dépasser %{max} caractères."
+        city:
+          too_long: "La localité ne peut dépasser %{max} caractères."
+        country_code:
+          invalid: "Le code pays « %{value} » n'est pas valide (deux lettres, ISO 3166-1)."
+          regime_mismatch: "Le pays %{country} n'est pas compatible avec le régime fiscal %{regime}."
+        phone:
+          too_long: "Le téléphone ne peut dépasser %{max} caractères."
+        email:
+          invalid: "L'adresse électronique n'est pas valide."
+          too_long: "L'adresse électronique ne peut dépasser %{max} caractères."
+        tax_regime:
+          blank: "Le régime fiscal est obligatoire."
+          invalid: "Le régime fiscal « %{value} » est inconnu (fr ou be)."
+          immutable: "Le régime fiscal ne peut plus être modifié après la création du dossier."
+        default_locale:
+          invalid: "La langue « %{value} » n'est pas disponible."
+        domain:
+          blank: "L'adresse du dossier est obligatoire."
+          invalid: "L'adresse du dossier « %{value} » n'est pas un nom d'hôte valide."
+          too_long: "L'adresse du dossier ne peut dépasser %{max} caractères."
+        auth_methods:
+          blank: "Au moins une méthode d'authentification doit être autorisée."
+          unknown: "Méthode d'authentification inconnue : %{methods}."
+        auth_minimum_level:
+          out_of_range: "Le niveau d'authentification doit être compris entre %{min} et %{max}."
+          unreachable: "Aucune méthode autorisée ne permet d'atteindre le niveau %{level}."
+        session_duration_minutes:
+          out_of_range: "La durée de session doit être comprise entre %{min} et %{max} minutes."
+      provision:
+        already_provisioned: "Ce dossier est déjà créé."
+        admin_email:
+          invalid: "L'adresse de l'administrateur n'est pas valide."
+        modules:
+          unknown: "Module inconnu : %{code}."
+          wrong_kind: "%{code} n'est pas un module (voir --with pour les extensions)."
+          inactive: "Le module %{code} n'est pas actif dans la configuration de l'instance."
+        extensions:
+          unknown: "Extension inconnue : %{code}."
+          wrong_kind: "%{code} n'est pas une extension (voir --modules)."
+          inactive: "L'extension %{code} n'est pas active dans la configuration de l'instance."
+    provision:
+      done: "Dossier « %{name} » créé : %{domain}."
+      regime: "Régime fiscal : %{regime}."
+      modules:
+        one: "%{count} module activé : %{codes}."
+        other: "%{count} modules activés : %{codes}."
+      loaders:
+        zero: "Aucun jeu de données initial à charger."
+        one: "%{count} jeu de données initial chargé : %{names}."
+        other: "%{count} jeux de données initiaux chargés : %{names}."
+      failed:
+        one: "Création du dossier refusée : %{count} erreur."
+        other: "Création du dossier refusée : %{count} erreurs."
+      invalid_number: "Valeur numérique illisible (capital, niveau ou durée de session)."
   partiduo:
     api:
       errors:

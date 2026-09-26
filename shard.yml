@@ -36,6 +36,8 @@ dependencies:
     path: ../../webauthn
   jose:
     path: ../../jose
+  saml:
+    path: ../../saml
 
 development_dependencies:
   ameba:

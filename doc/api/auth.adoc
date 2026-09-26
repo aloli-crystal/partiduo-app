@@ -1,0 +1,251 @@
+= Authentification, droits et audit
+:toc: left
+:toc-title: Table des matières
+:toclevels: 3
+:icons: font
+:source-language: crystal
+
+Référence de l'application `auth/` de `partiduo-app` (ADR-002, ADR-003 D4) et
+de son contrat `Partiduo::Api::Auth`. L'interface (`partiduo-ui-bulma`) n'utilise
+que ce contrat : elle garde le jeton de session dans un cookie, affiche les
+écrans et envoie les courriels ; toutes les règles sont ici.
+
+== Vue d'ensemble
+
+[cols="1,3",options="header"]
+|===
+|Sujet |Règle
+
+|Niveaux (D2)
+|0 session d'enrôlement (invitation) · 1 mot de passe · 2 mot de passe + TOTP
+(ou code de récupération), ou fournisseur d'identité déclaré de niveau 2 ·
+3 passkey avec vérification de l'utilisateur. Le 3 ne s'empile pas sur le 2.
+
+|Niveau exigé
+|`max(Core::Settings#auth_minimum_level, 3 si comptable)`. Session en dessous :
+acteur authentifié *sans aucune permission* ; il peut seulement enrôler une
+méthode ou élever sa session.
+
+|Mot de passe
+|`password-policy`, préréglage « 14 caractères sans caractère spécial
+obligatoire » (palier CNIL à 50 bits), 71 octets au plus, ni nom ni adresse ;
+BCrypt par `authn`. Dès qu'une passkey ou un TOTP est actif, le mot de passe
+exige un second facteur.
+
+|Tentatives
+|Temporisation à partir du 3ᵉ échec (5 s, doublée, plafond 15 min), blocage au
+10ᵉ ; déblocage par l'administrateur, par jeton, ou par remise à zéro du mot
+de passe.
+
+|TOTP
+|RFC 6238 par défaut : SHA-1, 6 chiffres, 30 s ; QR code *et* secret base32 ;
+anti-rejeu par `last_otp_counter`.
+
+|Passkeys
+|ES256 et RS256, credential découvrable, vérification exigée, attestation
+`none`, compteur nul admis, RP ID `PARTIDUO_RP_ID` ou le domaine
+(`partiduo.localhost`). Jamais seule : codes de récupération générés.
+
+|Fédération (D3)
+|SAML intégré, OIDC par la même interface d'adaptateur. Identité
+(`provider` + `subject`) rattachée par la société ; pas d'auto-provisionnement.
+
+|Comptable (D4)
+|Rôle `accountant` : nominatif, niveau 3, sans permission administrative
+(`auth.*`, `core.*.manage`), date de fin, révocation immédiate.
+
+|Audit
+|`auth_audit_event`, nominatif, en ajout seul (déclencheur).
+|===
+
+== Parcours de l'interface
+
+=== Connexion par mot de passe
+
+[source]
+----
+anonymous = Partiduo::Api::Actor.anonymous
+context = Partiduo::Api::Auth::LoginContext.new(ip: request.host, user_agent: ua)
+
+step = Partiduo::Api::Auth.login_password(anonymous,
+  Partiduo::Api::Auth::PasswordLoginInput.new(email, password, context))
+# échec : step.error_keys → auth.errors.login.invalid_credentials | throttled (%{seconds}) | locked | …
+
+view = step.value!
+if view.status == "second_factor_required"   # view.second_factors : ["totp", "recovery_code"]
+  view = Partiduo::Api::Auth.login_second_factor(anonymous,
+    Partiduo::Api::Auth::SecondFactorInput.new(view.pending_token!, code, "totp", context)).value!
+end
+cookie = view.session_token!
+# view.elevation_required : proposer l'élévation ; view.suggest_passkey : inviter à enrôler une passkey
+----
+
+=== À chaque requête
+
+[source]
+----
+actor = Partiduo::Api::Auth.actor(cookie)          # Actor.anonymous si la session n'est plus valable
+session = Partiduo::Api::Auth.session(cookie)      # SessionView? : niveau, niveau exigé, langue…
+Partiduo::Api::Auth.logout(actor, cookie)
+----
+
+=== Passkey
+
+[source]
+----
+# Enrôlement (utilisateur connecté, quel que soit le niveau)
+options = Partiduo::Api::Auth.begin_passkey_registration(actor)  # → navigator.credentials.create
+result = Partiduo::Api::Auth.finish_passkey_registration(actor,
+  Partiduo::Api::Auth::PasskeyRegistrationInput.new(options.challenge_id, attestation_object, client_data_json,
+    transports, name))
+result.value!.recovery_codes  # à afficher une seule fois (vide si l'utilisateur en avait encore)
+
+# Connexion sans identifiant (credential découvrable)
+options = Partiduo::Api::Auth.begin_passkey_login(anonymous)     # → navigator.credentials.get
+Partiduo::Api::Auth.login_passkey(anonymous, Partiduo::Api::Auth::PasskeyAssertionInput.new(
+  options.challenge_id, credential_id, authenticator_data, client_data_json, signature, user_handle, context))
+
+# Élévation de la session courante
+Partiduo::Api::Auth.elevate_with_passkey(anonymous, cookie, assertion)
+Partiduo::Api::Auth.elevate_with_totp(anonymous, cookie, code)
+----
+
+Les octets passent en base64url, tels que les renvoie le navigateur.
+
+=== TOTP
+
+[source]
+----
+enrollment = Partiduo::Api::Auth.begin_totp_enrollment(actor)
+# enrollment.qr_code.modules[y][x] (vrai = sombre, ajouter 4 modules de marge),
+# enrollment.secret_base32, enrollment.provisioning_uri
+codes = Partiduo::Api::Auth.confirm_totp_enrollment(actor, code).value!.codes
+Partiduo::Api::Auth.disable_totp(actor, code)              # niveau 2
+Partiduo::Api::Auth.regenerate_recovery_codes(actor)       # niveau 2
+----
+
+=== Fédération
+
+[source]
+----
+Partiduo::Api::Auth.login_providers(anonymous)             # boutons de l'écran de connexion
+start = Partiduo::Api::Auth.begin_federated_login(anonymous, "idp")
+# rediriger vers start.redirect_url ; garder start.request_id (cookie)
+Partiduo::Api::Auth.login_federated(anonymous, "idp", start.request_id, {"SAMLResponse" => form_value}, context)
+----
+
+Un adaptateur (OIDC…) s'ajoute par `Partiduo::Auth::Federation.register` :
+voir `src/auth/services/federation.cr`.
+
+=== Invitation, remise à zéro, déblocage
+
+L'interface envoie les jetons par courriel ; le cœur ne produit aucun texte.
+Un jeton n'est *jamais* affiché à celui qui le demande : seule la possession de
+l'adresse doit permettre de l'utiliser.
+
+[cols="2,3",options="header"]
+|===
+|Appel |Usage
+
+|`create_user(actor, UserInput)` → `UserCreatedView(user, invitation)`
+|Compte sans mot de passe (sauf s'il est fourni) et jeton d'invitation (7 jours).
+
+|`accept_invitation(anonymous, jeton, context)`
+|Session de niveau 0 : enrôler une passkey (proposée d'abord) ou choisir un
+mot de passe (`change_password` sans mot de passe actuel).
+
+|`issue_invitation(actor, id)`
+|Rouvre l'accès d'un utilisateur qui a perdu ses moyens (D7).
+
+|`request_password_reset(anonymous, email)` → `TokenView?`, `reset_password(anonymous, jeton, mot de passe)`
+|Jeton d'une heure ; lève aussi un blocage et coupe les sessions.
+
+|`request_unlock(anonymous, email)` → `TokenView?`, `unlock_with_token(anonymous, jeton)`
+|Déblocage par courriel d'un compte bloqué.
+|===
+
+== Contrat
+
+Chaque fonction prend l'acteur en premier argument, sauf `actor(jeton)` et
+`session(jeton)` qui le construisent. Les commandes de connexion acceptent
+`Actor.anonymous`.
+
+[cols="3,2,3",options="header"]
+|===
+|Fonction |Accès |Retour
+
+|`login_password`, `login_second_factor`, `login_passkey`, `login_federated`, `accept_invitation`
+|anonyme
+|`Result(LoginView)`
+
+|`begin_passkey_login`, `begin_federated_login`, `login_providers`, `password_policy`, `check_password`
+|anonyme
+|options, vues, `Result(Nil)`
+
+|`actor(jeton)`, `session(jeton)`, `logout`, `elevate_with_passkey`, `elevate_with_totp`
+|jeton de session
+|`Actor`, `SessionView?`, `Result(SessionView)`
+
+|`security_overview`, `dismiss_passkey_prompt`, `change_password`, `begin_totp_enrollment`,
+`confirm_totp_enrollment`, `begin_passkey_registration`, `finish_passkey_registration`, `rename_passkey`
+|authentifié
+|vues, `Result`
+
+|`disable_totp`, `regenerate_recovery_codes`, `remove_passkey`
+|authentifié, niveau 2 (`ElevationRequired`)
+|`Result`
+
+|`ledger_access(actor, ledger_id)`
+|authentifié
+|`W`, `R` ou `X` (héritier de `get_ledger_access`)
+
+|`audit(actor, action, module, détail)`
+|authentifié
+|inscrit une ligne `AUDIT`
+
+|`users`, `user`, `user_by_email`, `create_user`, `update_user`, `revoke_access`, `restore_access`,
+`unlock_user`, `issue_invitation`, `set_ledger_security`, `set_ledger_access`, `ledger_accesses`,
+`user_ledger_access`, `link_federated_identity`, `unlink_federated_identity`, `federated_identities`
+|`auth.users.manage`
+|vues, `Result`
+
+|`profiles`, `profile`, `create_profile`, `update_profile`, `delete_profile`, `ensure_default_profiles`
+|`auth.profiles.manage`
+|`ProfileView`, `Result`
+
+|`identity_providers`, `save_identity_provider`
+|`auth.providers.manage`
+|`IdentityProviderView`, `Result`
+
+|`audit_events(actor, AuditQuery)`
+|`auth.audit.view`
+|`Array(AuditEventView)`, du plus récent au plus ancien
+|===
+
+Erreurs : clés `auth.errors.*` (fr, en, nl), par champ (`email`, `password`,
+`new_password`, `code`, `permissions[2]`, `settings.idp_cert`…) ou `base`.
+
+== Configuration
+
+[cols="1,3",options="header"]
+|===
+|Source |Paramètre
+
+|`Core::Settings`
+|`auth_methods` (`password`, `passkey`, `federated`), `auth_minimum_level`,
+`session_duration_minutes`
+
+|`PARTIDUO_RP_ID`
+|RP ID WebAuthn ; défaut `PARTIDUO_DOMAIN` (`partiduo.localhost`)
+
+|`PARTIDUO_WEBAUTHN_ORIGINS`
+|liste exacte d'origines admises (sinon : sous-domaines du RP ID)
+
+|`PARTIDUO_BCRYPT_COST`
+|coût BCrypt (12 ; 4 en test)
+|===
+
+Fournisseur SAML (`save_identity_provider`, `kind: "saml"`) : `settings` avec
+`idp_entity_id`, `idp_sso_service_url`, `idp_cert` (PEM), `sp_entity_id`,
+`assertion_consumer_service_url`, et facultativement `name_identifier_format` ;
+`level` (1 à 3, 2 par défaut) : niveau reconnu à ce fournisseur.

@@ -2,6 +2,40 @@ en:
   accounting:
     module:
       name: "Accounting"
+    permissions:
+      entry:
+        read: "View entries"
+        post: "Post entries"
+        cancel: "Cancel entries"
+      account:
+        read: "View the chart of accounts"
+        write: "Edit the chart of accounts"
+      ledger:
+        read: "View journals"
+        write: "Create and edit journals"
+      matching:
+        write: "Match accounts"
+      report:
+        read: "View reports"
+      vat:
+        declare: "Prepare VAT returns"
+      period:
+        close: "Close periods and fiscal years"
+    menu:
+      acc_entry_purchase: "Purchases"
+      acc_entry_sale: "Sales"
+      acc_entry_financial: "Financial"
+      acc_entry_misc: "Miscellaneous operations"
+      acc_accounts: "Accounts and parties"
+      acc_entries: "Entries"
+      acc_matching: "Matching"
+      acc_chart: "Chart of accounts"
+      acc_ledgers: "Journals"
+      acc_trial_balance: "Trial balance"
+      acc_general_ledger: "General ledger"
+      acc_fec: "FEC"
+      acc_vat_return: "VAT return"
+      acc_closing: "Closing"
     errors:
       entry:
         account_missing: "Enter an account."

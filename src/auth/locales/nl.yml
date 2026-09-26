@@ -2,3 +2,99 @@ nl:
   auth:
     module:
       name: "Authenticatie"
+    permissions:
+      users:
+        manage: "Gebruikers en hun toegang beheren"
+      profiles:
+        manage: "Profielen en hun rechten beheren"
+      audit:
+        view: "Het auditlogboek raadplegen"
+      providers:
+        manage: "Identiteitsproviders configureren"
+    profiles:
+      admin: "Beheerder"
+      accountant: "Boekhouder"
+    roles:
+      member: "Gebruiker van de onderneming"
+      accountant: "Boekhouder"
+    levels:
+      enrollment: "Registratie"
+      password: "Wachtwoord"
+      two_factor: "Wachtwoord en authenticatie-app"
+      passkey: "Toegangssleutel (passkey)"
+    methods:
+      password: "Wachtwoord"
+      totp: "Authenticatie-app"
+      recovery_code: "Herstelcode"
+      passkey: "Toegangssleutel (passkey)"
+      federated: "Identiteitsprovider"
+      invitation: "Uitnodiging"
+    missing:
+      totp: "Activeer een authenticatie-app om niveau 2 te bereiken."
+      passkey: "Registreer een toegangssleutel (passkey) om niveau 3 te bereiken."
+      recovery_codes: "Genereer herstelcodes: u hebt ze nodig als u uw toestel verliest."
+    errors:
+      elevation_required: "Voor deze handeling is een bijkomende controle van uw identiteit nodig."
+      password:
+        empty: "Voer een wachtwoord in."
+        too_short: "Het wachtwoord moet minstens %{minimum} tekens bevatten."
+        too_long: "Het wachtwoord mag niet langer zijn dan %{maximum} tekens."
+        too_many_bytes: "Het wachtwoord is te lang: hoogstens %{max_bytes} bytes (letters met accent tellen dubbel)."
+        missing_uppercase: "Het wachtwoord moet een hoofdletter bevatten."
+        missing_lowercase: "Het wachtwoord moet een kleine letter bevatten."
+        missing_digit: "Het wachtwoord moet een cijfer bevatten."
+        missing_special: "Het wachtwoord moet een speciaal teken bevatten."
+        too_few_words: "De wachtwoordzin bevat te weinig woorden."
+        forbidden: "Dit wachtwoord is te gangbaar; kies een ander."
+        personal: "Het wachtwoord mag uw naam of uw adres niet bevatten."
+        current_invalid: "Het huidige wachtwoord is onjuist."
+      login:
+        method_disabled: "Deze aanmeldmethode is niet toegestaan voor dit dossier."
+        invalid_credentials: "Onjuist adres of wachtwoord."
+        access_denied: "Uw toegang tot dit dossier is afgesloten."
+        passkey_required: "Meld u aan met uw toegangssleutel (passkey)."
+        expired: "De aanvraag is verlopen; meld u opnieuw aan."
+        invalid_code: "Onjuiste code."
+        locked: "Account geblokkeerd na te veel mislukte pogingen. Vraag een deblokkeerlink aan of neem contact op met de beheerder."
+        throttled: "Te veel pogingen: probeer het over %{seconds} seconden opnieuw."
+      passkey:
+        challenge: "De aanvraag is verlopen; begin opnieuw."
+        invalid: "De toegangssleutel kon niet worden geverifieerd."
+        already_registered: "Deze toegangssleutel is al geregistreerd."
+        unknown: "Onbekende toegangssleutel voor dit dossier."
+        cloned: "Deze toegangssleutel lijkt gekopieerd te zijn: hij wordt geweigerd."
+        origin: "Adres van de site niet herkend voor deze toegangssleutel."
+      federated:
+        invalid: "Het antwoord van de identiteitsprovider is ongeldig."
+        signature: "De handtekening van de identiteitsprovider is ongeldig."
+        unsupported: "Dit type identiteitsprovider wordt niet ondersteund."
+        unknown_identity: "Deze identiteit heeft geen toegang tot dit dossier."
+        subject_required: "Voer de identificatie van de persoon bij de provider in."
+        subject_taken: "Deze identiteit is al aan een gebruiker gekoppeld."
+      token:
+        invalid: "Deze link is niet meer geldig."
+      user:
+        self: "U kunt uw eigen toegang niet intrekken."
+        email_required: "Voer het e-mailadres in."
+        email_invalid: "Ongeldig e-mailadres."
+        email_taken: "Dit adres is al in gebruik."
+        role_invalid: "Onbekende rol."
+        nominative: "Een boekhoudersaccount is persoonlijk: voornaam en naam zijn verplicht."
+        too_long: "Hoogstens 100 tekens."
+        locale_invalid: "Taal niet beschikbaar."
+        profile_unknown: "Onbekend profiel."
+        access_ends_on_past: "De einddatum van de toegang is al verstreken."
+      ledger:
+        access_invalid: "Onbekend recht (W, R of X)."
+      profile:
+        in_use: "Dit profiel is aan gebruikers toegekend."
+        name_required: "Voer de naam van het profiel in."
+        name_taken: "Er bestaat al een profiel met deze naam."
+        permission_unknown: "Onbekende machtiging: %{permission}."
+      provider:
+        required: "Verplicht veld."
+        certificate: "Onleesbaar certificaat (PEM-formaat verwacht)."
+        unknown: "Onbekende identiteitsprovider."
+        code_invalid: "Ongeldige code (kleine letters, cijfers, - en _)."
+        level_invalid: "Ongeldig niveau (1 tot 3)."
+        kind_unsupported: "Niet-ondersteund type provider."

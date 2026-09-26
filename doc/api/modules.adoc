@@ -1,0 +1,298 @@
+= Registre, modules, permissions et événements
+:toc: left
+:toc-title: Table des matières
+:toclevels: 3
+:icons: font
+:source-language: crystal
+
+Référence de l'application `modules/` de `partiduo-app` : le registre
+`Partiduo::Modules`, le manifeste déclaratif, l'activation par instance, les
+permissions nommées, les menus et le bus d'événements `Partiduo::Events`
+(ADR-003 D2, D4, D7 ; ADR-006 D1 à D3). Le contrat vu de l'interface et des
+extensions est `Partiduo::Api::Modules`.
+
+[cols="1,3",options="header"]
+|===
+|Qui |Utilise
+
+|Interface (`partiduo-ui-bulma`)
+|`Partiduo::Api::Modules` seulement : liste, activation, catalogue des
+permissions, menu de l'utilisateur.
+
+|Extension (`partiduo-<nom>`)
+|Le manifeste (`Partiduo::Modules.register`), les événements
+(`on`, `Partiduo::Events.after_commit`) et `Partiduo::Api`.
+
+|Applications du cœur
+|En plus : `Partiduo::Modules.*` (permissions effectives des profils,
+`require_active!`) et `Partiduo::Events.publish`.
+|===
+
+== Pièces du registre
+
+Trois natures (`Partiduo::Modules::Kind`) :
+
+[cols="1,2,3",options="header"]
+|===
+|Nature |Pièces |Activation
+
+|`Socle` |`CORE`, `AUTH`, `CARDS`, `VAT` |Toujours actives ; ne s'activent ni ne se désactivent.
+|`Module` |`ACCOUNTING`, `INVOICING`, `ANALYTIC` (`STOCK` au lot 6) |Par instance.
+|`Extension` |`SKEL`, `EINV`… (shards `partiduo-<nom>`) |Par instance. Valeur par défaut d'un manifeste.
+|===
+
+== Manifeste
+
+Chaque pièce déclare son manifeste dans `src/<app>/manifest.cr` (ou dans le
+fichier principal de l'extension). Le bloc est évalué avec le manifeste pour
+receveur ; `code` vient en premier, car les clés i18n par défaut en dérivent.
+
+[source]
+----
+Partiduo::Modules.register do
+  code "SKEL"                               # majuscules, chiffres, _
+  name "skel.module.name"                   # clé i18n (défaut : <code>.module.name)
+  version "0.1.0"                           # majeure.mineure.correctif
+  requires_core "~> 0.1"                    # contrainte sur Partiduo::VERSION
+  depends_on "ACCOUNTING"                   # toutes requises
+  depends_on "DOCUMENT", version: ">= 1.0"  # avec contrainte de version
+  depends_on_any "INVOICING", "ACCOUNTING"  # au moins une requise
+
+  permission "skel.page.view"               # libellé : skel.permissions.page.view
+  permission "skel.page.edit", label: "skel.rights.edit"
+
+  menu "SKEL_HOME", parent: "EXTENSION", order: 100,
+    route: "skel:index", permission: "skel.page.view"   # libellé : skel.menu.skel_home
+
+  ui "bulma", path: "ui/bulma"              # interface fournie (ADR-005 D4)
+
+  on("entry.posted") { |event| Skel::Counter.increment(event["entry_id"]) }
+end
+----
+
+[cols="1,3",options="header"]
+|===
+|Déclaration |Règle
+
+|`code`
+|Unique dans le registre. En minuscules dans `PARTIDUO_MODULES`.
+
+|`version`, `requires_core`
+|Contraintes à la manière de shards : `~>`, `>=`, `>`, `<=`, `<`, `=`,
+combinables par des virgules (`">= 0.1, < 1.0"`). `"0.1.0"` seul signifie `=`.
+
+|`depends_on`
+|Pièces requises, *toutes* actives ; `version:` contraint leur version.
+
+|`depends_on_any`
+|Au moins deux pièces, dont *une* doit être active (module Stock, ADR-006 D1).
+
+|`permission`
+|`<préfixe>.<objet>.<action>` en minuscules. Unique dans tout le registre.
+Libellé i18n par défaut `<préfixe>.permissions.<objet>.<action>`.
+
+|`menu`
+|Code unique dans le registre. `parent` : une rubrique existante (voir
+<<menus>>). `route` : nom de route que l'*interface* résout — le cœur n'a
+aucune route (ADR-005 D1). `permission` : déclarée dans un manifeste ; `nil`
+= tout utilisateur authentifié. Libellé par défaut
+`<code du manifeste>.menu.<code du menu>` (en minuscules).
+
+|`ui`
+|Dossier d'interface de l'extension, monté par le dépôt d'interface sous
+`/ext/<code>/` (ADR-003 D3, ADR-005 D4).
+
+|`on`
+|Abonnement à un événement de la liste fermée (voir <<evenements>>).
+|===
+
+Toutes les clés i18n citées (nom, permissions, menus) existent en fr, en et nl
+(spec `spec/modules/registry_spec.cr`).
+
+== Vérification au démarrage
+
+`Partiduo::Modules::App#setup` appelle `Partiduo::Modules.check!` ; une
+incohérence lève `Partiduo::Modules::ConfigurationError` (toutes les erreurs,
+une par ligne) et *empêche le démarrage*, au lieu d'échouer à l'usage.
+
+Défauts de composition (toutes les pièces enregistrées) ::
+* version mal formée ;
+* permission ou code de menu déclaré par deux pièces ;
+* menu rattaché à une rubrique inconnue, ou exigeant une permission non déclarée.
+
+Défauts d'activation (pièces actives) ::
+* pièce active inconnue du registre (faute de frappe dans `PARTIDUO_MODULES`) ;
+* pièce du socle citée comme activable ;
+* dépendance (`depends_on`) inconnue, inactive ou de version incompatible ;
+* aucune pièce active parmi un `depends_on_any` ;
+* version du cœur hors de `requires_core`.
+
+== Activation par instance
+
+L'ensemble actif (`Partiduo::Modules::State.active_codes`) vient :
+
+. de la table `modules_activation`, dès qu'elle contient une ligne : c'est le
+  choix enregistré par l'administrateur (`Api::Modules.activate`,
+  `deactivate`) ou par `partiduo-provision` ;
+. sinon de `PARTIDUO_MODULES` : `accounting,invoicing` ; absente, les trois
+  modules officiels ; `none` ou vide, le socle seul.
+
+Une pièce inactive n'expose ni menu ni permission cochable ; ses commandes et
+requêtes lèvent `Partiduo::Api::ModuleDisabled` (via `Guard.authorize!`) ; ses
+abonnés ne sont pas appelés. Ses données sont conservées (ADR-006 D2).
+
+[source]
+----
+Partiduo::Modules.active?("INVOICING")          # => Bool
+Partiduo::Modules.require_active!("INVOICING")  # lève Api::ModuleDisabled
+Partiduo::Modules.active_manifests              # => Array(Manifest), ordre d'enregistrement
+Partiduo::Modules.dependents("ACCOUNTING")      # pièces actives qui l'exigent
+----
+
+== Permissions et profils
+
+Les permissions sont déclarées par les manifestes et *cochées dans les
+profils* (ADR-003 D4, ADR-002 D4). Le modèle `Profile` (application `auth`)
+s'appuie sur :
+
+[cols="2,3",options="header"]
+|===
+|Appel |Usage
+
+|`Partiduo::Modules.permission_catalog : Array(PermissionEntry)`
+|Toutes les permissions déclarées (`name`, `label`, `module_code`), pièces
+inactives comprises.
+
+|`Partiduo::Modules.active_permissions : Array(String)`
+|Celles des pièces actives : ce que l'administrateur peut cocher ; toutes pour
+un profil administrateur.
+
+|`Partiduo::Modules.permission_declared?(name) : Bool`, `permission_entry(name)`
+|Validation unitaire.
+
+|`Partiduo::Modules.unknown_permissions(names) : Array(String)`
+|À la validation d'un profil : les noms inconnus sont refusés.
+
+|`Partiduo::Modules.effective_permissions(names) : Set(String)`
+|Pour construire l'acteur : `Actor.user(user.id, effective_permissions(profil))`.
+Un profil garde les permissions d'un module désactivé ; elles reprennent
+effet à sa réactivation.
+|===
+
+== Contrat `Partiduo::Api::Modules`
+
+Toutes les fonctions prennent l'acteur en premier argument ; celles qui ne
+citent pas de permission exigent un acteur authentifié (`Forbidden` sinon).
+
+[cols="3,1,3",options="header"]
+|===
+|Fonction |Permission |Retour
+
+|`list(actor)`
+|—
+|`Array(ModuleView)` : `code`, `name_key`, `kind` (`socle`, `module`,
+`extension`), `version`, `active`, `depends_on`, `depends_on_any`, `permissions`.
+
+|`get(actor, code)`
+|—
+|`ModuleView` ; `NotFound` si le code est inconnu (casse indifférente).
+
+|`activate(actor, code)`
+|`core.modules.manage`
+|`Result(ModuleView)`. Erreurs sur le champ `code` :
+`modules.errors.activation.socle`, `.missing_dependency` (`%{module}`,
+`%{dependency}`), `.incompatible` (`%{module}`, `%{detail}`). Sans effet si
+la pièce est déjà active.
+
+|`deactivate(actor, code)`
+|`core.modules.manage`
+|`Result(ModuleView)`. Erreurs : `modules.errors.activation.socle`,
+`.required_by` (`%{module}`, `%{dependent}`), une par pièce active qui l'exige.
+
+|`permissions(actor)`
+|—
+|`Array(PermissionView)` : `name`, `label_key`, `module_code` — permissions
+des pièces actives, pour l'écran des profils.
+
+|`menu(actor)`
+|—
+|`Array(MenuView)` en arbre (`code`, `label_key`, `route`, `module_code`,
+`children`) : entrées des pièces actives que l'acteur a le droit de voir,
+triées par `order`. Une rubrique sans route ni enfant visible est omise.
+|===
+
+L'activation s'exécute dans une transaction et enregistre l'auteur
+(`changed_by_id`). Activer la Comptabilité après une période de facturation
+seule proposera de comptabiliser l'historique (ADR-006 D2) : ce sera un
+abonnement du module Comptabilité, au lot F.
+
+[[menus]]
+== Rubriques du menu
+
+Déclarées par `CORE` (ADR-005 § Structure d'écran) ; modules et extensions y
+rattachent leurs entrées.
+
+[cols="1,1,2",options="header"]
+|===
+|Code |Ordre |Contenu
+
+|`DASHBOARD` |10 |Tableau de bord (route `core:dashboard`)
+|`BILLING` |20 |Facturation
+|`ENTRY` |30 |Saisie
+|`CONSULT` |40 |Consultation
+|`REFERENCE` |50 |Référentiel
+|`REPORTS` |60 |Éditions
+|`VAT` |70 |TVA
+|`ANALYTIC` |80 |Analytique
+|`SETTINGS` |90 |Paramètres
+|`EXTENSION` |100 |Extensions activées
+|===
+
+[[evenements]]
+== Événements
+
+Liste fermée (ADR-003 D7, ADR-006 D3), avec les clés de charge utile
+obligatoires :
+
+[cols="1,1,2",options="header"]
+|===
+|Événement |Clés |Publié par
+
+|`entry.posted` |`entry_id` |Comptabilité, écriture enregistrée
+|`entry.cancelled` |`entry_id` |Comptabilité, écriture annulée
+|`invoice.issued` |`invoice_id` |Facturation, à la validation
+|`credit_note.issued` |`credit_note_id` |Facturation
+|`payment.recorded` |`payment_id` |Facturation, encaissement saisi
+|`payment.matched` |`matching_id` |Comptabilité, lettrage
+|`card.saved` |`card_id` |Socle, fiche enregistrée
+|`period.closed` |`period_id` |Socle ou Comptabilité, clôture
+|===
+
+Publication, dans la transaction de la commande :
+
+[source]
+----
+Partiduo::Api::Transaction.run do
+  entry = ...
+  Partiduo::Events.publish("entry.posted", {"entry_id" => entry.pk.to_s}, actor_user_id: actor.user_id)
+  Partiduo::Api::Result(EntryView).success(EntryView.from(entry))
+end
+----
+
+* *Synchrone* : les abonnés des pièces actives sont appelés aussitôt, dans
+  l'ordre d'enregistrement des manifestes ; `publish` rejoint la transaction
+  courante ou en ouvre une.
+* *Atomique* : l'exception d'un abonné est propagée et annule toute
+  l'opération.
+* *Charge utile* : `Hash(String, String)` d'identifiants et de scalaires
+  (montants en `BigDecimal#to_s`) ; clés supplémentaires permises. L'abonné
+  relit le reste par `Partiduo::Api` avec `Actor.system`.
+* `Event#[](key)` lève `KeyError` si la clé manque ; `Event#[]?` renvoie `nil`.
+  `Event#actor_user_id` : auteur de l'opération, pour la traçabilité.
+* *Effet extérieur* (courriel, appel à une plateforme) :
+  `Partiduo::Events.after_commit { … }` l'exécute après la validation, jamais
+  si l'opération est annulée.
+* `Partiduo::Events.subscribers(name)` : codes des pièces actives abonnées.
+
+Ajouter un événement : compléter `Partiduo::Events::SCHEMA`, ce document et
+DECISIONS.adoc (convention C4).

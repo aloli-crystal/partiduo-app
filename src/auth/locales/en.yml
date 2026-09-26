@@ -2,3 +2,99 @@ en:
   auth:
     module:
       name: "Authentication"
+    permissions:
+      users:
+        manage: "Manage users and their access"
+      profiles:
+        manage: "Manage profiles and their rights"
+      audit:
+        view: "View the audit log"
+      providers:
+        manage: "Configure identity providers"
+    profiles:
+      admin: "Administrator"
+      accountant: "Accountant"
+    roles:
+      member: "Company user"
+      accountant: "Accountant"
+    levels:
+      enrollment: "Enrolment"
+      password: "Password"
+      two_factor: "Password and authenticator app"
+      passkey: "Passkey"
+    methods:
+      password: "Password"
+      totp: "Authenticator app"
+      recovery_code: "Recovery code"
+      passkey: "Passkey"
+      federated: "Identity provider"
+      invitation: "Invitation"
+    missing:
+      totp: "Turn on an authenticator app to reach level 2."
+      passkey: "Register a passkey to reach level 3."
+      recovery_codes: "Generate recovery codes: you will need them if you lose your device."
+    errors:
+      elevation_required: "This operation requires an additional check of your identity."
+      password:
+        empty: "Enter a password."
+        too_short: "The password must be at least %{minimum} characters long."
+        too_long: "The password cannot exceed %{maximum} characters."
+        too_many_bytes: "The password is too long: %{max_bytes} bytes at most (accented letters count as two)."
+        missing_uppercase: "The password must contain an uppercase letter."
+        missing_lowercase: "The password must contain a lowercase letter."
+        missing_digit: "The password must contain a digit."
+        missing_special: "The password must contain a special character."
+        too_few_words: "The passphrase does not contain enough words."
+        forbidden: "This password is too common; choose another one."
+        personal: "The password must not contain your name or your address."
+        current_invalid: "The current password is incorrect."
+      login:
+        method_disabled: "This sign-in method is not allowed on this ledger file."
+        invalid_credentials: "Incorrect address or password."
+        access_denied: "Your access to this ledger file is closed."
+        passkey_required: "Sign in with your passkey."
+        expired: "The request has expired; sign in again."
+        invalid_code: "Incorrect code."
+        locked: "Account locked after too many failures. Request an unlock link or contact the administrator."
+        throttled: "Too many attempts: try again in %{seconds} seconds."
+      passkey:
+        challenge: "The request has expired; start again."
+        invalid: "The passkey could not be verified."
+        already_registered: "This passkey is already registered."
+        unknown: "Passkey unknown on this ledger file."
+        cloned: "This passkey appears to have been copied: it is refused."
+        origin: "Site address not recognised for this passkey."
+      federated:
+        invalid: "The identity provider's response is invalid."
+        signature: "The identity provider's signature is invalid."
+        unsupported: "This kind of identity provider is not supported."
+        unknown_identity: "This identity has no access to this ledger file."
+        subject_required: "Enter the person's identifier at the provider."
+        subject_taken: "This identity is already linked to a user."
+      token:
+        invalid: "This link is no longer valid."
+      user:
+        self: "You cannot revoke your own access."
+        email_required: "Enter the email address."
+        email_invalid: "Invalid email address."
+        email_taken: "This address is already in use."
+        role_invalid: "Unknown role."
+        nominative: "An accountant account is personal: first and last names are required."
+        too_long: "100 characters at most."
+        locale_invalid: "Language not available."
+        profile_unknown: "Unknown profile."
+        access_ends_on_past: "The access end date has already passed."
+      ledger:
+        access_invalid: "Unknown right (W, R or X)."
+      profile:
+        in_use: "This profile is assigned to users."
+        name_required: "Enter the profile name."
+        name_taken: "A profile already has this name."
+        permission_unknown: "Unknown permission: %{permission}."
+      provider:
+        required: "Required field."
+        certificate: "Unreadable certificate (PEM format expected)."
+        unknown: "Unknown identity provider."
+        code_invalid: "Invalid code (lowercase letters, digits, - and _)."
+        level_invalid: "Invalid level (1 to 3)."
+        kind_unsupported: "Unsupported provider type."

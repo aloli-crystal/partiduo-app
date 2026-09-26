@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Instance Partiduo {{DOSSIER}} — généré par partiduo-provision.
+# Certificat : un certificat générique *.{{DOMAIN}} pour tout le parc.
+
+server {
+  listen      80;
+  listen      [::]:80;
+  server_name {{HOST}};
+  return 301  https://$host$request_uri;
+}
+
+server {
+  listen      443 ssl;
+  listen      [::]:443 ssl;
+  http2       on;
+  server_name {{HOST}};
+
+  ssl_certificate     /etc/letsencrypt/live/{{DOMAIN}}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/{{DOMAIN}}/privkey.pem;
+
+  add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+
+  # Pièces jointes et imports (FEC) : limite volontairement large.
+  client_max_body_size 32m;
+
+  access_log /var/log/nginx/partiduo-{{DOSSIER}}.access.log;
+  error_log  /var/log/nginx/partiduo-{{DOSSIER}}.error.log;
+
+  location / {
+    proxy_pass         http://127.0.0.1:{{PORT}};
+    proxy_http_version 1.1;
+    proxy_set_header   Host              $host;
+    proxy_set_header   X-Real-IP         $remote_addr;
+    proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header   X-Forwarded-Proto $scheme;
+    proxy_read_timeout 300s;
+  }
+}

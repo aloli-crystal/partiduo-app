@@ -2,3 +2,12 @@ nl:
   analytic:
     module:
       name: "Analytische boekhouding"
+    permissions:
+      plan:
+        read: "Analytische plannen raadplegen"
+        write: "Analytische plannen wijzigen"
+      report:
+        read: "Analytische rapporten raadplegen"
+    menu:
+      ana_plans: "Plannen en posten"
+      ana_reports: "Analytische rapporten"

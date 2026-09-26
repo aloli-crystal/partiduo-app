@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 require "./manifest"
+require "./models/**"
+require "./services/**"
 require "./api/**"
 
 module Partiduo

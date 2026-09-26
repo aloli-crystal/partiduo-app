@@ -83,10 +83,39 @@ La configuration d'une instance tient dans son environnement (ADR-001 D2).
 |domaine des instances (`<dossier>.<domaine>`), RP ID WebAuthn
 |`partiduo.localhost`
 
+|`PARTIDUO_RP_ID`
+|identifiant de partie de confiance WebAuthn (à figer avant le premier enrôlement)
+|`PARTIDUO_DOMAIN`
+
+|`PARTIDUO_WEBAUTHN_ORIGINS`
+|origines WebAuthn admises, liste exacte séparée par des virgules
+|tout sous-domaine du RP ID (`http` admis pour `*.localhost`)
+
+|`PARTIDUO_BCRYPT_COST`
+|coût BCrypt des mots de passe
+|12 (4 en test)
+
 |`MARTEN_SECRET_KEY`
 |clé secrète (obligatoire en production)
 |valeur de développement
 |===
+
+== Créer une instance et exploiter le parc
+
+Une instance par dossier : une base, une URL `<dossier>.<domaine>` (ADR-001 D2).
+
+[source,sh]
+----
+bin/partiduo-provision --name "Exemple SARL" --regime fr \
+  --modules accounting,invoicing --with skel exemple-sarl
+----
+
+crée la base, applique les migrations, enregistre la société et charge le jeu
+de données initial du régime, puis génère environnement, vhost nginx et unité
+systemd dans `tmp/instances/exemple-sarl/` (sans les installer).
+`deploy/bin/partiduo-fleet` outille le parc (montée de version progressive,
+sauvegardes, retour arrière) : voir link:deploy/README.adoc[] et, pour le
+contrat, link:doc/api/core-settings.adoc[].
 
 == Tests
 

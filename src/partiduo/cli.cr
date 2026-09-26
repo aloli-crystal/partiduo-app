@@ -8,3 +8,8 @@
 require "marten/cli"
 
 require "../auth/migrations/**"
+require "../core/migrations/**"
+require "../modules/migrations/**"
+
+# Commandes de gestion du cœur (`provision`).
+require "../core/commands/**"

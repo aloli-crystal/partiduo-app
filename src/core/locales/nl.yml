@@ -2,6 +2,148 @@ nl:
   core:
     module:
       name: "Basis"
+    permissions:
+      settings:
+        manage: "Dossierinstellingen beheren"
+      users:
+        manage: "Gebruikers en profielen beheren"
+      modules:
+        manage: "Modules activeren en deactiveren"
+    menu:
+      dashboard: "Dashboard"
+      billing: "Facturatie"
+      entry: "Invoer"
+      consult: "Raadpleging"
+      reference: "Basisgegevens"
+      reports: "Rapporten"
+      vat: "Btw"
+      analytic: "Analytische boekhouding"
+      settings: "Instellingen"
+      extension: "Uitbreidingen"
+      core_company: "Onderneming"
+      core_fiscal_years: "Boekjaren en periodes"
+      core_users: "Gebruikers en profielen"
+      core_modules: "Modules"
+    settings:
+      name: "Onderneming"
+      fields:
+        company_name: "Firmanaam"
+        legal_form: "Rechtsvorm"
+        share_capital: "Maatschappelijk kapitaal"
+        rcs: "Inschrijving (RPR, RCS)"
+        siren: "SIREN"
+        vat_number: "Btw-nummer"
+        street: "Straat"
+        street_number: "Nummer"
+        postcode: "Postcode"
+        city: "Gemeente"
+        country_code: "Land"
+        phone: "Telefoon"
+        email: "E-mailadres"
+        tax_regime: "Fiscaal stelsel"
+        default_locale: "Standaardtaal"
+        domain: "Adres van het dossier"
+        auth_methods: "Toegestane authenticatiemethoden"
+        auth_minimum_level: "Minimaal authenticatieniveau"
+        session_duration_minutes: "Sessieduur (minuten)"
+      tax_regimes:
+        fr: "Frankrijk"
+        be: "België"
+      locales:
+        fr: "Frans"
+        en: "Engels"
+        nl: "Nederlands"
+      auth_methods:
+        password: "Wachtwoord (TOTP als tweede factor)"
+        passkey: "Passkey"
+        federated: "Gefedereerde identiteit (SSO)"
+      auth_levels:
+        level_1: "Niveau 1 — enkel wachtwoord"
+        level_2: "Niveau 2 — wachtwoord en TOTP"
+        level_3: "Niveau 3 — passkey"
+      session_duration:
+        one: "%{count} minuut"
+        other: "%{count} minuten"
+    errors:
+      settings:
+        company_name:
+          blank: "De firmanaam is verplicht."
+          too_long: "De firmanaam mag niet langer zijn dan %{max} tekens."
+        legal_form:
+          too_long: "De rechtsvorm mag niet langer zijn dan %{max} tekens."
+        share_capital:
+          negative: "Het maatschappelijk kapitaal mag niet negatief zijn."
+          too_precise: "Het maatschappelijk kapitaal mag niet meer dan %{decimals} decimalen hebben."
+          too_large: "Het maatschappelijk kapitaal is te hoog."
+        rcs:
+          too_long: "De inschrijving mag niet langer zijn dan %{max} tekens."
+        siren:
+          invalid: "Het SIREN-nummer „%{value}” is ongeldig (9 cijfers, controlecijfer)."
+          not_applicable: "Het SIREN-nummer geldt enkel voor het Franse stelsel."
+        vat_number:
+          invalid: "Het btw-nummer „%{value}” is ongeldig."
+          country_mismatch: "Het btw-nummer moet beginnen met %{prefix}, het voorvoegsel van het land van de onderneming."
+          siren_mismatch: "Het btw-nummer komt niet overeen met SIREN %{siren}."
+        street:
+          too_long: "De straat mag niet langer zijn dan %{max} tekens."
+        street_number:
+          too_long: "Het nummer mag niet langer zijn dan %{max} tekens."
+        postcode:
+          too_long: "De postcode mag niet langer zijn dan %{max} tekens."
+        city:
+          too_long: "De gemeente mag niet langer zijn dan %{max} tekens."
+        country_code:
+          invalid: "De landcode „%{value}” is ongeldig (twee letters, ISO 3166-1)."
+          regime_mismatch: "Land %{country} is niet verenigbaar met het fiscaal stelsel %{regime}."
+        phone:
+          too_long: "Het telefoonnummer mag niet langer zijn dan %{max} tekens."
+        email:
+          invalid: "Het e-mailadres is ongeldig."
+          too_long: "Het e-mailadres mag niet langer zijn dan %{max} tekens."
+        tax_regime:
+          blank: "Het fiscaal stelsel is verplicht."
+          invalid: "Onbekend fiscaal stelsel „%{value}” (fr of be)."
+          immutable: "Het fiscaal stelsel kan na het aanmaken van het dossier niet meer worden gewijzigd."
+        default_locale:
+          invalid: "De taal „%{value}” is niet beschikbaar."
+        domain:
+          blank: "Het adres van het dossier is verplicht."
+          invalid: "Het adres van het dossier „%{value}” is geen geldige hostnaam."
+          too_long: "Het adres van het dossier mag niet langer zijn dan %{max} tekens."
+        auth_methods:
+          blank: "Er moet minstens één authenticatiemethode toegestaan zijn."
+          unknown: "Onbekende authenticatiemethode: %{methods}."
+        auth_minimum_level:
+          out_of_range: "Het authenticatieniveau moet tussen %{min} en %{max} liggen."
+          unreachable: "Geen enkele toegestane methode bereikt niveau %{level}."
+        session_duration_minutes:
+          out_of_range: "De sessieduur moet tussen %{min} en %{max} minuten liggen."
+      provision:
+        already_provisioned: "Dit dossier bestaat al."
+        admin_email:
+          invalid: "Het e-mailadres van de beheerder is ongeldig."
+        modules:
+          unknown: "Onbekende module: %{code}."
+          wrong_kind: "%{code} is geen module (gebruik --with voor uitbreidingen)."
+          inactive: "Module %{code} is niet actief in de configuratie van de instantie."
+        extensions:
+          unknown: "Onbekende uitbreiding: %{code}."
+          wrong_kind: "%{code} is geen uitbreiding (gebruik --modules)."
+          inactive: "Uitbreiding %{code} is niet actief in de configuratie van de instantie."
+    provision:
+      done: "Dossier „%{name}” aangemaakt: %{domain}."
+      regime: "Fiscaal stelsel: %{regime}."
+      modules:
+        one: "%{count} module geactiveerd: %{codes}."
+        other: "%{count} modules geactiveerd: %{codes}."
+      loaders:
+        zero: "Geen initiële gegevensset te laden."
+        one: "%{count} initiële gegevensset geladen: %{names}."
+        other: "%{count} initiële gegevenssets geladen: %{names}."
+      failed:
+        one: "Aanmaken van het dossier geweigerd: %{count} fout."
+        other: "Aanmaken van het dossier geweigerd: %{count} fouten."
+      invalid_number: "Onleesbare numerieke waarde (kapitaal, niveau of sessieduur)."
   partiduo:
     api:
       errors:

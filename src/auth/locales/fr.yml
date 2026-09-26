@@ -2,3 +2,99 @@ fr:
   auth:
     module:
       name: "Authentification"
+    permissions:
+      users:
+        manage: "Gérer les utilisateurs et leurs accès"
+      profiles:
+        manage: "Gérer les profils et leurs droits"
+      audit:
+        view: "Consulter le journal d'audit"
+      providers:
+        manage: "Configurer les fournisseurs d'identité"
+    profiles:
+      admin: "Administrateur"
+      accountant: "Comptable"
+    roles:
+      member: "Utilisateur de la société"
+      accountant: "Comptable"
+    levels:
+      enrollment: "Enrôlement"
+      password: "Mot de passe"
+      two_factor: "Mot de passe et application d'authentification"
+      passkey: "Clé d'accès (passkey)"
+    methods:
+      password: "Mot de passe"
+      totp: "Application d'authentification"
+      recovery_code: "Code de récupération"
+      passkey: "Clé d'accès (passkey)"
+      federated: "Fournisseur d'identité"
+      invitation: "Invitation"
+    missing:
+      totp: "Activez une application d'authentification pour atteindre le niveau 2."
+      passkey: "Enregistrez une clé d'accès (passkey) pour atteindre le niveau 3."
+      recovery_codes: "Générez des codes de récupération : ils vous serviront si vous perdez votre appareil."
+    errors:
+      elevation_required: "Cette opération demande une vérification supplémentaire de votre identité."
+      password:
+        empty: "Saisissez un mot de passe."
+        too_short: "Le mot de passe doit compter au moins %{minimum} caractères."
+        too_long: "Le mot de passe ne peut pas dépasser %{maximum} caractères."
+        too_many_bytes: "Le mot de passe est trop long : %{max_bytes} octets au plus (les lettres accentuées en comptent deux)."
+        missing_uppercase: "Le mot de passe doit contenir une majuscule."
+        missing_lowercase: "Le mot de passe doit contenir une minuscule."
+        missing_digit: "Le mot de passe doit contenir un chiffre."
+        missing_special: "Le mot de passe doit contenir un caractère spécial."
+        too_few_words: "La phrase de passe ne contient pas assez de mots."
+        forbidden: "Ce mot de passe est trop courant ; choisissez-en un autre."
+        personal: "Le mot de passe ne doit contenir ni votre nom ni votre adresse."
+        current_invalid: "Le mot de passe actuel est incorrect."
+      login:
+        method_disabled: "Cette méthode de connexion n'est pas autorisée sur ce dossier."
+        invalid_credentials: "Adresse ou mot de passe incorrect."
+        access_denied: "Votre accès à ce dossier est fermé."
+        passkey_required: "Connectez-vous avec votre clé d'accès (passkey)."
+        expired: "La demande a expiré ; recommencez la connexion."
+        invalid_code: "Code incorrect."
+        locked: "Compte bloqué après trop d'échecs. Demandez un lien de déblocage ou contactez l'administrateur."
+        throttled: "Trop de tentatives : réessayez dans %{seconds} secondes."
+      passkey:
+        challenge: "La demande a expiré ; recommencez."
+        invalid: "La clé d'accès n'a pas pu être vérifiée."
+        already_registered: "Cette clé d'accès est déjà enregistrée."
+        unknown: "Clé d'accès inconnue sur ce dossier."
+        cloned: "Cette clé d'accès semble avoir été copiée : elle est refusée."
+        origin: "Adresse du site non reconnue pour cette clé d'accès."
+      federated:
+        invalid: "La réponse du fournisseur d'identité est invalide."
+        signature: "La signature du fournisseur d'identité est invalide."
+        unsupported: "Ce type de fournisseur d'identité n'est pas pris en charge."
+        unknown_identity: "Cette identité n'a pas d'accès à ce dossier."
+        subject_required: "Saisissez l'identifiant de la personne chez le fournisseur."
+        subject_taken: "Cette identité est déjà rattachée à un utilisateur."
+      token:
+        invalid: "Ce lien n'est plus valable."
+      user:
+        self: "Vous ne pouvez pas révoquer votre propre accès."
+        email_required: "Saisissez l'adresse électronique."
+        email_invalid: "Adresse électronique invalide."
+        email_taken: "Cette adresse est déjà utilisée."
+        role_invalid: "Rôle inconnu."
+        nominative: "Un compte comptable est nominatif : prénom et nom sont obligatoires."
+        too_long: "100 caractères au plus."
+        locale_invalid: "Langue non disponible."
+        profile_unknown: "Profil inconnu."
+        access_ends_on_past: "La date de fin d'accès est déjà passée."
+      ledger:
+        access_invalid: "Droit inconnu (W, R ou X)."
+      profile:
+        in_use: "Ce profil est attribué à des utilisateurs."
+        name_required: "Saisissez le nom du profil."
+        name_taken: "Un profil porte déjà ce nom."
+        permission_unknown: "Permission inconnue : %{permission}."
+      provider:
+        required: "Champ obligatoire."
+        certificate: "Certificat illisible (format PEM attendu)."
+        unknown: "Fournisseur d'identité inconnu."
+        code_invalid: "Code invalide (minuscules, chiffres, - et _)."
+        level_invalid: "Niveau invalide (1 à 3)."
+        kind_unsupported: "Type de fournisseur non pris en charge."

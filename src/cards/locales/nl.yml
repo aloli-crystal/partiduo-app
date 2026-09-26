@@ -2,3 +2,12 @@ nl:
   cards:
     module:
       name: "Fiches"
+    permissions:
+      card:
+        read: "Fiches raadplegen"
+        write: "Fiches aanmaken en wijzigen"
+      category:
+        manage: "Fichecategorieën beheren"
+    menu:
+      cards_list: "Relaties en artikelen"
+      cards_categories: "Fichecategorieën"

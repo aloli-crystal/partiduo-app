@@ -2,3 +2,9 @@ en:
   modules:
     module:
       name: "Modules"
+    errors:
+      activation:
+        socle: "%{module} is part of the core: it is always enabled."
+        missing_dependency: "%{module} requires %{dependency}, which is not enabled."
+        required_by: "%{dependent} requires %{module}: disable %{dependent} first."
+        incompatible: "%{module} is not compatible with this instance: %{detail}"

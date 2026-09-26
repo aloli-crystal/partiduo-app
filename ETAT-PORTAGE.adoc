@@ -16,9 +16,9 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 
 |P |Squelette `partiduo-app`, conventions, CI, garde-fou ADR-005 D3 |*Terminé*
 |P |Squelette `partiduo-ui-bulma` avec Opal, garde-fou `Partiduo::Api` |*Terminé*
-|P |`partiduo-skel` (extension de référence) |Reporté au lot 0 (D-017)
-|0 |Socle : registre étoffé, société, authentification + TOTP, i18n, `partiduo-provision` |*Lot suivant*
-|1 |Référentiel : tiers, articles, TVA, exercices et périodes ; plan comptable, journaux |À faire
+|P |`partiduo-skel` (extension de référence) |Reporté au lot 1 (D-017, D-023)
+|0 |Socle : registre étoffé, société, authentification + TOTP + WebAuthn, i18n, `partiduo-provision`, parc, interface de connexion |*Terminé*
+|1 |Référentiel : tiers, articles, TVA, exercices et périodes ; plan comptable, journaux |*Lot suivant*
 |2 |Écritures, consultation, lettrage |À faire
 |F |Module Facturation |À faire
 |M |`partiduo-migrate` |À faire
@@ -71,14 +71,68 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
   depuis l'interface : vert.
 * Aucune remarque de relecture ouverte à la clôture.
 
+== Lot 0 — ce qui existe (27 septembre 2026)
+
+Cœur (`partiduo-app`) :
+
+* Registre `Partiduo::Modules` étoffé : activation enregistrée en base
+  (`modules_activation`, `PARTIDUO_MODULES` en valeur initiale, D-018), menus
+  déclarés par les manifestes (D-019), catalogue de permissions avec libellés
+  i18n (D-020), événements à charge utile contrôlée émis après validation de
+  la transaction (D-021) ; contrat `Partiduo::Api::Modules`
+  (link:doc/api/modules.adoc[]).
+* `Core::Settings` : identité de la société, régime (be/fr) immuable,
+  contrôle des identifiants (numéros de TVA BE/FR, D-SET-003), politique
+  d'authentification ; jeu de données initial `Partiduo::Api::InitialData` ;
+  correctif de lecture des `numeric` (B-SET-001, D-SET-008)
+  (link:doc/api/core-settings.adoc[]).
+* Authentification et droits (`auth`) : mots de passe (password-policy,
+  BCrypt), TOTP avec anti-rejeu, passkeys WebAuthn, fédération SAML/OIDC au
+  niveau du contrat, niveaux de session et élévation, sessions tenues par le
+  cœur, limitation des tentatives, profils et permissions, droits par
+  journal, audit, invitations ; contrat `Partiduo::Api::Auth` (connexion, compte,
+  administration) (link:doc/api/auth.adoc[]).
+* i18n fr/en/nl de toutes les applications, complétude vérifiée par spec.
+* `bin/partiduo-provision` (base, migrations, société, données initiales,
+  fichiers de service) et `deploy/bin/partiduo-fleet` (parc : montée de
+  version progressive, sauvegardes, retour arrière) (D-SET-006, D-SET-007).
+* Specs : 207 exemples (Comptabilité seule : 207 ; Facturation seule : 204
+  + 1 en attente ; les deux : 207).
+
+Interface (`partiduo-ui-bulma`) :
+
+* Connexion (mot de passe, second facteur TOTP ou passkey, élévation),
+  récupération (lien de remise à zéro, déblocage, invitation), écran
+  « Sécurité du compte » (enrôlement TOTP en HTMX, passkeys, codes de
+  récupération), tableau de bord, recherche, « À propos », pages d'erreur ;
+  menus et routes des extensions par point d'entrée unique (D-UI-003) ;
+  trois tailles d'écran (D-UI-014). Décisions D-UI-001 à D-UI-014.
+* Specs : 80 exemples (dont accessibilité et extension factice).
+
+== Clôture du lot 0 — vérifications (27 septembre 2026)
+
+* `partiduo-app` : `crystal tool format` sans changement ; Ameba sans remarque
+  (113 fichiers) ; garde-fou ADR-005 D3 vert ; specs vertes dans les trois
+  configurations (207 / 204 + 1 en attente / 207).
+* `partiduo-ui-bulma` : format sans changement ; Ameba sans remarque ;
+  garde-fou `Partiduo::Api` vert ; `opal-build --check` vert ; 80 exemples
+  verts.
+* `marten migrate` sur base vierge (`partiduo_migrate_0`), depuis le cœur et
+  depuis l'interface : 4 migrations, vert ; second passage sans migration en
+  attente.
+* Relecture : la seule remarque transmise était sans objet (relecteur sans
+  outils, D-022).
+
 == Prochaines étapes
 
-. Lot 0 : `partiduo-skel` (extension de référence, D-017) ; étoffer le
-  registre (menus pour l'interface, permissions rattachées aux profils —
-  ADR-003 D4), `Core::Settings`, profils, authentification (password-policy via
-  authn, TOTP avec `last_otp_counter`, WebAuthn), limitation des tentatives,
-  `bin/partiduo-provision`, écran de connexion dans `partiduo-ui-bulma`.
-. Amendement ADR-005 D3 proposé (D-014) : `Partiduo::Api::Distribution`.
+. Lot 1, première tâche : `partiduo-skel` (D-023), d'après
+  link:doc/api/modules.adoc[] et l'extension factice de l'interface.
+. Relecture outillée du lot 0 (D-022).
+. Lot 1 : référentiel — tiers (fiches), articles, TVA, exercices et périodes ;
+  plan comptable, journaux ; écrans correspondants dans `partiduo-ui-bulma`.
+. Toujours ouverts : amendement ADR-005 D3 (`Partiduo::Api::Distribution`,
+  D-014) ; CI GitHub non exécutée (B-002) ; serveur HTTP non démarrable dans
+  le bac à sable (B-UI-001).
 
 == Commandes
 
@@ -93,6 +147,7 @@ crystal spec                                       # base partiduo_test
 DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' scripts/specs-modules.sh
 crystal tool format src spec && ameba
 crystal run scripts/interface_boundary.cr -- src   # garde-fou ADR-005 D3
+bin/partiduo-provision --help                      # création d'une instance
 ----
 
 Interface (`partiduo-ui-bulma`) :
@@ -102,7 +157,7 @@ Interface (`partiduo-ui-bulma`) :
 cd prod-crystal/partiduo/partiduo-ui-bulma
 SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install
 crystal run manage.cr -- migrate                   # migrations du cœur
-crystal run src/server.cr                          # http://127.0.0.1:8000/
+crystal run src/server.cr                          # http://demo.partiduo.localhost:8000/
 DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' crystal spec
 crystal run scripts/api_boundary.cr                # garde-fou Partiduo::Api
 bundle exec scripts/opal-build --check             # paquets Opal à jour

@@ -59,3 +59,121 @@ qu'avec des variables explicites.
 `PATH=~/.rubies/ruby-4.0.6/bin:$PATH GEM_HOME=~/.gem/ruby/4.0.1 GEM_PATH=~/.gem/ruby/4.0.1:~/.rubies/ruby-4.0.6/lib/ruby/gems/4.0.0 bundle exec scripts/opal-build`.
 
 *Levée.* `bundle install` dans `partiduo-ui-bulma` avec le Ruby courant.
+
+== B-SET-001 — crystal-pg : `PG::Numeric#to_big_d` échoue sur les multiples de 10 000 (lot 0, settings)
+
+*Constat.* `SELECT 10000::numeric(20,4)` relu en `BigDecimal` lève
+`OverflowError` : le dernier groupe significatif est à gauche de la virgule,
+l'échelle calculée est négative et `BigDecimal.new(BigInt, UInt64)` la refuse.
+Tout montant multiple de 10 000 (capital social, écritures) serait illisible.
+
+*Contournement.* Redéfinition de `PG::Numeric#to_big_d` dans
+`src/partiduo/ext/pg_numeric.cr` (D-SET-008), couverte par une spec. À
+signaler en amont (will/crystal-pg) et à retirer quand la correction sera
+publiée ; le shard n'est pas modifié (hors des shards autorisés).
+
+== B-SET-002 — Arbre de travail commun non compilable pendant le lot 0 (lot 0, settings)
+
+*Constat.* Pendant l'exécution parallèle du lot 0, l'arbre de travail partagé
+ne compilait pas pour des raisons extérieures au périmètre « settings » :
+modèles `auth_profile` sans migration (en cours d'écriture), puis conflit de
+liaisons OpenSSL entre `lib/saml` et `lib/jose` (`EVP_PKEY_free` redéfini).
+
+*Contournement.* Les specs du périmètre (société, provisionnement, jeu de
+données initial, scripts de déploiement) ont été exécutées sur un instantané :
+`HEAD` + les fichiers de ce périmètre, `lib/` partagé — 84 exemples verts dans
+les trois configurations de modules, format, Ameba et garde-fou ADR-005 D3
+verts. À rejouer sur l'arbre intégré à la clôture du lot 0.
+
+== B-AUTH-001 — `saml` : validation de signature inutilisable en l'état (lot 0, auth)
+
+*Constat.* `CrystalSaml::XmlSecurity::SignatureValidator` vérifie la signature
+avec le certificat *embarqué* dans la réponse s'il y en a un, avant le
+certificat configuré : n'importe qui peut signer une réponse avec sa propre
+clé. Il n'applique pas non plus la transformation « enveloped-signature »
+(l'empreinte inclut la signature elle-même : une réponse réelle ne vérifie
+jamais), et `Response#valid?` n'exige ni audience ni `InResponseTo`.
+Modifier `prod-crystal/saml` est interdit dans cette exécution.
+
+*Contournement.* Le cœur n'utilise du shard que `AuthRequest`, `Settings`,
+`Utils` et la canonicalisation C14N ; la réponse et sa signature sont
+contrôlées par `Partiduo::Auth::SamlAdapter` et `SamlSignature` (certificat
+configuré seul, signature enveloppée, anti-emballage), avec 13 specs dont la
+signature par une autre clé avec certificat embarqué.
+
+*Levée.* Corriger le shard (préférer le certificat configuré, appliquer la
+transformation enveloppée, exiger audience et `InResponseTo`), puis revenir à
+`CrystalSaml::Response`. Tester contre un IdP réel : la C14N du shard est
+« simplifiée » et n'a pas été éprouvée sur les réponses d'un IdP du marché.
+
+== B-AUTH-002 — Liaisons OpenSSL incompatibles entre shards (lot 0, auth)
+
+*Constat.* `authn` requiert `jwt`, qui requiert `openssl_ext` (`struct
+LibCrypto::EvpPKey`) ; `jose` (requis par `webauthn`) déclare `type EvpPKey`.
+`saml/crystal_saml/openssl_ext.cr` redéclare `EVP_PKEY_free` avec un autre
+type que `jose`. Chacun de ces `require` casse la compilation du cœur.
+
+*Contournement.* `require "authn/password"` (hachage seul) ; composants de
+`saml` requis un à un, sans `openssl_ext` ; lecture du certificat de l'IdP et
+vérification de signature par `OpenSSL::X509::Certificate.from_der?`, les
+liaisons EVP de `jose` et une liaison propre
+(`LibCrypto.partiduo_x509_get_pubkey`).
+
+*Levée.* Harmoniser les liaisons (`jose` comme source unique des types EVP) dans
+`saml` et `authn` (ou `jwt` remplacé par `jose` dans `authn`).
+
+== B-AUTH-003 — Pas d'essai contre un appareil réel (lot 0, auth)
+
+*Constat.* Le bac à sable n'ouvre pas de port (B-UI-001) et aucun
+authentificateur, lecteur de QR code ou IdP réel n'est disponible.
+
+*Contournement.* Passkeys éprouvées par un authentificateur simulé (ES256,
+RS256, compteur nul, UV absent, origine, RP ID, signature altérée, clé clonée,
+défi rejoué) ; QR code relu par un lecteur indépendant écrit dans les specs
+(format BCH, zigzag, syndromes Reed-Solomon, données) ; SAML par un IdP simulé
+(clé RSA, certificat `openssl`).
+
+*Levée.* Écran de connexion de `partiduo-ui-bulma` essayé avec Trousseau
+macOS, Windows Hello et un téléphone ; QR code scanné par deux applications
+d'authentification ; connexion SAML contre un IdP de test.
+
+== B-UI-003 — Client de test Marten et réponses anticipées d'un middleware (lot 0, interface)
+
+*Constat.* Quand un middleware répond sans appeler la suite,
+`Marten::Spec::Client` lève `NilAssertionError` (il lit
+`context.marten.response`, que seul le routage renseigne).
+
+*Contournement.* Contrôle d'accès des extensions dans un handler qui reçoit
+toutes les routes `/ext/<CODE>/…` (D-UI-003) plutôt que dans un middleware.
+
+*Levée.* Corriger le client de test de Marten (hors des shards modifiables).
+
+== B-UI-004 — Gabarits Marten : clés d'un dictionnaire de plus de huit entrées (lot 0, interface)
+
+*Constat.* `{{ d.cle }}` renvoie vide dès que le dictionnaire passé au
+gabarit a plus de huit entrées (`Hash(Template::Value, Template::Value)`
+consulté avec une `String` : empreintes différentes une fois le dictionnaire
+indexé).
+
+*Contournement.* Variables à plat (D-UI-010).
+
+*Levée.* Signaler à Marten (`Template::Value#hash` cohérent avec la valeur).
+
+== B-UI-005 — Ameba s'arrête sur `%w[…][i]` interpolé (lot 0, interface)
+
+*Constat.* Ameba 1.7 s'interrompt (« Error: unreachable », code 255) sur
+`"#{%w[a b][i]}"` dans un bloc.
+
+*Contournement.* Table constante (`SecurityHandler::LEVEL_KEYS`).
+
+== B-UI-006 — Vérification visuelle et passkeys réelles (lot 0, interface)
+
+*Constat.* Le serveur ne peut toujours pas écouter (B-UI-001) : les écrans
+ont été vérifiés par les specs et par des instantanés statiques (sans Bulma ni
+polices) dans le panneau de navigation, aux trois tailles. Les passkeys sont
+vérifiées avec un authentificateur simulé.
+
+*Levée.* `crystal run src/server.cr` puis
+`http://demo.partiduo.localhost:8000/` : essai avec Trousseau macOS, Windows
+Hello, un téléphone, et un lecteur d'écran (VoiceOver, NVDA) pour
+l'audit WCAG 2.2 AA manuel (contrastes du thème, ordre de lecture).

@@ -2,3 +2,9 @@ en:
   vat:
     module:
       name: "VAT"
+    permissions:
+      rate:
+        read: "View VAT rates"
+        write: "Edit VAT rates"
+    menu:
+      vat_rates: "VAT rates"

@@ -2,6 +2,40 @@ nl:
   accounting:
     module:
       name: "Boekhouding"
+    permissions:
+      entry:
+        read: "Boekingen raadplegen"
+        post: "Boekingen invoeren"
+        cancel: "Boekingen annuleren"
+      account:
+        read: "Het rekeningstelsel raadplegen"
+        write: "Het rekeningstelsel wijzigen"
+      ledger:
+        read: "Dagboeken raadplegen"
+        write: "Dagboeken aanmaken en wijzigen"
+      matching:
+        write: "Rekeningen afpunten"
+      report:
+        read: "Rapporten raadplegen"
+      vat:
+        declare: "Btw-aangiften opstellen"
+      period:
+        close: "Periodes en boekjaren afsluiten"
+    menu:
+      acc_entry_purchase: "Aankopen"
+      acc_entry_sale: "Verkopen"
+      acc_entry_financial: "Financieel"
+      acc_entry_misc: "Diverse verrichtingen"
+      acc_accounts: "Rekeningen en relaties"
+      acc_entries: "Boekingen"
+      acc_matching: "Afpunten"
+      acc_chart: "Rekeningstelsel"
+      acc_ledgers: "Dagboeken"
+      acc_trial_balance: "Proef- en saldibalans"
+      acc_general_ledger: "Grootboek"
+      acc_fec: "FEC"
+      acc_vat_return: "Btw-aangifte"
+      acc_closing: "Afsluiting"
     errors:
       entry:
         account_missing: "Vul een rekening in."

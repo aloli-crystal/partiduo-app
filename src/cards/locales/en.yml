@@ -2,3 +2,12 @@ en:
   cards:
     module:
       name: "Cards"
+    permissions:
+      card:
+        read: "View cards"
+        write: "Create and edit cards"
+      category:
+        manage: "Manage card categories"
+    menu:
+      cards_list: "Parties and items"
+      cards_categories: "Card categories"

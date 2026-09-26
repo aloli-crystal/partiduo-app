@@ -1,0 +1,406 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# partiduo-fleet — exploitation du parc d'instances Partiduo, sur le modèle de
+# capistrano-quimeo (un binaire, N instances, un sous-domaine chacune) :
+# construction et envoi d'une version, provisionnement, montée de version
+# progressive avec sauvegarde et retour arrière, état, sauvegardes, retrait.
+#
+# Par défaut, RIEN n'est exécuté : chaque commande affiche le plan (commandes
+# locales et distantes). `--execute` l'exécute réellement.
+#
+# Voir deploy/README.adoc.
+set -eu
+
+HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+APP_ROOT=$(CDPATH= cd -- "$HERE/../.." && pwd)
+
+usage() {
+  cat <<'EOF'
+Usage : partiduo-fleet [--config FICHIER] [--execute] <commande> [arguments]
+
+Commandes :
+  inventory                          liste les instances de l'inventaire
+  build VERSION                      construit l'archive de la distribution
+  upload VERSION                     envoie et décompresse l'archive sur chaque serveur
+  provision SERVEUR DOSSIER [OPTIONS…]
+                                     crée l'instance (partiduo-provision) et l'installe
+  upgrade VERSION [--only D1,D2 | --canary N | --all]
+                                     monte de version, instance par instance :
+                                     sauvegarde, arrêt, migrations, bascule, démarrage,
+                                     contrôle ; retour arrière et arrêt au premier échec
+  rollback DOSSIER                   revient à la version précédente de l'instance
+  status [DOSSIER]                   version et état du service de chaque instance
+  backup DOSSIER | --all             sauvegarde (pg_dump -Fc) la base
+  restore DOSSIER FICHIER            restaure une sauvegarde (service arrêté)
+  retire DOSSIER                     sauvegarde puis retire l'instance (base conservée)
+  cleanup                            supprime les versions qu'aucune instance n'utilise
+
+Options :
+  --config FICHIER   configuration du parc (défaut : $PARTIDUO_FLEET_CONFIG ou deploy/fleet.conf)
+  --execute          exécute réellement (sinon : affiche le plan)
+  -h, --help         cette aide
+EOF
+}
+
+die() {
+  echo "partiduo-fleet : $*" >&2
+  exit 1
+}
+
+EXECUTE=0
+CONFIG="${PARTIDUO_FLEET_CONFIG:-$APP_ROOT/deploy/fleet.conf}"
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --execute) EXECUTE=1 ;;
+    --config) [ $# -ge 2 ] || die "--config : fichier manquant"; CONFIG="$2"; shift ;;
+    --config=*) CONFIG="${1#*=}" ;;
+    -h | --help) usage; exit 0 ;;
+    -*) die "option inconnue : $1" ;;
+    *) break ;;
+  esac
+  shift
+done
+
+[ $# -ge 1 ] || { usage >&2; exit 1; }
+COMMAND="$1"
+shift
+
+[ -f "$CONFIG" ] || die "configuration introuvable : $CONFIG (voir deploy/fleet.conf.example)"
+
+# Valeurs par défaut, puis configuration du parc (fichier shell).
+PARTIDUO_DOMAIN="partiduo.example"
+INSTALL_ROOT="/opt/partiduo"
+ETC_DIR="/etc/partiduo"
+BACKUP_DIR="/var/backups/partiduo"
+SYSTEM_USER="partiduo"
+PG_SOCKET="/var/run/postgresql"
+PG_OWNER="partiduo"
+INVENTORY="$APP_ROOT/deploy/inventory"
+DISTRIBUTION_DIR="$APP_ROOT/../partiduo-ui-bulma"
+ARCHIVE_DIR="$APP_ROOT/tmp/releases"
+KEEP_RELEASES=5
+SUDO="sudo"
+# shellcheck disable=SC1090
+. "$CONFIG"
+
+# Chemins relatifs : l'inventaire par rapport au fichier de configuration,
+# la distribution et les archives par rapport à partiduo-app.
+case "$INVENTORY" in /*) ;; *) INVENTORY="$(CDPATH= cd -- "$(dirname -- "$CONFIG")" && pwd)/$INVENTORY" ;; esac
+case "$DISTRIBUTION_DIR" in /*) ;; *) DISTRIBUTION_DIR="$APP_ROOT/$DISTRIBUTION_DIR" ;; esac
+case "$ARCHIVE_DIR" in /*) ;; *) ARCHIVE_DIR="$APP_ROOT/$ARCHIVE_DIR" ;; esac
+
+# --- Exécution -----------------------------------------------------------------
+
+mode_label() {
+  [ "$EXECUTE" = 1 ] && echo "exécution" || echo "plan (ajoutez --execute pour exécuter)"
+}
+
+# Commande locale.
+local_run() {
+  printf '[local] %s\n' "$*"
+  [ "$EXECUTE" = 0 ] || sh -c "$*"
+}
+
+# Commande distante (chaîne shell exécutée par ssh sur SERVEUR).
+remote() {
+  server="$1"
+  shift
+  printf '[%s] %s\n' "$server" "$*"
+  [ "$EXECUTE" = 0 ] || ssh -o BatchMode=yes "$server" "$*"
+}
+
+# --- Inventaire -----------------------------------------------------------------
+# Une ligne par instance : « <dossier> <serveur ssh> [commentaire] ». C'est
+# l'inventaire des instances, hors application (ADR-001 D2 : la table
+# ac_dossier de NOALYSS disparaît).
+
+inventory_lines() {
+  [ -f "$INVENTORY" ] || return 0
+  sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$INVENTORY"
+}
+
+server_of() {
+  inventory_lines | awk -v d="$1" '$1 == d { print $2; exit }'
+}
+
+require_instance() {
+  server=$(server_of "$1")
+  [ -n "$server" ] || die "instance inconnue de l'inventaire : $1"
+  echo "$server"
+}
+
+servers() {
+  inventory_lines | awk '{ print $2 }' | sort -u
+}
+
+check_version() {
+  printf '%s' "$1" | grep -Eq '^[0-9A-Za-z][0-9A-Za-z._-]*$' || die "version invalide : « $1 »"
+}
+
+check_dossier() {
+  printf '%s' "$1" | grep -Eq '^[a-z][a-z0-9-]{0,39}$' || die "dossier invalide : « $1 »"
+}
+
+instance_dir() { echo "$INSTALL_ROOT/instances/$1"; }
+env_file() { echo "$ETC_DIR/$1.env"; }
+archive() { echo "$ARCHIVE_DIR/partiduo-$1.tar.gz"; }
+
+# Charge l'environnement de l'instance dans le shell distant.
+load_env() { echo "set -a && . $(env_file "$1") && set +a"; }
+
+# --- Commandes ------------------------------------------------------------------
+
+cmd_inventory() {
+  echo "# Inventaire : $INVENTORY"
+  inventory_lines | awk '{ printf "%-24s %s\n", $1, $2 }'
+}
+
+cmd_build() {
+  [ $# -eq 1 ] || die "usage : build VERSION"
+  version="$1"
+  check_version "$version"
+  stage="$ARCHIVE_DIR/partiduo-$version"
+  echo "# Construction de la version $version ($(mode_label))"
+  local_run "rm -rf '$stage' && mkdir -p '$stage/bin' '$stage/deploy'"
+  local_run "cd '$DISTRIBUTION_DIR' && shards build --release --production partiduo-server partiduo-ui-manage"
+  local_run "cp '$DISTRIBUTION_DIR/bin/partiduo-server' '$stage/bin/partiduo-server'"
+  local_run "cp '$DISTRIBUTION_DIR/bin/partiduo-ui-manage' '$stage/bin/partiduo-manage'"
+  local_run "cd '$DISTRIBUTION_DIR' && MARTEN_ENV=production PARTIDUO_ASSETS_ROOT='$stage/assets' bin/partiduo-ui-manage collectassets --no-input"
+  local_run "cp '$APP_ROOT/bin/partiduo-provision' '$stage/bin/' && cp -R '$APP_ROOT/deploy/templates' '$stage/deploy/'"
+  local_run "echo '$version' > '$stage/VERSION'"
+  local_run "tar -C '$ARCHIVE_DIR' -czf '$(archive "$version")' 'partiduo-$version'"
+}
+
+cmd_upload() {
+  [ $# -eq 1 ] || die "usage : upload VERSION"
+  version="$1"
+  check_version "$version"
+  echo "# Envoi de la version $version ($(mode_label))"
+  for server in $(servers); do
+    local_run "scp '$(archive "$version")' '$server:/tmp/partiduo-$version.tar.gz'"
+    remote "$server" "$SUDO install -d -o $SYSTEM_USER -g $SYSTEM_USER $INSTALL_ROOT/releases $INSTALL_ROOT/instances" \
+      "&& $SUDO -u $SYSTEM_USER tar -C $INSTALL_ROOT/releases -xzf /tmp/partiduo-$version.tar.gz" \
+      "&& $SUDO -u $SYSTEM_USER mv $INSTALL_ROOT/releases/partiduo-$version $INSTALL_ROOT/releases/$version" \
+      "&& rm -f /tmp/partiduo-$version.tar.gz"
+    # « current » : version des instances provisionnées désormais ; les
+    # instances existantes gardent la leur jusqu'à « upgrade ».
+    remote "$server" "$SUDO -u $SYSTEM_USER ln -sfn $INSTALL_ROOT/releases/$version $INSTALL_ROOT/current"
+  done
+}
+
+cmd_provision() {
+  [ $# -ge 2 ] || die "usage : provision SERVEUR DOSSIER [options de partiduo-provision…]"
+  server="$1"
+  dossier="$2"
+  shift 2
+  check_dossier "$dossier"
+  [ -z "$(server_of "$dossier")" ] || die "instance déjà dans l'inventaire : $dossier"
+  release="$INSTALL_ROOT/current"
+  work="/tmp/partiduo-provision-$dossier"
+  args=""
+  for arg in "$@"; do
+    args="$args '$(printf '%s' "$arg" | sed "s/'/'\\\\''/g")'"
+  done
+  echo "# Provisionnement de $dossier sur $server ($(mode_label))"
+  remote "$server" "$SUDO -u postgres createuser --createdb --no-superuser $PG_OWNER 2>/dev/null || true"
+  remote "$server" "$SUDO -u $SYSTEM_USER env PARTIDUO_MANAGE=$release/bin/partiduo-manage" \
+    "PARTIDUO_TEMPLATES=$release/deploy/templates" \
+    "$release/bin/partiduo-provision --domain=$PARTIDUO_DOMAIN --owner=$PG_OWNER --pg-socket=$PG_SOCKET" \
+    "--install-root=$INSTALL_ROOT --etc-dir=$ETC_DIR --system-user=$SYSTEM_USER --output-dir=$work$args $dossier"
+  remote "$server" "cd $work/$dossier && $SUDO sh INSTALL.txt && $SUDO rm -rf $work"
+  remote "$server" "$SUDO ln -sfn $(readlink_release_cmd) $(instance_dir "$dossier")/release"
+  local_run "printf '%s %s\\n' '$dossier' '$server' >> '$INVENTORY'"
+}
+
+# L'instance neuve pointe sur la version courante du serveur, résolue.
+readlink_release_cmd() {
+  echo "\$(readlink -f $INSTALL_ROOT/current)"
+}
+
+# Liste des dossiers visés par upgrade.
+select_instances() {
+  selection="$1"
+  value="$2"
+  case "$selection" in
+    all) inventory_lines | awk '{ print $1 }' ;;
+    only) printf '%s\n' "$value" | tr ',' '\n' | sed '/^$/d' ;;
+    canary) inventory_lines | awk '{ print $1 }' | head -n "$value" ;;
+  esac
+}
+
+cmd_upgrade() {
+  [ $# -ge 1 ] || die "usage : upgrade VERSION [--only D1,D2 | --canary N | --all]"
+  version="$1"
+  shift
+  check_version "$version"
+  selection=""
+  value=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --all) selection=all ;;
+      --only) [ $# -ge 2 ] || die "--only : liste manquante"; selection=only; value="$2"; shift ;;
+      --only=*) selection=only; value="${1#*=}" ;;
+      --canary) [ $# -ge 2 ] || die "--canary : nombre manquant"; selection=canary; value="$2"; shift ;;
+      --canary=*) selection=canary; value="${1#*=}" ;;
+      *) die "option inconnue : $1" ;;
+    esac
+    shift
+  done
+  [ -n "$selection" ] || die "précisez --only, --canary N ou --all : la montée de version du parc est progressive"
+  if [ "$selection" = canary ]; then
+    case "$value" in '' | *[!0-9]*) die "--canary : nombre attendu" ;; esac
+  fi
+
+  # Toute la sélection est vérifiée avant de toucher la première instance.
+  targets=$(select_instances "$selection" "$value")
+  [ -n "$targets" ] || die "aucune instance sélectionnée"
+  for dossier in $targets; do
+    check_dossier "$dossier"
+    require_instance "$dossier" >/dev/null
+  done
+
+  release="$INSTALL_ROOT/releases/$version"
+  echo "# Montée de version $version ($selection${value:+ $value}) — $(mode_label)"
+  for dossier in $targets; do
+    server=$(require_instance "$dossier")
+    dir=$(instance_dir "$dossier")
+    stamp='$(date +%Y%m%d-%H%M%S)'
+    echo "## $dossier ($server)"
+    remote "$server" "test -x $release/bin/partiduo-server || { echo 'version $version absente' >&2; exit 1; }"
+    backup_cmd "$server" "$dossier" "pre-$version-$stamp"
+    remote "$server" "$SUDO systemctl stop partiduo-$dossier.service"
+    remote "$server" "$SUDO -u $SYSTEM_USER sh -c '$(load_env "$dossier") && $release/bin/partiduo-manage migrate'" ||
+      fail_upgrade "$server" "$dossier" "migrations"
+    remote "$server" "$SUDO -u $SYSTEM_USER sh -c 'ln -sfn \$(readlink -f $dir/release) $dir/release.previous && ln -sfn $release $dir/release'"
+    remote "$server" "$SUDO systemctl start partiduo-$dossier.service"
+    remote "$server" "sleep 3 && $(health_cmd "$dossier")" || fail_upgrade "$server" "$dossier" "contrôle de santé"
+  done
+  echo "# Montée de version $version terminée."
+}
+
+health_cmd() {
+  echo "$SUDO sh -c '$(load_env "$1") && curl -fsS -o /dev/null -H \"Host: \$MARTEN_ALLOWED_HOSTS\" http://127.0.0.1:\$PORT/'"
+}
+
+# Échec d'une instance : on la remet dans l'état d'avant (version et base) et
+# on arrête la vague — les instances suivantes gardent leur version.
+fail_upgrade() {
+  server="$1"
+  dossier="$2"
+  step="$3"
+  echo "!! $dossier : échec ($step). Retour arrière et arrêt de la montée de version." >&2
+  dir=$(instance_dir "$dossier")
+  remote "$server" "$SUDO systemctl stop partiduo-$dossier.service || true"
+  remote "$server" "test -L $dir/release.previous && $SUDO -u $SYSTEM_USER ln -sfn \$(readlink -f $dir/release.previous) $dir/release || true"
+  restore_cmd "$server" "$dossier" "\$(ls -1t $BACKUP_DIR/$dossier/pre-*.dump | head -n 1)"
+  remote "$server" "$SUDO systemctl start partiduo-$dossier.service"
+  exit 1
+}
+
+backup_cmd() {
+  server="$1"
+  dossier="$2"
+  label="$3"
+  remote "$server" "$SUDO install -d -o $SYSTEM_USER -g $SYSTEM_USER -m 750 $BACKUP_DIR/$dossier" \
+    "&& $SUDO -u $SYSTEM_USER sh -c '$(load_env "$dossier") && pg_dump -Fc -d \"\$DATABASE_URL\" -f $BACKUP_DIR/$dossier/$label.dump'"
+}
+
+restore_cmd() {
+  server="$1"
+  dossier="$2"
+  file="$3"
+  remote "$server" "$SUDO -u $SYSTEM_USER sh -c '$(load_env "$dossier") && pg_restore --clean --if-exists --no-owner -d \"\$DATABASE_URL\" $file'"
+}
+
+cmd_rollback() {
+  [ $# -eq 1 ] || die "usage : rollback DOSSIER"
+  dossier="$1"
+  check_dossier "$dossier"
+  server=$(require_instance "$dossier")
+  dir=$(instance_dir "$dossier")
+  echo "# Retour à la version précédente de $dossier ($(mode_label))"
+  echo "# La base n'est pas restaurée : si les migrations de la nouvelle version ont"
+  echo "# changé le schéma, utilisez « restore » avec la sauvegarde pre-<version>."
+  remote "$server" "test -L $dir/release.previous"
+  remote "$server" "$SUDO systemctl stop partiduo-$dossier.service"
+  remote "$server" "$SUDO -u $SYSTEM_USER sh -c 'current=\$(readlink -f $dir/release) && ln -sfn \$(readlink -f $dir/release.previous) $dir/release && ln -sfn \$current $dir/release.previous'"
+  remote "$server" "$SUDO systemctl start partiduo-$dossier.service"
+}
+
+cmd_status() {
+  echo "# État du parc ($(mode_label))"
+  if [ $# -ge 1 ]; then
+    check_dossier "$1"
+    list="$1"
+  else
+    list=$(inventory_lines | awk '{ print $1 }')
+  fi
+  for dossier in $list; do
+    server=$(require_instance "$dossier")
+    remote "$server" "printf '%-24s %-12s %s\\n' $dossier \$(basename \$(readlink -f $(instance_dir "$dossier")/release)) \$(systemctl is-active partiduo-$dossier.service)"
+  done
+}
+
+cmd_backup() {
+  [ $# -eq 1 ] || die "usage : backup DOSSIER | --all"
+  if [ "$1" = "--all" ]; then
+    list=$(inventory_lines | awk '{ print $1 }')
+  else
+    check_dossier "$1"
+    list="$1"
+  fi
+  echo "# Sauvegarde ($(mode_label))"
+  for dossier in $list; do
+    server=$(require_instance "$dossier")
+    backup_cmd "$server" "$dossier" "manual-\$(date +%Y%m%d-%H%M%S)"
+  done
+}
+
+cmd_restore() {
+  [ $# -eq 2 ] || die "usage : restore DOSSIER FICHIER"
+  dossier="$1"
+  check_dossier "$dossier"
+  server=$(require_instance "$dossier")
+  echo "# Restauration de $dossier depuis $2 ($(mode_label))"
+  remote "$server" "$SUDO systemctl stop partiduo-$dossier.service"
+  restore_cmd "$server" "$dossier" "$2"
+  remote "$server" "$SUDO systemctl start partiduo-$dossier.service"
+}
+
+cmd_retire() {
+  [ $# -eq 1 ] || die "usage : retire DOSSIER"
+  dossier="$1"
+  check_dossier "$dossier"
+  server=$(require_instance "$dossier")
+  echo "# Retrait de $dossier ($(mode_label)) — la base et les pièces jointes sont conservées"
+  backup_cmd "$server" "$dossier" "retire-\$(date +%Y%m%d-%H%M%S)"
+  remote "$server" "$SUDO systemctl disable --now partiduo-$dossier.service"
+  remote "$server" "$SUDO rm -f /etc/nginx/sites-enabled/partiduo-$dossier.conf && $SUDO nginx -t && $SUDO systemctl reload nginx"
+  remote "$server" "$SUDO rm -f /etc/systemd/system/partiduo-$dossier.service && $SUDO systemctl daemon-reload"
+  local_run "sed -i.bak '/^$dossier[[:space:]]/d' '$INVENTORY' && rm -f '$INVENTORY.bak'"
+}
+
+cmd_cleanup() {
+  echo "# Nettoyage des versions inutilisées ($(mode_label)), $KEEP_RELEASES plus récentes conservées"
+  for server in $(servers); do
+    remote "$server" "cd $INSTALL_ROOT/releases && used=\$(for l in $INSTALL_ROOT/instances/*/release $INSTALL_ROOT/instances/*/release.previous $INSTALL_ROOT/current; do basename \$(readlink -f \$l); done | sort -u)" \
+      "&& ls -1t | tail -n +$((KEEP_RELEASES + 1)) | while read -r v; do echo \"\$used\" | grep -qx \"\$v\" || $SUDO -u $SYSTEM_USER rm -rf \"\$v\"; done"
+  done
+}
+
+case "$COMMAND" in
+  inventory) cmd_inventory "$@" ;;
+  build) cmd_build "$@" ;;
+  upload) cmd_upload "$@" ;;
+  provision) cmd_provision "$@" ;;
+  upgrade) cmd_upgrade "$@" ;;
+  rollback) cmd_rollback "$@" ;;
+  status) cmd_status "$@" ;;
+  backup) cmd_backup "$@" ;;
+  restore) cmd_restore "$@" ;;
+  retire) cmd_retire "$@" ;;
+  cleanup) cmd_cleanup "$@" ;;
+  *) die "commande inconnue : $COMMAND (voir --help)" ;;
+esac

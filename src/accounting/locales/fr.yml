@@ -2,6 +2,40 @@ fr:
   accounting:
     module:
       name: "Comptabilité"
+    permissions:
+      entry:
+        read: "Consulter les écritures"
+        post: "Saisir des écritures"
+        cancel: "Annuler des écritures"
+      account:
+        read: "Consulter le plan comptable"
+        write: "Modifier le plan comptable"
+      ledger:
+        read: "Consulter les journaux"
+        write: "Créer et modifier les journaux"
+      matching:
+        write: "Lettrer les comptes"
+      report:
+        read: "Consulter les éditions"
+      vat:
+        declare: "Établir les déclarations de TVA"
+      period:
+        close: "Clôturer les périodes et exercices"
+    menu:
+      acc_entry_purchase: "Achats"
+      acc_entry_sale: "Ventes"
+      acc_entry_financial: "Financier"
+      acc_entry_misc: "Opérations diverses"
+      acc_accounts: "Comptes et tiers"
+      acc_entries: "Écritures"
+      acc_matching: "Lettrage"
+      acc_chart: "Plan comptable"
+      acc_ledgers: "Journaux"
+      acc_trial_balance: "Balance"
+      acc_general_ledger: "Grand livre"
+      acc_fec: "FEC"
+      acc_vat_return: "Déclaration de TVA"
+      acc_closing: "Clôture"
     errors:
       entry:
         account_missing: "Indiquez un compte."

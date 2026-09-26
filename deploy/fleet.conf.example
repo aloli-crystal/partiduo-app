@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Configuration du parc pour deploy/bin/partiduo-fleet (fichier shell).
+# Copier en deploy/fleet.conf (ignoré par git) et adapter.
+
+# Domaine du parc : chaque instance est servie en <dossier>.<domaine>.
+PARTIDUO_DOMAIN=partiduo.example
+
+# Arborescence sur les serveurs.
+INSTALL_ROOT=/opt/partiduo          # releases/<version>/, current, instances/<dossier>/
+ETC_DIR=/etc/partiduo               # <dossier>.env (clé secrète, base, modules)
+BACKUP_DIR=/var/backups/partiduo    # <dossier>/pre-<version>-<date>.dump
+SYSTEM_USER=partiduo                # compte système des services
+PG_SOCKET=/var/run/postgresql       # PostgreSQL par socket Unix uniquement
+PG_OWNER=partiduo                   # rôle propriétaire des bases (CREATEDB)
+
+# Inventaire des instances : « <dossier> <serveur ssh> » par ligne
+# (chemin relatif à ce fichier).
+INVENTORY=inventory
+
+# Dépôt qui compose la distribution (interface + cœur + extensions).
+DISTRIBUTION_DIR=../partiduo-ui-bulma
+ARCHIVE_DIR=tmp/releases
+KEEP_RELEASES=5
+
+# Élévation de privilèges sur les serveurs.
+SUDO=sudo
