@@ -1,0 +1,11 @@
+en:
+  accounting:
+    module:
+      name: "Accounting"
+    errors:
+      entry:
+        account_missing: "Enter an account."
+        amount_not_positive: "The amount must be greater than zero."
+        too_many_decimals: "The amount has at most %{max} decimal places."
+        too_few_lines: "An entry has at least %{min} lines."
+        unbalanced: "The entry is not balanced: difference of %{difference}."

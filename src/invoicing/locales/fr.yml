@@ -1,0 +1,4 @@
+fr:
+  invoicing:
+    module:
+      name: "Facturation"

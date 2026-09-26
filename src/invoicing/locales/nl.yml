@@ -1,0 +1,4 @@
+nl:
+  invoicing:
+    module:
+      name: "Facturatie"

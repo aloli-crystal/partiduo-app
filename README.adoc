@@ -1,0 +1,120 @@
+= partiduo-app — socle et modules de Partiduo
+:toc: left
+:toc-title: Table des matières
+:icons: font
+
+*Partiduo* est le portage en Crystal de https://noalyss.eu[NOALYSS], logiciel
+libre de comptabilité et d'ERP créé et maintenu par *Dany De Bontridder*.
+Partiduo n'est pas un projet officiel NOALYSS ; il en reprend les règles
+métier, lues dans le code PHP et le SQL d'origine, dans un schéma repensé.
+
+Ce dépôt contient le *métier* : un socle toujours actif et des modules
+activables par instance (Comptabilité, Facturation, Analytique, puis Stock),
+exposés par le contrat `Partiduo::Api`. Il ne contient *aucune interface* —
+ni handler, ni gabarit, ni fichier statique (ADR-005) : l'interface est le
+dépôt `partiduo-ui-bulma`.
+
+La spécification est dans `../partiduo-docs/` : `CARTOGRAPHIE-NOALYSS.adoc`,
+`adr/ADR-001` à `adr/ADR-006`. Les conventions de code partagées et les
+décisions prises pendant le portage sont dans link:DECISIONS.adoc[], les
+blocages dans link:BLOCAGES.adoc[], l'avancement dans link:ETAT-PORTAGE.adoc[].
+
+== Organisation
+
+[source]
+----
+src/
+├── partiduo.cr         # point d'entrée du shard : require "partiduo"
+├── partiduo/           # version, configuration, conventions du contrat Api
+│   └── api/            #   Result, FieldError, Actor, Guard, Transaction, erreurs
+# Socle — toujours actif
+├── modules/            # registre Partiduo::Modules, manifeste, événements
+├── auth/               # utilisateur (ADR-002 D1)
+├── core/               # société, profils, exercices et périodes, paramètres
+├── cards/              # tiers, articles et services
+├── vat/                # taux de TVA ; be/ et fr/
+# Modules activables
+├── accounting/         # Comptabilité
+├── invoicing/          # Facturation
+└── analytic/           # Analytique (requiert accounting)
+----
+
+Chaque application Marten suit le même plan : `app.cr`, `manifest.cr`,
+`models/`, `migrations/`, `services/` (interne), `api/` (contrat public),
+`locales/` (fr, en, nl).
+
+== Prérequis
+
+* Crystal 1.19.1 ;
+* PostgreSQL 18, joint *par socket Unix* (`/tmp/.s.PGSQL.5432`) ;
+* les shards maison à côté du groupe : `prod-crystal/marten`, `authn`,
+  `password-policy`, `totp`, `webauthn`, `jose` (dépendances `path:`, voir
+  `shard.override.yml`).
+
+== Installation
+
+[source,sh]
+----
+SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install
+createdb --encoding=UTF8 partiduo_dev
+crystal run manage.cr -- migrate
+----
+
+`SKIP_MARTEN_CLI_PRECOMPILATION=1` évite que Marten, installé en `path:`,
+compile sa ligne de commande hors du dépôt (voir DECISIONS).
+
+== Configuration
+
+La configuration d'une instance tient dans son environnement (ADR-001 D2).
+
+[cols="1,2,2",options="header"]
+|===
+|Variable |Rôle |Défaut
+
+|`DATABASE_URL`
+|base de l'instance
+|`postgres:///partiduo_dev?host=/tmp` (`partiduo_test` en test)
+
+|`PARTIDUO_MODULES`
+|modules et extensions actifs, séparés par des virgules ; `none` pour le socle seul
+|`accounting,invoicing,analytic`
+
+|`PARTIDUO_DOMAIN`
+|domaine des instances (`<dossier>.<domaine>`), RP ID WebAuthn
+|`partiduo.localhost`
+
+|`MARTEN_SECRET_KEY`
+|clé secrète (obligatoire en production)
+|valeur de développement
+|===
+
+== Tests
+
+[source,sh]
+----
+createdb --encoding=UTF8 partiduo_test
+crystal spec                              # tous les modules actifs
+PARTIDUO_MODULES=invoicing crystal spec   # une configuration
+scripts/specs-modules.sh                  # les trois configurations de l'ADR-006 D7
+----
+
+Les specs reconstruisent le schéma de la base de test *par les migrations* à
+chaque exécution ; le nom de la base doit contenir `test`.
+
+Contrôles de la CI (`.github/workflows/ci.yml`) :
+
+[source,sh]
+----
+crystal tool format --check src spec config scripts manage.cr
+ameba
+crystal run scripts/interface_boundary.cr -- src   # garde-fou ADR-005 D3
+----
+
+== Licence
+
+*AGPL-3.0-or-later* — texte intégral dans link:LICENSE[].
+
+Partiduo est une œuvre dérivée de NOALYSS (© Dany De Bontridder), publié sous
+GPL v2 « ou toute version ultérieure » : cette clause permet de reprendre son
+code sous GPL v3, compatible avec l'AGPL v3. Chaque fichier source commence
+par `# SPDX-License-Identifier: AGPL-3.0-or-later`.

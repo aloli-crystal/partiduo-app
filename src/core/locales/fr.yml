@@ -1,0 +1,10 @@
+fr:
+  core:
+    module:
+      name: "Socle"
+  partiduo:
+    api:
+      errors:
+        module_disabled: "Ce module n'est pas activé sur ce dossier."
+        forbidden: "Vous n'avez pas le droit d'effectuer cette opération."
+        not_found: "L'élément demandé est introuvable."

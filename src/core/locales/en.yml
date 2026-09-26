@@ -1,0 +1,10 @@
+en:
+  core:
+    module:
+      name: "Core"
+  partiduo:
+    api:
+      errors:
+        module_disabled: "This module is not enabled for this company file."
+        forbidden: "You are not allowed to perform this operation."
+        not_found: "The requested item could not be found."

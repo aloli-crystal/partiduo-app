@@ -1,0 +1,38 @@
+= Blocages rencontrés pendant le portage
+:toc: left
+:toc-title: Table des matières
+:icons: font
+
+Chaque blocage est contourné pour continuer ; il est noté ici avec son
+contournement et ce qui le lèverait.
+
+== B-001 — `git init` refusé dans le dossier du dépôt (lot P, architecte)
+
+*Constat.* Le bac à sable refuse la copie des gabarits de crochets dans
+`.git/hooks/` (`Operation not permitted`).
+
+*Contournement.* `git init -b development` dans `$TMPDIR`, puis déplacement
+du dépôt dans `prod-crystal/partiduo/partiduo-app`.
+
+*Levée.* Aucune action nécessaire ; à répéter pour chaque nouveau dépôt.
+
+== B-002 — CI GitHub non exécutable en l'état (lot P, architecte)
+
+*Constat.* La CI clone les shards maison depuis `github.com/aloli-crystal`
+(`scripts/ci-checkout-deps.sh`) ; `totp` et `password-policy` n'y sont pas
+encore publiés, et rien n'est poussé (interdit dans cette exécution). La CI
+n'a donc pas pu être exécutée sur GitHub : ses étapes ont été rejouées
+localement (format, Ameba, garde-fou, specs dans les trois configurations).
+
+*Contournement.* Aucun nécessaire localement.
+
+*Levée.* Publier `totp` et `password-policy` (et vérifier que la branche par
+défaut de `aloli-crystal/marten` contient `daabb7c2`, verrouillage de lignes),
+puis pousser `partiduo-app`.
+
+== B-003 — PostgreSQL en TCP bloqué localement (lot P, architecte)
+
+*Constat.* Le bac à sable n'autorise que la socket Unix `/tmp/.s.PGSQL.5432`.
+
+*Contournement.* URL `postgres:///<base>?host=/tmp` partout en local ; TCP
+seulement en CI (service Docker).

@@ -1,0 +1,69 @@
+= État du portage
+:toc: left
+:toc-title: Table des matières
+:icons: font
+
+Mis à jour à la fin de chaque lot. Pour reprendre après une interruption :
+lire ce fichier, puis DECISIONS.adoc (conventions C1 à C6) et BLOCAGES.adoc.
+
+== Plan de lots (ADR-001)
+
+P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
+
+[cols="1,4,1",options="header"]
+|===
+|Lot |Contenu |État
+
+|P |Squelette `partiduo-app`, conventions, CI, garde-fou ADR-005 D3 |*Terminé* (squelette de `partiduo-app`)
+|P |Squelette `partiduo-ui-bulma` avec Opal, `partiduo-skel` |À faire
+|0 |Socle : registre étoffé, société, authentification + TOTP, i18n, `partiduo-provision` |À faire
+|1 |Référentiel : tiers, articles, TVA, exercices et périodes ; plan comptable, journaux |À faire
+|2 |Écritures, consultation, lettrage |À faire
+|F |Module Facturation |À faire
+|M |`partiduo-migrate` |À faire
+|3–6 |Éditions, TVA, analytique, stock |À faire
+|===
+
+== Lot P — ce qui existe (26 septembre 2026)
+
+* Projet Marten (Marten 0.7 en `path:`), branche `development`, licence
+  AGPL v3, `shard.yml` en `path:` + `shard.override.yml`.
+* Applications : `modules`, `auth` (modèle `User` + migration), `core`,
+  `cards`, `vat` (`be/`, `fr/`), `accounting`, `invoicing`, `analytic` —
+  chacune avec son manifeste et ses traductions fr/en/nl.
+* Registre `Partiduo::Modules` (squelette) : manifeste (`code`, `name`,
+  `version`, `requires_core`, `kind`, `depends_on`, `depends_on_any`,
+  `permission`, `menu`, `ui`, `on`), activation par `PARTIDUO_MODULES`,
+  contrôle au démarrage ; événements `Partiduo::Events` (liste fermée,
+  synchrones, pièces actives seulement).
+* Contrat `Partiduo::Api` : `Actor`, `Guard`, `Result`, `FieldError`,
+  `Transaction`, `ModuleDisabled` / `Forbidden` / `NotFound` ; exemples
+  `Api::Core.instance` et `Api::Accounting.check_entry`.
+* Specs : 37 exemples (registre, contrat, transaction, garde-fou, isolation
+  des modules, complétude des traductions, en-têtes SPDX, connexion PostgreSQL).
+* CI GitHub Actions : format, Ameba, garde-fou, specs × 3 configurations
+  (non exécutée sur GitHub, voir BLOCAGES B-002).
+
+== Prochaines étapes
+
+. Lot P (suite) : `partiduo-ui-bulma` (Opal sans npm, exemple couvert par une
+  spec, CI citant seulement `Partiduo::Api`) et `partiduo-skel`.
+. Lot 0 : étoffer le registre (menus pour l'interface, permissions rattachées
+  aux profils — ADR-003 D4), `Core::Settings`, profils, authentification
+  (password-policy via authn, TOTP avec `last_otp_counter`, WebAuthn), limitation
+  des tentatives, `bin/partiduo-provision`.
+
+== Commandes
+
+[source,sh]
+----
+cd prod-crystal/partiduo/partiduo-app
+SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install
+createdb --encoding=UTF8 partiduo_dev
+crystal run manage.cr -- migrate                   # base de développement
+createdb --encoding=UTF8 partiduo_test             # une fois
+crystal spec                                       # base partiduo_test
+DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' scripts/specs-modules.sh
+crystal tool format src spec && ameba
+crystal run scripts/interface_boundary.cr -- src   # garde-fou ADR-005 D3
+----

@@ -1,0 +1,11 @@
+nl:
+  accounting:
+    module:
+      name: "Boekhouding"
+    errors:
+      entry:
+        account_missing: "Vul een rekening in."
+        amount_not_positive: "Het bedrag moet groter dan nul zijn."
+        too_many_decimals: "Het bedrag heeft hoogstens %{max} decimalen."
+        too_few_lines: "Een boeking telt minstens %{min} lijnen."
+        unbalanced: "De boeking is niet in evenwicht: verschil van %{difference}."

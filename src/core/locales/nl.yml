@@ -1,0 +1,10 @@
+nl:
+  core:
+    module:
+      name: "Basis"
+  partiduo:
+    api:
+      errors:
+        module_disabled: "Deze module is niet geactiveerd voor dit dossier."
+        forbidden: "U hebt niet het recht om deze bewerking uit te voeren."
+        not_found: "Het gevraagde element werd niet gevonden."

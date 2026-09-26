@@ -1,0 +1,11 @@
+fr:
+  accounting:
+    module:
+      name: "Comptabilité"
+    errors:
+      entry:
+        account_missing: "Indiquez un compte."
+        amount_not_positive: "Le montant doit être strictement positif."
+        too_many_decimals: "Le montant compte au plus %{max} décimales."
+        too_few_lines: "Une écriture compte au moins %{min} lignes."
+        unbalanced: "L'écriture n'est pas équilibrée : écart de %{difference}."

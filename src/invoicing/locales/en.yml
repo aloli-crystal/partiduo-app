@@ -1,0 +1,4 @@
+en:
+  invoicing:
+    module:
+      name: "Invoicing"

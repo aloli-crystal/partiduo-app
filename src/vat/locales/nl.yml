@@ -1,0 +1,4 @@
+nl:
+  vat:
+    module:
+      name: "Btw"

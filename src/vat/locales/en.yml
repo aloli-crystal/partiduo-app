@@ -1,0 +1,4 @@
+en:
+  vat:
+    module:
+      name: "VAT"

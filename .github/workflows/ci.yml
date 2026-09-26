@@ -1,0 +1,71 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# CI de partiduo-app : format, Ameba, garde-fou d'interface (ADR-005 D3), specs
+# sur PostgreSQL dans les trois configurations de modules (ADR-006 D7).
+name: CI
+
+on:
+  push:
+    branches: [development, production]
+  pull_request:
+
+env:
+  CRYSTAL_VERSION: "1.19.1"
+  SKIP_MARTEN_CLI_PRECOMPILATION: "1"
+
+jobs:
+  qualite:
+    name: Format, Ameba, garde-fou
+    runs-on: ubuntu-latest
+    container: crystallang/crystal:1.19.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dépendances path (shards maison non publiés)
+        run: scripts/ci-checkout-deps.sh
+      - name: Format
+        run: crystal tool format --check src spec config scripts manage.cr
+      - name: Shards
+        run: shards install
+      - name: Ameba
+        run: mkdir -p bin && crystal build lib/ameba/bin/ameba.cr -o bin/ameba && bin/ameba
+      - name: Garde-fou ADR-005 D3 (aucune interface sous src/)
+        run: crystal run scripts/interface_boundary.cr -- src
+
+  specs:
+    name: Specs (${{ matrix.configuration }})
+    runs-on: ubuntu-latest
+    container: crystallang/crystal:1.19.1
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - configuration: comptabilite-seule
+            modules: accounting,analytic
+          - configuration: facturation-seule
+            modules: invoicing
+          - configuration: comptabilite-et-facturation
+            modules: accounting,invoicing,analytic
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: partiduo
+          POSTGRES_PASSWORD: partiduo
+          POSTGRES_DB: partiduo_test
+        options: >-
+          --health-cmd "pg_isready -U partiduo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # En CI seulement, PostgreSQL est un service joignable en TCP.
+      DATABASE_URL: postgres://partiduo:partiduo@postgres:5432/partiduo_test
+      PARTIDUO_MODULES: ${{ matrix.modules }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dépendances path (shards maison non publiés)
+        run: scripts/ci-checkout-deps.sh
+      - name: Shards
+        run: shards install
+      - name: Specs
+        run: crystal spec --order random

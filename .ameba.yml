@@ -1,0 +1,7 @@
+# Configuration d'Ameba pour partiduo-app.
+Globs:
+  - "**/*.cr"
+  - "!lib"
+
+Excluded:
+  - lib/

@@ -1,0 +1,43 @@
+name: partiduo
+version: 0.1.0
+
+description: |
+  Partiduo — portage en Crystal de NOALYSS (comptabilité et facturation).
+  Socle et modules activables, sans interface : le contrat Partiduo::Api
+  est consommé par un dépôt d'interface (partiduo-ui-bulma).
+
+authors:
+  - Philippe Nénert <it+claude.ai@aloli.fr>
+
+crystal: ">= 1.19.1"
+
+license: AGPL-3.0-or-later
+
+targets:
+  partiduo-manage:
+    main: manage.cr
+
+dependencies:
+  marten:
+    path: ../../marten
+  marten_auth:
+    github: martenframework/marten-auth
+    version: ">= 0.2.0"
+  pg:
+    github: will/crystal-pg
+  # Shards maison, en path: tant qu'ils ne sont pas publiés (lot P).
+  authn:
+    path: ../../authn
+  password-policy:
+    path: ../../password-policy
+  totp:
+    path: ../../totp
+  webauthn:
+    path: ../../webauthn
+  jose:
+    path: ../../jose
+
+development_dependencies:
+  ameba:
+    github: crystal-ameba/ameba
+    version: "~> 1.6"

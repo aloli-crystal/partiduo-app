@@ -1,0 +1,4 @@
+nl:
+  auth:
+    module:
+      name: "Authenticatie"

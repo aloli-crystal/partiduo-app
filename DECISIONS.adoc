@@ -1,0 +1,338 @@
+= Décisions du portage
+:toc: left
+:toc-title: Table des matières
+:toclevels: 3
+:icons: font
+
+Ce fichier consigne les *conventions partagées* que suivent tous les agents et
+contributeurs, puis les *décisions* prises pendant le portage lorsqu'un point
+n'était pas tranché par les ADR (contexte, choix, alternative écartée). Les ADR
+ne sont jamais modifiés : un écart ou un complément y est proposé ici comme
+*amendement*.
+
+Chaque nouvelle décision prend le numéro suivant (`D-NNN`), avec le lot et
+l'auteur (agent).
+
+== Conventions partagées
+
+=== C1 — Arborescence et nommage
+
+* Une application Marten par dossier de `src/`, selon l'ADR-001 § Organisation
+  du code : `modules`, `auth`, `core`, `cards`, `vat`, `accounting`,
+  `invoicing`, `analytic` (`stock` au lot 6).
+* Espace de noms : `Partiduo::<App>` (`Partiduo::Accounting`,
+  `Partiduo::Cards`…). Rien au niveau supérieur, sauf les classes de
+  migration, nommées par Marten (`Migration::Accounting::V0001`).
+* Plan d'une application :
++
+[source]
+----
+src/<app>/
+├── app.cr            # Partiduo::<App>::App < Marten::App, label "<app>"
+├── manifest.cr       # Partiduo::Modules.register do … end
+├── models/           # modèles Marten (internes)
+├── migrations/       # générées par `crystal run manage.cr -- genmigrations`
+├── services/         # règles métier (internes)
+├── api/<app>.cr      # contrat public : module Partiduo::Api::<App>
+└── locales/          # fr.yml, en.yml, nl.yml — mêmes clés (spec)
+----
+* Base : tables `<app_label>_<model>` (convention Marten), clé `id` en
+  `big_int` auto-incrémentée, colonnes en anglais `snake_case` sans préfixe
+  de table (ADR-001 D1). Modèles au singulier, en anglais (`Entry`,
+  `EntryLine`, `Account`, `Ledger`, `Card`, `FiscalYear`, `Period`…, glossaire
+  de l'ADR-001).
+* Montants : `field :amount, :decimal, max_digits: 20, decimal_places: 4`,
+  `BigDecimal` partout en Crystal, *jamais* `Float`. Un montant qui porte plus
+  de décimales que la colonne est refusé, pas arrondi : l'appelant arrondit
+  explicitement. Sens d'une ligne : énumération `debit` / `credit`, pas un
+  booléen.
+* Dates : champs Marten `:date` (valeur `Time` à minuit UTC) ; horodatages
+  `:date_time`.
+* Permissions : `<app_label>.<objet>.<action>` (`accounting.entry.post`,
+  `cards.card.write`), déclarées dans le manifeste de l'application.
+* Clés i18n : `<app_label>.…` ; erreurs de validation sous
+  `<app_label>.errors.<objet>.<code>` (`accounting.errors.entry.unbalanced`) ;
+  nom affiché d'une pièce du registre : `<app_label>.module.name`. Pluriels
+  par `count:`, jamais par `if n > 1` (ADR-005 D7).
+* Codes du registre en majuscules (`ACCOUNTING`, `SKEL`) ; dans
+  `PARTIDUO_MODULES`, les mêmes en minuscules.
+* En-tête SPDX en première ligne de chaque `.cr` (vérifié par une spec).
+
+=== C2 — Contrat `Partiduo::Api` (ADR-005 D2)
+
+Le contrat est la *seule* surface que voient l'interface, les extensions,
+`partiduo-migrate` et les specs métier. Tout le reste (`models/`, `services/`)
+est interne et peut changer.
+
+* *Emplacement* : `src/<app>/api/<app>.cr` définit `module Partiduo::Api::<App>`
+  (fonctions de module). Les conventions communes sont dans `src/partiduo/api/`.
+* *Acteur* : chaque commande et requête prend `actor : Partiduo::Api::Actor` en
+  premier argument. L'interface construit l'acteur de l'utilisateur connecté ;
+  les outils en ligne de commande et les abonnés utilisent `Actor.system`.
+* *Contrôle d'accès en première ligne* :
+  `Guard.authorize!(actor, "<permission>", module_code: "<CODE>")`. Il lève
+  `ModuleDisabled` si le module est inactif, `Forbidden` si l'acteur n'est pas
+  authentifié ou n'a pas la permission. `permission: nil` = « tout utilisateur
+  authentifié », à écrire explicitement. Une permission non déclarée dans un
+  manifeste lève `ArgumentError`.
+* *Entrées* : `record XxxInput` (ou `struct` avec valeurs par défaut),
+  montants en `BigDecimal`, références par identifiant (`Int64`) ou par code
+  métier (compte, quick code).
+* *Objets de vue* : `record XxxView` (`record struct`), immuables, construits
+  depuis les modèles *à l'intérieur* du contrat. Jamais un modèle Marten ni un
+  `QuerySet` en retour.
+* *Requêtes* : `def self.xxx(actor, …) : XxxView | Array(XxxView)`. Absence →
+  `Partiduo::Api::NotFound`.
+* *Commandes* : `def self.xxx(actor, input) : Result(XxxView)` (ou
+  `Result(Nil)`), corps dans `Partiduo::Api::Transaction.run { … }` : un échec
+  ou une exception annule tout. Un seul point d'entrée par opération métier ;
+  une commande n'en appelle pas une autre.
+* *Erreurs de validation* : `Result(T).failure([FieldError…])`, avec
+  `FieldError.new("<chemin>", "<clé i18n>", {"param" => "valeur"})`. Chemins :
+  `"date"`, `"lines[2].amount"`, `FieldError::BASE` (`"base"`) pour
+  l'ensemble. Paramètres déjà convertis en chaînes. Le cœur ne produit jamais
+  de texte affiché : l'interface appelle `error.message`.
+* *Requêtes de contrôle* (`check_entry`…) : appliquent la même règle que la
+  commande, par le même service interne, pour le retour instantané de
+  l'interface. Aucune règle métier dans l'interface.
+* `Result` s'instancie toujours avec son type : `Result(EntryView).success(v)`
+  (Crystal n'infère pas le paramètre d'un constructeur de classe générique).
+* *Exemples de référence* : `Partiduo::Api::Core.instance` (requête) et
+  `Partiduo::Api::Accounting.check_entry` (requête de contrôle, erreurs par
+  champ, module et permission vérifiés), avec leurs specs.
+* *Versionnage* : `Partiduo::API_VERSION` (semver). Toute rupture incrémente la
+  majeure et se note ici.
+
+=== C3 — Organisation des services
+
+* Règles métier dans `src/<app>/services/`, en modules ou classes de
+  `Partiduo::<App>` ; appelées par le contrat de la même application, jamais
+  par l'interface.
+* Intégrité comptable *en base* (ADR-001 § PL/pgSQL) : contraintes et
+  déclencheurs posés par les migrations avec
+  `execute(<sql avant>, <sql arrière>)`. Les specs tournent sur un schéma
+  construit *par les migrations* (`spec/support/database.cr`), donc ces
+  contraintes sont présentes et testées.
+* Verrouillage : `QuerySet#lock` (fork `aloli-crystal/marten`, commit
+  `daabb7c2`) produit `SELECT … FOR UPDATE` ; c'est l'outil imposé pour la
+  numérotation des factures (ADR-006 D5). Jamais de séquence PostgreSQL pour
+  un numéro fiscal.
+* *Isolation des modules* (ADR-006 D3) : un module ne cite jamais les
+  internes d'un autre (`Partiduo::Invoicing::…` depuis `accounting/`), et ne
+  cite le contrat d'un autre module que s'il le déclare en `depends_on`
+  (`analytic` → `ACCOUNTING`). Tous peuvent utiliser le socle. Vérifié par
+  `spec/architecture/module_isolation_spec.cr`.
+
+=== C4 — Registre et événements (ADR-003 D2, D7 ; ADR-006)
+
+* Chaque application (socle compris) déclare un manifeste dans son
+  `manifest.cr`. Le socle se déclare en `kind Partiduo::Modules::Kind::Socle`
+  (`CORE`, `CARDS`, `VAT`) ; les modules officiels en `Kind::Module` ; les
+  extensions gardent le défaut `Kind::Extension`.
+* Au démarrage (`Partiduo::Modules::App#setup`), `Partiduo::Modules.check!`
+  refuse un module actif inconnu, une dépendance (`depends_on`,
+  `depends_on_any`) inactive ou une version du cœur hors de `requires_core`.
+* Événements : liste fermée `Partiduo::Events::NAMES` — `entry.posted`,
+  `entry.cancelled`, `invoice.issued`, `credit_note.issued`,
+  `payment.recorded`, `payment.matched`, `card.saved`, `period.closed`.
+** publication *dans la transaction* de la commande :
+   `Partiduo::Events.publish("entry.posted", {"entry_id" => id.to_s})` ;
+** charge utile : identifiants et scalaires en chaînes (montants en
+   `BigDecimal#to_s`) ; l'abonné relit ce qu'il lui faut par `Partiduo::Api` ;
+** abonnement dans le manifeste : `on("entry.posted") { |event| … }` ; seuls
+   les abonnés des pièces actives sont appelés ; un abonné qui lève annule
+   l'opération ; un abonné agit avec `Actor.system`.
+** ajouter un événement = compléter `NAMES` et le noter ici.
+
+=== C5 — Specs
+
+* Écrites contre `Partiduo::Api` (ADR-005 D2), pas contre les modèles, sauf
+  pour tester une contrainte de base.
+* `describe_module "ACCOUNTING", … do` pour les specs d'un module activable :
+  en attente si le module est inactif dans la configuration courante. Les
+  refus (`ModuleDisabled`) se testent avec `with_active_modules("invoicing") { … }`.
+* `actor_with("perm", …)` fournit un acteur authentifié muni de permissions.
+* Chaque agent utilise *sa* base de test :
+  `DATABASE_URL=postgres:///partiduo_test_<agent>?host=/tmp crystal spec`
+  (nom contenant `test`, sinon refus). Créer la base une fois :
+  `createdb --encoding=UTF8 partiduo_test_<agent>`.
+* Les trois configurations : `scripts/specs-modules.sh`.
+* Avant de rendre la main : `crystal tool format src spec`, `ameba`, specs
+  vertes dans les trois configurations.
+
+=== C6 — Migrations
+
+* Générées par `crystal run manage.cr -- genmigrations` puis relues ;
+  appliquées par `crystal run manage.cr -- migrate`.
+* Une application qui crée sa *première* migration ajoute
+  `require "../<app>/migrations/**"` dans `src/partiduo/cli.cr` (un motif
+  vide ne compile pas).
+* Jeu de données initial (plans comptables BE/FR, journaux, taux) : chargé par
+  `partiduo-provision` via le contrat, pas par des migrations de données.
+
+== Décisions
+
+=== D-001 — Applications directement sous `src/`, espace `Partiduo::` (lot P, architecte)
+
+*Contexte.* L'ADR-001 place les applications sous `src/<app>/` ; l'ADR-002 D1
+évoque `src/apps/auth` et `Auth::User`, disposition générée par
+`marten new project --with-auth`. Le cœur est aussi un *shard* consommé par
+l'interface, les extensions et `partiduo-migrate`.
+
+*Choix.* Toutes les applications, `auth` comprise, sous `src/<app>/`, dans
+l'espace `Partiduo::` : l'utilisateur est `Partiduo::Auth::User`.
+
+*Alternative écartée.* `src/apps/` et des modules de premier niveau (`Auth`,
+`Core`, `Cards`) : contraire à l'arborescence de l'ADR-001 et source de
+collisions de noms chez les consommateurs du shard.
+
+*Amendement proposé.* ADR-002 D1 : lire `Partiduo::Auth::User`, `src/auth/`.
+
+=== D-002 — Application `auth` réduite au modèle (lot P, architecte)
+
+*Contexte.* `--with-auth` génère handlers, gabarits, schémas et courriels
+d'authentification ; l'ADR-005 interdit toute interface dans le cœur.
+
+*Choix.* Projet généré avec `--with-auth` (Marten 0.6.3 installé), puis seuls
+le modèle `User` (hérité de `MartenAuth::User`) et sa migration sont gardés.
+Écrans et handlers de connexion appartiennent à `partiduo-ui-bulma` ; le
+lot 0 expose l'authentification par des commandes `Partiduo::Api::Auth`
+(vérification du mot de passe, TOTP, WebAuthn) et applique `password-policy`
+via `authn`.
+
+*Alternative écartée.* Garder l'app générée entière : casse le garde-fou
+ADR-005 D3.
+
+=== D-003 — Dépendances `path:` et fichier d'override (lot P, architecte)
+
+*Contexte.* `marten_auth`, `authn` et `webauthn` déclarent `marten`,
+`password-policy` et `jose` en `github:`, alors que le projet les veut en
+`path:` (non publiés, ou fork local).
+
+*Choix.* `shard.override.yml` force `marten`, `password-policy` et `jose` sur
+les sources locales. Les dépôts consommateurs (`partiduo-ui-bulma`,
+`partiduo-skel`, `partiduo-migrate`) ont besoin du même fichier, avec
+`partiduo` en `path: ../partiduo-app`.
+
+*Alternative écartée.* Publier les shards maison : interdit (aucune poussée).
+
+=== D-004 — `SKIP_MARTEN_CLI_PRECOMPILATION=1` (lot P, architecte)
+
+*Contexte.* Le `postinstall` de Marten compile sa ligne de commande dans
+`$PWD/../../bin/marten` ; installé en `path:`, `$PWD` est
+`prod-crystal/marten`, donc la cible devient `~/bin/marten`, hors du bac à
+sable (et écrase un binaire de l'utilisateur).
+
+*Choix.* Toujours installer avec `SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install`
+(documenté dans le README, positionné dans la CI). La ligne de commande du
+projet est `crystal run manage.cr -- <commande>`.
+
+*Alternative écartée.* Laisser le `postinstall` : échoue ou écrit hors du dépôt.
+
+=== D-005 — Configuration par l'environnement ; modules actifs dans `PARTIDUO_MODULES` (lot P, architecte)
+
+*Contexte.* L'ADR-006 D2 active les modules à la création puis par
+l'administrateur ; l'ADR-006 D7 exige trois configurations de specs.
+
+*Choix.* Au lot P, l'ensemble actif est lu à chaque appel dans
+`PARTIDUO_MODULES` (défaut : `accounting,invoicing,analytic` ; `none` : le
+socle seul). `DATABASE_URL` et `PARTIDUO_DOMAIN` suivent le même principe.
+Le lot 0 pourra persister l'activation en base (écran d'administration),
+`PARTIDUO_MODULES` restant la valeur initiale posée par `partiduo-provision`
+et la configuration des specs.
+
+*Alternative écartée.* Table d'activation dès le lot P : prématuré, et les
+specs devraient écrire en base pour changer de configuration.
+
+=== D-006 — Configurations de CI : l'Analytique suit la Comptabilité (lot P, architecte)
+
+*Contexte.* L'ADR-006 D7 nomme trois configurations (Comptabilité seule,
+Facturation seule, les deux) ; l'Analytique dépend de la Comptabilité.
+
+*Choix.* Matrice `accounting,analytic` / `invoicing` /
+`accounting,invoicing,analytic`.
+
+*Alternative écartée.* `accounting` strictement seul : les specs de
+l'Analytique ne tourneraient qu'avec la Facturation active.
+
+=== D-007 — Refus d'accès par exception, validation par `Result` (lot P, architecte)
+
+*Contexte.* L'ADR-005 D2 impose erreurs par champ et permissions vérifiées
+dans chaque commande et requête ; l'ADR-006 D2 nomme `ModuleDisabled`.
+
+*Choix.* `ModuleDisabled`, `Forbidden` (sous-classes de `AccessDenied`) et
+`NotFound` sont des exceptions, levées par commandes *et* requêtes ;
+l'interface les traduit globalement (403/404). Les erreurs de saisie passent
+par `Result(T)`.
+
+*Alternative écartée.* Tout dans `Result` : chaque requête devrait renvoyer un
+`Result`, et chaque appelant tester un cas qu'une interface correcte ne
+produit jamais.
+
+=== D-008 — Événements : liste fermée, charge utile en chaînes (lot P, architecte)
+
+*Contexte.* L'ADR-003 D7 liste six événements ; l'ADR-006 D3 en ajoute deux
+(`credit_note.issued`, `payment.recorded`).
+
+*Choix.* Liste fermée de huit noms ; charge utile `Hash(String, String)`
+d'identifiants ; dispatch synchrone aux seules pièces actives, dans la
+transaction.
+
+*Alternative écartée.* Événements typés (une classe par événement) :
+plus sûr, mais plus lourd pour les extensions ; réversible si le besoin
+apparaît.
+
+=== D-009 — Specs sur un schéma construit par les migrations (lot P, architecte)
+
+*Contexte.* `marten/spec` crée les tables par synchronisation des modèles :
+les contraintes et déclencheurs SQL des migrations (équilibre des écritures)
+seraient absents des specs.
+
+*Choix.* `spec/support/database.cr` supprime le schéma `public` et rejoue
+toutes les migrations avant la suite ; les tables sont vidées après chaque
+exemple par `marten/spec`. La base doit contenir `test` dans son nom.
+
+*Alternative écartée.* Garder la synchronisation et reposer les contraintes à
+la main dans les specs : double source de vérité.
+
+=== D-010 — Garde-fou d'interface (lot P, architecte)
+
+*Contexte.* ADR-005 D3, premier point : la CI échoue si `src/` contient du
+HTML, un gabarit ou un handler.
+
+*Choix.* `scripts/interface_boundary.cr`, exécuté par la CI et par
+`spec/architecture/interface_boundary_spec.cr` : sous `src/`, seules les
+extensions `.cr .yml .yaml .sql .adoc` sont admises ; répertoires
+`templates/`, `assets/`, `static/`, `handlers/` interdits ; code citant
+`Marten::Handler(s)`, `Marten::Template`, `Marten.routes`, `Marten::Routing`,
+`Marten::Middleware`, `Marten::HTTP::Response` ou contenant une balise HTML
+refusé. Le second point de l'ADR-005 D3 (l'interface ne cite que
+`Partiduo::Api`) relève de la CI de `partiduo-ui-bulma`.
+
+*Alternative écartée.* Règle Ameba propre : plus lourde à maintenir pour le
+même résultat.
+
+=== D-011 — CI : PostgreSQL en TCP, dépendances clonées (lot P, architecte)
+
+*Contexte.* Localement, PostgreSQL n'est joignable que par socket Unix ; en
+CI c'est un service Docker. Les dépendances `path:` pointent hors du dépôt.
+
+*Choix.* En CI, `DATABASE_URL=postgres://partiduo:partiduo@postgres:5432/partiduo_test` ;
+`scripts/ci-checkout-deps.sh` clone `marten`, `authn`, `password-policy`,
+`totp`, `webauthn` et `jose` depuis `github.com/aloli-crystal` dans
+`../../`, à l'emplacement attendu par `shard.yml`.
+
+*Alternative écartée.* Dépendances `github:` dans `shard.yml` : impossible
+tant que `totp` et `password-policy` ne sont pas publiés (voir BLOCAGES).
+
+=== D-012 — Dépendances ajoutées au fil des lots (lot P, architecte)
+
+*Contexte.* `pdf-a`, `pdf-validate`, `pdf-signature` et `saml` seront
+nécessaires aux lots 0 (SAML) et F (Factur-X).
+
+*Choix.* Le squelette ne déclare que les dépendances du lot 0
+(authentification) ; chaque lot ajoute les siennes en `path:` (et dans
+`shard.override.yml` si un autre shard les déclare en `github:`).
+
+*Alternative écartée.* Tout déclarer dès le lot P : temps d'installation et de
+compilation sans usage.

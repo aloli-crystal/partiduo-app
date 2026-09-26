@@ -1,0 +1,4 @@
+fr:
+  auth:
+    module:
+      name: "Authentification"
