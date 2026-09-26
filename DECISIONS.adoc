@@ -336,3 +336,97 @@ nécessaires aux lots 0 (SAML) et F (Factur-X).
 
 *Alternative écartée.* Tout déclarer dès le lot P : temps d'installation et de
 compilation sans usage.
+
+=== D-013 — Opal compilé par la gem `opal`, paquet autonome par écran (lot P, ui-squelette)
+
+*Contexte.* ADR-005 D5 : Opal intégré dès le lot P, compilé sans npm ni Node,
+JavaScript versionné et servi par Marten, un exemple couvert par une spec.
+
+*Choix.* Gem `opal` 1.8.2 (et `base64`, retiré des gems par défaut de
+Ruby 3.4), verrouillées par `Gemfile`/`Gemfile.lock` dans
+`partiduo-ui-bulma` ; `bundle exec scripts/opal-build` compile chaque
+`opal/<écran>.rb` en `src/ui/assets/ui/js/opal/<écran>.js`, runtime Opal
+compris, cache Opal désactivé. L'en-tête porte la version d'Opal et
+l'empreinte SHA-256 des sources ; une spec Crystal la recalcule sans Ruby
+(paquet périmé = échec), la CI rejoue `--check` avec Ruby. Les specs qui
+*exécutent* le paquet (logique du compteur, montage sur un DOM simulé) passent
+par un moteur JavaScript autonome, JavaScriptCore (`jsc`, livré avec macOS,
+`libjavascriptcoregtk` en CI), jamais Node ; en attente s'il est absent.
+Exemple : compteur de clics de la page d'accueil (`opal/demo.rb`), monté par
+`PartiduoUi::Boot` au chargement et après chaque `htmx:load`.
+
+*Alternative écartée.* Ligne de commande `opal` avec son lanceur Node
+(interdit) ; compilateur Opal réécrit en Crystal (hors de portée) ; runtime
+Opal partagé dans un fichier séparé (`opal.js` + paquets `--no-opal`) :
+780 Ko par écran aujourd'hui, à reconsidérer quand plusieurs écrans Opal
+cohabiteront sur une même page.
+
+=== D-014 — Garde-fou de l'interface : `Partiduo::Api` plus la composition (lot P, ui-squelette)
+
+*Contexte.* ADR-005 D3 : la CI de l'interface échoue si elle cite autre chose
+que `Partiduo::Api`. Or composer la distribution exige `require "partiduo"`,
+`require "partiduo/cli"` (migrations), `Partiduo.apply_settings` et
+`Partiduo::INSTALLED_APPS`.
+
+*Choix.* `partiduo-ui-bulma/scripts/api_boundary.cr` (CI et
+`spec/architecture/api_boundary_spec.cr`) analyse `src`, `config`, `spec`,
+`scripts` et `manage.cr` (commentaires exclus) et refuse toute constante
+`Partiduo::X` hors de `Api`, tout appel `Partiduo.x`, tout `require
+"partiduo/…"` et toute réouverture d'un espace `Partiduo`, sauf une liste
+blanche de composition : `require "partiduo"`, `require "partiduo/cli"`,
+`Partiduo.apply_settings`, `Partiduo::INSTALLED_APPS`, `LOCALES`,
+`VERSION`, `API_VERSION`. Le domaine des instances n'étant exposé que par
+`Partiduo::Config`, l'interface admet en développement tout sous-domaine de
+`localhost` plutôt que de le lire.
+
+*Alternative écartée.* Règle Ameba propre : plus lourde, même résultat.
+
+*Amendement proposé.* ADR-005 D3 : exposer la composition dans le contrat
+(`Partiduo::Api::Distribution.apply_settings`, `.installed_apps`,
+`.locales`, `.domain`) pour réduire la liste blanche à `require`.
+
+=== D-015 — Fichiers statiques de partiduo-ui-bulma (lot P, ui-squelette)
+
+*Contexte.* ADR-005 D5, D7 : Bulma 1.x, HTMX 2.x, un seul jeu d'icônes SVG,
+IBM Plex ; la maquette charge Plex depuis Google Fonts.
+
+*Choix.* Tout est versionné dans l'application Marten `ui`, sous
+`assets/ui/` (espace de noms, les extensions apportant leurs propres
+fichiers) : Bulma 1.0.4 (celui de la maquette), HTMX 2.0.11, `theme.css` de
+la maquette à l'identique, IBM Plex Sans (400, 400 italique, 500, 600, 700) et
+Plex Mono (400, 500, 600) en woff2 « complete » (latin étendu, grec,
+cyrillique) *auto-hébergées*, icônes *Lucide* (ISC) assemblées en planche
+`sprite.svg` par `scripts/icon_sprite.cr`. Service : route
+`ServeAsset` en développement et en test ; en production `collectassets` +
+`Marten::Middleware::AssetServing`. Le bouton de menu mobile bascule le menu
+par un attribut `onclick` d'une ligne, en attendant un composant Opal.
+
+*Alternative écartée.* Google Fonts ou CDN : dépendance à un tiers et fuite
+d'adresses IP des utilisateurs ; Tabler ou Heroicons : équivalents, Lucide
+retenu pour son trait proche de l'icône de la maquette.
+
+=== D-016 — Specs de l'interface sur un schéma synchronisé (lot P, ui-squelette)
+
+*Contexte.* D-009 reconstruit le schéma du cœur par les migrations pour tester
+les contraintes SQL ; les specs de l'interface ne testent pas ces contraintes.
+
+*Choix.* `partiduo-ui-bulma` garde la synchronisation des modèles de
+`marten/spec` ; base de test par `DATABASE_URL` (nom contenant `test`).
+Les specs d'écran qui écriront en base passeront par `Partiduo::Api`.
+
+*Alternative écartée.* Réutiliser `Partiduo::SpecSupport` du cœur : c'est une
+référence interne, refusée par le garde-fou.
+
+=== D-017 — `partiduo-skel` reporté au lot 0 (lot P, clôture)
+
+*Contexte.* Le plan de lots place `partiduo-skel` au lot P, mais la clôture du
+lot P porte sur les squelettes `partiduo-app` et `partiduo-ui-bulma`, la CI,
+les garde-fous et Opal ; le registre de modules n'expose encore ni menus ni
+permissions exploitables par une extension.
+
+*Choix.* Créer `partiduo-skel` au début du lot 0, une fois le registre étoffé
+(menus, permissions, événements), pour que l'extension de référence illustre
+un contrat stable.
+
+*Alternative écartée.* Un `partiduo-skel` minimal dès maintenant : à réécrire
+aussitôt le registre étoffé.

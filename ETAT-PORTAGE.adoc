@@ -14,9 +14,10 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |===
 |Lot |Contenu |État
 
-|P |Squelette `partiduo-app`, conventions, CI, garde-fou ADR-005 D3 |*Terminé* (squelette de `partiduo-app`)
-|P |Squelette `partiduo-ui-bulma` avec Opal, `partiduo-skel` |À faire
-|0 |Socle : registre étoffé, société, authentification + TOTP, i18n, `partiduo-provision` |À faire
+|P |Squelette `partiduo-app`, conventions, CI, garde-fou ADR-005 D3 |*Terminé*
+|P |Squelette `partiduo-ui-bulma` avec Opal, garde-fou `Partiduo::Api` |*Terminé*
+|P |`partiduo-skel` (extension de référence) |Reporté au lot 0 (D-017)
+|0 |Socle : registre étoffé, société, authentification + TOTP, i18n, `partiduo-provision` |*Lot suivant*
 |1 |Référentiel : tiers, articles, TVA, exercices et périodes ; plan comptable, journaux |À faire
 |2 |Écritures, consultation, lettrage |À faire
 |F |Module Facturation |À faire
@@ -44,14 +45,40 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 * CI GitHub Actions : format, Ameba, garde-fou, specs × 3 configurations
   (non exécutée sur GitHub, voir BLOCAGES B-002).
 
+== Lot P — partiduo-ui-bulma (26 septembre 2026)
+
+* Application Marten `ui` (`PartiduoUi`) qui compose le cœur (`require
+  "partiduo"`) : page d'accueil (gabarit `base.html` repris de la maquette),
+  libellés fr/en/nl, route `ServeAsset` en développement et en test.
+* Fichiers statiques versionnés (D-015) : Bulma 1.0.4, HTMX 2.0.11,
+  `theme.css` de la maquette, IBM Plex auto-hébergée, planche d'icônes Lucide.
+* Opal sans npm ni Node (D-013) : `opal/demo.rb` compilé par la gem `opal`
+  en `src/ui/assets/ui/js/opal/demo.js`, empreinte des sources vérifiée par
+  spec, exécution vérifiée sous JavaScriptCore.
+* Garde-fou ADR-005 D3 côté interface (D-014) : `scripts/api_boundary.cr`,
+  seul `Partiduo::Api` plus la composition est admis.
+* CI GitHub Actions : format, Ameba, garde-fou, Opal `--check`, specs.
+* Specs : 27 exemples.
+
+== Clôture du lot P — vérifications
+
+* `partiduo-app` : 37 exemples verts (Comptabilité seule), 34 + 1 en attente
+  (Facturation seule), 37 (les deux) ; Ameba sans remarque ; garde-fou
+  ADR-005 D3 vert.
+* `partiduo-ui-bulma` : 27 exemples verts ; Ameba sans remarque ; garde-fou
+  `Partiduo::Api` vert.
+* `marten migrate` sur base vierge (`partiduo_migrate_P`), depuis le cœur et
+  depuis l'interface : vert.
+* Aucune remarque de relecture ouverte à la clôture.
+
 == Prochaines étapes
 
-. Lot P (suite) : `partiduo-ui-bulma` (Opal sans npm, exemple couvert par une
-  spec, CI citant seulement `Partiduo::Api`) et `partiduo-skel`.
-. Lot 0 : étoffer le registre (menus pour l'interface, permissions rattachées
-  aux profils — ADR-003 D4), `Core::Settings`, profils, authentification
-  (password-policy via authn, TOTP avec `last_otp_counter`, WebAuthn), limitation
-  des tentatives, `bin/partiduo-provision`.
+. Lot 0 : `partiduo-skel` (extension de référence, D-017) ; étoffer le
+  registre (menus pour l'interface, permissions rattachées aux profils —
+  ADR-003 D4), `Core::Settings`, profils, authentification (password-policy via
+  authn, TOTP avec `last_otp_counter`, WebAuthn), limitation des tentatives,
+  `bin/partiduo-provision`, écran de connexion dans `partiduo-ui-bulma`.
+. Amendement ADR-005 D3 proposé (D-014) : `Partiduo::Api::Distribution`.
 
 == Commandes
 
@@ -66,4 +93,17 @@ crystal spec                                       # base partiduo_test
 DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' scripts/specs-modules.sh
 crystal tool format src spec && ameba
 crystal run scripts/interface_boundary.cr -- src   # garde-fou ADR-005 D3
+----
+
+Interface (`partiduo-ui-bulma`) :
+
+[source,sh]
+----
+cd prod-crystal/partiduo/partiduo-ui-bulma
+SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install
+crystal run manage.cr -- migrate                   # migrations du cœur
+crystal run src/server.cr                          # http://127.0.0.1:8000/
+DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' crystal spec
+crystal run scripts/api_boundary.cr                # garde-fou Partiduo::Api
+bundle exec scripts/opal-build --check             # paquets Opal à jour
 ----

@@ -36,3 +36,26 @@ puis pousser `partiduo-app`.
 
 *Contournement.* URL `postgres:///<base>?host=/tmp` partout en local ; TCP
 seulement en CI (service Docker).
+
+== B-UI-001 — Serveur HTTP non démarrable dans le bac à sable (lot P, ui-squelette)
+
+*Constat.* `partiduo-server` compile et démarre, mais l'ouverture du port est
+refusée (`Could not bind to '127.0.0.1:8765': Operation not permitted`).
+
+*Contournement.* Page d'accueil et fichiers statiques vérifiés par le client
+de test de Marten (`Marten::Spec.client`) ; comportement Opal vérifié sous
+JavaScriptCore avec un DOM simulé (`spec/opal/build_spec.cr`).
+
+*Levée.* Autoriser l'écoute locale (`sandbox.network.allowLocalBinding`) puis
+`crystal run src/server.cr` dans `partiduo-ui-bulma`.
+
+== B-UI-002 — Gems Ruby installées pour une autre version de Ruby (lot P, ui-squelette)
+
+*Constat.* La gem `opal` 1.8.2 est installée dans `~/.gem/ruby/4.0.1`, alors
+que seul Ruby 4.0.6 est présent (`~/.rubies`) ; `bundle exec` ne la trouve
+qu'avec des variables explicites.
+
+*Contournement.*
+`PATH=~/.rubies/ruby-4.0.6/bin:$PATH GEM_HOME=~/.gem/ruby/4.0.1 GEM_PATH=~/.gem/ruby/4.0.1:~/.rubies/ruby-4.0.6/lib/ruby/gems/4.0.0 bundle exec scripts/opal-build`.
+
+*Levée.* `bundle install` dans `partiduo-ui-bulma` avec le Ruby courant.
