@@ -1098,6 +1098,92 @@ des fiches en bloc par le contrat du socle (D-STK-013) ; livraison par ligne
 (D-STK-010) ; rappels sur le tableau de bord, actions liées sur un document
 de la Facturation (interface).
 
+== Vérification du jalon 2 + M (27 septembre 2026)
+
+Parcours de bout en bout sur des instances neuves provisionnées par
+`bin/partiduo-provision` (distribution cœur + interface + SKEL), décisions
+D-J2-001 à D-J2-003.
+
+Ce qui marche (vérifié) :
+
+* *Saisie* (`partiduo-skel/scripts/demo_jalon2.cr`, instance
+  `partiduo_j2_fr`, 48 étapes vertes) : enrôlement ; exercice 2026 et
+  comptes `6226`, `627` créés par l'interface ; fiches client et fournisseur
+  rattachées à leur compte (`card.saved`) ; vente V01 (1 000,00 HT, TVA
+  20 %, contrôle HTMX), achat A01 (250,00 HT), extrait F01 (deux écritures),
+  opération diverse O01 ; refus à 422 d'une écriture déséquilibrée d'un
+  centime (écart 0,01 affiché), hors exercice et sur compte inconnu, sans
+  rien enregistrer ; consultation (liste, écriture, relevé, comptes et
+  tiers) ; lettrage par l'écran (contrôle HTMX, balance âgée soldée) ;
+  annulation par extourne (seconde refusée) ; éditions à l'écran et en CSV ;
+  au centime par le contrat : balance 3 030,00 / 3 030,00, soldes 706, 6226,
+  627, 44571, 4456x, banque 900,00, résultat 750,00, 6 écritures aux
+  journaux, FEC de 14 lignes équilibré ; `post_entry` refusé à un acteur sans
+  droit ; six `entry.posted` reçus par SKEL.
+* *Reprise du FEC de démonstration* (`partiduo-migrate`, instance neuve
+  `partiduo_j2_fec`) : `check` (133 écritures, 354 lignes, 246 290,77 au
+  débit et au crédit), essai à blanc réussi puis annulé, reprise réussie
+  « réconciliation au centime », rapport sans écart ni anomalie (26 comptes,
+  4 journaux, 12 mois ; 15 comptes, 14 fiches, 1 exercice, 43 lettrages
+  créés), second passage refusé (code 1, instance inchangée).
+* *Recoupement indépendant* : soldes par compte du FEC recalculés hors de
+  l'outil et comparés aux lignes de la base de l'instance : identiques pour
+  les 26 comptes ; 133 écritures, 354 lignes, 246 290,77 au débit et au
+  crédit, 43 lettrages sur 87 lignes, comme le FEC.
+* Le FEC de démonstration est régénéré octet pour octet depuis la base
+  NOALYSS de démonstration (`export-fec`) ; FEC complété par cette base
+  (`--fec` et `--noalyss`, instance `partiduo_j2_nl`) repris au centime.
+* *Aller-retour* : le FEC exporté par l'instance de saisie est repris au
+  centime dans une instance neuve (`partiduo_j2_rt`, 6 écritures).
+* Non-régression : `demo_jalon1.cr` vert sur une instance neuve après
+  l'extraction du navigateur en mémoire (`scripts/demo/browser.cr`).
+
+Rien n'était cassé dans le cœur, l'interface ni `partiduo-migrate` ; seuls
+des scripts de démonstration ont été ajoutés (`partiduo-skel`).
+
+Specs (base `partiduo_j2_test`) : `partiduo-app` 927 exemples + 4 en
+attente ; `partiduo-ui-bulma` 253 ; `partiduo-skel` 24 ; `partiduo-migrate`
+93 ; tous verts. Format et Ameba sans remarque sur les scripts ajoutés.
+
+Limites : parcours en mémoire, pas dans un navigateur (B-UI-001) ;
+analytique, stock et prévisions non repris par `partiduo-migrate` (B-MIG-001).
+
+=== Démonstration du jalon 2 + M
+
+[source,sh]
+----
+cd prod-crystal/partiduo/partiduo-skel
+shards build partiduo-skel-manage
+MANAGE="$PWD/bin/partiduo-skel-manage"
+cd ../partiduo-migrate && shards build partiduo-migrate && cd ../partiduo-app
+
+# 1. Saisie sur une instance neuve (noter le lien d'invitation affiché)
+bin/partiduo-provision --manage "$MANAGE" --name "Démo FR SARL" --regime fr \
+  --siren 732829320 --admin-email admin@j2-fr.test --with skel \
+  --database partiduo_j2_fr j2-fr
+cd ../partiduo-skel
+PARTIDUO_MODULES=accounting,invoicing,skel \
+DATABASE_URL='postgres:///partiduo_j2_fr?host=/tmp' \
+  crystal run scripts/demo_jalon2.cr -- --host=j2-fr.partiduo.localhost \
+  --email=admin@j2-fr.test --invitation='<lien>' --fec=/tmp/fec-j2-fr.txt
+
+# 2. Reprise du FEC de démonstration dans une instance neuve
+cd ../partiduo-app
+bin/partiduo-provision --manage "$MANAGE" --name "Démo FR SARL" --regime fr \
+  --siren 732829320 --database partiduo_j2_fec j2-fec
+cd ../partiduo-migrate
+export DATABASE_URL='postgres:///partiduo_j2_fec?host=/tmp' \
+  PARTIDUO_MODULES=accounting,invoicing PARTIDUO_MEDIA_ROOT=/tmp/j2-fec-media
+bin/partiduo-migrate check --fec demo/732829320FEC20241231.txt
+bin/partiduo-migrate import --fec demo/732829320FEC20241231.txt --dry-run --report /tmp/rapport-dry
+bin/partiduo-migrate import --fec demo/732829320FEC20241231.txt --report /tmp/rapport-fec
+# (même chose avec --fec /tmp/fec-j2-fr.txt dans une autre instance neuve :
+#  aller-retour de la saisie)
+
+# Nettoyage
+dropdb partiduo_j2_fr; dropdb partiduo_j2_fec; rm -rf tmp/instances/j2-*
+----
+
 == Prochaines étapes
 
 . Reprise du lot 6 par `partiduo-migrate` (stock, prévisions, suivi) avec

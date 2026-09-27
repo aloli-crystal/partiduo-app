@@ -5294,3 +5294,61 @@ de zéro que l'utilisateur n'a pas fait, et donc une entrée en stock.
 
 *Choix.* Le texte indicatif du champ heure passe par
 `ui.followup.hour_placeholder` (fr `hh:mm`, en `HH:MM`, nl `UU:MM`).
+
+== Vérification du jalon 2 + M (27 septembre 2026)
+
+=== D-J2-001 — Démonstration de bout en bout : `partiduo-skel/scripts/demo_jalon2.cr` (jalon 2)
+
+*Contexte.* Le jalon 2 + M (ADR-001, PROMPT-PORTAGE § « Jalon minimal »)
+demande la saisie d'écritures sur une instance provisionnée puis la reprise
+d'un FEC de démonstration dans une instance neuve, réconciliée au centime.
+Le serveur HTTP reste non démarrable dans le bac à sable (B-UI-001,
+B-J1-001).
+
+*Choix.* Même méthode que D-J1-003 : script composé comme une distribution
+(cœur + interface Bulma + SKEL) qui s'exécute contre la base d'une instance
+provisionnée, requêtes HTTP en mémoire à travers la pile de Marten. Il
+enrôle l'administrateur, crée l'exercice et deux comptes par l'interface,
+deux fiches par le contrat, saisit les quatre formes (vente, achat, extrait
+de deux écritures, opération diverse) avec le contrôle instantané HTMX,
+vérifie les refus (écart d'un centime, hors exercice, compte inconnu),
+consulte, lettre par l'écran de lettrage, annule par extourne, ouvre les
+éditions (balance, CSV, grand livre, journaux, FEC), puis contrôle au
+centime par `Partiduo::Api` (balance, soldes, résultat, journaux, FEC
+réexporté et équilibré) et la réception de `entry.posted` par SKEL (six
+écritures réelles, D-SKEL-003 levé en pratique). Option `--fec` : écrit le
+FEC exporté par l'instance, qu'on reprend ensuite avec `partiduo-migrate`
+(aller-retour). Le navigateur en mémoire est extrait dans
+`scripts/demo/browser.cr`, partagé avec `demo_jalon1.cr` (et doté de
+`post_pairs` pour les cases cochées répétées du lettrage).
+
+La reprise (partie M) est faite par le binaire `bin/partiduo-migrate` sur
+des instances neuves provisionnées par `bin/partiduo-provision`, et son
+rapport est recoupé indépendamment : totaux par compte du FEC calculés hors
+de l'outil (Python, décimales exactes) comparés aux lignes enregistrées dans
+la base de l'instance (lecture SQL seule).
+
+*Alternative écartée.* Specs dans `partiduo-migrate` seulement : elles
+vident leur base et ne passent pas par une instance provisionnée ni par
+l'interface.
+
+=== D-J2-002 — Bases de la vérification `partiduo_j2_*` (jalon 2)
+
+*Choix.* Specs des quatre dépôts sur `partiduo_j2_test` (l'une après
+l'autre, B-J1-001) ; instances `partiduo_j2_fr` (saisie), `partiduo_j2_fec`
+(FEC de démonstration), `partiduo_j2_nl` (FEC complété par la base NOALYSS
+de démonstration), `partiduo_j2_rt` (FEC réexporté par `partiduo_j2_fr`),
+`partiduo_j2_j1` (non-régression de `demo_jalon1.cr`).
+
+=== D-J2-003 — Constats de la vérification, sans correction (jalon 2)
+
+* Le compte `62` du plan FR de NOALYSS (`mod2`) n'est pas utilisable
+  directement (`direct_use` faux) : la saisie le refuse, comme NOALYSS. La
+  démonstration crée `6226` et `627` par l'interface avant de saisir.
+* Les fiches clients et fournisseurs reçoivent un compte `410xxxx` /
+  `400xxxx` (catégories de `mod2`), non `411` / `401` : conforme au modèle de
+  NOALYSS ; le FEC exporté les porte en `CompteNum` avec le quick code en
+  `CompAuxNum`, et `partiduo-migrate` les reprend tels quels.
+* L'extourne d'une opération diverse est lettrée avec l'écriture annulée,
+  compte par compte (codes `B` et `C` au FEC) ; le FEC réexporté se reprend
+  au centime dans une instance neuve.
