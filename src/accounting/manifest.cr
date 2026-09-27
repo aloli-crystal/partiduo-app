@@ -40,4 +40,7 @@ Partiduo::Modules.register do
   menu "ACC_VAT_RETURN", parent: "VAT", order: 10, route: "accounting:vat_return", permission: "accounting.vat.declare"
 
   menu "ACC_CLOSING", parent: "SETTINGS", order: 25, route: "accounting:closing", permission: "accounting.period.close"
+
+  # Une fiche neuve reçoit le compte que prévoit sa catégorie (D-ACC-006).
+  on("card.saved") { |event| Partiduo::Accounting::CardAccounts.on_card_saved(event["card_id"].to_i64) }
 end

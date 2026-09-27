@@ -16,10 +16,10 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 
 |P |Squelette `partiduo-app`, conventions, CI, garde-fou ADR-005 D3 |*Terminé*
 |P |Squelette `partiduo-ui-bulma` avec Opal, garde-fou `Partiduo::Api` |*Terminé*
-|P |`partiduo-skel` (extension de référence) |Reporté au lot 1 (D-017, D-023)
+|P |`partiduo-skel` (extension de référence) |*Terminé* (au lot 1)
 |0 |Socle : registre étoffé, société, authentification + TOTP + WebAuthn, i18n, `partiduo-provision`, parc, interface de connexion |*Terminé*
-|1 |Référentiel : tiers, articles, TVA, exercices et périodes ; plan comptable, journaux |*Lot suivant*
-|2 |Écritures, consultation, lettrage |À faire
+|1 |Référentiel : tiers, articles, TVA, devises, exercices et périodes, pièces jointes ; plan comptable, journaux ; écrans ; `partiduo-skel` |*Terminé*
+|2 |Écritures, consultation, lettrage |*Lot suivant*
 |F |Module Facturation |À faire
 |M |`partiduo-migrate` |À faire
 |3–6 |Éditions, TVA, analytique, stock |À faire
@@ -123,13 +123,71 @@ Interface (`partiduo-ui-bulma`) :
 * Relecture : la seule remarque transmise était sans objet (relecteur sans
   outils, D-022).
 
+== Lot 1 — ce qui existe (27 septembre 2026)
+
+Cœur (`partiduo-app`), référentiel du socle (décisions D-REF-001 à D-REF-014,
+link:doc/api/socle-referentiel.adoc[]) :
+
+* Fiches (`cards`) : tiers et articles (articles = fiches de nature `item`),
+  colonnes typées et attributs libres `extra` en jsonb, adresses principale
+  et de livraison, SIREN/SIRET, quick code au format de NOALYSS, catégories à
+  code stable avec attributs propres, unités.
+* TVA (`vat`) : taux (pourcentage, catégorie UNCL5305), jeux initiaux BE et FR,
+  contrôle des numéros de TVA.
+* `core` : devises et cours datés, exercices et périodes (ouverture, clôture),
+  pièces jointes (stockage de fichiers de Marten, contrôle du contenu),
+  permissions du référentiel.
+
+Cœur, référentiel comptable (D-ACC-001 à D-ACC-007,
+link:doc/api/accounting-reference.adoc[]) :
+
+* Plan comptable : relation parent, numéro normalisé, arbre en SQL récursif ;
+  plans initiaux BE et FR repris de NOALYSS (`scripts/chart_from_noalyss.cr`).
+* Journaux : champs repris de NOALYSS, numérotation des pièces, devise,
+  droits par journal ; rattachement fiche → compte ; comptes par défaut.
+* Pas encore de schéma d'écritures (lot 2, D-ACC-007).
+* Specs : 354 exemples (Comptabilité seule : 354 ; Facturation seule : 320
+  + 5 en attente ; les deux : 354).
+
+Interface (`partiduo-ui-bulma`, D-UI-015 à D-UI-020) :
+
+* Écrans du référentiel : fiches et catégories, taux de TVA, exercices et
+  périodes, plan comptable (sans soldes), journaux — listes (tri, filtre,
+  pages), consultation et modification séparées, formulaires génériques.
+* Montants et dates selon la langue et le pays, période de travail dans la
+  barre supérieure, module inactif en 404, commande sans droit en 403.
+* Specs : 108 exemples.
+
+Extension de référence (`partiduo-skel`, D-SKEL-001 à D-SKEL-004) :
+
+* Espace `Skel`, deux applications Marten (cœur et interface), permission
+  `skel.view`, abonnement à `entry.posted`, migration propre, page d'interface.
+* Specs : 22 exemples.
+
+== Clôture du lot 1 — vérifications (27 septembre 2026)
+
+* `crystal tool format src/ spec/` sans changement dans les trois dépôts.
+* `partiduo-app` : specs vertes dans les trois configurations de modules
+  (354 / 320 + 5 en attente / 354, base `partiduo_test_1_final`) ; Ameba sans
+  remarque (173 fichiers) ; garde-fou ADR-005 D3 vert.
+* `partiduo-ui-bulma` : 108 exemples verts ; Ameba sans remarque ; garde-fou
+  `Partiduo::Api` vert ; `opal-build --check` vert (environnement Ruby de
+  B-UI-002).
+* `partiduo-skel` : 22 exemples verts contre l'arbre de travail de
+  l'interface (B-SKEL-001 levé).
+* `marten migrate` sur base vierge (`partiduo_migrate_1`) depuis le cœur :
+  8 migrations, vert ; second passage depuis le cœur et depuis l'interface
+  sans migration en attente ; depuis `partiduo-skel` : migration
+  `skel_0001` appliquée, vert.
+* Relecture : aucune remarque transmise à la clôture.
+
 == Prochaines étapes
 
-. Lot 1, première tâche : `partiduo-skel` (D-023), d'après
-  link:doc/api/modules.adoc[] et l'extension factice de l'interface.
-. Relecture outillée du lot 0 (D-022).
-. Lot 1 : référentiel — tiers (fiches), articles, TVA, exercices et périodes ;
-  plan comptable, journaux ; écrans correspondants dans `partiduo-ui-bulma`.
+. Lot 2 : écritures (schéma, saisie, validation, numérotation), consultation,
+  lettrage ; puis lot F (Facturation) en parallèle.
+. Soldes du plan comptable dans l'interface une fois les écritures en place
+  (D-UI-020).
+. Signaler à l'amont de Marten le piège `db_unique_constraint` (B-REF-001).
 . Toujours ouverts : amendement ADR-005 D3 (`Partiduo::Api::Distribution`,
   D-014) ; CI GitHub non exécutée (B-002) ; serveur HTTP non démarrable dans
   le bac à sable (B-UI-001).
@@ -161,4 +219,14 @@ crystal run src/server.cr                          # http://demo.partiduo.localh
 DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' crystal spec
 crystal run scripts/api_boundary.cr                # garde-fou Partiduo::Api
 bundle exec scripts/opal-build --check             # paquets Opal à jour
+----
+
+Extension de référence (`partiduo-skel`) :
+
+[source,sh]
+----
+cd prod-crystal/partiduo/partiduo-skel
+SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install
+crystal run manage.cr -- migrate                   # cœur + extension
+DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' crystal spec
 ----

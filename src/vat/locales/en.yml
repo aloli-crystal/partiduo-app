@@ -8,3 +8,66 @@ en:
         write: "Edit VAT rates"
     menu:
       vat_rates: "VAT rates"
+    categories:
+      s: "Standard rate"
+      z: "Zero rated"
+      e: "Exempt"
+      ae: "Reverse charge"
+      k: "Intra-community supply"
+      g: "Export outside the EU"
+      o: "Outside the scope of VAT"
+      l: "Canary Islands (IGIC)"
+      m: "Ceuta and Melilla (IPSI)"
+    initial:
+      be:
+        21g: "VAT 21%"
+        12a: "VAT 12%"
+        6a: "VAT 6%"
+        0tva: "VAT 0%"
+        exp: "Export"
+        intl: "Intra-community supply"
+        coc: "Co-contractor (reverse charge)"
+        inta: "Intra-community acquisition 21%"
+      fr:
+        nor: "VAT 20% (standard)"
+        int: "VAT 10% (intermediate)"
+        tr55: "VAT 5.5% (reduced)"
+        tp021: "VAT 2.1% (special)"
+        dnor: "VAT 8.5% overseas"
+        dr: "VAT 2.1% overseas"
+        dprs: "VAT 1.05% overseas (press)"
+        cor13: "VAT 13% Corsica"
+        cor09: "VAT 0.9% Corsica"
+        exp: "Export outside the EU"
+        intl: "Intra-community supply"
+        autol: "Reverse charge"
+        ints: "Intra-community acquisition 20%"
+        franc: "VAT exemption threshold (CGI art. 293 B)"
+    errors:
+      rate:
+        base:
+          in_use: "This rate is in use and cannot be deleted; disable it instead."
+        code:
+          blank: "The code is required."
+          too_long: "VAT code: 5 characters at most."
+          invalid_characters: "VAT code: digits and letters only."
+          digits_only: "VAT code: must also contain letters."
+          taken: "Code %{value} is already in use."
+        label:
+          blank: "The label cannot be empty."
+          too_long: "The label cannot exceed %{max} characters."
+          taken: "This name is already in use."
+        rate:
+          out_of_range: "Invalid VAT rate (between 0 and 100%)."
+          too_precise: "The rate cannot have more than %{decimals} decimals."
+          must_be_positive: "A standard rate (S) must be above zero."
+          must_be_zero: "This VAT category requires a zero rate."
+          in_use: "This rate is already in use: create a new rate instead of changing it."
+        category:
+          invalid: "Category “%{value}” is not a UNCL5305 category."
+        exemption_code:
+          required: "Category %{category} requires an exemption reason (VATEX code or text)."
+          not_applicable: "Category %{category} carries no exemption reason."
+          invalid: "Code “%{value}” is not a VATEX code."
+        exemption_reason:
+          too_long: "The reason cannot exceed %{max} characters."

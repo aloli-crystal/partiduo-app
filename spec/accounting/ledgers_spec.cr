@@ -1,0 +1,161 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+require "../spec_helper"
+
+private alias Api = Partiduo::Api::Accounting
+
+private def system
+  Partiduo::Api::Actor.system
+end
+
+private def bank_account : Nil
+  AccountingSpec.create_account("5")
+  AccountingSpec.create_account("512", "Banque")
+  AccountingSpec.create_account("51", "Banques", direct_use: false)
+  nil
+end
+
+describe "Journaux : module inactif (ADR-006 D2)" do
+  it "refuse requêtes et commandes par ModuleDisabled" do
+    with_active_modules("invoicing") do
+      expect_raises(Partiduo::Api::ModuleDisabled) { Api.ledgers(system) }
+      expect_raises(Partiduo::Api::ModuleDisabled) { Api.create_ledger(system, AccountingSpec.ledger_input) }
+      expect_raises(Partiduo::Api::ModuleDisabled) { Api.ledger_access(system, 1_i64) }
+    end
+  end
+end
+
+describe_module "ACCOUNTING", "Journaux (jrn_def)" do
+  describe ".create_ledger" do
+    it "attribue un code comme NOALYSS et prépare la numérotation des pièces" do
+      AccountingSpec.base_currency
+      _, actor = AccountingSpec.user_actor("erin@example.com", "accounting.ledger.write")
+      first = Api.create_ledger(actor, AccountingSpec.ledger_input("Achats", receipt_prefix: "ACH-", receipt_padding: 4)).value!
+      second = Api.create_ledger(actor, AccountingSpec.ledger_input("Frais généraux")).value!
+      sale = Api.create_ledger(actor, AccountingSpec.ledger_input("Ventes", Api::LedgerKind::Sale, code: " v10 ")).value!
+
+      first.code.should eq("A01")
+      first.next_receipt.should eq("ACH-0001")
+      first.currency_code.should eq("EUR")
+      first.enabled.should be_true
+      second.code.should eq("A02")
+      second.next_receipt.should eq("1")
+      sale.code.should eq("V10")
+    end
+
+    it "exige le compte de banque d'un journal financier, utilisable directement" do
+      bank_account
+      AccountingSpec.base_currency
+
+      Api.create_ledger(system, AccountingSpec.ledger_input("Banque", Api::LedgerKind::Financial)).error_keys
+        .should eq(["accounting.errors.ledger.default_account.required"])
+      Api.create_ledger(system, AccountingSpec.ledger_input("Banque", Api::LedgerKind::Financial, default_account: "51"))
+        .error_keys.should eq(["accounting.errors.ledger.default_account.not_direct_use"])
+      Api.create_ledger(system, AccountingSpec.ledger_input("Banque", Api::LedgerKind::Financial, default_account: "519"))
+        .error_keys.should eq(["accounting.errors.ledger.default_account.not_found"])
+
+      view = Api.create_ledger(system, AccountingSpec.ledger_input("Banque", Api::LedgerKind::Financial, default_account: "512")).value!
+      view.code.should eq("F01")
+      view.default_account.try(&.number).should eq("512")
+    end
+
+    it "refuse nom ou code déjà pris, champs invalides, devise non déclarée au socle" do
+      AccountingSpec.create_ledger("Achats", code: "ACH")
+
+      Api.check_ledger(system, AccountingSpec.ledger_input("Achats")).error_keys
+        .should eq(["accounting.errors.ledger.name.taken"])
+      Api.check_ledger(system, AccountingSpec.ledger_input("Autres", code: "ach")).error_keys
+        .should eq(["accounting.errors.ledger.code.taken"])
+      Api.check_ledger(system, AccountingSpec.ledger_input("Autres", code: "A-1")).error_keys
+        .should eq(["accounting.errors.ledger.code.invalid"])
+      Api.check_ledger(system, AccountingSpec.ledger_input(" ")).error_keys
+        .should eq(["accounting.errors.ledger.name.blank"])
+      Api.check_ledger(system, AccountingSpec.ledger_input("Autres", receipt_padding: 21, next_receipt_number: 0_i64,
+        receipt_prefix: "P" * 21)).error_keys.sort.should eq([
+        "accounting.errors.ledger.next_receipt_number.invalid",
+        "accounting.errors.ledger.receipt_padding.invalid",
+        "accounting.errors.ledger.receipt_prefix.too_long",
+      ])
+      Api.check_ledger(system, AccountingSpec.ledger_input("Autres", currency_code: "EURO")).error_keys
+        .should eq(["accounting.errors.ledger.currency_code.invalid"])
+      result = Api.check_ledger(system, AccountingSpec.ledger_input("Autres", currency_code: "usd"))
+      result.error_keys.should eq(["accounting.errors.ledger.currency_code.unknown"])
+      result.errors.first.params["code"].should eq("USD")
+    end
+  end
+
+  describe ".update_ledger" do
+    it "modifie le journal et repositionne la numérotation des pièces (jrn_def_pj_seq)" do
+      ledger = AccountingSpec.create_ledger("Achats", receipt_prefix: "A-", receipt_padding: 3)
+
+      view = Api.update_ledger(system, ledger.id, AccountingSpec.ledger_input("Achats 2026", receipt_prefix: "A26-",
+        receipt_padding: 3, next_receipt_number: 42_i64, enabled: false, description: "Exercice 2026")).value!
+
+      view.code.should eq("A01")
+      view.name.should eq("Achats 2026")
+      view.enabled.should be_false
+      view.last_receipt_number.should eq(41)
+      view.next_receipt.should eq("A26-042")
+      Api.ledgers(system, enabled_only: true).should be_empty
+      Api.ledgers(system, kind: Api::LedgerKind::Purchase).size.should eq(1)
+    end
+  end
+
+  describe ".delete_ledger" do
+    it "efface un journal" do
+      ledger = AccountingSpec.create_ledger
+      Api.delete_ledger(system, ledger.id).success?.should be_true
+      expect_raises(Partiduo::Api::NotFound) { Api.ledger(system, ledger.id) }
+    end
+  end
+
+  describe "numérotation des pièces" do
+    it "réserve des numéros consécutifs, sans trou quand la transaction est annulée" do
+      ledger = AccountingSpec.create_ledger("Ventes", Api::LedgerKind::Sale, receipt_prefix: "V-", receipt_padding: 5)
+
+      Partiduo::Accounting::Receipts.take!(ledger.id).should eq("V-00001")
+      Marten::DB::Connection.default.transaction do
+        Partiduo::Accounting::Receipts.take!(ledger.id).should eq("V-00002")
+        raise Marten::DB::Errors::Rollback.new
+      end
+      Partiduo::Accounting::Receipts.take!(ledger.id).should eq("V-00002")
+      Api.ledger(system, ledger.id).next_receipt.should eq("V-00003")
+    end
+  end
+
+  describe "droits par journal (user_sec_jrn, D-AUTH-010)" do
+    it "ne montre à un utilisateur sous sécurité des journaux que ses journaux, avec son droit" do
+      purchases = AccountingSpec.create_ledger("Achats")
+      sales = AccountingSpec.create_ledger("Ventes", Api::LedgerKind::Sale)
+      misc = AccountingSpec.create_ledger("OD", Api::LedgerKind::Misc)
+      user_id, actor = AccountingSpec.user_actor("bob@example.com", "accounting.ledger.read")
+      Partiduo::Api::Auth.set_ledger_security(system, user_id, true).success?.should be_true
+      Partiduo::Api::Auth.set_ledger_access(system, user_id, purchases.id, "R").success?.should be_true
+      Partiduo::Api::Auth.set_ledger_access(system, user_id, sales.id, "W").success?.should be_true
+
+      Api.ledgers(actor).map { |ledger| {ledger.code, ledger.access} }.should eq([
+        {"A01", Api::LedgerAccess::Read}, {"V01", Api::LedgerAccess::Write},
+      ])
+      Api.ledger_access(actor, misc.id).should eq(Api::LedgerAccess::None)
+      Api.ledger_access(actor, sales.id).writable?.should be_true
+      expect_raises(Partiduo::Api::NotFound) { Api.ledger(actor, misc.id) }
+      expect_raises(Partiduo::Api::NotFound) { Api.ledger_access(actor, 999_i64) }
+    end
+
+    it "donne l'écriture partout sans sécurité des journaux, et tout montre à qui administre les journaux" do
+      ledger = AccountingSpec.create_ledger("Achats")
+      _, reader = AccountingSpec.user_actor("carol@example.com", "accounting.ledger.read")
+      Api.ledger(reader, ledger.id).access.should eq(Api::LedgerAccess::Write)
+
+      admin_id, admin = AccountingSpec.user_actor("dave@example.com", "accounting.ledger.read", "accounting.ledger.write")
+      Partiduo::Api::Auth.set_ledger_security(system, admin_id, true)
+      view = Api.ledger(admin, ledger.id)
+      view.access.should eq(Api::LedgerAccess::None)
+    end
+
+    it "exige la permission de lecture des journaux" do
+      expect_raises(Partiduo::Api::Forbidden) { Api.ledgers(actor_with) }
+      expect_raises(Partiduo::Api::Forbidden) { Api.create_ledger(actor_with("accounting.ledger.read"), AccountingSpec.ledger_input) }
+    end
+  end
+end

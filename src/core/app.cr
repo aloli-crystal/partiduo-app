@@ -4,6 +4,7 @@ require "./manifest"
 require "./models/**"
 require "./services/**"
 require "./api/**"
+require "./initial_data"
 
 module Partiduo
   # Socle : dossier et société (Settings), profils, exercices et périodes,

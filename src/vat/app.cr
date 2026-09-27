@@ -1,8 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 require "./manifest"
+require "./models/**"
+require "./services/**"
+require "./api/**"
 require "./be/**"
 require "./fr/**"
+require "./initial_data"
 
 module Partiduo
   # Socle : taux de TVA et régime du dossier. Les spécificités nationales sont

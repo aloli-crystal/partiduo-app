@@ -1,6 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 require "./manifest"
+require "./models/category"
+require "./models/card"
+require "./services/**"
+require "./defaults"
+require "./api/**"
+require "./initial_data"
 
 module Partiduo
   # Socle : fiches — tiers (clients, fournisseurs), articles et services,

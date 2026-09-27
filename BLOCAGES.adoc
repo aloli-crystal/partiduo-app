@@ -177,3 +177,49 @@ vérifiées avec un authentificateur simulé.
 `http://demo.partiduo.localhost:8000/` : essai avec Trousseau macOS, Windows
 Hello, un téléphone, et un lecteur d'écran (VoiceOver, NVDA) pour
 l'audit WCAG 2.2 AA manuel (contrastes du thème, ordre de lecture).
+
+== B-ACC-001 — Compilation partagée pendant l'écriture parallèle du lot 1 (lot 1, comptabilité-référentiel)
+
+*Constat.* Le socle (`cards`, `core`, `vat`) et le référentiel comptable sont
+écrits en même temps dans le même dépôt : tant que le code du socle était en
+cours d'écriture, `crystal spec` ne compilait pas (types `Int32 | Int64` des
+identifiants Marten, migration à plusieurs instructions), ce qui bloquait les
+specs de la Comptabilité.
+
+*Contournement.* Specs de la Comptabilité exécutées dans une copie du dépôt
+(bac à sable) où seules les erreurs de compilation du socle étaient corrigées
+localement, puis rejouées sur le dépôt dès qu'il a compilé : 350, 320 et 354
+exemples verts dans les trois configurations de modules (base
+`partiduo_test_1_compta`).
+
+*Levée.* Levé à la fin du lot ; rien à faire.
+
+== B-REF-001 — Marten : champs déclarés après `db_unique_constraint` ignorés (lot 1, socle-référentiel)
+
+*Constat.* Dans un modèle, `with_timestamp_fields` placé *après*
+`db_unique_constraint` n'ajoute pas ses champs au modèle : l'enregistrement
+lève `Unknown field 'created_at'` (`Marten::DB::Errors::UnknownField`).
+
+*Contournement.* Toujours déclarer les champs avant les contraintes (D-REF-014) ;
+`CategoryAttribute` et `CurrencyRate` corrigés. Le shard `marten` n'est pas
+modifié (hors des shards autorisés).
+
+*Levée.* Signaler à l'amont avec un cas minimal.
+
+== B-SKEL-001 — `partiduo-ui-bulma` en cours de modification pendant la vérification de `partiduo-skel` (lot 1, skel)
+
+*Constat.* `partiduo-skel` dépend de `../partiduo-ui-bulma` en `path:` ; un
+autre agent modifiait ce dépôt au même moment (`src/ui/shell.cr`,
+`handler.cr` non compilables dans l'état intermédiaire), ce qui empêchait de
+compiler les specs de l'extension.
+
+*Contournement.* Specs et `manage.cr` vérifiés contre un instantané de
+`HEAD` de `partiduo-ui-bulma` (`git archive` dans `$TMPDIR`, lien
+`lib/partiduo-ui-bulma` pointé dessus le temps du passage, puis restauré) :
+22 exemples verts. Specs également vertes contre l'arbre de travail avant le
+début de ces modifications.
+
+*Levée.* Relancer `crystal spec` dans `partiduo-skel` une fois le travail en
+cours de `partiduo-ui-bulma` terminé.
+*Levé* à la clôture du lot 1 : 22 exemples verts contre l'arbre de travail de
+`partiduo-ui-bulma` (lien `lib/partiduo-ui-bulma` restauré).

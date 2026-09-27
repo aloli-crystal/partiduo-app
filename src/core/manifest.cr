@@ -12,6 +12,15 @@ Partiduo::Modules.register do
   permission "core.settings.manage"
   permission "core.users.manage"
   permission "core.modules.manage"
+  # Lot 1 : exercices et périodes, devises, pièces jointes. Pas de suffixe
+  # `.manage` : ces droits ne sont pas administratifs, le rôle comptable les
+  # garde (Partiduo::Auth::Permissions.administrative?).
+  permission "core.fiscal_year.write"
+  permission "core.period.close"
+  permission "core.period.reopen"
+  permission "core.currency.write"
+  permission "core.attachment.read"
+  permission "core.attachment.write"
 
   menu "DASHBOARD", order: 10, route: "core:dashboard"
   menu "BILLING", order: 20
@@ -25,7 +34,8 @@ Partiduo::Modules.register do
   menu "EXTENSION", order: 100
 
   menu "CORE_COMPANY", parent: "SETTINGS", order: 10, route: "core:company", permission: "core.settings.manage"
-  menu "CORE_FISCAL_YEARS", parent: "SETTINGS", order: 20, route: "core:fiscal_years", permission: "core.settings.manage"
+  menu "CORE_FISCAL_YEARS", parent: "SETTINGS", order: 20, route: "core:fiscal_years", permission: "core.fiscal_year.write"
   menu "CORE_USERS", parent: "SETTINGS", order: 30, route: "core:users", permission: "core.users.manage"
   menu "CORE_MODULES", parent: "SETTINGS", order: 40, route: "core:modules", permission: "core.modules.manage"
+  menu "CORE_CURRENCIES", parent: "SETTINGS", order: 25, route: "core:currencies", permission: "core.currency.write"
 end

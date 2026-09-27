@@ -36,6 +36,52 @@ nl:
       acc_fec: "FEC"
       acc_vat_return: "Btw-aangifte"
       acc_closing: "Afsluiting"
+    account_kinds:
+      asset: "Activa"
+      liability: "Passiva"
+      asset_contra: "Activa, tegenrekening"
+      liability_contra: "Passiva, tegenrekening"
+      income: "Opbrengst"
+      income_contra: "Opbrengst, tegenrekening"
+      expense: "Kost"
+      expense_contra: "Kost, tegenrekening"
+      context: "Context"
+    ledger_kinds:
+      purchase: "Aankopen"
+      sale: "Verkopen"
+      financial: "Financieel"
+      misc: "Diverse verrichtingen"
+    ledger_access:
+      none: "Geen toegang"
+      read: "Lezen"
+      write: "Schrijven"
+    default_accounts:
+      customer: "Klanten"
+      supplier: "Leveranciers"
+      bank: "Bank"
+      cash: "Kas"
+      sales: "Verkopen"
+      internal_transfer: "Interne overboekingen"
+      current_account: "Rekening-courant"
+      vat: "Te betalen btw"
+      non_deductible: "Niet-aftrekbare kosten"
+      non_deductible_vat: "Niet-aftrekbare btw"
+      vat_deductible_tax: "Btw aftrekbaar via de belastingen"
+      private_expense: "Kosten ten laste van de zaakvoerder"
+    initial_data:
+      ledgers:
+        purchase:
+          name: "Aankopen"
+          description: "Aankopen, ontvangen facturen en creditnota's, onkostennota's"
+        sale:
+          name: "Verkopen"
+          description: "Verkopen en uitgereikte creditnota's"
+        financial:
+          name: "Financieel"
+          description: "Financiële bewegingen: bankrekeningen, kas, kaarten"
+        misc:
+          name: "Diverse verrichtingen"
+          description: "Afschrijvingen, btw en andere verrichtingen"
     errors:
       entry:
         account_missing: "Vul een rekening in."
@@ -43,3 +89,61 @@ nl:
         too_many_decimals: "Het bedrag heeft hoogstens %{max} decimalen."
         too_few_lines: "Een boeking telt minstens %{min} lijnen."
         unbalanced: "De boeking is niet in evenwicht: verschil van %{difference}."
+      account:
+        number:
+          blank: "Vul het rekeningnummer in."
+          too_long: "Het nummer telt hoogstens %{max} tekens."
+          invalid: "Het nummer bevat enkel letters en cijfers."
+          taken: "Rekening %{number} bestaat al."
+        label:
+          blank: "Vul de omschrijving van de rekening in."
+          too_long: "De omschrijving telt hoogstens %{max} tekens."
+        parent:
+          not_found: "Bovenliggende rekening %{number} bestaat niet."
+          self: "Een rekening kan niet haar eigen bovenliggende rekening zijn."
+          cycle: "De bovenliggende rekening kan niet van deze rekening afhangen."
+          required: "Geen bovenliggende rekening past bij dit nummer: vul ze in."
+        has_children: "Deze rekening heeft subrekeningen: verwijderen is niet toegestaan."
+        in_use: "Deze rekening is in gebruik: verwijderen is niet toegestaan."
+      ledger:
+        name:
+          blank: "Vul de naam van het dagboek in."
+          too_long: "De naam telt hoogstens %{max} tekens."
+          taken: "Een dagboek draagt al deze naam."
+        code:
+          invalid: "De code telt hoogstens %{max} letters of cijfers."
+          taken: "Code %{code} is al in gebruik."
+        default_account:
+          not_found: "Rekening %{number} bestaat niet."
+          not_direct_use: "Rekening %{number} kan niet rechtstreeks gebruikt worden."
+          required: "Een financieel dagboek heeft een bank- of kasrekening."
+        receipt_prefix:
+          too_long: "Het voorvoegsel telt hoogstens %{max} tekens."
+        receipt_padding:
+          invalid: "De lengte van het nummer ligt tussen 0 en %{max}."
+        next_receipt_number:
+          invalid: "Het volgende stuknummer is minstens 1."
+        currency_code:
+          invalid: "Vul een ISO 4217-muntcode in (drie letters)."
+          unknown: "Munt %{code} is niet aangegeven."
+      default_account:
+        code:
+          invalid: "Onbekend gebruik van standaardrekening."
+        account:
+          not_found: "Rekening %{number} bestaat niet."
+      card_account:
+        card_id:
+          not_found: "Deze fiche bestaat niet."
+        account:
+          not_direct_use: "Rekening %{number} kan niet rechtstreeks gebruikt worden."
+          required: "Vul een rekening in: de categorie van de fiche levert er geen."
+      card_category:
+        category_id:
+          not_found: "Deze categorie bestaat niet."
+        base_account:
+          not_found: "Rekening %{number} bestaat niet."
+          required: "Vul de basisrekening in om per fiche een rekening aan te maken."
+      initial_data:
+        regime:
+          invalid: "Onbekend belastingstelsel."
+        not_empty: "Het rekeningstelsel of de dagboeken zijn al geladen."

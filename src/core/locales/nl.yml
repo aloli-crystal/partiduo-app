@@ -9,6 +9,16 @@ nl:
         manage: "Gebruikers en profielen beheren"
       modules:
         manage: "Modules activeren en deactiveren"
+      fiscal_year:
+        write: "Boekjaren en periodes aanmaken en verwijderen"
+      period:
+        close: "Periodes en boekjaren afsluiten"
+        reopen: "Een afgesloten periode heropenen"
+      currency:
+        write: "Munten en wisselkoersen beheren"
+      attachment:
+        read: "Bijlagen raadplegen"
+        write: "Bijlagen toevoegen en verwijderen"
     menu:
       dashboard: "Dashboard"
       billing: "Facturatie"
@@ -24,6 +34,7 @@ nl:
       core_fiscal_years: "Boekjaren en periodes"
       core_users: "Gebruikers en profielen"
       core_modules: "Modules"
+      core_currencies: "Munten"
     settings:
       name: "Onderneming"
       fields:
@@ -64,6 +75,8 @@ nl:
       session_duration:
         one: "%{count} minuut"
         other: "%{count} minuten"
+    currencies:
+      eur: "Euro"
     errors:
       settings:
         company_name:
@@ -130,6 +143,65 @@ nl:
           unknown: "Onbekende uitbreiding: %{code}."
           wrong_kind: "%{code} is geen uitbreiding (gebruik --modules)."
           inactive: "Uitbreiding %{code} is niet actief in de configuratie van de instantie."
+      fiscal_year:
+        year:
+          out_of_range: "Het boekjaar moet tussen %{min} en %{max} liggen."
+          taken: "Boekjaar %{year} bestaat al."
+        start_year:
+          out_of_range: "Het beginjaar moet tussen %{min} en %{max} liggen."
+        start_month:
+          invalid: "De beginmaand bestaat niet."
+        months:
+          out_of_range: "Het aantal maanden moet tussen %{min} en %{max} liggen."
+        label:
+          too_long: "Het label mag niet langer zijn dan %{max} tekens."
+          taken: "Het label „%{label}” duidt al een ander boekjaar aan."
+        closed: "Dit boekjaar is afgesloten."
+        in_use: "Dit boekjaar kan niet worden verwijderd: er zijn verrichtingen in geboekt."
+        already_closed: "Dit boekjaar is al afgesloten."
+        no_period: "Dit boekjaar heeft geen periode."
+      period:
+        overlap: "De periode overlapt de periode van %{starts_on} tot %{ends_on}."
+        fiscal_year_closed: "Het boekjaar van deze periode is afgesloten."
+        ends_on:
+          before_start: "Het einde van de periode ligt voor het begin."
+        starts_on:
+          out_of_range: "De datums moeten tussen %{min} en %{max} liggen."
+        closed: "Deze periode is afgesloten."
+        in_use: "Deze periode kan niet worden verwijderd: er zijn verrichtingen in geboekt."
+        already_closed: "Deze periode is al afgesloten."
+        not_closed: "Deze periode is niet afgesloten."
+      currency:
+        code:
+          base_immutable: "De boekhoudmunt van het dossier kan niet worden gewijzigd."
+          invalid: "„%{value}” is geen ISO 4217-code (drie letters)."
+          taken: "Munt %{value} bestaat al."
+          in_use: "Deze munt wordt gebruikt en kan niet worden verwijderd."
+        name:
+          blank: "De naam van de munt is verplicht."
+          too_long: "De naam mag niet langer zijn dan %{max} tekens."
+        decimals:
+          out_of_range: "Het aantal decimalen moet tussen %{min} en %{max} liggen."
+        rate:
+          blank: "Een eerste wisselkoers is verplicht."
+          not_positive: "De wisselkoers moet positief zijn."
+          too_precise: "De wisselkoers mag niet meer dan %{decimals} decimalen hebben."
+          too_large: "De wisselkoers is te hoog."
+        valid_from:
+          blank: "De datum van de eerste wisselkoers is verplicht."
+          not_after_last: "De datum moet na de laatste wisselkoers liggen (%{date})."
+      attachment:
+        filename:
+          blank: "De bestandsnaam is verplicht."
+          too_long: "De bestandsnaam mag niet langer zijn dan %{max} tekens."
+        content:
+          empty: "Het bestand is leeg."
+          too_large: "Het bestand is groter dan %{max} MiB."
+        content_type:
+          unsupported: "Dit bestandstype (%{value}) wordt niet aanvaard."
+          mismatch: "De inhoud van het bestand komt niet overeen met het type (%{value})."
+        in_use: "Deze bijlage is nog gekoppeld en kan niet worden verwijderd."
+        corrupted: "Deze bijlage is gewijzigd: de vingerafdruk komt niet meer overeen."
     provision:
       done: "Dossier „%{name}” aangemaakt: %{domain}."
       regime: "Fiscaal stelsel: %{regime}."

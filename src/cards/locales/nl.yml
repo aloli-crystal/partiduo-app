@@ -11,3 +11,180 @@ nl:
     menu:
       cards_list: "Relaties en artikelen"
       cards_categories: "Fichecategorieën"
+    kinds:
+      customer: "Klant"
+      supplier: "Leverancier"
+      item: "Artikel of dienst"
+      bank: "Bank"
+      employee: "Werknemer"
+      contact: "Contactpersoon"
+      other: "Andere"
+    value_types:
+      text: "Tekst"
+      number: "Getal"
+      date: "Datum"
+      boolean: "Ja / nee"
+      card: "Fiche"
+    address_kinds:
+      main: "Adres"
+      delivery: "Leveringsadres"
+    units:
+      c62: "eenheid"
+      h87: "stuk"
+      ea: "elk"
+      xpp: "stuk (colli)"
+      set: "set"
+      pr: "paar"
+      dzn: "dozijn"
+      xbx: "doos"
+      xpk: "pak"
+      ls: "forfait"
+      e48: "service-eenheid"
+      sec: "seconde"
+      min: "minuut"
+      hur: "uur"
+      day: "dag"
+      wee: "week"
+      mon: "maand"
+      ann: "jaar"
+      kgm: "kilogram"
+      grm: "gram"
+      mgm: "milligram"
+      tne: "ton"
+      mtr: "meter"
+      cmt: "centimeter"
+      mmt: "millimeter"
+      kmt: "kilometer"
+      mtk: "vierkante meter"
+      mtq: "kubieke meter"
+      ltr: "liter"
+      mlt: "milliliter"
+      clt: "centiliter"
+      kwh: "kilowattuur"
+      mwh: "megawattuur"
+      kwt: "kilowatt"
+      p1: "procent"
+    initial:
+      categories:
+        customer: "Klanten"
+        supplier: "Leveranciers"
+        bank: "Banken"
+        sale: "Verkopen: artikelen en diensten"
+        purchase: "Aankopen van handelsgoederen"
+        expense: "Diensten en diverse goederen"
+        employee: "Werknemers"
+        contact: "Contactpersonen"
+        tax_authority: "Administraties"
+      attributes:
+        first_name: "Voornaam"
+        company: "Onderneming"
+    errors:
+      card:
+        base:
+          in_use: "Deze fiche wordt gebruikt en kan niet worden verwijderd; deactiveer ze."
+        category_id:
+          not_found: "Deze fichecategorie bestaat niet."
+          kind_mismatch: "Een artikel kan geen relatie worden, en omgekeerd."
+        name:
+          blank: "De naam is verplicht."
+          too_long: "Dit veld mag niet langer zijn dan %{max} tekens."
+        description:
+          too_long: "Dit veld mag niet langer zijn dan %{max} tekens."
+        email:
+          too_long: "Dit veld mag niet langer zijn dan %{max} tekens."
+          invalid: "Het e-mailadres is ongeldig."
+        phone:
+          too_long: "Dit veld mag niet langer zijn dan %{max} tekens."
+        contact_name:
+          too_long: "Dit veld mag niet langer zijn dan %{max} tekens."
+        code:
+          too_long: "De snelcode mag niet langer zijn dan %{max} tekens."
+          taken: "Snelcode %{value} is al in gebruik."
+        unit_code:
+          not_applicable: "Dit veld is niet van toepassing op deze fichecategorie."
+          invalid: "Eenheid „%{value}” is geen erkende UN/ECE-eenheid."
+        sale_price:
+          not_applicable: "Dit veld is niet van toepassing op deze fichecategorie."
+          negative: "De prijs mag niet negatief zijn."
+          too_precise: "De prijs mag niet meer dan %{decimals} decimalen hebben."
+          too_large: "De prijs is te hoog."
+        purchase_price:
+          not_applicable: "Dit veld is niet van toepassing op deze fichecategorie."
+          negative: "De prijs mag niet negatief zijn."
+          too_precise: "De prijs mag niet meer dan %{decimals} decimalen hebben."
+          too_large: "De prijs is te hoog."
+        vat_rate_id:
+          not_applicable: "Dit veld is niet van toepassing op deze fichecategorie."
+          not_found: "Dit btw-tarief bestaat niet."
+          disabled: "Btw-tarief %{code} is gedeactiveerd."
+        siren:
+          not_applicable: "Dit veld is niet van toepassing op deze fichecategorie."
+          invalid: "SIREN „%{value}” is ongeldig (9 cijfers, controlecijfer)."
+        siret:
+          not_applicable: "Dit veld is niet van toepassing op deze fichecategorie."
+          invalid: "SIRET „%{value}” is ongeldig (14 cijfers, controlecijfer)."
+          siren_mismatch: "Het SIRET moet beginnen met SIREN %{siren}."
+        routing_id:
+          not_applicable: "Dit veld is niet van toepassing op deze fichecategorie."
+          siren_required: "Een routeringscode vereist een SIREN."
+          invalid: "Routeringscode „%{value}” is ongeldig (letters, cijfers, punt, koppelteken, underscore)."
+        vat_number:
+          not_applicable: "Dit veld is niet van toepassing op deze fichecategorie."
+          invalid: "Btw-nummer „%{value}” is ongeldig."
+          siren_mismatch: "Het btw-nummer komt niet overeen met SIREN %{siren}."
+        iban:
+          not_applicable: "Dit veld is niet van toepassing op deze fichecategorie."
+          invalid: "IBAN „%{value}” is ongeldig."
+        bic:
+          not_applicable: "Dit veld is niet van toepassing op deze fichecategorie."
+          invalid: "BIC „%{value}” is ongeldig."
+        delivery_addresses:
+          not_applicable: "Dit veld is niet van toepassing op deze fichecategorie."
+          too_many: "Een fiche heeft hoogstens %{max} leveringsadressen."
+        address:
+          too_long: "Dit veld mag niet langer zijn dan %{max} tekens."
+          country_invalid: "Landcode „%{value}” is ongeldig (twee letters, ISO 3166-1)."
+        extra:
+          unknown: "Kenmerk „%{key}” bestaat niet in deze categorie."
+          required: "%{label} is verplicht."
+          too_long: "%{label} mag niet langer zijn dan %{max} tekens."
+          too_precise: "%{label} mag niet meer dan %{decimals} decimalen hebben."
+          card_not_found: "%{label}: fiche %{id} bestaat niet."
+          invalid_text: "%{label} moet tekst zijn."
+          invalid_number: "%{label} moet een decimaal getal zijn."
+          invalid_date: "%{label} moet een datum zijn (JJJJ-MM-DD)."
+          invalid_boolean: "%{label} moet ja of nee zijn."
+          invalid_card: "%{label} moet naar een fiche verwijzen."
+      category:
+        base:
+          has_cards: "Deze categorie bevat fiches en kan niet worden verwijderd."
+          in_use: "Deze categorie wordt gebruikt en kan niet worden verwijderd."
+        code:
+          immutable: "De code van een categorie kan niet wijzigen."
+          invalid: "Code „%{value}” is ongeldig (hoofdletters, cijfers, underscore)."
+          taken: "Code %{value} is al in gebruik."
+        name:
+          blank: "De naam van de categorie mag niet leeg zijn."
+          too_long: "Dit veld mag niet langer zijn dan %{max} tekens."
+          taken: "Categorie „%{value}” bestaat al."
+        kind:
+          invalid: "Een categoriemodel is verplicht („%{value}” is onbekend)."
+          in_use: "De aard van een categorie met fiches kan niet wijzigen."
+        attributes:
+          too_many: "Een categorie heeft hoogstens %{max} kenmerken."
+        attribute:
+          key:
+            invalid: "Sleutel „%{value}” is ongeldig (kleine letters, cijfers, underscore)."
+            duplicate: "Sleutel „%{value}” wordt al door een ander kenmerk gebruikt."
+          label:
+            blank: "Het label is verplicht."
+            too_long: "Dit veld mag niet langer zijn dan %{max} tekens."
+          value_type:
+            invalid: "Type „%{value}” is onbekend."
+            in_use: "Fiches gebruiken dit kenmerk: het type kan niet meer wijzigen."
+          max_length:
+            out_of_range: "De maximale lengte moet tussen 1 en %{max} liggen."
+          decimals:
+            out_of_range: "Het aantal decimalen moet tussen 0 en %{max} liggen."
+          required:
+            missing_values: "Sommige fiches vullen dit kenmerk niet in: het kan niet verplicht worden."

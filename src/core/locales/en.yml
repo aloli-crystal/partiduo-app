@@ -9,6 +9,16 @@ en:
         manage: "Manage users and profiles"
       modules:
         manage: "Enable and disable modules"
+      fiscal_year:
+        write: "Create and delete fiscal years and periods"
+      period:
+        close: "Close periods and fiscal years"
+        reopen: "Reopen a closed period"
+      currency:
+        write: "Manage currencies and exchange rates"
+      attachment:
+        read: "View attachments"
+        write: "Upload and delete attachments"
     menu:
       dashboard: "Dashboard"
       billing: "Invoicing"
@@ -24,6 +34,7 @@ en:
       core_fiscal_years: "Fiscal years and periods"
       core_users: "Users and profiles"
       core_modules: "Modules"
+      core_currencies: "Currencies"
     settings:
       name: "Company"
       fields:
@@ -64,6 +75,8 @@ en:
       session_duration:
         one: "%{count} minute"
         other: "%{count} minutes"
+    currencies:
+      eur: "Euro"
     errors:
       settings:
         company_name:
@@ -130,6 +143,65 @@ en:
           unknown: "Unknown extension: %{code}."
           wrong_kind: "%{code} is not an extension (use --modules)."
           inactive: "Extension %{code} is not active in the instance configuration."
+      fiscal_year:
+        year:
+          out_of_range: "The fiscal year must be between %{min} and %{max}."
+          taken: "Fiscal year %{year} already exists."
+        start_year:
+          out_of_range: "The starting year must be between %{min} and %{max}."
+        start_month:
+          invalid: "The starting month does not exist."
+        months:
+          out_of_range: "The number of months must be between %{min} and %{max}."
+        label:
+          too_long: "The label cannot exceed %{max} characters."
+          taken: "The label “%{label}” already names another fiscal year."
+        closed: "This fiscal year is closed."
+        in_use: "This fiscal year cannot be deleted: transactions are recorded in it."
+        already_closed: "This fiscal year is already closed."
+        no_period: "This fiscal year has no period."
+      period:
+        overlap: "The period overlaps the period from %{starts_on} to %{ends_on}."
+        fiscal_year_closed: "The fiscal year of this period is closed."
+        ends_on:
+          before_start: "The end of the period is before its start."
+        starts_on:
+          out_of_range: "Dates must be between %{min} and %{max}."
+        closed: "This period is closed."
+        in_use: "This period cannot be deleted: transactions are recorded in it."
+        already_closed: "This period is already closed."
+        not_closed: "This period is not closed."
+      currency:
+        code:
+          base_immutable: "The bookkeeping currency cannot be changed."
+          invalid: "“%{value}” is not an ISO 4217 code (three letters)."
+          taken: "Currency %{value} already exists."
+          in_use: "This currency is in use and cannot be deleted."
+        name:
+          blank: "The currency name is required."
+          too_long: "The name cannot exceed %{max} characters."
+        decimals:
+          out_of_range: "The number of decimals must be between %{min} and %{max}."
+        rate:
+          blank: "A first exchange rate is required."
+          not_positive: "The exchange rate must be positive."
+          too_precise: "The exchange rate cannot have more than %{decimals} decimals."
+          too_large: "The exchange rate is too high."
+        valid_from:
+          blank: "The date of the first exchange rate is required."
+          not_after_last: "The date must be after the latest exchange rate (%{date})."
+      attachment:
+        filename:
+          blank: "The file name is required."
+          too_long: "The file name cannot exceed %{max} characters."
+        content:
+          empty: "The file is empty."
+          too_large: "The file exceeds %{max} MiB."
+        content_type:
+          unsupported: "This file type (%{value}) is not accepted."
+          mismatch: "The file content does not match its type (%{value})."
+        in_use: "This attachment is still linked and cannot be deleted."
+        corrupted: "This attachment has been altered: its fingerprint no longer matches."
     provision:
       done: "Company file “%{name}” created: %{domain}."
       regime: "Tax regime: %{regime}."

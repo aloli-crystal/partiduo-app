@@ -1,0 +1,268 @@
+= Référentiel du socle : fiches, TVA, exercices, devises, pièces jointes
+:toc: left
+:toc-title: Table des matières
+:toclevels: 3
+:icons: font
+:source-language: crystal
+
+Référence du référentiel du *socle* (lot 1, ADR-006 D1) : tiers, articles et
+services (`Partiduo::Api::Cards`), taux de TVA (`Partiduo::Api::Vat`),
+exercices et périodes, devises, pièces jointes (`Partiduo::Api::Core`). Le
+socle ne cite aucun module : le rattachement d'une fiche, d'une catégorie ou
+d'un taux à un compte comptable appartient à la Comptabilité
+(link:accounting-reference.adoc[], D-ACC-001).
+
+Conventions communes : acteur en premier argument, droits vérifiés en tête,
+commandes en transaction renvoyant `Result(T)`, erreurs par champ en clés
+i18n (fr, en, nl), objets de vue immuables (convention C2 de
+`DECISIONS.adoc`). Les décisions de ce périmètre sont `D-REF-001` à
+`D-REF-014`.
+
+== Fiches (`Partiduo::Api::Cards`)
+
+Successeur de `fiche`, `fiche_detail` (EAV), `fiche_def`, `jnt_fic_attr` et
+`attr_def` (ADR-001 D3). Colonnes typées pour les attributs universels et les
+champs de facturation française du cœur (ADR-004 D5) ; `extra` (jsonb, index
+GIN `jsonb_path_ops`) pour les attributs propres de la catégorie, validés
+selon sa définition.
+
+=== Catégories
+
+[cols="2,1,3",options="header"]
+|===
+|Appel |Droit |Rôle
+
+|`categories(actor, kind = nil) : Array(CategoryView)`
+|`cards.card.read`
+|Catégories, par nom ; d'une nature si `kind`.
+
+|`category(actor, id)`, `category_by_code(actor, code)`
+|`cards.card.read`
+|Une catégorie (`NotFound`), ou par code stable (`nil`).
+
+|`check_category(actor, CategoryInput, id = nil) : Result(Nil)`
+|`cards.category.manage`
+|Contrôle instantané.
+
+|`create_category`, `update_category(actor, id, input)`
+|`cards.category.manage`
+|La saisie décrit la catégorie *entière*, attributs compris ; un attribut
+retiré est effacé des fiches.
+
+|`delete_category(actor, id) : Result(Nil)`
+|`cards.category.manage`
+|Refusée si la catégorie a des fiches (`base.has_cards`).
+
+|`load_default_categories(Actor.system, locale) : Array(String)`
+|acteur système
+|Jeu de données initial (chargeur `CARDS.categories`, ordre 12).
+|===
+
+* `code` : identifiant stable (`CUSTOMER`, `SUPPLIER`, `BANK`, `SALE`,
+  `PURCHASE`, `EXPENSE`, `EMPLOYEE`, `CONTACT`, `TAX_AUTHORITY`), en
+  majuscules, immuable ; c'est par lui qu'un module rattache ses paramètres.
+* `kind` : `customer`, `supplier`, `item` (articles et services), `bank`,
+  `employee`, `contact`, `other` ; immuable dès que la catégorie a des fiches.
+* Attributs propres (`AttributeInput`) : `key` (`[a-z][a-z0-9_]*`), `label`,
+  `value_type` — `text` (`max_length`, 255 par défaut), `number` (`decimals`,
+  4 par défaut, valeur stockée *en chaîne* décimale), `date` (`AAAA-MM-JJ`),
+  `boolean`, `card` (identifiant d'une autre fiche) —, `required`.
+
+=== Fiches
+
+[cols="2,1,3",options="header"]
+|===
+|Appel |Droit |Rôle
+
+|`cards(actor, CardQuery) : Array(CardView)`, `count_cards`
+|`cards.card.read`
+|Recherche : `search` (nom, quick code, TVA, SIREN, SIRET, description),
+`category_id`, `kind`, `enabled` (`true` par défaut, `nil` = toutes),
+`extra` (inclusion jsonb, servie par l'index GIN), `limit`, `offset`.
+
+|`card(actor, id)`, `card_by_code(actor, code)`
+|`cards.card.read`
+|Une fiche ; par quick code saisi librement (`Fiche::get_by_qcode`).
+
+|`check_card(actor, CardInput, id = nil) : Result(Nil)`
+|`cards.card.write`
+|Contrôle instantané.
+
+|`create_card`, `update_card(actor, id, input) : Result(CardView)`
+|`cards.card.write`
+|Publie `card.saved` (`card_id`).
+
+|`set_card_enabled(actor, id, enabled)`
+|`cards.card.write`
+|`f_enable` ; publie `card.saved`.
+
+|`card_in_use?(actor, id) : Bool`, `delete_card(actor, id) : Result(Nil)`
+|`cards.card.read` / `write`
+|`Fiche::is_used` / `remove` : refus (`base.in_use`) si une autre fiche la
+cite (attribut `card`) ou si une ligne d'un module la référence.
+
+|`format_code(code) : String`
+|—
+|Format d'un quick code (`comptaproc.format_quickcode`).
+|===
+
+`CardInput` décrit la fiche entière, sauf `code` : `nil` ou vide *génère* le
+quick code à la création (six premiers caractères du nom formaté, ou `CRD`,
+puis `1`, `2`… en cas de doublon) et le *conserve* à la modification ; un code
+saisi déjà pris est refusé.
+
+[cols="1,3",options="header"]
+|===
+|Champ |Règle
+
+|`name` |obligatoire, 255 caractères
+|`vat_number` |compacté ; contrôle FR et BE, forme générique UE sinon ; FR : cohérent avec le SIREN
+|`siren`, `siret` |clé de Luhn (exception La Poste) ; SIREN déduit du SIRET ; SIRET commençant par le SIREN
+|`routing_id` |code de routage de l'annuaire (`[A-Za-z0-9._-]`, 100 car.), exige un SIREN ; `CardView#electronic_address` = `SIREN[_SIRET[_CODE]]`
+|`iban`, `bic` |ISO 13616 (clé modulo 97), ISO 9362
+|`address`, `delivery_addresses` |adresse principale et adresses de livraison (20 au plus, la première par défaut) ; pays ISO 3166-1, celui de la société si vide
+|`unit_code` |articles : recommandation UN/ECE n° 20 (`Api::Cards::UNITS`, libellés `cards.units.<code>`), `C62` par défaut
+|`sale_price`, `purchase_price` |articles : décimaux ≥ 0, quatre décimales au plus
+|`vat_rate_id` |articles : taux de TVA par défaut, existant et actif
+|`extra` |attributs propres de la catégorie ; clé inconnue refusée
+|===
+
+Les champs d'article sont refusés sur un tiers, les identifiants de tiers et
+les adresses de livraison sur un article (`not_applicable`). Une fiche change
+de catégorie sans changer de nature.
+
+== Taux de TVA (`Partiduo::Api::Vat`)
+
+[cols="2,1,3",options="header"]
+|===
+|Appel |Droit |Rôle
+
+|`rates(actor, include_disabled = false)`, `rate(actor, id)`, `rate_by_code(actor, code)`
+|`vat.rate.read`
+|Lecture.
+
+|`check_rate`, `create_rate`, `update_rate(actor, id, input)`, `delete_rate`
+|`vat.rate.write`
+|Règles de `Tva_Rate_MTable::check` ; le taux ou le code d'un taux cité ne
+change plus (`rate.in_use`) : on crée un taux et on désactive l'ancien.
+
+|`load_rates(Actor.system, regime, locale)`
+|acteur système
+|Taux en vigueur du régime (`Vat::Be::RATES`, `Vat::Fr::RATES`), chargeur
+`VAT.rates`, ordre 8.
+|===
+
+`RateView` : `code` (cinq caractères, au moins une lettre), `label` (unique),
+`rate` en *pourcentage* (`20.0000`), `category` UNCL5305 (`S`, `Z`, `E`, `AE`,
+`K`, `G`, `O`, `L`, `M`), `exemption_code` (VATEX) ou `exemption_reason`
+(obligatoires pour `E`, `AE`, `K`, `G`, `O`), `reverse_charge`
+(autoliquidation), `sale_on_payment` / `purchase_on_payment` (exigibilité à
+l'encaissement), `enabled`. Aides : `fraction`, `tax_on(base, decimals = 2)`.
+
+== Exercices et périodes (`Partiduo::Api::Core`)
+
+[cols="2,1,3",options="header"]
+|===
+|Appel |Droit |Rôle
+
+|`fiscal_years`, `fiscal_year(id)`, `periods(fiscal_year_id?, open_only)`, `period(id)`
+|authentifié
+|Lecture ; périodes dans l'ordre chronologique.
+
+|`period_for(actor, day) : PeriodView?`
+|authentifié
+|`find_periode`.
+
+|`current_period(actor, today) : PeriodView?`
+|authentifié
+|Période du jour, sinon dernière période ouverte commencée, sinon première
+période ouverte.
+
+|`check_fiscal_year`, `create_fiscal_year(actor, FiscalYearInput)`
+|`core.fiscal_year.write`
+|`insert_exercice` : `year`, `start_year`, `start_month`, `months` (1 à 60),
+`label`, `opening_period` / `closing_period` (périodes d'un jour).
+
+|`add_period(actor, PeriodInput)`, `delete_period`, `delete_fiscal_year`
+|`core.fiscal_year.write`
+|Sans chevauchement ; suppression refusée si close ou citée.
+
+|`close_period`, `close_fiscal_year`
+|`core.period.close`
+|Publie `period.closed` (`period_id`) pour chaque période close.
+
+|`reopen_period`
+|`core.period.reopen`
+|Refusée si l'exercice est clos.
+|===
+
+En base : bornes ordonnées, contrainte d'exclusion `core_period_no_overlap`
+(aucun chevauchement, quel que soit le code qui écrit), déclencheur
+`core_period_guard` (période close intouchable, exercice clos sans ajout ni
+réouverture), fonction `core_period_for(date)` pour les contrôles des modules.
+L'état par journal (`jrn_periode`) relève de la Comptabilité.
+
+== Devises (`Partiduo::Api::Core`)
+
+[cols="2,1,3",options="header"]
+|===
+|Appel |Droit |Rôle
+
+|`currencies`, `currency(code)`, `base_currency`
+|authentifié
+|La devise de tenue (EUR) d'abord.
+
+|`rate_on(actor, code, day) : BigDecimal?`
+|authentifié
+|Dernier cours à la date ; `1` pour la devise de tenue.
+
+|`create_currency(actor, CurrencyInput)`, `update_currency`, `add_currency_rate`, `delete_currency`
+|`core.currency.write`
+|`Currency_MTable::check` : code ISO 4217, premier cours obligatoire, cours
+`> 0` à huit décimales, date strictement postérieure au dernier cours ; la
+devise de tenue ne se modifie pas.
+
+|`ensure_base_currency(Actor.system)`
+|acteur système
+|Chargeur `CORE.base_currency`, ordre 2.
+|===
+
+== Pièces jointes (`Partiduo::Api::Core`, ADR-006 D1)
+
+[cols="2,1,3",options="header"]
+|===
+|Appel |Droit |Rôle
+
+|`store_attachment(actor, AttachmentInput(filename, content_type, io))`
+|`core.attachment.write`
+|Types admis (`Partiduo::Core::Attachments::TYPES` : PDF, PNG, JPEG, WebP,
+HEIC, TIFF, XML, texte, CSV), signature du contenu contrôlée, 20 Mio au plus,
+empreinte SHA-256.
+
+|`attachment(actor, id)`, `attachment_content(actor, id) : Bytes`
+|`core.attachment.read`
+|Le contenu est vérifié contre l'empreinte (`AttachmentCorrupted`).
+
+|`delete_attachment(actor, id)`
+|`core.attachment.write`
+|Refusée tant qu'une ligne d'un module la cite ; fichier effacé après la
+validation.
+|===
+
+Stockage : `media_files` de Marten, dossier `PARTIDUO_MEDIA_ROOT` (`media` par
+défaut). Un module rattache une pièce par une clé étrangère vers
+`core_attachment` ; la boîte « Justificatifs à traiter » relève de
+l'extension `partiduo-document`.
+
+== Données initiales et ordre des chargeurs
+
+[cols="1,1,3",options="header"]
+|===
+|Ordre |Chargeur |Contenu
+
+|2 |`CORE.base_currency` |Euro, devise de tenue
+|5 |`AUTH.profiles_and_admin` |Profils, administrateur
+|8 |`VAT.rates` |Taux du régime, libellés dans la langue du dossier
+|12 |`CARDS.categories` |Catégories par défaut
+|20 |`ACCOUNTING.reference_data` |Plan comptable, journaux, comptes des catégories
+|===

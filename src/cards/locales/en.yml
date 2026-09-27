@@ -11,3 +11,180 @@ en:
     menu:
       cards_list: "Parties and items"
       cards_categories: "Card categories"
+    kinds:
+      customer: "Customer"
+      supplier: "Supplier"
+      item: "Item or service"
+      bank: "Bank"
+      employee: "Employee"
+      contact: "Contact"
+      other: "Other"
+    value_types:
+      text: "Text"
+      number: "Number"
+      date: "Date"
+      boolean: "Yes / no"
+      card: "Card"
+    address_kinds:
+      main: "Address"
+      delivery: "Delivery address"
+    units:
+      c62: "unit"
+      h87: "piece"
+      ea: "each"
+      xpp: "piece (package)"
+      set: "set"
+      pr: "pair"
+      dzn: "dozen"
+      xbx: "box"
+      xpk: "pack"
+      ls: "lump sum"
+      e48: "service unit"
+      sec: "second"
+      min: "minute"
+      hur: "hour"
+      day: "day"
+      wee: "week"
+      mon: "month"
+      ann: "year"
+      kgm: "kilogram"
+      grm: "gram"
+      mgm: "milligram"
+      tne: "tonne"
+      mtr: "metre"
+      cmt: "centimetre"
+      mmt: "millimetre"
+      kmt: "kilometre"
+      mtk: "square metre"
+      mtq: "cubic metre"
+      ltr: "litre"
+      mlt: "millilitre"
+      clt: "centilitre"
+      kwh: "kilowatt hour"
+      mwh: "megawatt hour"
+      kwt: "kilowatt"
+      p1: "percent"
+    initial:
+      categories:
+        customer: "Customers"
+        supplier: "Suppliers"
+        bank: "Banks"
+        sale: "Sales: items and services"
+        purchase: "Purchases of goods"
+        expense: "Services and sundry goods"
+        employee: "Employees"
+        contact: "Contacts"
+        tax_authority: "Tax and public authorities"
+      attributes:
+        first_name: "First name"
+        company: "Company"
+    errors:
+      card:
+        base:
+          in_use: "This card is in use and cannot be deleted; disable it instead."
+        category_id:
+          not_found: "This card category does not exist."
+          kind_mismatch: "An item cannot become a party, nor a party an item."
+        name:
+          blank: "The name is required."
+          too_long: "This field cannot exceed %{max} characters."
+        description:
+          too_long: "This field cannot exceed %{max} characters."
+        email:
+          too_long: "This field cannot exceed %{max} characters."
+          invalid: "The email address is not valid."
+        phone:
+          too_long: "This field cannot exceed %{max} characters."
+        contact_name:
+          too_long: "This field cannot exceed %{max} characters."
+        code:
+          too_long: "The quick code cannot exceed %{max} characters."
+          taken: "Quick code %{value} is already in use."
+        unit_code:
+          not_applicable: "This field does not apply to this card category."
+          invalid: "Unit “%{value}” is not a recognised UN/ECE unit."
+        sale_price:
+          not_applicable: "This field does not apply to this card category."
+          negative: "The price cannot be negative."
+          too_precise: "The price cannot have more than %{decimals} decimals."
+          too_large: "The price is too high."
+        purchase_price:
+          not_applicable: "This field does not apply to this card category."
+          negative: "The price cannot be negative."
+          too_precise: "The price cannot have more than %{decimals} decimals."
+          too_large: "The price is too high."
+        vat_rate_id:
+          not_applicable: "This field does not apply to this card category."
+          not_found: "This VAT rate does not exist."
+          disabled: "VAT rate %{code} is disabled."
+        siren:
+          not_applicable: "This field does not apply to this card category."
+          invalid: "SIREN “%{value}” is not valid (9 digits, check digit)."
+        siret:
+          not_applicable: "This field does not apply to this card category."
+          invalid: "SIRET “%{value}” is not valid (14 digits, check digit)."
+          siren_mismatch: "The SIRET must start with SIREN %{siren}."
+        routing_id:
+          not_applicable: "This field does not apply to this card category."
+          siren_required: "A routing code requires a SIREN."
+          invalid: "Routing code “%{value}” is not valid (letters, digits, dot, hyphen, underscore)."
+        vat_number:
+          not_applicable: "This field does not apply to this card category."
+          invalid: "VAT number “%{value}” is not valid."
+          siren_mismatch: "The VAT number does not match SIREN %{siren}."
+        iban:
+          not_applicable: "This field does not apply to this card category."
+          invalid: "IBAN “%{value}” is not valid."
+        bic:
+          not_applicable: "This field does not apply to this card category."
+          invalid: "BIC “%{value}” is not valid."
+        delivery_addresses:
+          not_applicable: "This field does not apply to this card category."
+          too_many: "A card has at most %{max} delivery addresses."
+        address:
+          too_long: "This field cannot exceed %{max} characters."
+          country_invalid: "Country code “%{value}” is not valid (two letters, ISO 3166-1)."
+        extra:
+          unknown: "Attribute “%{key}” does not exist in this category."
+          required: "%{label} is required."
+          too_long: "%{label} cannot exceed %{max} characters."
+          too_precise: "%{label} cannot have more than %{decimals} decimals."
+          card_not_found: "%{label}: card %{id} does not exist."
+          invalid_text: "%{label} must be text."
+          invalid_number: "%{label} must be a decimal number."
+          invalid_date: "%{label} must be a date (YYYY-MM-DD)."
+          invalid_boolean: "%{label} must be yes or no."
+          invalid_card: "%{label} must refer to a card."
+      category:
+        base:
+          has_cards: "This category contains cards and cannot be deleted."
+          in_use: "This category is in use and cannot be deleted."
+        code:
+          immutable: "A category code cannot change."
+          invalid: "Code “%{value}” is not valid (capitals, digits, underscore)."
+          taken: "Code %{value} is already in use."
+        name:
+          blank: "The category name cannot be empty."
+          too_long: "This field cannot exceed %{max} characters."
+          taken: "Category “%{value}” already exists."
+        kind:
+          invalid: "A category template is required (“%{value}” is unknown)."
+          in_use: "The kind of a category that contains cards cannot change."
+        attributes:
+          too_many: "A category has at most %{max} attributes."
+        attribute:
+          key:
+            invalid: "Key “%{value}” is not valid (lower case, digits, underscore)."
+            duplicate: "Key “%{value}” is already used by another attribute."
+          label:
+            blank: "The label is required."
+            too_long: "This field cannot exceed %{max} characters."
+          value_type:
+            invalid: "Type “%{value}” is unknown."
+            in_use: "Cards use this attribute: its type can no longer change."
+          max_length:
+            out_of_range: "The maximum length must be between 1 and %{max}."
+          decimals:
+            out_of_range: "The number of decimals must be between 0 and %{max}."
+          required:
+            missing_values: "Some cards do not fill in this attribute: it cannot become required."

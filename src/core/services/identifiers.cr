@@ -32,6 +32,23 @@ module Partiduo
         sum % 10 == 0
       end
 
+      # IBAN (ISO 13616) : pays, clé, BBAN de 11 à 30 caractères ; clé
+      # contrôlée modulo 97 (ISO 7064). Valeur déjà compactée.
+      def self.valid_iban?(value : String) : Bool
+        return false unless value.matches?(/\A[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}\z/)
+        rearranged = value[4..] + value[0, 4]
+        digits = String.build do |io|
+          rearranged.each_char { |char| char.ascii_number? ? io << char : io << (char.ord - 'A'.ord + 10) }
+        end
+        digits.each_char.reduce(0) { |rest, char| (rest * 10 + char.to_i) % 97 } == 1
+      end
+
+      # BIC (ISO 9362) : banque (4 lettres), pays (2 lettres), localité
+      # (2 caractères), agence facultative (3 caractères).
+      def self.valid_bic?(value : String) : Bool
+        value.matches?(/\A[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?\z/)
+      end
+
       # Supprime espaces, points et tirets, et passe en majuscules :
       # `"fr 40 303 265 045"` → `"FR40303265045"`.
       def self.compact(value : String) : String

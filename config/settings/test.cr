@@ -8,6 +8,8 @@ Marten.configure :test do |config|
   config.database do |db|
     db.from_url(Partiduo::Config.database_url)
   end
+  # Pièces jointes des specs : dossier temporaire propre à l'exécution.
+  config.media_files.root = File.join(Dir.tempdir, "partiduo-media-#{Process.pid}")
   config.cache_store = Marten::Cache::Store::Null.new
   config.emailing.backend = Marten::Emailing::Backend::Development.new(collect_emails: true, print_emails: false)
 end

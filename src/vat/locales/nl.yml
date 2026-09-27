@@ -8,3 +8,66 @@ nl:
         write: "Btw-tarieven wijzigen"
     menu:
       vat_rates: "Btw-tarieven"
+    categories:
+      s: "Normaal tarief"
+      z: "Nultarief"
+      e: "Vrijgesteld"
+      ae: "Verlegging van heffing"
+      k: "Intracommunautaire levering"
+      g: "Uitvoer buiten de EU"
+      o: "Buiten het toepassingsgebied van de btw"
+      l: "Canarische Eilanden (IGIC)"
+      m: "Ceuta en Melilla (IPSI)"
+    initial:
+      be:
+        21g: "Btw 21 %"
+        12a: "Btw 12 %"
+        6a: "Btw 6 %"
+        0tva: "Btw 0 %"
+        exp: "Uitvoer"
+        intl: "Intracommunautaire levering"
+        coc: "Medecontractant (verlegging)"
+        inta: "Intracommunautaire verwerving 21 %"
+      fr:
+        nor: "Btw 20 % (normaal)"
+        int: "Btw 10 % (tussentarief)"
+        tr55: "Btw 5,5 % (verlaagd)"
+        tp021: "Btw 2,1 % (bijzonder)"
+        dnor: "Btw 8,5 % overzee"
+        dr: "Btw 2,1 % overzee"
+        dprs: "Btw 1,05 % overzee (pers)"
+        cor13: "Btw 13 % Corsica"
+        cor09: "Btw 0,9 % Corsica"
+        exp: "Uitvoer buiten de EU"
+        intl: "Intracommunautaire levering"
+        autol: "Verlegging van heffing"
+        ints: "Intracommunautaire verwerving 20 %"
+        franc: "Vrijstellingsregeling (art. 293 B CGI)"
+    errors:
+      rate:
+        base:
+          in_use: "Dit tarief wordt gebruikt en kan niet worden verwijderd; deactiveer het."
+        code:
+          blank: "De code is verplicht."
+          too_long: "Btw-code: maximaal 5 tekens."
+          invalid_characters: "Btw-code: enkel cijfers en letters."
+          digits_only: "Btw-code: moet ook letters bevatten."
+          taken: "Code %{value} is al in gebruik."
+        label:
+          blank: "Het label mag niet leeg zijn."
+          too_long: "Het label mag niet langer zijn dan %{max} tekens."
+          taken: "Deze naam is al in gebruik."
+        rate:
+          out_of_range: "Ongeldig btw-tarief (tussen 0 en 100 %)."
+          too_precise: "Het tarief mag niet meer dan %{decimals} decimalen hebben."
+          must_be_positive: "Een normaal tarief (S) moet groter zijn dan nul."
+          must_be_zero: "Deze btw-categorie vereist een nultarief."
+          in_use: "Dit tarief wordt al gebruikt: maak een nieuw tarief aan in plaats van het te wijzigen."
+        category:
+          invalid: "Categorie „%{value}” is geen UNCL5305-categorie."
+        exemption_code:
+          required: "Categorie %{category} vereist een vrijstellingsreden (VATEX-code of tekst)."
+          not_applicable: "Categorie %{category} heeft geen vrijstellingsreden."
+          invalid: "Code „%{value}” is geen VATEX-code."
+        exemption_reason:
+          too_long: "De reden mag niet langer zijn dan %{max} tekens."

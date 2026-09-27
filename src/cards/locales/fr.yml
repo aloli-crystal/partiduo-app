@@ -11,3 +11,180 @@ fr:
     menu:
       cards_list: "Tiers et articles"
       cards_categories: "Catégories de fiches"
+    kinds:
+      customer: "Client"
+      supplier: "Fournisseur"
+      item: "Article ou service"
+      bank: "Banque"
+      employee: "Salarié"
+      contact: "Contact"
+      other: "Autre"
+    value_types:
+      text: "Texte"
+      number: "Nombre"
+      date: "Date"
+      boolean: "Oui / non"
+      card: "Fiche"
+    address_kinds:
+      main: "Adresse"
+      delivery: "Adresse de livraison"
+    units:
+      c62: "unité"
+      h87: "pièce"
+      ea: "chacun"
+      xpp: "colis individuel"
+      set: "ensemble"
+      pr: "paire"
+      dzn: "douzaine"
+      xbx: "boîte"
+      xpk: "paquet"
+      ls: "forfait"
+      e48: "unité de service"
+      sec: "seconde"
+      min: "minute"
+      hur: "heure"
+      day: "jour"
+      wee: "semaine"
+      mon: "mois"
+      ann: "année"
+      kgm: "kilogramme"
+      grm: "gramme"
+      mgm: "milligramme"
+      tne: "tonne"
+      mtr: "mètre"
+      cmt: "centimètre"
+      mmt: "millimètre"
+      kmt: "kilomètre"
+      mtk: "mètre carré"
+      mtq: "mètre cube"
+      ltr: "litre"
+      mlt: "millilitre"
+      clt: "centilitre"
+      kwh: "kilowattheure"
+      mwh: "mégawattheure"
+      kwt: "kilowatt"
+      p1: "pour cent"
+    initial:
+      categories:
+        customer: "Clients"
+        supplier: "Fournisseurs"
+        bank: "Banques"
+        sale: "Ventes : articles et services"
+        purchase: "Achats de marchandises"
+        expense: "Services et biens divers"
+        employee: "Salariés"
+        contact: "Contacts"
+        tax_authority: "Administrations"
+      attributes:
+        first_name: "Prénom"
+        company: "Société"
+    errors:
+      card:
+        base:
+          in_use: "Cette fiche est utilisée et ne peut être supprimée ; désactivez-la."
+        category_id:
+          not_found: "Cette catégorie de fiche n'existe pas."
+          kind_mismatch: "Un article ne peut devenir un tiers, ni un tiers un article."
+        name:
+          blank: "Le nom est obligatoire."
+          too_long: "Ce champ ne peut dépasser %{max} caractères."
+        description:
+          too_long: "Ce champ ne peut dépasser %{max} caractères."
+        email:
+          too_long: "Ce champ ne peut dépasser %{max} caractères."
+          invalid: "L'adresse électronique n'est pas valide."
+        phone:
+          too_long: "Ce champ ne peut dépasser %{max} caractères."
+        contact_name:
+          too_long: "Ce champ ne peut dépasser %{max} caractères."
+        code:
+          too_long: "Le quick code ne peut dépasser %{max} caractères."
+          taken: "Le quick code %{value} est déjà utilisé."
+        unit_code:
+          not_applicable: "Ce champ ne concerne pas cette catégorie de fiche."
+          invalid: "L'unité « %{value} » n'est pas une unité UN/ECE reconnue."
+        sale_price:
+          not_applicable: "Ce champ ne concerne pas cette catégorie de fiche."
+          negative: "Le prix ne peut être négatif."
+          too_precise: "Le prix ne peut avoir plus de %{decimals} décimales."
+          too_large: "Le prix est trop élevé."
+        purchase_price:
+          not_applicable: "Ce champ ne concerne pas cette catégorie de fiche."
+          negative: "Le prix ne peut être négatif."
+          too_precise: "Le prix ne peut avoir plus de %{decimals} décimales."
+          too_large: "Le prix est trop élevé."
+        vat_rate_id:
+          not_applicable: "Ce champ ne concerne pas cette catégorie de fiche."
+          not_found: "Ce taux de TVA n'existe pas."
+          disabled: "Le taux de TVA %{code} est désactivé."
+        siren:
+          not_applicable: "Ce champ ne concerne pas cette catégorie de fiche."
+          invalid: "Le SIREN « %{value} » n'est pas valide (9 chiffres, clé de contrôle)."
+        siret:
+          not_applicable: "Ce champ ne concerne pas cette catégorie de fiche."
+          invalid: "Le SIRET « %{value} » n'est pas valide (14 chiffres, clé de contrôle)."
+          siren_mismatch: "Le SIRET doit commencer par le SIREN %{siren}."
+        routing_id:
+          not_applicable: "Ce champ ne concerne pas cette catégorie de fiche."
+          siren_required: "Un code de routage suppose un SIREN."
+          invalid: "Le code de routage « %{value} » n'est pas valide (lettres, chiffres, point, tiret, souligné)."
+        vat_number:
+          not_applicable: "Ce champ ne concerne pas cette catégorie de fiche."
+          invalid: "Le numéro de TVA « %{value} » n'est pas valide."
+          siren_mismatch: "Le numéro de TVA ne correspond pas au SIREN %{siren}."
+        iban:
+          not_applicable: "Ce champ ne concerne pas cette catégorie de fiche."
+          invalid: "L'IBAN « %{value} » n'est pas valide."
+        bic:
+          not_applicable: "Ce champ ne concerne pas cette catégorie de fiche."
+          invalid: "Le BIC « %{value} » n'est pas valide."
+        delivery_addresses:
+          not_applicable: "Ce champ ne concerne pas cette catégorie de fiche."
+          too_many: "Une fiche compte au plus %{max} adresses de livraison."
+        address:
+          too_long: "Ce champ ne peut dépasser %{max} caractères."
+          country_invalid: "Le code pays « %{value} » n'est pas valide (deux lettres, ISO 3166-1)."
+        extra:
+          unknown: "L'attribut « %{key} » n'existe pas dans cette catégorie."
+          required: "%{label} est obligatoire."
+          too_long: "%{label} ne peut dépasser %{max} caractères."
+          too_precise: "%{label} ne peut avoir plus de %{decimals} décimales."
+          card_not_found: "%{label} : la fiche %{id} n'existe pas."
+          invalid_text: "%{label} doit être un texte."
+          invalid_number: "%{label} doit être un nombre décimal."
+          invalid_date: "%{label} doit être une date (AAAA-MM-JJ)."
+          invalid_boolean: "%{label} doit valoir oui ou non."
+          invalid_card: "%{label} doit désigner une fiche."
+      category:
+        base:
+          has_cards: "Cette catégorie contient des fiches et ne peut être supprimée."
+          in_use: "Cette catégorie est utilisée et ne peut être supprimée."
+        code:
+          immutable: "Le code d'une catégorie ne change pas."
+          invalid: "Le code « %{value} » n'est pas valide (majuscules, chiffres, souligné)."
+          taken: "Le code %{value} est déjà utilisé."
+        name:
+          blank: "Le nom de la catégorie ne peut pas être vide."
+          too_long: "Ce champ ne peut dépasser %{max} caractères."
+          taken: "La catégorie « %{value} » existe déjà."
+        kind:
+          invalid: "Un modèle de catégorie est obligatoire (« %{value} » est inconnu)."
+          in_use: "La nature d'une catégorie qui contient des fiches ne change pas."
+        attributes:
+          too_many: "Une catégorie compte au plus %{max} attributs."
+        attribute:
+          key:
+            invalid: "La clé « %{value} » n'est pas valide (minuscules, chiffres, souligné)."
+            duplicate: "La clé « %{value} » est déjà utilisée par un autre attribut."
+          label:
+            blank: "Le libellé est obligatoire."
+            too_long: "Ce champ ne peut dépasser %{max} caractères."
+          value_type:
+            invalid: "Le type « %{value} » est inconnu."
+            in_use: "Des fiches renseignent cet attribut : son type ne change plus."
+          max_length:
+            out_of_range: "La longueur maximale doit être comprise entre 1 et %{max}."
+          decimals:
+            out_of_range: "Le nombre de décimales doit être compris entre 0 et %{max}."
+          required:
+            missing_values: "Des fiches ne renseignent pas cet attribut : il ne peut devenir obligatoire."

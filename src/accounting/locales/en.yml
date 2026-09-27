@@ -36,6 +36,52 @@ en:
       acc_fec: "FEC"
       acc_vat_return: "VAT return"
       acc_closing: "Closing"
+    account_kinds:
+      asset: "Asset"
+      liability: "Liability"
+      asset_contra: "Asset, contra account"
+      liability_contra: "Liability, contra account"
+      income: "Income"
+      income_contra: "Income, contra account"
+      expense: "Expense"
+      expense_contra: "Expense, contra account"
+      context: "Context"
+    ledger_kinds:
+      purchase: "Purchases"
+      sale: "Sales"
+      financial: "Financial"
+      misc: "Miscellaneous operations"
+    ledger_access:
+      none: "No access"
+      read: "Read"
+      write: "Write"
+    default_accounts:
+      customer: "Customers"
+      supplier: "Suppliers"
+      bank: "Bank"
+      cash: "Cash"
+      sales: "Sales"
+      internal_transfer: "Internal transfers"
+      current_account: "Current account"
+      vat: "VAT payable"
+      non_deductible: "Non-deductible expenses"
+      non_deductible_vat: "Non-deductible VAT"
+      vat_deductible_tax: "VAT deductible from income tax"
+      private_expense: "Expenses charged to the manager"
+    initial_data:
+      ledgers:
+        purchase:
+          name: "Purchases"
+          description: "Purchases, received invoices and credit notes, expense reports"
+        sale:
+          name: "Sales"
+          description: "Sales and issued credit notes"
+        financial:
+          name: "Financial"
+          description: "Financial movements: bank accounts, cash, cards"
+        misc:
+          name: "Miscellaneous operations"
+          description: "Depreciation, VAT and other operations"
     errors:
       entry:
         account_missing: "Enter an account."
@@ -43,3 +89,61 @@ en:
         too_many_decimals: "The amount has at most %{max} decimal places."
         too_few_lines: "An entry has at least %{min} lines."
         unbalanced: "The entry is not balanced: difference of %{difference}."
+      account:
+        number:
+          blank: "Enter the account number."
+          too_long: "The number has at most %{max} characters."
+          invalid: "The number contains only letters and digits."
+          taken: "Account %{number} already exists."
+        label:
+          blank: "Enter the account label."
+          too_long: "The label has at most %{max} characters."
+        parent:
+          not_found: "Parent account %{number} does not exist."
+          self: "An account cannot be its own parent."
+          cycle: "The parent account cannot depend on this account."
+          required: "No parent account matches this number: enter one."
+        has_children: "This account has sub-accounts: it cannot be deleted."
+        in_use: "This account is in use: it cannot be deleted."
+      ledger:
+        name:
+          blank: "Enter the journal name."
+          too_long: "The name has at most %{max} characters."
+          taken: "A journal already has this name."
+        code:
+          invalid: "The code has at most %{max} letters or digits."
+          taken: "Code %{code} is already in use."
+        default_account:
+          not_found: "Account %{number} does not exist."
+          not_direct_use: "Account %{number} cannot be used directly."
+          required: "A financial journal has a bank or cash account."
+        receipt_prefix:
+          too_long: "The prefix has at most %{max} characters."
+        receipt_padding:
+          invalid: "The number length is between 0 and %{max}."
+        next_receipt_number:
+          invalid: "The next document number is at least 1."
+        currency_code:
+          invalid: "Enter an ISO 4217 currency code (three letters)."
+          unknown: "Currency %{code} is not declared."
+      default_account:
+        code:
+          invalid: "Unknown default account usage."
+        account:
+          not_found: "Account %{number} does not exist."
+      card_account:
+        card_id:
+          not_found: "This card does not exist."
+        account:
+          not_direct_use: "Account %{number} cannot be used directly."
+          required: "Enter an account: the card category does not provide one."
+      card_category:
+        category_id:
+          not_found: "This category does not exist."
+        base_account:
+          not_found: "Account %{number} does not exist."
+          required: "Enter the base account to create one account per card."
+      initial_data:
+        regime:
+          invalid: "Unknown tax regime."
+        not_empty: "The chart of accounts or the journals are already loaded."

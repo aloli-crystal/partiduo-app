@@ -1132,3 +1132,616 @@ de l'interface (D-UI-008).
 
 *Alternative écartée.* L'écrire pendant la clôture : hors du périmètre de
 clôture fixé, et sans relecture.
+
+=== D-ACC-001 — Préfixe `D-ACC-`, frontière avec le socle (fiches, périodes) (lot 1, comptabilité-référentiel)
+
+*Contexte.* Le lot 1 est écrit en parallèle : le socle (tiers et fiches dans
+`cards`, exercices et périodes) par un agent, le référentiel comptable
+(`accounting` : plan comptable, journaux, rattachement fiche → compte, droits
+par journal) par un autre. ADR-006 D3 : le socle ne dépend jamais de
+`accounting`.
+
+*Choix.* Décisions de ce périmètre préfixées `D-ACC-`. Le module Comptabilité
+ne crée *aucune* table ni colonne dans `cards` ou `core`. Le rattachement
+d'une fiche à un compte (héritier de l'attribut 5 « poste comptable » de
+`fiche_detail`) et le compte de base d'une catégorie (héritier de
+`fiche_def.fd_class_base` et `fd_create_account`) vivent dans
+`accounting_card_account` et `accounting_card_category_account`, qui citent
+`cards_card.id` et `cards_category.id` par une clé étrangère *en cascade*
+(migration `accounting` 0001 dépendante de `cards` `0001_cards`) : une fiche
+ou une catégorie effacée au socle emporte son rattachement, sans que le socle
+le sache. Fiches et catégories sont lues par le contrat du socle
+(`Partiduo::Api::Cards.card`, `category`, `category_by_code` : code stable
+`CUSTOMER`, `SUPPLIER`…), jamais par ses modèles.
+
+*Alternative écartée.* Une colonne `account_id` dans `cards_card` : ferait
+dépendre le socle du module. Des identifiants sans clé étrangère (première
+version de cette décision, quand `cards` n'existait pas encore) : liens
+orphelins après l'effacement d'une fiche.
+
+=== D-ACC-002 — Plan comptable : relation parent, numéro normalisé, arbre en SQL récursif (lot 1, comptabilité-référentiel)
+
+*Contexte.* `tmp_pcmn` relie un compte à son parent par le *numéro*
+(`pcm_val_parent`, `account_type` = `varchar(40)`), déduit au besoin par
+`account_parent` (plus long préfixe existant) ; le type manquant est déduit par
+`find_pcm_type` ; l'arbre est parcouru par `get_pcm_tree`, fonction récursive
+PL/pgSQL. Aucune protection contre un parent circulaire.
+
+*Choix.* `accounting_account.parent_id` (clé étrangère, `NULL` pour une racine).
+Numéro normalisé comme `format_account` (majuscules, accents et ponctuation
+retirés), puis limité à `[A-Z0-9]{1,40}` : un caractère restant hors de cet
+ensemble est *refusé*, pas supprimé. Parent absent de la saisie : plus long
+préfixe existant ; aucun préfixe : racine admise pour un numéro d'un seul
+caractère (classe), refus sinon (`parent.required`). Type absent : celui du
+parent (`find_pcm_type` sans la table `parm_poste`, que le type hérité rend
+inutile), `context` pour une racine. Types : `asset`, `liability`,
+`asset_contra`, `liability_contra`, `income`, `income_contra`, `expense`,
+`expense_contra`, `context` (ACT, PAS, ACTINV, PASINV, PRO, PROINV, CHA,
+CHAINV, CON). En base : `CHECK` sur numéro, libellé, type et parent ≠ soi, et
+déclencheur `accounting_account_no_cycle` (remontée récursive des ancêtres).
+L'arbre (`Api::Accounting.chart`, tout le plan ou un sous-arbre) est une
+requête `WITH RECURSIVE` ordonnée par le chemin des numéros. Effacement refusé
+pour un compte parent ou utilisé (fiche, catégorie, journal, compte par
+défaut ; écritures au lot 2). Renuméroter un compte reste permis : les
+références passent par l'identifiant ; le lot 2 ajoutera le refus pour un
+compte mouvementé (`Acc_Plan_MTable::check`, « Poste utilisé »).
+
+*Alternative écartée.* Garder le parent par numéro : pas d'intégrité
+référentielle, et un renumérotage casse la hiérarchie. Chemin matérialisé
+(`ltree`) : dénormalisation à maintenir, pour des plans de quelques centaines
+de comptes.
+
+=== D-ACC-003 — Plans initiaux repris de NOALYSS : règles de reprise (lot 1, comptabilité-référentiel)
+
+*Contexte.* `mod1` (belge, PCMN, 529 comptes) et `mod2` (français, PCG,
+164 comptes) contiennent aussi les comptes des fiches de démonstration, des
+parents absents (551 à 559 dans `mod1`) et, dans `mod2`, toute la classe 7
+typée `PAS`.
+
+*Choix.* `scripts/chart_from_noalyss.cr` produit `src/accounting/data/chart_be.yml`
+et `chart_fr.yml` (versionnés, embarqués à la compilation, chargés par
+`Api::Accounting.load_initial_data`, chargeur `ACCOUNTING.reference_data`
+d'ordre 20, après la devise de tenue et les catégories de fiches du socle) :
+
+* `mod1` : retrait des comptes de fiches de démonstration (six caractères et
+  plus sous 400, 440, 604, 61, 700, 701, 5500, 4890 : « Client 1 »,
+  « Banque 2 »…), soit 504 comptes ; `mod2` : retrait de « 4000001 Four »,
+  soit 163 comptes ; « 510001 Banque » est gardé comme compte du journal
+  financier français ;
+* parent absent : plus long préfixe existant (`account_parent`) ; parent `0` :
+  racine ;
+* `mod2` : classe 7 typée `PAS` corrigée en produit (`income`) ;
+* libellés d'origine, en français pour les deux régimes (le PCMN n'est pas
+  traduit en néerlandais) ; espaces multiples réduits ;
+* comptes par défaut repris de `parm_code` quand le compte existe (BE :
+  `TVA_DED_IMPOT` 619000 absent ; FR : `DEP_PRIV` 4890 absent) ;
+* compte de base des catégories par défaut du socle (codes
+  `Partiduo::Cards::Defaults`), d'après `fiche_def`, création d'un compte par
+  fiche : BE CUSTOMER 400, SUPPLIER 440, BANK 5500, SALE 700, PURCHASE 604,
+  EXPENSE 61 ; FR CUSTOMER 410, SUPPLIER 400, BANK 51, EXPENSE 61, et, les
+  comptes 604 et 700 de `mod2` manquant au plan, PURCHASE 60 et SALE 706
+  (`fiche_def_ref` « Vente Service ») ; le chargeur passe donc après
+  `CARDS.categories` (ordre 20) ;
+* quatre journaux par régime : `A01` Achats, `V01` Ventes, `F01` Financier
+  (compte 550 en BE, 510001 en FR), `O01` Opérations diverses ; pièces
+  préfixées `A-`, `V-`, `F-`, `O-` sur 5 chiffres ; noms et descriptions dans
+  la langue du dossier. Le journal belge « Salaire » (`O02`) n'est pas repris.
+
+*Alternative écartée.* Transcrire les `INSERT` SQL tels quels : la
+démonstration et les anomalies passeraient dans chaque instance. Des
+migrations de données : contraire à la convention C6.
+
+=== D-ACC-004 — Journaux : champs repris, numérotation des pièces, devise (lot 1, comptabilité-référentiel)
+
+*Contexte.* `jrn_def` porte aussi des réglages de saisie (lignes minimales,
+échéance, avertissement de montant négatif, colonne quantité, catégories de
+fiches et filtres de comptes par côté) ; la numérotation des pièces est une
+séquence PostgreSQL `s_jrn_pj<id>`, repositionnable. ADR-006 D1 place les
+devises au socle (`core_currency`, écrit en parallèle).
+
+*Choix.* `accounting_ledger` : code (attribué comme `save_new` si absent :
+initiale A/V/F/O + rang en base 36 sur deux caractères), nom unique, type,
+description, activation, compte par défaut (obligatoire et utilisable
+directement pour un journal financier, successeur de `jrn_def_bank`),
+préfixe et longueur de numéro de pièce, compteur `last_receipt_number`,
+devise par *code* ISO 4217 vérifié par `Partiduo::Api::Core.currency` (pas de
+clé étrangère vers le socle). Numérotation : colonne verrouillée
+(`SELECT … FOR UPDATE`) et incrémentée dans la transaction de l'écriture
+(`Partiduo::Accounting::Receipts.take!`) : une écriture annulée ne consomme
+pas de numéro ; `next_receipt_number` repositionne le compteur
+(`jrn_def_pj_seq`). Les réglages de saisie arrivent au lot 2 avec les
+écritures qui les utilisent, de même que le refus de changer type ou devise,
+ou d'effacer, un journal mouvementé. L'effacement d'un journal laisse les
+lignes `auth_ledger_access` qui le citent (sans objet, sans clé étrangère).
+
+*Alternative écartée.* Une séquence par journal : non transactionnelle,
+interdite pour une numérotation continue (convention C3). Une clé étrangère
+vers `core_currency` : lierait les migrations des deux périmètres.
+
+=== D-ACC-005 — Droits par journal côté Comptabilité (lot 1, comptabilité-référentiel)
+
+*Contexte.* D-AUTH-010 : le socle tient `auth_ledger_access` et expose
+`Api::Auth.ledger_access` (`W`, `R`, `X`). NOALYSS ne liste à un utilisateur
+que ses journaux (`get_ledger`), mais l'écran de paramétrage des journaux les
+montre tous.
+
+*Choix.* `Api::Accounting.ledgers` et `ledger` ne renvoient que les journaux
+sur lesquels l'acteur a `R` ou `W`, sauf s'il détient
+`accounting.ledger.write` (paramétrage) ; un journal invisible lève
+`NotFound`. Chaque vue porte le droit de l'acteur (`LedgerAccess` : `None`,
+`Read`, `Write`). `Api::Accounting.ledger_access` l'expose à l'interface ; la
+saisie (lot 2) exigera `Write`.
+
+*Alternative écartée.* Réserver la visibilité au seul droit par journal, même
+pour l'administrateur des journaux : il ne pourrait plus paramétrer un
+journal qu'il ne voit pas.
+
+=== D-ACC-006 — Rattachement fiche → compte (lot 1, comptabilité-référentiel)
+
+*Contexte.* `comptaproc.account_insert` crée ou rattache le compte d'une fiche
+à son enregistrement : compte saisi (créé sous `fd_class_base` s'il n'existe
+pas), sinon compte calculé (`account_compute`) si la catégorie crée un compte
+par fiche, sinon le compte de base. Il admet aussi deux comptes séparés par une
+virgule (débit, crédit) et un calcul alphanumérique à partir du nom
+(`MY_ALPHANUM`).
+
+*Choix.* `Api::Accounting.assign_card_account(card_id, account)` reprend ces
+trois cas, avec le nom et la catégorie de la fiche lus par `Api::Cards.card` ;
+le compte doit être utilisable directement (`pcm_direct_use`) ; sans compte
+déterminable, refus (`account.required`) plutôt qu'un attribut vide. Une
+fiche *neuve* reçoit automatiquement son compte : abonnement à `card.saved`
+(acteur système), sans effet si la fiche a déjà un compte ou si sa catégorie
+n'en prévoit pas — l'enregistrement de la fiche n'échoue jamais pour cela. Calcul
+numérique seul : `B0001` sous un compte de base `B` sans enfant de cette
+forme, sinon le plus grand numéro `B…` augmenté de 1, un numéro pris étant
+sauté. La double imputation et le calcul alphanumérique ne sont pas repris
+(réversible). Lier une fiche exige aussi `cards.card.read` (la fiche est lue
+avec l'acteur appelant).
+
+*Alternative écartée.* Un compte obligatoire dans le modèle de fiche : ferait
+dépendre le socle de la Comptabilité (ADR-006 D3).
+
+=== D-ACC-007 — Écritures : pas de schéma au lot 1 (lot 1, comptabilité-référentiel)
+
+*Contexte.* La tâche autorise à préparer le schéma des écritures s'il est
+nécessaire au référentiel.
+
+*Choix.* Aucun : rien dans le plan, les journaux ou le rattachement des fiches
+n'en dépend. Les points d'accroche du lot 2 sont prêts : `Receipts.take!`
+(numéro de pièce), `LedgerAccess#writable?`, `Chart.delete_errors`
+(compte mouvementé à ajouter).
+
+*Alternative écartée.* Créer `accounting_entry` et `accounting_entry_line`
+maintenant : le lot 2 fixera leurs contraintes (équilibre, période close)
+avec les commandes qui les écrivent.
+
+=== D-REF-001 — Préfixe `D-REF-`, périmètre du référentiel du socle (lot 1, socle-référentiel)
+
+*Contexte.* Le lot 1 est écrit en parallèle : référentiel du socle (`core`,
+`cards`, `vat`) d'un côté, référentiel comptable de l'autre (D-ACC-001).
+
+*Choix.* Décisions de ce périmètre préfixées `D-REF-`. Contrat documenté dans
+link:doc/api/socle-referentiel.adoc[]. `vat` est requis avant `cards` dans
+`src/partiduo.cr` (une fiche article cite son taux par défaut) ; migrations
+`vat` 0001 → `cards` 0001, `core` 0002. Ordre des chargeurs de données
+initiales : `CORE.base_currency` (2), `VAT.rates` (8), `CARDS.categories` (12)
+— la Comptabilité passe après (20). Une spec (`spec/architecture/
+socle_isolation_spec.cr`) interdit au socle de citer un module, son contrat
+ou ses tables.
+
+*Alternative écartée.* Laisser `cards` avant `vat` et citer le taux par un
+identifiant nu : pas d'intégrité référentielle.
+
+=== D-REF-002 — Fiches : colonnes typées, `extra` jsonb, pas de compte ; articles = fiches de nature `item` (lot 1, socle-référentiel)
+
+*Contexte.* ADR-001 D3 liste `account_id` parmi les colonnes typées de la
+fiche ; ADR-006 D3 interdit au socle de dépendre de la Comptabilité. NOALYSS
+range articles et services parmi les fiches (catégories Vente,
+Marchandises), avec leur quick code.
+
+*Choix.* `cards_card` : colonnes typées (`name`, `code`, `description`,
+`enabled`, `vat_number`, `siren`, `siret`, `routing_id`, `iban`, `bic`,
+`email`, `phone`, `contact_name`, et pour les articles `unit_code`,
+`sale_price`, `purchase_price`, `vat_rate_id`) + `extra jsonb` (index GIN
+`jsonb_path_ops`, `CHECK` objet). Pas d'`account_id` : le rattachement est
+dans `accounting_card_account` (D-ACC-001). Les articles et services sont
+des fiches d'une catégorie de nature `item` : ils gardent un quick code
+utilisable en saisie comme en facturation. Les champs d'article sont refusés
+sur un tiers et inversement (`not_applicable`) ; une fiche change de
+catégorie (`Fiche::move_to`) sans changer de nature.
+
+*Amendement proposé.* ADR-001 D3 : retirer `account_id` des colonnes typées
+de la fiche ; le lien fiche → compte appartient au module Comptabilité.
+
+*Alternative écartée.* Un modèle `Item` séparé : deux référentiels à
+rapprocher en saisie, et une rupture avec les quick codes de NOALYSS.
+
+=== D-REF-003 — Adresses : principale et livraisons dans `cards_address` (lot 1, socle-référentiel)
+
+*Contexte.* ADR-004 D5 met l'adresse de livraison au cœur ; un client peut
+avoir plusieurs sites. NOALYSS n'a qu'une adresse (attributs 14, 15, 24, 16).
+
+*Choix.* Table `cards_address` (`main`, une au plus — index unique partiel ;
+`delivery`, vingt au plus, ordonnées) ; la première adresse de livraison est
+celle par défaut. La saisie décrit la liste entière (remplacée à chaque
+enregistrement). Pays vide : celui de la société.
+
+*Alternative écartée.* Colonnes d'adresse sur la fiche + une seule adresse
+de livraison : un second site oblige à dupliquer le client.
+
+=== D-REF-004 — SIREN, SIRET, identifiant de routage (lot 1, socle-référentiel)
+
+*Contexte.* ADR-004 D5 : SIREN, SIRET et identifiant de routage de
+l'annuaire appartiennent au cœur ; l'adresse de l'annuaire est `SIREN`,
+`SIREN_SIRET` ou `SIREN_SIRET_CODEROUTAGE`.
+
+*Choix.* Clé de Luhn (exception La Poste pour le SIRET), SIREN déduit d'un
+SIRET saisi seul, SIRET commençant par le SIREN, numéro de TVA français
+cohérent avec le SIREN. `routing_id` = code de routage seul
+(`[A-Za-z0-9._-]`, 100 caractères), qui exige un SIREN ;
+`CardView#electronic_address` recompose l'adresse de l'annuaire. IBAN
+(modulo 97) et BIC contrôlés ; `Core::Identifiers.valid_iban?` et
+`valid_bic?` ajoutés au socle.
+
+*Alternative écartée.* Stocker l'adresse complète de l'annuaire : redondante
+avec SIREN et SIRET, et incohérente dès que l'un change.
+
+=== D-REF-005 — Nom de fiche obligatoire (lot 1, socle-référentiel)
+
+*Contexte.* `Fiche::insert` remplace un nom vide par « Nom vide »
+(`ficheTest::testInsertName`).
+
+*Choix.* Nom vide refusé (`cards.errors.card.name.blank`) : une fiche sans nom
+est une erreur de saisie, pas une valeur.
+
+*Alternative écartée.* Reprendre « Nom vide » : donnée fausse en base, et
+texte non traduisible.
+
+=== D-REF-006 — Quick code : format de NOALYSS, génération sans préfixe comptable, doublon saisi refusé (lot 1, socle-référentiel)
+
+*Contexte.* `format_quickcode` (majuscules, blancs et caractères réservés
+ôtés, accents français retirés), `insert_quick_code` (code vide : six
+premiers caractères du nom, sinon `CRD` ; doublon : suffixe 1, 2…),
+`Fiche::insert` (code par défaut préfixé par le compte de la catégorie),
+`update_quick_code` (code vide : inchangé ; doublon : suffixe).
+
+*Choix.* Format identique (specs reprises de `ficheTest`). Code vide ou
+réduit à rien : généré à la création (six caractères du nom, `CRD`, puis
+suffixes), conservé à la modification. Pas de préfixe comptable (le socle
+ignore les comptes). Un code *saisi* déjà pris est refusé
+(`code.taken`) au lieu d'être suffixé en silence. Les références entre
+fiches passent par l'identifiant (attribut `card`) : changer un quick code ne
+touche aucune autre fiche. Attribution sérialisée par un verrou consultatif
+transactionnel, unicité garantie par un index unique.
+
+*Alternative écartée.* Suffixer un code saisi : l'utilisateur croit avoir
+créé `DUPONT`, la fiche s'appelle `DUPONT1`.
+
+=== D-REF-007 — Catégories : code stable, nature, attributs propres par catégorie (lot 1, socle-référentiel)
+
+*Contexte.* `fiche_def` (libellé unique sans casse, modèle `fiche_def_ref`
+obligatoire), attributs globaux `attr_def` rattachés par `jnt_fic_attr`,
+valeurs `text` sans contrôle ; `Fiche_Def::remove` supprime en silence les
+fiches inutilisées.
+
+*Choix.* `cards_category` : `code` stable et immuable (lien des modules),
+`name` unique sans casse, `kind` (modèle réduit à sept natures). Attributs
+définis *par catégorie* (`cards_category_attribute`, clé unique dans la
+catégorie), typés (`text`, `number` en chaîne décimale — jamais un flottant —,
+`date`, `boolean`, `card` = identifiant de fiche), obligatoires ou non. Un
+attribut retiré est effacé des fiches (`removeAttribut`) ; son type ne change
+plus s'il est renseigné ; il ne devient obligatoire que si toutes les fiches
+le renseignent. Une catégorie qui a des fiches ne se supprime pas.
+
+*Alternative écartée.* Catalogue global d'attributs : sans objet quand les
+attributs universels sont des colonnes typées.
+
+=== D-REF-008 — Suppression au socle : SQL direct, clés étrangères vérifiées immédiatement (lot 1, socle-référentiel)
+
+*Contexte.* Le socle ne connaît pas les modules qui citent une fiche, une
+période, un taux, une devise ou une pièce jointe (NOALYSS interrogeait
+`jrnx`, `action_gestion`…). Marten déclare les clés étrangères
+`DEFERRABLE INITIALLY DEFERRED` et applique lui-même `on_delete` pour ses
+modèles.
+
+*Choix.* `Partiduo::Core::Db.delete_unless_referenced` : `DELETE` en SQL
+direct dans un point de sauvegarde, après `SET CONSTRAINTS ALL IMMEDIATE` ;
+une violation de clé étrangère annule le point de sauvegarde et devient une
+erreur `in_use`. `Db.referenced?` fait le même essai puis l'annule. Chaque
+module décide de l'effet de sa référence : `ON DELETE CASCADE` pour un lien
+accessoire (rattachement comptable d'une fiche, D-ACC-001), restriction pour
+une écriture ou une facture.
+
+*Alternative écartée.* Suppression par Marten : un `on_delete: :cascade`
+déclaré par un module emporterait ses écritures avec la fiche.
+
+=== D-REF-009 — Taux de TVA : pourcentage, catégorie UNCL5305, comptes à la Comptabilité (lot 1, socle-référentiel)
+
+*Contexte.* `tva_rate` stocke une fraction (`0.2100`), les comptes
+(`tva_poste`), l'autoliquidation (`tva_both_side`), l'exigibilité
+(`tva_payment_sale`/`purchase`), le code UBL (`tva_peppol_code`, `vx_code`) ;
+les jeux `mod1`/`mod2` contiennent des taux abrogés et pas le taux français
+de 10 %.
+
+*Choix.* `vat_rate.rate` en *pourcentage* `numeric(7,4)` (0 à 100) ;
+catégorie UNCL5305 déduite (`S` ou `Z`) si absente, règles EN 16931 (S > 0,
+Z = 0, E/AE/K/G/O à taux nul sauf autoliquidation, motif d'exonération VATEX
+ou texte obligatoire pour ces catégories, interdit pour les autres) ; règles
+de code de `Tva_Rate_MTable::check` ; libellé unique sans casse. Les comptes
+de TVA sont rattachés par la Comptabilité. Un taux cité ne change plus de
+taux ni de code (`rate.in_use`) ; on le désactive (`enabled`). Jeux initiaux
+en vigueur : BE (21, 12, 6, 0 %, export, livraison intracommunautaire,
+cocontractant, acquisition intracommunautaire) et FR (20, 10, 5,5, 2,1 %,
+DOM, Corse, export, livraison intracommunautaire, autoliquidation,
+acquisition intracommunautaire de services, franchise en base), libellés
+traduits dans la langue du dossier. Exigibilité à l'opération par défaut.
+
+*Alternative écartée.* Reprendre la fraction : la facture électronique
+attend un pourcentage (BT-119), et deux conventions dans le même code
+finissent en erreur d'un facteur 100.
+
+=== D-REF-010 — Exercices et périodes (lot 1, socle-référentiel)
+
+*Contexte.* `parm_periode` porte l'exercice en colonne (`p_exercice`,
+`p_exercice_label`) ; `check_periode` interdit les chevauchements et un
+libellé sur deux exercices ; `Periode::close`/`reopen` ; l'état par journal
+(`jrn_periode`) complète la clôture.
+
+*Choix.* `core_fiscal_year` (`year` 1900–2100 et `label`, uniques) et
+`core_period` (bornes incluses, `closed_at`). En base : contrainte
+d'exclusion GiST (aucun chevauchement), déclencheur `core_period_guard`
+(période close ni modifiée ni supprimée, exercice clos sans ajout ni
+réouverture), fonction `core_period_for(date)`. Création d'un exercice
+mensuel (`insert_exercice`, 1 à 60 mois, périodes d'ouverture et de clôture
+d'un jour), ajout de période libre, clôture d'une période ou de l'exercice
+(`period.closed` publié par période close), réouverture sous droit distinct
+(`core.period.reopen`). « Période courante » : celle du jour, sinon la
+dernière période ouverte commencée, sinon la première période ouverte (pas de
+préférence par utilisateur dans le socle). L'état par journal relève de la
+Comptabilité, qui lit les périodes par le contrat.
+
+*Alternative écartée.* Garder l'exercice en colonne des périodes : pas de
+clôture d'exercice, libellé dupliqué sur chaque période.
+
+=== D-REF-011 — Devises : devise de tenue, cours datés (lot 1, socle-référentiel)
+
+*Contexte.* `currency` (EUR en `id = 0`), `currency_history` (`ch_value
+numeric(20,8) > 0`, date) ; `Currency_MTable::check`.
+
+*Choix.* `core_currency` (code ISO 4217, décimales 0–4, `base` unique par
+index partiel) et `core_currency_rate` (cours `numeric(20,8) > 0`, une ligne
+par date). EUR créé au provisionnement (BE et FR). Cours ajoutés à une date
+strictement postérieure au dernier ; `rate_on` rend le dernier cours à une
+date. La devise de tenue ne se modifie ni ne se supprime.
+
+*Alternative écartée.* Modifier les cours passés : fausserait les opérations
+déjà converties.
+
+=== D-REF-012 — Pièces jointes : stockage de fichiers de Marten, contrôle du contenu (lot 1, socle-référentiel)
+
+*Contexte.* ADR-006 D1 met le stockage au socle ; ADR-001 D1 abandonne les
+_large objects_. Aucun module ne rattache encore de pièce.
+
+*Choix.* `core_attachment` (nom de stockage aléatoire, nom déposé nettoyé,
+type, taille, SHA-256, déposant) ; fichier dans `Marten.media_files_storage`,
+dossier `PARTIDUO_MEDIA_ROOT` (`media` par défaut, dossier temporaire en
+test). Types admis limités aux justificatifs, signature du contenu
+contrôlée, 20 Mio au plus ; contenu vérifié contre l'empreinte à la lecture.
+Fichier écrit effacé si la transaction est annulée, et après la validation
+d'une suppression. Pas de rattachement générique (`owner_type`/`owner_id`) :
+le module garde une clé étrangère vers la pièce, ce qui en protège la
+suppression.
+
+*Alternative écartée.* Contenu en `bytea` : sauvegardes et réplication
+alourdies ; rattachement polymorphe : aucune intégrité référentielle.
+
+=== D-REF-013 — Permissions du référentiel du socle (lot 1, socle-référentiel)
+
+*Contexte.* `Auth::Permissions.administrative?` retire au rôle comptable
+toute permission `core.*.manage`.
+
+*Choix.* Nouvelles permissions sans suffixe `.manage`, donc accessibles au
+rôle comptable : `core.fiscal_year.write`, `core.period.close`,
+`core.period.reopen`, `core.currency.write`, `core.attachment.read`,
+`core.attachment.write`. Le menu `CORE_FISCAL_YEARS` exige désormais
+`core.fiscal_year.write` ; menu `CORE_CURRENCIES` (`core:currencies`)
+ajouté. Lectures des exercices, périodes et devises ouvertes à tout
+utilisateur authentifié.
+
+*Alternative écartée.* `core.settings.manage` pour tout : le comptable ne
+pourrait ni créer un exercice ni clôturer une période.
+
+=== D-REF-014 — Pièges de Marten rencontrés (lot 1, socle-référentiel)
+
+*Contexte.* Écriture des premiers modèles riches du socle.
+
+*Choix.* Conventions : (1) une seule instruction SQL par `execute` de
+migration (instruction préparée) ; (2) `with_timestamp_fields` *avant*
+`db_unique_constraint` (voir B-REF-001) ; (3) les identifiants et entiers lus
+d'un modèle sont `Int32 | Int64` : convertir (`.to_i64`, `.as(Int).to_i64`
+pour une clé étrangère) avant de construire une vue ; (4) une requête SQL
+brute (`filter("…")`) n'emploie pas l'opérateur jsonb `?`, confondu avec le
+paramètre : `jsonb_exists(extra, ?)`.
+
+*Alternative écartée.* —
+
+=== D-SKEL-001 — Permission `skel.view` en deux segments (lot 1, skel)
+
+*Contexte.* La tâche de création de `partiduo-skel` nomme la permission
+`skel.view` ; la convention C1 recommande `<app>.<objet>.<action>`. Le
+manifeste accepte `<préfixe>.<nom>` (au moins un point).
+
+*Choix.* `skel.view`, libellé `skel.permissions.view`. Une extension réelle
+suit C1 (`einvoicing.invoice.send`), comme le rappelle le README du squelette.
+
+*Alternative écartée.* `skel.page.view` : écart avec la tâche, sans gain pour
+une extension qui n'a qu'une page.
+
+=== D-SKEL-002 — Plan d'une extension : espace `Skel`, deux applications Marten, trois points de `require` (lot 1, skel)
+
+*Contexte.* ADR-003 D1 et ADR-005 D4 fixent un dépôt par extension, avec
+`src/<nom>/` (métier et son module Api) et `ui/<interface>/` ; rien ne dit
+comment la distribution les compose.
+
+*Choix.*
+
+* Espace de noms de premier niveau `Skel` (pas `Partiduo::Skel`, réservé au
+  cœur) ; contrat public `Skel::Api`, sur le modèle de C2 (acteur, `Guard`,
+  vues immuables).
+* Deux applications Marten : `Skel::App` (label `skel`, dans `src/skel/` :
+  modèles, migrations, libellés métier) et `Skel::Ui::App` (label `skel_ui`,
+  dans `ui/bulma/` : gabarits, libellés d'écran `skel_ui.*`). Chacune expose
+  `INSTALLED_APPS`, que la distribution ajoute aux siennes.
+* Points d'entrée : `require "partiduo-skel"` (métier),
+  `require "partiduo-skel/ui/bulma"` (Crystal résout
+  `lib/partiduo-skel/ui/bulma/bulma.cr`), `require "partiduo-skel/cli"`
+  (migrations), comme `partiduo/cli` pour le cœur.
+* `partiduo-ui-bulma` est une dépendance de *développement* : le métier n'en
+  dépend pas ; la distribution apporte l'interface.
+* Montage explicite `PartiduoUi::Extensions.mount "SKEL", ROUTES,
+  permission: "skel.view"` (la règle par le menu donnerait le même résultat,
+  mais implicite).
+* La table `skel_received_entry` garde `entry_id` sans clé étrangère :
+  l'écriture n'existe pas encore dans le cœur et l'extension ne relit le cœur
+  que par `Partiduo::Api` (ADR-003 D5 autorise la relation `many_to_one` ; à
+  poser par l'extension qui en a besoin, quand le modèle public existe).
+
+*Alternative écartée.* Un seul shard d'interface par extension
+(`partiduo-skel-ui-bulma`) : contraire à ADR-005 D4 (un seul dépôt).
+
+=== D-SKEL-003 — `entry.posted` publié par le bus du cœur dans les specs (lot 1, skel)
+
+*Contexte.* Le service de création d'écriture de la Comptabilité n'existe pas
+encore ; aucun code du cœur ne publie `entry.posted`.
+
+*Choix.* Les specs de `partiduo-skel` publient l'événement par
+`Partiduo::Events.publish("entry.posted", {"entry_id" => …})` (aide
+`post_entry` de `spec/support/modules.cr`). Quand
+`Partiduo::Api::Accounting` enregistrera une écriture, remplacer cette aide
+par l'appel au contrat.
+
+*Alternative écartée.* Attendre le service d'écriture : bloque le jalon
+« P + 0 + 1 ».
+
+=== D-SKEL-004 — Specs de l'extension : composition complète, schéma par les migrations, outils de l'interface réutilisés (lot 1, skel)
+
+*Contexte.* Les specs doivent exercer l'activation, la page sous `/ext/SKEL/`
+et l'abonnement, donc le cœur, l'interface et l'extension ensemble.
+
+*Choix.* `spec/spec_helper.cr` compose une distribution (interface, métier,
+`ui/bulma`, réglages de `config/settings/`) ; le schéma est reconstruit par
+les migrations du cœur *et* de l'extension (comme D-009), ce qui exécute la
+migration de SKEL à chaque passage. Les comptes et le navigateur de test
+(`spec/support/accounts.cr`, `browser.cr`) et le garde-fou
+`scripts/api_boundary.cr` sont requis depuis `lib/partiduo-ui-bulma/`, sans
+copie ; le garde-fou vérifie que `ui/bulma/` ne cite que `Partiduo::Api`, et
+une spec de plus qu'il ne cite du métier que `Skel::Api`.
+
+*Alternative écartée.* Copier ces outils dans le squelette : ils
+divergeraient de ceux de l'interface.
+
+=== D-UI-015 — Écrans du référentiel : adresses, routes, consultation et modification séparées (lot 1, interface)
+
+*Contexte.* Les manifestes du lot 1 citent `core:fiscal_years`,
+`cards:index`, `vat:rates`, `accounting:chart` et `accounting:ledgers`
+(D-019) ; la maquette ne dessine que le plan comptable et place « Articles et
+services » dans la Facturation, alors que le socle n'a qu'une entrée
+`CARDS_LIST` (« Tiers et articles »).
+
+*Choix.* Cartes de routes par pièce, sous les noms des manifestes :
+`/fiscal-years` (et `/periods/<id>/…`), `/cards` et `/cards/items`,
+`/vat/rates`, `/accounting/chart`, `/accounting/ledgers`. Chaque élément a une
+page de consultation (`/<id>`), une page de modification (`/<id>/edit`) et
+des commandes `POST` (`/delete`, `/close`, `/reopen`, `/enable`) qui
+reviennent à la consultation avec un message. Les articles et services sont
+un onglet de la page des fiches (`/cards/items`), non une entrée de menu :
+pas de modification du manifeste du socle. Création d'une fiche en deux temps
+(catégorie, puis formulaire propre à sa nature).
+
+*Alternative écartée.* Formulaire de modification dans la page de
+consultation : page longue, et une consultation en lecture seule reste
+nécessaire pour qui n'a que le droit de lire.
+
+=== D-UI-016 — Listes, formulaires et consultations génériques ; tri, filtre et pages dans l'interface (lot 1, interface)
+
+*Contexte.* Tableaux triables, filtres et export CSV sur cinq écrans ; le
+contrat renvoie des listes complètes (plan, journaux, taux, exercices) ou
+paginées sans ordre au choix (`CardQuery` : nom seulement).
+
+*Choix.* Trois objets d'écran (`PartiduoUi::Table`, `Form`, `Screen`) et trois
+gabarits génériques (`ui/reference/list.html`, `form.html`, `detail.html`) :
+le handler prépare des cellules déjà formatées, avec leur clé de tri
+(`String` repliée sans accents, ou `BigDecimal`) et leur valeur CSV. Tri
+(`?sort=col`, `-col` décroissant, `aria-sort`), filtre texte (`?q=`) et pages
+de 100 lignes s'appliquent aux lignes lues ; pour les fiches, la recherche
+est celle du contrat (nom, code, TVA, SIREN…) et 1 000 fiches au plus sont
+lues (message au-delà). HTMX : filtres envoyés à la saisie, en-têtes et pages
+en `hx-boost`, réponse complète dont `hx-select` ne garde que le tableau ;
+sans JavaScript, liens et bouton « Filtrer ». Export CSV (`?format=csv`) de
+toutes les lignes filtrées et triées : BOM UTF-8, point-virgule quand la
+virgule est le séparateur décimal, montants sans séparateur de milliers,
+dates ISO. Règle Ameba `Naming/QueryBoolMethods` écartée pour ces objets : un
+attribut lu par un gabarit Marten ne peut pas finir par `?`.
+
+*Alternative écartée.* Un gabarit par écran : quinze gabarits presque
+identiques. Tri en base : le contrat ne le propose pas.
+
+*Amendement proposé.* `CardQuery#order` (colonne, sens) et un compteur, pour
+trier et paginer en base au-delà de 1 000 fiches.
+
+=== D-UI-017 — Montants et dates selon la langue et le pays (lot 1, interface)
+
+*Contexte.* ADR-005 D7 ; montants en `BigDecimal` ; la société est en
+France ou en Belgique, l'utilisateur lit en fr, en ou nl.
+
+*Choix.* `PartiduoUi::Format` : langue de l'utilisateur et pays de la société
+(`Api::Core.settings`), conventions CLDR par paire (fr : `1 234,56` avec
+espace fine insécable, `27/09/2026` ; nl-BE : `1.234,56`, `27/09/2026` ;
+nl : `27-09-2026` ; en : `1,234.56` ; en-BE et en-FR suivent les séparateurs
+du pays). Arrondi au demi supérieur, aucun passage par `Float`. Taux sans
+zéros inutiles (`5,5 %`). Mois nommés dans les libellés de l'interface
+(`ui.months`). Saisie : nombre lu quelle que soit l'écriture (`1 234,56`,
+`1.234,56`, `1234.56`), dates `AAAA-MM-JJ` (champ date) ou au format de la
+langue.
+
+*Alternative écartée.* `I18n.l` de crystal-i18n pour les nombres : conversion
+en `Float` et aucun réglage par pays.
+
+=== D-UI-018 — Période de travail dans la barre supérieure (lot 1, interface)
+
+*Contexte.* D-UI-009 attendait `Api::Core.current_period` ; la maquette
+propose un choix d'exercice et de période.
+
+*Choix.* La barre affiche l'exercice et une liste des périodes des exercices
+ouverts (groupées par exercice) ; le choix est envoyé à `/period` et gardé
+dans un cookie `partiduo_period` (un an, `HttpOnly`), relu et contrôlé par
+`Api::Core.period` ; à défaut, `Api::Core.current_period` (période du jour,
+sinon dernière ouverte). Les écrans de saisie (lot 2) la prendront comme
+période par défaut.
+
+*Alternative écartée.* Préférence enregistrée par utilisateur : le socle n'en
+a pas (D-REF-010).
+
+=== D-UI-019 — Module inactif : 404 ; commande sans droit : 403 avant le formulaire (lot 1, interface)
+
+*Choix.* `Partiduo::Api::ModuleDisabled` rendu en 404 (l'écran n'existe pas
+sur l'instance, ADR-006) ; les autres refus d'accès restent en 403. Les pages
+de création et de modification vérifient module et permission avant
+d'afficher le formulaire (`ReferenceHandler#require!`) ; le contrat les
+vérifie de nouveau à l'envoi. Les boutons d'action ne sont affichés qu'avec
+la permission ; la consultation d'une fiche n'affiche son compte que si la
+Comptabilité est active.
+
+*Alternative écartée.* 403 pour un module inactif : laisserait croire qu'un
+droit manque.
+
+=== D-UI-020 — Plan comptable sans soldes au lot 1 (lot 1, interface)
+
+*Contexte.* La maquette montre débit, crédit et solde par compte ; les
+écritures n'existent qu'au lot 2.
+
+*Choix.* Colonnes type, « utilisable en saisie » et nombre de sous-comptes ;
+retrait selon la profondeur, onglets par classe (premier caractère des
+comptes racines). Les colonnes de montants s'ajouteront avec la balance.
+
+*Alternative écartée.* Colonnes de montants vides : trompeuses.

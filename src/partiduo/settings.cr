@@ -36,5 +36,6 @@ module Partiduo
     config.i18n.default_locale = :fr
     config.i18n.available_locales = LOCALES
     config.auth.user_model = Partiduo::Auth::User
+    config.media_files.root = Partiduo::Config.media_root
   end
 end

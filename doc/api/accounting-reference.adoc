@@ -1,0 +1,164 @@
+= Comptabilité : référentiel (plan comptable, journaux, fiches)
+:toc: left
+:toc-title: Table des matières
+:toclevels: 3
+:icons: font
+:source-language: crystal
+
+Référence du lot 1 du module Comptabilité (ADR-006 D1) : plan comptable
+hiérarchique (héritier de `tmp_pcmn`), comptes par défaut (`parm_code`),
+journaux (`jrn_def`), droits par journal (`user_sec_jrn`, tenus par le socle),
+rattachement des fiches et catégories du socle à un compte (attribut 5 de
+`fiche_detail`, `fiche_def.fd_class_base`), jeu de données initial FR et BE.
+Le contrat est `Partiduo::Api::Accounting` ; toutes ses fonctions lèvent
+`ModuleDisabled` si la Comptabilité est inactive. Décisions : `DECISIONS.adoc`,
+D-ACC-001 à D-ACC-007.
+
+== Plan comptable
+
+[cols="3,1,3",options="header"]
+|===
+|Appel |Droit |Rôle
+
+|`chart(actor, root : String? = nil) : Array(ChartLineView)`
+|`accounting.account.read`
+|Arbre (SQL récursif) : chaque compte suivi de ses descendants, frères par
+numéro ; `depth` (0 = racine ou compte `root`), `children_count`.
+
+|`account(actor, number) : AccountView`, `account_by_id(actor, id)`
+|`accounting.account.read`
+|Un compte ; `NotFound` sinon.
+
+|`search_accounts(actor, query, limit = 20, direct_use_only = false)`
+|`accounting.account.read`
+|Autocomplétion : numéros commençant par la saisie ou libellés la contenant.
+
+|`check_account(actor, AccountInput, id = nil) : Result(Nil)`
+|`accounting.account.write`
+|Contrôle instantané, même règle que la création ou la modification.
+
+|`create_account(actor, AccountInput)`, `update_account(actor, id, AccountInput)` : `Result(AccountView)`
+|`accounting.account.write`
+|Crée ou modifie un compte.
+
+|`delete_account(actor, id) : Result(Nil)`
+|`accounting.account.write`
+|Refusé pour un compte parent (`has_children`) ou utilisé (`in_use`).
+
+|`default_accounts(actor)`, `default_account(actor, code)`
+|`accounting.account.read`
+|Comptes par défaut (`DEFAULT_ACCOUNT_CODES` : `customer`, `supplier`,
+`bank`, `cash`, `sales`, `internal_transfer`, `current_account`, `vat`,
+`non_deductible`, `non_deductible_vat`, `vat_deductible_tax`,
+`private_expense`).
+
+|`set_default_account(actor, code, account : String?) : Result(Nil)`
+|`accounting.account.write`
+|Définit ou retire (`nil`) un compte par défaut.
+|===
+
+Règles de `AccountInput(number, label, parent = nil, kind = nil, direct_use = true)` :
+
+* `number` normalisé comme `comptaproc.format_account` (majuscules, accents
+  et ponctuation retirés) puis `[A-Z0-9]{1,40}`, unique ;
+* `parent` absent : plus long préfixe existant ; racine admise pour un numéro
+  d'un caractère ; un parent descendant du compte est refusé (`cycle`) ;
+* `kind` absent : celui du parent, `Context` pour une racine. Types
+  (`AccountKind`) : `Asset`, `Liability`, `AssetContra`, `LiabilityContra`,
+  `Income`, `IncomeContra`, `Expense`, `ExpenseContra`, `Context` ; libellés
+  `accounting.account_kinds.<code>` ;
+* `direct_use` : faux pour un compte de regroupement, que ni la saisie ni une
+  fiche ne peuvent utiliser.
+
+En base : `CHECK` sur numéro, libellé, type, parent, et déclencheur
+`accounting_account_no_cycle`.
+
+== Journaux et droits par journal
+
+[cols="3,1,3",options="header"]
+|===
+|Appel |Droit |Rôle
+
+|`ledgers(actor, kind = nil, enabled_only = false) : Array(LedgerView)`
+|`accounting.ledger.read`
+|Journaux visibles : droit `R` ou `W` de l'acteur, ou tous pour qui détient
+`accounting.ledger.write`.
+
+|`ledger(actor, id)`, `ledger_by_code(actor, code)` : `LedgerView`
+|`accounting.ledger.read`
+|Un journal visible ; `NotFound` sinon.
+
+|`ledger_access(actor, ledger_id) : LedgerAccess`
+|authentifié
+|Droit de l'acteur (`None`, `Read`, `Write`), calculé par
+`Api::Auth.ledger_access` ; libellés `accounting.ledger_access.<none/read/write>`.
+
+|`check_ledger`, `create_ledger`, `update_ledger(actor, id, LedgerInput)`
+|`accounting.ledger.write`
+|Contrôle, création, modification.
+
+|`delete_ledger(actor, id) : Result(Nil)`
+|`accounting.ledger.write`
+|Efface un journal (refusé au lot 2 s'il est mouvementé).
+|===
+
+`LedgerInput(name, kind, code = nil, description = "", enabled = true,
+default_account = nil, receipt_prefix = "", receipt_padding = 0,
+next_receipt_number = nil, currency_code = "EUR")` :
+
+* `kind` (`LedgerKind`) : `Purchase`, `Sale`, `Financial`, `Misc` ; libellés
+  `accounting.ledger_kinds.<code>` ;
+* `code` absent : initiale du type (A, V, F, O) et rang en base 36 (`A01`) ;
+* `default_account` obligatoire pour un journal financier (compte de banque ou
+  de caisse, utilisable directement) ;
+* pièces : `receipt_prefix` + numéro complété à `receipt_padding` chiffres ;
+  `LedgerView#next_receipt` donne le prochain numéro sans le réserver ;
+  `next_receipt_number` repositionne le compteur ;
+* `currency_code` : devise déclarée au socle (`Api::Core.currency`).
+
+Le lot 2 réserve un numéro par `Partiduo::Accounting::Receipts.take!` dans la
+transaction de l'écriture (compteur verrouillé, pas de trou si l'écriture est
+annulée) et exige `LedgerAccess::Write`.
+
+== Fiches et catégories
+
+[cols="3,1,3",options="header"]
+|===
+|Appel |Droit |Rôle
+
+|`card_account(actor, card_id) : CardAccountView?`
+|`accounting.account.read`
+|Compte d'une fiche.
+
+|`card_ids_for_account(actor, number) : Array(Int64)`
+|`accounting.account.read`
+|Fiches rattachées à un compte.
+
+|`assign_card_account(actor, AssignCardAccountInput(card_id, account = nil))`
+|`accounting.account.write` (+ `cards.card.read`)
+|Rattache une fiche, en créant le compte au besoin (`account_insert`).
+
+|`unassign_card_account(actor, card_id) : Result(Nil)`
+|`accounting.account.write`
+|Détache la fiche (le compte reste).
+
+|`card_category_account(actor, category_id)`, `set_card_category_account(actor, CardCategoryAccountInput)`
+|`accounting.account.read` / `write` (+ `cards.card.read`)
+|Compte de base d'une catégorie et création automatique d'un compte par fiche.
+|===
+
+Abonnement : à `card.saved`, une fiche sans compte reçoit celui que prévoit sa
+catégorie — compte calculé (`B0001`, puis le plus grand `B…` + 1) si la
+catégorie crée un compte par fiche, sinon le compte de base. Les rattachements
+disparaissent avec la fiche ou la catégorie effacée (clé étrangère en cascade).
+
+== Jeu de données initial
+
+`load_initial_data(actor, regime, locale = "fr") : Result(InitialDataView)`
+(droits `accounting.account.write` et `accounting.ledger.write`), chargeur
+`ACCOUNTING.reference_data` (ordre 20) : plan comptable du régime
+(`src/accounting/data/chart_{be,fr}.yml`, produits par
+`scripts/chart_from_noalyss.cr` depuis `mod1` et `mod2`), comptes par défaut,
+compte de base des catégories de fiches par défaut du socle, journaux `A01`,
+`V01`, `F01`, `O01` nommés dans la langue du dossier. Refusé si le plan ou les
+journaux ne sont pas vides.

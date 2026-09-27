@@ -36,6 +36,52 @@ fr:
       acc_fec: "FEC"
       acc_vat_return: "Déclaration de TVA"
       acc_closing: "Clôture"
+    account_kinds:
+      asset: "Actif"
+      liability: "Passif"
+      asset_contra: "Actif, compte inversé"
+      liability_contra: "Passif, compte inversé"
+      income: "Produit"
+      income_contra: "Produit, compte inversé"
+      expense: "Charge"
+      expense_contra: "Charge, compte inversé"
+      context: "Contexte"
+    ledger_kinds:
+      purchase: "Achats"
+      sale: "Ventes"
+      financial: "Financier"
+      misc: "Opérations diverses"
+    ledger_access:
+      none: "Aucun accès"
+      read: "Lecture"
+      write: "Écriture"
+    default_accounts:
+      customer: "Clients"
+      supplier: "Fournisseurs"
+      bank: "Banque"
+      cash: "Caisse"
+      sales: "Ventes"
+      internal_transfer: "Virements internes"
+      current_account: "Compte courant"
+      vat: "TVA à payer"
+      non_deductible: "Dépenses non déductibles"
+      non_deductible_vat: "TVA non déductible"
+      vat_deductible_tax: "TVA déductible par l'impôt"
+      private_expense: "Dépenses à charge du gérant"
+    initial_data:
+      ledgers:
+        purchase:
+          name: "Achats"
+          description: "Achats, factures et notes de crédit reçues, notes de frais"
+        sale:
+          name: "Ventes"
+          description: "Ventes et notes de crédit émises"
+        financial:
+          name: "Financier"
+          description: "Mouvements financiers : comptes en banque, caisse, cartes"
+        misc:
+          name: "Opérations diverses"
+          description: "Amortissements, TVA et autres opérations"
     errors:
       entry:
         account_missing: "Indiquez un compte."
@@ -43,3 +89,61 @@ fr:
         too_many_decimals: "Le montant compte au plus %{max} décimales."
         too_few_lines: "Une écriture compte au moins %{min} lignes."
         unbalanced: "L'écriture n'est pas équilibrée : écart de %{difference}."
+      account:
+        number:
+          blank: "Indiquez le numéro du compte."
+          too_long: "Le numéro compte au plus %{max} caractères."
+          invalid: "Le numéro ne contient que des lettres et des chiffres."
+          taken: "Le compte %{number} existe déjà."
+        label:
+          blank: "Indiquez le libellé du compte."
+          too_long: "Le libellé compte au plus %{max} caractères."
+        parent:
+          not_found: "Le compte parent %{number} n'existe pas."
+          self: "Un compte ne peut pas être son propre parent."
+          cycle: "Le compte parent ne peut pas dépendre de ce compte."
+          required: "Aucun compte parent ne correspond à ce numéro : indiquez-le."
+        has_children: "Ce compte a des sous-comptes : effacement interdit."
+        in_use: "Ce compte est utilisé : effacement interdit."
+      ledger:
+        name:
+          blank: "Indiquez le nom du journal."
+          too_long: "Le nom compte au plus %{max} caractères."
+          taken: "Un journal porte déjà ce nom."
+        code:
+          invalid: "Le code compte au plus %{max} lettres ou chiffres."
+          taken: "Le code %{code} est déjà utilisé."
+        default_account:
+          not_found: "Le compte %{number} n'existe pas."
+          not_direct_use: "Le compte %{number} ne peut pas être utilisé directement."
+          required: "Un journal financier a un compte de banque ou de caisse."
+        receipt_prefix:
+          too_long: "Le préfixe compte au plus %{max} caractères."
+        receipt_padding:
+          invalid: "La longueur du numéro est comprise entre 0 et %{max}."
+        next_receipt_number:
+          invalid: "Le prochain numéro de pièce est au moins 1."
+        currency_code:
+          invalid: "Indiquez un code de devise ISO 4217 (trois lettres)."
+          unknown: "La devise %{code} n'est pas déclarée."
+      default_account:
+        code:
+          invalid: "Usage de compte par défaut inconnu."
+        account:
+          not_found: "Le compte %{number} n'existe pas."
+      card_account:
+        card_id:
+          not_found: "Cette fiche n'existe pas."
+        account:
+          not_direct_use: "Le compte %{number} ne peut pas être utilisé directement."
+          required: "Indiquez un compte : la catégorie de la fiche n'en fournit pas."
+      card_category:
+        category_id:
+          not_found: "Cette catégorie n'existe pas."
+        base_account:
+          not_found: "Le compte %{number} n'existe pas."
+          required: "Indiquez le compte de base pour créer un compte par fiche."
+      initial_data:
+        regime:
+          invalid: "Régime fiscal inconnu."
+        not_empty: "Le plan comptable ou les journaux sont déjà chargés."

@@ -8,3 +8,66 @@ fr:
         write: "Modifier les taux de TVA"
     menu:
       vat_rates: "Taux de TVA"
+    categories:
+      s: "Taux normal"
+      z: "Taux zéro"
+      e: "Exonéré"
+      ae: "Autoliquidation"
+      k: "Livraison intracommunautaire"
+      g: "Exportation hors UE"
+      o: "Hors champ de la TVA"
+      l: "Îles Canaries (IGIC)"
+      m: "Ceuta et Melilla (IPSI)"
+    initial:
+      be:
+        21g: "TVA 21 %"
+        12a: "TVA 12 %"
+        6a: "TVA 6 %"
+        0tva: "TVA 0 %"
+        exp: "Exportation"
+        intl: "Livraison intracommunautaire"
+        coc: "Cocontractant (autoliquidation)"
+        inta: "Acquisition intracommunautaire 21 %"
+      fr:
+        nor: "TVA 20 % (taux normal)"
+        int: "TVA 10 % (taux intermédiaire)"
+        tr55: "TVA 5,5 % (taux réduit)"
+        tp021: "TVA 2,1 % (taux particulier)"
+        dnor: "TVA 8,5 % DOM"
+        dr: "TVA 2,1 % DOM"
+        dprs: "TVA 1,05 % DOM (presse)"
+        cor13: "TVA 13 % Corse"
+        cor09: "TVA 0,9 % Corse"
+        exp: "Exportation hors UE"
+        intl: "Livraison intracommunautaire"
+        autol: "Autoliquidation"
+        ints: "Acquisition intracommunautaire 20 %"
+        franc: "Franchise en base (art. 293 B du CGI)"
+    errors:
+      rate:
+        base:
+          in_use: "Ce taux est utilisé et ne peut être supprimé ; désactivez-le."
+        code:
+          blank: "Le code est obligatoire."
+          too_long: "Code TVA : maximum 5 caractères."
+          invalid_characters: "Code TVA : uniquement des chiffres et des lettres."
+          digits_only: "Code TVA : doit aussi contenir des lettres."
+          taken: "Le code %{value} est déjà utilisé."
+        label:
+          blank: "Le libellé ne peut être vide."
+          too_long: "Le libellé ne peut dépasser %{max} caractères."
+          taken: "Ce nom est déjà utilisé."
+        rate:
+          out_of_range: "Taux de TVA invalide (entre 0 et 100 %)."
+          too_precise: "Le taux ne peut avoir plus de %{decimals} décimales."
+          must_be_positive: "Un taux normal (S) doit être supérieur à zéro."
+          must_be_zero: "Cette catégorie de TVA impose un taux nul."
+          in_use: "Ce taux est déjà utilisé : créez un nouveau taux plutôt que de modifier celui-ci."
+        category:
+          invalid: "La catégorie « %{value} » n'est pas une catégorie UNCL5305."
+        exemption_code:
+          required: "La catégorie %{category} exige un motif d'exonération (code VATEX ou texte)."
+          not_applicable: "La catégorie %{category} ne porte pas de motif d'exonération."
+          invalid: "Le code « %{value} » n'est pas un code VATEX."
+        exemption_reason:
+          too_long: "Le motif ne peut dépasser %{max} caractères."

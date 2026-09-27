@@ -7,8 +7,11 @@
 # ligne `require "../<app>/migrations/**"` (un motif sans fichier ne compile pas).
 require "marten/cli"
 
+require "../accounting/migrations/**"
 require "../auth/migrations/**"
 require "../core/migrations/**"
+require "../vat/migrations/**"
+require "../cards/migrations/**"
 require "../modules/migrations/**"
 
 # Commandes de gestion du cœur (`provision`).

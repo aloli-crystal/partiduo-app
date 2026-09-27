@@ -9,6 +9,16 @@ fr:
         manage: "Gérer les utilisateurs et les profils"
       modules:
         manage: "Activer et désactiver les modules"
+      fiscal_year:
+        write: "Créer et supprimer les exercices et périodes"
+      period:
+        close: "Clôturer les périodes et exercices"
+        reopen: "Rouvrir une période clôturée"
+      currency:
+        write: "Gérer les devises et leurs cours"
+      attachment:
+        read: "Consulter les pièces jointes"
+        write: "Déposer et supprimer des pièces jointes"
     menu:
       dashboard: "Tableau de bord"
       billing: "Facturation"
@@ -24,6 +34,7 @@ fr:
       core_fiscal_years: "Exercices et périodes"
       core_users: "Utilisateurs et profils"
       core_modules: "Modules"
+      core_currencies: "Devises"
     settings:
       name: "Société"
       fields:
@@ -64,6 +75,8 @@ fr:
       session_duration:
         one: "%{count} minute"
         other: "%{count} minutes"
+    currencies:
+      eur: "Euro"
     errors:
       settings:
         company_name:
@@ -130,6 +143,65 @@ fr:
           unknown: "Extension inconnue : %{code}."
           wrong_kind: "%{code} n'est pas une extension (voir --modules)."
           inactive: "L'extension %{code} n'est pas active dans la configuration de l'instance."
+      fiscal_year:
+        year:
+          out_of_range: "L'exercice doit être compris entre %{min} et %{max}."
+          taken: "L'exercice %{year} existe déjà."
+        start_year:
+          out_of_range: "L'année de début doit être comprise entre %{min} et %{max}."
+        start_month:
+          invalid: "Le mois de début n'existe pas."
+        months:
+          out_of_range: "Le nombre de mois doit être compris entre %{min} et %{max}."
+        label:
+          too_long: "Le libellé ne peut dépasser %{max} caractères."
+          taken: "Le libellé « %{label} » désigne déjà un autre exercice."
+        closed: "Cet exercice est clôturé."
+        in_use: "Cet exercice ne peut être supprimé : des opérations y sont enregistrées."
+        already_closed: "Cet exercice est déjà clôturé."
+        no_period: "Cet exercice n'a aucune période."
+      period:
+        overlap: "La période chevauche la période du %{starts_on} au %{ends_on}."
+        fiscal_year_closed: "L'exercice de cette période est clôturé."
+        ends_on:
+          before_start: "La fin de la période précède son début."
+        starts_on:
+          out_of_range: "Les dates doivent être comprises entre %{min} et %{max}."
+        closed: "Cette période est clôturée."
+        in_use: "Cette période ne peut être supprimée : des opérations y sont enregistrées."
+        already_closed: "Cette période est déjà clôturée."
+        not_closed: "Cette période n'est pas clôturée."
+      currency:
+        code:
+          base_immutable: "La devise de tenue du dossier ne peut être modifiée."
+          invalid: "Le code « %{value} » n'est pas un code ISO 4217 (trois lettres)."
+          taken: "La devise %{value} existe déjà."
+          in_use: "Cette devise est utilisée et ne peut être supprimée."
+        name:
+          blank: "Le nom de la devise est obligatoire."
+          too_long: "Le nom ne peut dépasser %{max} caractères."
+        decimals:
+          out_of_range: "Le nombre de décimales doit être compris entre %{min} et %{max}."
+        rate:
+          blank: "Un premier cours est obligatoire."
+          not_positive: "Le cours doit être strictement positif."
+          too_precise: "Le cours ne peut avoir plus de %{decimals} décimales."
+          too_large: "Le cours est trop élevé."
+        valid_from:
+          blank: "La date du premier cours est obligatoire."
+          not_after_last: "La date doit être postérieure au dernier cours (%{date})."
+      attachment:
+        filename:
+          blank: "Le nom du fichier est obligatoire."
+          too_long: "Le nom du fichier ne peut dépasser %{max} caractères."
+        content:
+          empty: "Le fichier est vide."
+          too_large: "Le fichier dépasse %{max} Mio."
+        content_type:
+          unsupported: "Ce type de fichier (%{value}) n'est pas accepté."
+          mismatch: "Le contenu du fichier ne correspond pas à son type (%{value})."
+        in_use: "Cette pièce jointe est encore rattachée et ne peut être supprimée."
+        corrupted: "Cette pièce jointe a été altérée : son empreinte ne correspond plus."
     provision:
       done: "Dossier « %{name} » créé : %{domain}."
       regime: "Régime fiscal : %{regime}."

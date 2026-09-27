@@ -9,6 +9,7 @@ module Partiduo
   # |`DATABASE_URL`     |URL PostgreSQL, par socket Unix : `postgres:///partiduo_dev?host=/tmp`
   # |`PARTIDUO_MODULES` |modules et extensions actifs, séparés par des virgules (`accounting,invoicing`)
   # |`PARTIDUO_DOMAIN`  |domaine des instances (`partiduo.localhost` en développement)
+  # |`PARTIDUO_MEDIA_ROOT` |dossier des pièces jointes de l'instance (`media` par défaut)
   # |===
   module Config
     # Modules activables officiels, dans l'ordre de l'ADR-006 D1 (sans le Stock, lot 6).
@@ -39,6 +40,11 @@ module Partiduo
       return Set(String).new if raw.strip.downcase == "none"
 
       raw.split(',').map(&.strip.downcase).reject(&.empty?).to_set
+    end
+
+    # Dossier où le stockage de Marten écrit les pièces jointes (ADR-006 D1).
+    def self.media_root : String
+      ENV["PARTIDUO_MEDIA_ROOT"]?.presence || "media"
     end
 
     # Domaine sous lequel les instances sont servies (`<dossier>.<domaine>`),
