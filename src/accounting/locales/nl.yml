@@ -43,6 +43,8 @@ nl:
       acc_income_statement: "Resultatenrekening"
       acc_reports: "Aangepaste rapporten"
       acc_vat_return: "Btw-aangifte"
+      acc_vat_returns: "Opgeslagen btw-aangiften"
+      acc_vat_settings: "Btw-instellingen"
       acc_closing: "Afsluiting"
     account_kinds:
       asset: "Activa"
@@ -95,6 +97,74 @@ nl:
           name: "Diverse verrichtingen"
           description: "Afschrijvingen, btw en andere verrichtingen"
     errors:
+      vat_return:
+        form:
+          invalid: "Het formulier „%{value}” bestaat niet."
+          regime: "Dit formulier hoort niet bij het belastingstelsel van het dossier (%{regime})."
+        periodicity:
+          invalid: "De periodiciteit „%{value}” is niet toegestaan voor dit formulier."
+        exigibility:
+          invalid: "De opeisbaarheid „%{value}” bestaat niet."
+        year:
+          invalid: "Het jaar %{value} is ongeldig."
+        number:
+          invalid: "De periode %{value} is ongeldig."
+        threshold:
+          negative: "De drempel mag niet negatief zijn."
+        dates:
+          order: "De einddatum ligt vóór de begindatum."
+          not_allowed: "Vrije grenzen zijn alleen toegestaan voor een CA12 (verschoven boekjaar): het ingediende bestand vermeldt de maand, het kwartaal of het jaar."
+        draft_exists: "Er bestaat al een ontwerp van deze aangifte (nr. %{id})."
+        overlap: "Een afgesloten aangifte dekt al de periode van %{from} tot %{to}."
+        closed: "Deze aangifte is afgesloten en kan niet meer worden gewijzigd."
+        stale: "De boekingen zijn gewijzigd sinds de berekening: bereken de aangifte opnieuw vóór de afsluiting."
+        not_closed: "De aangifte moet afgesloten zijn vóór de vereffening."
+        not_settled_form: "Deze opgave wordt niet vereffend."
+        already_settled: "De vereffeningsboeking van deze aangifte is al geboekt."
+        nothing_to_settle: "Geen btw-bedrag te vereffenen."
+        settle_stale: "De boekingen van de periode zijn gewijzigd sinds de afsluiting: de vereffeningsboeking zou niet meer overeenkomen met de aangegeven bedragen; boek ze manueel."
+        declarant_vat_number: "Het btw-nummer van de vennootschap („%{value}”) is geen geldig Belgisch nummer: vul de instellingen van de vennootschap aan."
+        client_vat_number: "Het btw-nummer „%{value}” van klant %{name} is ongeldig."
+        box:
+          not_editable: "Rooster %{code} kan niet worden gecorrigeerd."
+          too_many_decimals: "Het bedrag mag niet meer dan twee decimalen hebben."
+          whole_euros: "Een Franse aangifte gebeurt in hele euro's."
+          negative: "Een Belgisch rooster mag niet negatief zijn."
+        format:
+          xml: "Het Intervat-XML-bestand bestaat alleen voor Belgische aangiften."
+        settlement:
+          account_missing: "Geef de vereffeningsrekening op."
+          ledger_missing: "Geef een dagboek voor diverse verrichtingen op voor de vereffening."
+          adjusted: "Rooster(s) %{codes} gecorrigeerd of ingevuld: de vereffeningsboeking kan ze niet overnemen. Sluit af zonder vereffening en boek manueel."
+          mismatch: "De regels van de aangifte dekken niet alle btw van de boekingen: de vereffeningsboeking zou niet overeenkomen met de aangegeven bedragen; boek ze manueel."
+      vat_rule:
+        regime:
+          invalid: "Het stelsel „%{value}” bestaat niet."
+        box:
+          invalid: "Rooster „%{value}” wordt niet met regels berekend."
+        source:
+          invalid: "De bron „%{value}” bestaat niet."
+        sign:
+          invalid: "Het teken „%{value}” bestaat niet."
+        operation:
+          invalid: "De bewerking „%{value}” bestaat niet."
+        ledger_kind:
+          invalid: "Het dagboektype „%{value}” bestaat niet."
+          balance: "Een saldo wordt gelezen in een dagboek voor diverse verrichtingen of een financieel dagboek."
+          document: "Maatstaf en btw worden gelezen in een aankoop- of verkoopdagboek."
+        ledger_code:
+          not_found: "Dagboek %{code} bestaat niet."
+          kind: "Dagboek %{code} is niet van het opgegeven type."
+        vat_rate_code:
+          not_found: "Btw-tarief %{code} bestaat niet."
+          balance: "Een rekeningsaldo heeft geen btw-tarief."
+        accounts:
+          invalid: "Het rekeningprefix „%{value}” is ongeldig."
+      vat_settings:
+        representative_id:
+          required: "Geef het identificatienummer van de gevolmachtigde op."
+        country:
+          invalid: "Geef een landcode van twee letters op."
       entry:
         account_missing: "Vul een rekening in."
         amount_not_positive: "Het bedrag moet groter dan nul zijn."
@@ -459,3 +529,14 @@ nl:
           result_of_year: "Winst (verlies) van het boekjaar"
           untaxed_reserves: "Onttrekking (overboeking) belastingvrije reserves"
           net_result: "Te bestemmen winst (verlies) van het boekjaar"
+    vat_returns:
+      settlement_label: "Vereffening van de btw — %{form} van %{from} tot %{to}"
+      total: "Totaal"
+      columns:
+        box: "Rooster"
+        label: "Omschrijving"
+        amount: "Bedrag"
+        vat_number: "Btw-nummer"
+        name: "Naam"
+        code: "Code"
+        vat: "Btw"

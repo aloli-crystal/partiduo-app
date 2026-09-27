@@ -11,11 +11,11 @@ end
 describe_module "ACCOUNTING", "Données initiales comptables (PCG, PCMN)" do
   it "charge le plan comptable français (mod2), ses comptes par défaut et ses journaux" do
     view = AccountingSpec.load("fr")
-    view.accounts.should eq(164)
+    view.accounts.should eq(167)
     view.ledgers.should eq(4)
 
     lines = Api.chart(system)
-    lines.size.should eq(164)
+    lines.size.should eq(167)
     lines.select(&.depth.zero?).map(&.account.number).should eq(%w[1 2 3 4 5 6 7 8 9])
     Api.account(system, "7").kind.should eq(Api::AccountKind::Income) # PAS dans mod2, corrigé
     Api.account(system, "707").parent_number.should eq("7")

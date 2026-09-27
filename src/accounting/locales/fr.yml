@@ -43,6 +43,8 @@ fr:
       acc_income_statement: "Compte de résultat"
       acc_reports: "Rapports personnalisés"
       acc_vat_return: "Déclaration de TVA"
+      acc_vat_returns: "Déclarations de TVA enregistrées"
+      acc_vat_settings: "Paramètres de la TVA"
       acc_closing: "Clôture"
     account_kinds:
       asset: "Actif"
@@ -95,6 +97,74 @@ fr:
           name: "Opérations diverses"
           description: "Amortissements, TVA et autres opérations"
     errors:
+      vat_return:
+        form:
+          invalid: "Le formulaire « %{value} » n'existe pas."
+          regime: "Ce formulaire ne relève pas du régime du dossier (%{regime})."
+        periodicity:
+          invalid: "La périodicité « %{value} » n'est pas admise pour ce formulaire."
+        exigibility:
+          invalid: "L'exigibilité « %{value} » n'existe pas."
+        year:
+          invalid: "L'année %{value} n'est pas valide."
+        number:
+          invalid: "La période %{value} n'est pas valide."
+        threshold:
+          negative: "Le seuil ne peut être négatif."
+        dates:
+          order: "La date de fin précède la date de début."
+          not_allowed: "Des bornes libres ne sont admises que pour une CA12 (exercice décalé) : le fichier déposé reprend le mois, le trimestre ou l'année."
+        draft_exists: "Un brouillon de cette déclaration existe déjà (n° %{id})."
+        overlap: "Une déclaration close couvre déjà la période du %{from} au %{to}."
+        closed: "Cette déclaration est close et ne peut plus être modifiée."
+        stale: "Les écritures ont changé depuis le calcul : recalculez la déclaration avant de la clore."
+        not_closed: "La déclaration doit être close avant d'être liquidée."
+        not_settled_form: "Ce relevé ne se liquide pas."
+        already_settled: "L'écriture de liquidation de cette déclaration est déjà passée."
+        nothing_to_settle: "Aucun montant de TVA à liquider."
+        settle_stale: "Les écritures de la période ont changé depuis la clôture : l'écriture de liquidation ne reprendrait plus les montants déclarés ; passez-la à la main."
+        declarant_vat_number: "Le numéro de TVA de la société (« %{value} ») n'est pas un numéro belge valide : complétez les paramètres de la société."
+        client_vat_number: "Le numéro de TVA « %{value} » du client %{name} n'est pas valide."
+        box:
+          not_editable: "La case %{code} ne peut être corrigée."
+          too_many_decimals: "Le montant ne peut avoir plus de deux décimales."
+          whole_euros: "Une déclaration française se fait en euros entiers."
+          negative: "Une grille belge ne peut être négative."
+        format:
+          xml: "Le fichier XML Intervat n'existe que pour les déclarations belges."
+        settlement:
+          account_missing: "Indiquez le compte de liquidation."
+          ledger_missing: "Indiquez un journal d'opérations diverses pour la liquidation."
+          adjusted: "Case(s) %{codes} corrigée(s) ou saisie(s) : l'écriture de liquidation ne peut les reprendre. Clôturez sans liquidation et passez l'écriture à la main."
+          mismatch: "Les règles de la déclaration ne couvrent pas toute la TVA des écritures : l'écriture de liquidation ne correspondrait pas aux montants déclarés ; passez-la à la main."
+      vat_rule:
+        regime:
+          invalid: "Le régime « %{value} » n'existe pas."
+        box:
+          invalid: "La case « %{value} » ne se calcule pas par des règles."
+        source:
+          invalid: "La source « %{value} » n'existe pas."
+        sign:
+          invalid: "Le signe « %{value} » n'existe pas."
+        operation:
+          invalid: "L'opération « %{value} » n'existe pas."
+        ledger_kind:
+          invalid: "Le type de journal « %{value} » n'existe pas."
+          balance: "Un solde se lit dans un journal d'opérations diverses ou financier."
+          document: "Le hors taxe et la TVA se lisent dans un journal d'achats ou de ventes."
+        ledger_code:
+          not_found: "Le journal %{code} n'existe pas."
+          kind: "Le journal %{code} n'est pas du type indiqué."
+        vat_rate_code:
+          not_found: "Le taux de TVA %{code} n'existe pas."
+          balance: "Un solde de comptes ne porte pas de taux de TVA."
+        accounts:
+          invalid: "Le préfixe de compte « %{value} » n'est pas valide."
+      vat_settings:
+        representative_id:
+          required: "Indiquez l'identifiant du mandataire."
+        country:
+          invalid: "Indiquez un code de pays à deux lettres."
       entry:
         account_missing: "Indiquez un compte."
         amount_not_positive: "Le montant doit être strictement positif."
@@ -459,3 +529,14 @@ fr:
           result_of_year: "Bénéfice (perte) de l'exercice"
           untaxed_reserves: "Prélèvements (transferts) sur les réserves immunisées"
           net_result: "Bénéfice (perte) de l'exercice à affecter"
+    vat_returns:
+      settlement_label: "Liquidation de la TVA — %{form} du %{from} au %{to}"
+      total: "Total"
+      columns:
+        box: "Case"
+        label: "Libellé"
+        amount: "Montant"
+        vat_number: "N° de TVA"
+        name: "Nom"
+        code: "Code"
+        vat: "TVA"

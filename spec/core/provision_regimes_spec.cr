@@ -107,7 +107,7 @@ end
 describe_module "ACCOUNTING", "Provisionnement : plan comptable selon le régime" do
   it "charge le PCG français (mod2) avec l'instance française" do
     provision_instance
-    Partiduo::Api::Accounting.chart(system).size.should eq(164)
+    Partiduo::Api::Accounting.chart(system).size.should eq(167)
     Partiduo::Api::Accounting.ledgers(system).map(&.code).should eq(%w[A01 F01 O01 V01])
     Partiduo::Api::Accounting.default_account(system, "customer").try(&.number).should eq("410")
   end

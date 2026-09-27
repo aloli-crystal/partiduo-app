@@ -43,6 +43,8 @@ en:
       acc_income_statement: "Income statement"
       acc_reports: "Custom reports"
       acc_vat_return: "VAT return"
+      acc_vat_returns: "Saved VAT returns"
+      acc_vat_settings: "VAT settings"
       acc_closing: "Closing"
     account_kinds:
       asset: "Asset"
@@ -95,6 +97,74 @@ en:
           name: "Miscellaneous operations"
           description: "Depreciation, VAT and other operations"
     errors:
+      vat_return:
+        form:
+          invalid: "The form “%{value}” does not exist."
+          regime: "This form does not belong to the company's tax regime (%{regime})."
+        periodicity:
+          invalid: "The periodicity “%{value}” is not allowed for this form."
+        exigibility:
+          invalid: "The chargeability “%{value}” does not exist."
+        year:
+          invalid: "The year %{value} is not valid."
+        number:
+          invalid: "The period %{value} is not valid."
+        threshold:
+          negative: "The threshold cannot be negative."
+        dates:
+          order: "The end date is before the start date."
+          not_allowed: "Free bounds are only allowed for a CA12 (non-calendar financial year): the filed file uses the month, quarter or year."
+        draft_exists: "A draft of this return already exists (no. %{id})."
+        overlap: "A closed return already covers the period from %{from} to %{to}."
+        closed: "This return is closed and can no longer be changed."
+        stale: "Entries have changed since the computation: recompute the return before closing it."
+        not_closed: "The return must be closed before being settled."
+        not_settled_form: "This listing is not settled."
+        already_settled: "The settlement entry of this return has already been posted."
+        nothing_to_settle: "No VAT amount to settle."
+        settle_stale: "The period's entries have changed since closing: the settlement entry would no longer match the declared amounts; post it manually."
+        declarant_vat_number: "The company VAT number (“%{value}”) is not a valid Belgian number: complete the company settings."
+        client_vat_number: "The VAT number “%{value}” of customer %{name} is not valid."
+        box:
+          not_editable: "Box %{code} cannot be corrected."
+          too_many_decimals: "The amount cannot have more than two decimals."
+          whole_euros: "A French return is filed in whole euros."
+          negative: "A Belgian grid cannot be negative."
+        format:
+          xml: "The Intervat XML file only exists for Belgian returns."
+        settlement:
+          account_missing: "Enter the settlement account."
+          ledger_missing: "Enter a miscellaneous operations journal for the settlement."
+          adjusted: "Box(es) %{codes} corrected or entered: the settlement entry cannot include them. Close without settlement and post the entry manually."
+          mismatch: "The return rules do not cover all the VAT of the entries: the settlement entry would not match the declared amounts; post it manually."
+      vat_rule:
+        regime:
+          invalid: "The regime “%{value}” does not exist."
+        box:
+          invalid: "Box “%{value}” is not computed by rules."
+        source:
+          invalid: "The source “%{value}” does not exist."
+        sign:
+          invalid: "The sign “%{value}” does not exist."
+        operation:
+          invalid: "The operation “%{value}” does not exist."
+        ledger_kind:
+          invalid: "The journal type “%{value}” does not exist."
+          balance: "A balance is read from a miscellaneous operations or financial journal."
+          document: "Net amounts and VAT are read from a purchase or sales journal."
+        ledger_code:
+          not_found: "Journal %{code} does not exist."
+          kind: "Journal %{code} is not of the given type."
+        vat_rate_code:
+          not_found: "VAT rate %{code} does not exist."
+          balance: "An account balance has no VAT rate."
+        accounts:
+          invalid: "The account prefix “%{value}” is not valid."
+      vat_settings:
+        representative_id:
+          required: "Enter the representative's identifier."
+        country:
+          invalid: "Enter a two-letter country code."
       entry:
         account_missing: "Enter an account."
         amount_not_positive: "The amount must be greater than zero."
@@ -459,3 +529,14 @@ en:
           result_of_year: "Profit (loss) for the period"
           untaxed_reserves: "Transfer from (to) untaxed reserves"
           net_result: "Profit (loss) for the period available for appropriation"
+    vat_returns:
+      settlement_label: "VAT settlement — %{form} from %{from} to %{to}"
+      total: "Total"
+      columns:
+        box: "Box"
+        label: "Label"
+        amount: "Amount"
+        vat_number: "VAT number"
+        name: "Name"
+        code: "Code"
+        vat: "VAT"

@@ -48,6 +48,9 @@ Partiduo::Modules.register do
   menu "ACC_REPORTS", parent: "REPORTS", order: 28, route: "accounting:reports", permission: "accounting.report.read"
 
   menu "ACC_VAT_RETURN", parent: "VAT", order: 10, route: "accounting:vat_return", permission: "accounting.vat.declare"
+  # Historique et paramètres des déclarations (proposition D-UI-040, adoptée au lot 4).
+  menu "ACC_VAT_RETURNS", parent: "VAT", order: 20, route: "accounting:vat_returns", permission: "accounting.vat.declare"
+  menu "ACC_VAT_SETTINGS", parent: "VAT", order: 30, route: "accounting:vat_settings", permission: "accounting.vat.declare"
 
   menu "ACC_CLOSING", parent: "SETTINGS", order: 25, route: "accounting:closing", permission: "accounting.period.close"
 

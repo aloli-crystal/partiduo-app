@@ -10,8 +10,11 @@ require "./initial_data"
 
 module Partiduo
   # Socle : taux de TVA et régime du dossier. Les spécificités nationales sont
-  # isolées dans `Vat::Be` (`be/`) et `Vat::Fr` (`fr/`) ; les déclarations
-  # relèvent du module Comptabilité (lot 4).
+  # isolées dans `Vat::Be` (`be/`) et `Vat::Fr` (`fr/`) : formulaires,
+  # règles par défaut et fichiers des déclarations, dont le moteur
+  # (`Vat::Returns`) et les tables sont au socle ; le calcul depuis les
+  # écritures et le contrat relèvent du module Comptabilité (lot 4,
+  # D-TVA-001).
   module Vat
     class App < Marten::App
       label "vat"

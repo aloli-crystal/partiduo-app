@@ -3909,3 +3909,447 @@ rubriques, figurent pour information, hors réconciliation. La balance âgée
 *Alternative écartée.* Garder la relecture par `entries` et
 `account_statement` : la reprise ne vérifierait pas les éditions que le
 dossier produira.
+
+== Interface du lot 4 — déclarations de TVA (27 septembre 2026)
+
+=== D-UI-039 — Écrans de TVA : préparation, déclaration, contrôle, historique, exports, paramètres (lot 4, interface)
+
+*Contexte.* Le contrat `Partiduo::Api::Accounting` (lot 4) expose le
+catalogue des formulaires (`vat_forms`), le calcul sans enregistrement
+(`preview_vat_return`), le cycle d'une déclaration (création en brouillon,
+correction, recalcul, clôture avec ou sans liquidation, liquidation après
+coup, suppression d'un brouillon), le détail du calcul
+(`vat_return_details`), les fichiers (`vat_return_file` : XML Intervat, CSV,
+PDF) et les paramètres (mandataire, règles de calcul des cases). Le
+manifeste ne déclare qu'un menu, `accounting:vat_return`.
+
+*Choix.* Routes sous `/accounting/vat` (`partiduo-ui-bulma`,
+`src/ui/handlers/accounting/vat_handlers.cr`, gabarit `ui/vat/page.html`) :
+
+* `vat_return` (menu) : *préparation*. Critères en formulaire GET
+  (formulaire du régime, année, périodicité, mois ou trimestre,
+  exigibilité, bornes facultatives d'un exercice décalé, seuil du listing) ;
+  par défaut, la période qui contient le jour de référence. `f=1` calcule
+  la déclaration par `preview_vat_return` (rien n'est enregistré) : cases
+  par cadre, relevé des clients ; refus du contrat sous leur champ (422).
+  Le bouton « Enregistrer le brouillon » envoie les mêmes critères en POST
+  à `vat_return_create` (dans l'adresse, jeton CSRF dans le corps) ; refus
+  (brouillon existant, période close chevauchée) : message et retour à la
+  préparation.
+* `vat_return_show` : *déclaration* enregistrée — synthèse, cases par
+  cadre (calculé, déclaré, « corrigée »), relevé ; actions selon l'état :
+  brouillon → clore, corriger, recalculer, supprimer ; close sans écriture
+  de liquidation → liquider ; toujours → contrôler, exports.
+* `vat_return_edit` : correction des cases (toute case sauf les totaux ;
+  vide = montant calculé), indicateurs belges (listing néant, demande de
+  restitution). Seules les cases modifiées sont envoyées ; les erreurs
+  `adjustments[i]` du contrat reviennent sous la case correspondante.
+* `vat_return_close` / `vat_return_settle` : clôture (case « passer
+  l'écriture de liquidation », journal d'opérations diverses, date,
+  comptes ; vides = valeurs par défaut du cœur) et liquidation après coup ;
+  erreurs `settlement.<champ>` rangées sous le champ.
+* `vat_return_control` : *contrôle* — cases calculées et déclarées,
+  corrections signalées, apport de chaque règle relu dans les écritures ;
+  d'un brouillon, les cases dont le calcul a changé depuis l'enregistrement,
+  obtenues en comparant les montants du brouillon à un
+  `preview_vat_return` des mêmes critères (aucun calcul dans l'interface),
+  avec un bouton « Recalculer » (le cœur refuse de toute façon la clôture
+  d'un brouillon périmé).
+* `vat_returns` : *historique* (filtres formulaire et année, export CSV du
+  tableau) ; `vat_return_file?format=xml|csv|pdf` : *exports* produits par
+  le cœur (XML proposé pour le régime belge seulement).
+* `vat_settings` : *paramètres* — mandataire des fichiers Intervat
+  (formulaire) et, par régime, tableau des cases réglées et de leurs règles
+  décrites en clair ; `vat_rules` (`/vat/rules/<régime>/<case>`) remplace
+  les règles d'une case (une ligne par règle, une ligne vide pour ajouter,
+  case « retirer ») ; `vat_rules_reset` revient au paramétrage par défaut.
+
+Les trois écrans principaux sont reliés par des onglets (Préparation,
+Historique, Paramètres), le manifeste n'ayant qu'une entrée de menu.
+
+*Alternatives écartées.* Ajouter des menus au manifeste de la
+Comptabilité : fichier du cœur modifié en parallèle par le lot 4 (voir
+D-UI-040) ; critères de préparation gardés en cookie (D-UI-035) : une
+déclaration se prépare pour une période précise, la période courante par
+défaut suffit ; comparaison du brouillon calculée par l'interface : règle
+de calcul hors du cœur (ADR-005 D2), d'où le recours à `preview_vat_return`.
+
+=== D-UI-040 — Proposition : menus « Historique » et « Paramètres » de la TVA (lot 4, interface ; non appliquée)
+
+*Contexte.* Le groupe de menus TVA n'a qu'une entrée
+(`ACC_VAT_RETURN` → `accounting:vat_return`).
+
+*Proposition.* Ajouter au manifeste de la Comptabilité
+`menu "ACC_VAT_RETURNS", parent: "VAT", order: 20, route: "accounting:vat_returns"`
+et `menu "ACC_VAT_SETTINGS", parent: "VAT", order: 30, route: "accounting:vat_settings"`
+(permission `accounting.vat.declare`), avec leurs libellés fr, en, nl ; les
+routes existent déjà dans `partiduo-ui-bulma`. En attendant, les onglets
+des écrans de TVA y mènent.
+
+== Lot 4 — déclarations de TVA (cœur, 27 septembre 2026)
+
+=== D-TVA-001 — Déclarations : contrat de la Comptabilité, règles nationales et tables au socle (lot 4, tva)
+
+*Contexte.* ADR-006 D1 range les déclarations de TVA dans le module
+Comptabilité ; le prompt et l'ADR-001 isolent les spécificités belges
+(`tva_belge`) et françaises dans `vat/be/` et `vat/fr/`, au socle, qui ne
+dépend d'aucun module.
+
+*Choix.* Contrat dans `Partiduo::Api::Accounting` (`vat_returns.cr`,
+permission existante `accounting.vat.declare`, `ModuleDisabled` sans la
+Comptabilité), extraction des mouvements, clôture et liquidation dans
+`Partiduo::Accounting::VatReturns`. Au socle : moteur neutre sans accès à la
+base (`Vat::Returns` : mouvements, règles, périodes), formulaires et fichiers
+nationaux (`Vat::Be::Periodic`, `Vat::Be::Intervat`, `Vat::Fr::Ca3`,
+`Vat::Fr::Ca12`), tables `vat_return`, `vat_return_box`, `vat_return_line`,
+`vat_box_rule`, `vat_setting` (successeurs de `declaration_amount`,
+`assujetti`, `intracomm`, leurs lignes, `parameter_chld`, `representative`).
+Les références vers la Comptabilité (`settlement_entry_id`, `ledger_id` d'une
+règle) n'ont pas de clé étrangère ; l'écriture de liquidation porte en retour
+la référence `vat_return:<id>` (`accounting_entry.source`, unique en
+vigueur).
+
+*Alternatives écartées.* Tout dans `accounting/` : contraire au prompt
+(« isolées dans `vat/be/` et `vat/fr/` »). Contrat dans `Api::Vat` : le socle
+appellerait un module (ADR-006 D3). Clé étrangère posée par une migration de
+la Comptabilité sur une table du socle : couple les migrations des deux
+pièces pour une information que la référence de l'écriture porte déjà.
+
+=== D-TVA-002 — Mouvements et règles de calcul des cases (lot 4, tva ; écart à NOALYSS)
+
+*Contexte.* L'extension lit `quant_sold` / `quant_purchase` (une ligne par
+article avec sa TVA) et applique `parameter_chld` (code TVA, poste, journal,
+`p_operation`, `p_side`). Partiduo range la TVA par taux et par écriture
+(`vat_role` `base` / `tax`, lot 2).
+
+*Choix.* Mouvements : lignes hors taxe (signées dans le sens de l'opération,
+avoir négatif), TVA déductible ou due (d'après les comptes du taux, sinon le
+journal, sinon le sens ; autoliquidation : les deux), TVA rattachée *au
+prorata* aux lignes hors taxe du même taux pour que le filtre de compte d'une
+règle porte, comme dans NOALYSS, sur le compte de l'article ; lignes des
+journaux d'opérations diverses et financiers pour la source `balance`
+(`get_solde` des grilles 61 et 62), hors écritures de liquidation. Règles :
+taux (tous si vide), nature de journal ou journal, préfixes de comptes
+(`%` de NOALYSS toléré) et *exclusions* (nouveau, pour « tout sauf les
+immobilisations »), source, signe, opération. *Écart* : `p_side` n'était
+qu'un avertissement ; ici le signe *filtre* (`positive`, `negative`), ce qui
+sépare les avoirs (grilles 48, 49, 84, 85, 63, 64) des opérations. Les règles
+par défaut sont dans le code, résolues par code de taux ; la première
+modification (`set_vat_box_rules`) les enregistre, `reset_vat_box_rules`
+y revient.
+
+*Alternative écartée.* Une ligne de TVA par article : changerait le schéma
+des écritures du lot 2 pour un seul usage.
+
+=== D-TVA-003 — Grilles belges par défaut (lot 4, tva)
+
+*Contexte.* Le paramétrage initial de l'extension ne remplit que quelques
+grilles (les autres ont un taux sans compte, ignorées par
+`fill_parameter_chld`) et cite les identifiants de taux de `mod1`.
+
+*Choix.* Sur les codes du jeu initial belge : ventes 00 (`0TVA`), 01 (`6A`),
+02 (`12A`), 03 (`21G`), 45 (`COC`), 46 (`INTL`), 47 (`EXP`), avoirs 48
+(`INTL`) et 49 (autres) ; achats 81 (comptes 60), 83 (biens
+d'investissement, comptes 20 à 27), 82 (tout le reste : comptes hors 60 et
+hors classe 2 — services et biens divers, relecture D-TVA-R07),
+avoirs 84 (`INTA`) et 85 (autres), 86 (`INTA`), 87 (`COC`) ; TVA 54 (due sur
+6, 12, 21 %), 55 (`INTA` autoliquidée), 56 (`COC`), 59 (déductible), 63 et 64
+(TVA des avoirs reçus et délivrés). Cases laissées au paramétrage ou à la
+saisie : 44, 57, 61, 62, 88, 91. Pseudo-cases des relevés : `listing` et
+`listing_vat` (21, 12, 6, 0 %, cocontractant), `intra_l` (`INTL`).
+
+*Alternative écartée.* Reprendre le paramétrage initial de NOALYSS tel quel :
+la plupart des grilles resteraient vides.
+
+=== D-TVA-004 — TVA sur les débits ou les encaissements : date du paiement complet (lot 4, tva)
+
+*Contexte.* NOALYSS (`Tax_Summary`) retient, pour un taux exigible au
+paiement, la date `jr_date_paid` (opération entièrement payée).
+
+*Choix.* Exigibilité par taux (`sale_on_payment`, `purchase_on_payment`,
+D-REF-009), ou imposée par la déclaration (`operation`, `payment`). Une
+facture est payée quand toutes ses lignes lettrées le sont par des lettrages
+soldés ; la date retenue est la plus récente des autres écritures de ces
+lettrages, et jamais antérieure à la date de l'écriture elle-même
+(relecture, D-TVA-R01). Un paiement partiel ne rend rien exigible.
+
+*Alternative écartée.* Exigibilité au prorata des encaissements partiels :
+plus juste pour les prestations de services françaises, mais un lettrage
+peut réunir plusieurs factures et plusieurs paiements sans répartition
+enregistrée ; à reprendre si le besoin se confirme.
+
+=== D-TVA-005 — Écriture de liquidation (lot 4, tva)
+
+*Contexte.* `Ext_Tva::propose_form` propose de solder les comptes de TVA
+(soldes depuis le début de l'exercice) vers `DTTVA` / `CRTVA` et laisse
+l'utilisateur la passer.
+
+*Choix.* L'écriture solde, compte par compte, la TVA des *mouvements
+retenus* par la déclaration (et non le solde du compte : une TVA exigible à
+l'encaissement non encore payée reste au compte), contrepartie au compte de
+dette (défaut : compte par défaut `vat`, `451` ou `44551`) ou de créance
+(défaut : `411` au PCMN, `44567` « Crédit de TVA à reporter » au PCG,
+*ajouté* au plan français : 165 comptes). Journal d'opérations diverses
+(premier actif par défaut), date de fin de période par défaut, passée par
+`post_entry` dans la transaction de la clôture (ou après coup,
+`settle_vat_return`). *Mis à jour à la relecture (D-TVA-R03)* : en France,
+la contrepartie reprend les montants déclarés (28 ou `sp` au compte de
+dette, 22 repris de la créance, 27, 25 et `ex` à la créance, 26 au compte
+de remboursement `44583`, `ac` au compte d'acomptes `44581`, tous deux
+ajoutés au plan français : 167 comptes) et l'écart d'arrondi à l'euro va en
+`658` ou `758` (paramétrables). Une case calculée corrigée, la case 29, ou
+une TVA des mouvements que les règles ne reprennent pas refusent la
+liquidation automatique (à passer à la main). En Belgique (au centime), la
+contrepartie reste le solde des mouvements.
+
+*Alternative écartée.* Solder les comptes de TVA à la date de fin : fausse
+pour la TVA sur les encaissements et reprendrait des opérations hors
+déclaration.
+
+=== D-TVA-006 — CA3 et CA12 (lot 4, tva)
+
+*Contexte.* NOALYSS n'a pas de déclaration française ; ADR-007 attend CA3 et
+CA12 « préparées par le lot 4 ».
+
+*Choix.* Cases de la 3310-CA3 : opérations (A1 à A5, B2, B4, B5, E1, E2, F2,
+F6), TVA brute par taux en base et taxe (08 20 %, 09 5,5 %, 9B 10 %, 10 et 11
+DOM, 13 anciens taux, 14 autres taux particuliers — le détail de l'annexe
+3310-A n'est pas repris), 15 à 17, TVA déductible 19 à 23, résultat 25 à 32 ;
+euros entiers (arrondi au demi supérieur, case par case). CA12 : les mêmes
+lignes de calcul, puis acomptes versés (`ac`, saisis), solde à payer (`sp`)
+ou excédent (`ex`) ; la numérotation propre du formulaire 3517-S n'est pas
+reproduite (correspondance à établir avec le formulaire de l'année, codes
+internes documentés). Règles par défaut : ventes par taux, E1 (`EXP`), E2
+(`AUTOL`), F2 (`INTL`), acquisitions intracommunautaires `INTS` (B2, 08, 17),
+19 (TVA déductible sur comptes 2), 20 (autres). Pas de fichier EDI-TVA.
+
+*Alternative écartée.* Reproduire l'annexe 3310-A et la CA12 ligne à ligne :
+formulaires annuels à suivre millésime par millésime, sans source dans
+NOALYSS.
+
+=== D-TVA-007 — Brouillon, corrections, clôture figée (lot 4, tva)
+
+*Choix.* Une déclaration se crée en brouillon (cases : montant calculé et
+montant déclaré, corrigé ou non), se corrige (jamais un total), se recalcule
+(corrections gardées), se supprime. La clôture est refusée si les écritures
+ont changé depuis le calcul (`stale`) ou si une déclaration close du même
+formulaire chevauche la période ; elle est ensuite figée par PostgreSQL
+(déclencheurs, seule l'écriture de liquidation peut s'y rattacher, une fois).
+Un seul brouillon par formulaire et par période (index unique partiel,
+relecture D-TVA-R06).
+
+*Alternative écartée.* Recalculer silencieusement à la clôture : les montants
+clos différeraient de ceux que l'utilisateur a relus.
+
+=== D-TVA-008 — Fichiers Intervat (lot 4, tva ; écart à NOALYSS)
+
+*Choix.* Trois fichiers repris de l'extension (espaces de noms
+`VATConsignment`, `ClientListingConsignment`, `IntraConsignment`, espace
+par défaut `InputCommon`), déclarant = la société du socle (numéro de TVA
+sans préfixe de pays), mandataire facultatif (`vat_setting`), grilles non
+nulles sauf `xx` et `yy`. *Écart* : UTF-8 pour les trois (NOALYSS écrivait le
+listing en ISO 8859-1) ; `String#encode` perd des octets (B-ED-001).
+
+*Alternative écartée.* ISO 8859-1 pour le listing : aucun gain, un nom hors
+Latin-1 serait perdu.
+
+=== D-TVA-009 — Relevés belges : clients, seuil, codes (lot 4, tva)
+
+*Choix.* Le client d'un mouvement est le tiers de l'écriture (dernière ligne
+sans rôle de TVA qui porte une fiche, relecture D-TVA-R04). Listing : clients au numéro de TVA belge, chiffre
+d'affaires et TVA de l'année civile, seuil de 250 € par défaut
+(`threshold`), sans correction ligne à ligne (NOALYSS le permettait) ;
+relevé : clients au numéro de TVA non belge, par code `L`, `S`, `T`.
+
+*Alternative écartée.* Garder les clients sans numéro de TVA (option
+`all_customer` de NOALYSS) : le listing ne concerne que les assujettis.
+
+=== D-TVA-010 — Menus « Historique » et « Paramètres » de la TVA (lot 4, tva ; adopte D-UI-040)
+
+*Choix.* `ACC_VAT_RETURNS` (`accounting:vat_returns`) et `ACC_VAT_SETTINGS`
+(`accounting:vat_settings`) ajoutés au manifeste de la Comptabilité, sous
+`VAT`, avec `accounting.vat.declare` et leurs libellés fr, en, nl.
+
+=== D-TVA-011 — Déclaration calculée sur toutes les écritures (lot 4, tva)
+
+*Contexte.* Les éditions ne lisent que les journaux visibles de l'acteur
+(D-ED-011).
+
+*Choix.* Une déclaration de TVA porte sur toutes les écritures : la
+permission `accounting.vat.declare` suffit. L'écriture de liquidation exige
+en outre le droit de saisir dans son journal.
+
+*Alternative écartée.* Refuser l'acteur qui ne voit pas tous les journaux
+(comme le FEC) : la permission de déclarer est déjà réservée.
+
+== Lot 4 — déclarations de TVA (tests, 27 septembre 2026)
+
+=== D-TVA-T01 — Corrections des déclarations françaises en euros entiers (lot 4, tva ; correctif)
+
+*Contexte.* Les specs du testeur ont montré qu'une case d'une CA3 ou d'une
+CA12 acceptait une correction en centimes (`10.50`), alors que le calcul
+arrondit ces formulaires à l'euro (`Returns.decimals`) : les totaux
+déclarés portaient alors des décimales.
+
+*Choix.* `update_vat_return` refuse une correction non entière d'un
+formulaire français (`accounting.errors.vat_return.box.whole_euros`,
+libellés fr, en, nl) ; `10.00` reste admis. En Belgique, la limite de deux
+décimales ne refuse plus un montant comme `10.500`, égal à son arrondi.
+
+*Alternative écartée.* Arrondir silencieusement la correction : le montant
+déclaré différerait de celui saisi sans que l'utilisateur le voie.
+
+=== D-TVA-T02 — Règle sans filtre gardée à l'écran (lot 4, interface ; correctif)
+
+*Contexte.* L'écran des règles d'une case écartait comme « ligne vide »
+toute règle sans taux, journal ni compte, même d'une autre source
+(« toute la TVA déductible ») : la case se retrouvait sans règle, sans
+message.
+
+*Choix.* Une ligne n'est vide que si, en plus, sa source, son signe et son
+opération sont ceux par défaut (`base`, `all`, `add`), c'est-à-dire la ligne
+ajoutée pour une nouvelle règle (`VatRulesHandler#blank?`).
+
+*Alternative écartée.* Une case à cocher « nouvelle règle » : plus lourde
+pour un cas rare.
+
+=== D-TVA-T03 — Liquidation après coup d'une déclaration dont les écritures ont changé (lot 4, tva ; appliquée à la relecture, D-TVA-R02)
+
+*Contexte.* `settle_vat_return` recalcule les mouvements au moment de la
+liquidation, comme `Ext_Tva::propose_form` qui lisait les soldes des comptes
+de TVA. Si des écritures de la période ont changé après la clôture,
+l'écriture de liquidation ne correspond plus aux montants déclarés et figés.
+
+*Proposition.* Refuser la liquidation après coup quand le calcul diffère de
+celui enregistré (comme la clôture, `stale`), avec un message propre à une
+déclaration close (la liquider à la main). Non appliquée : comportement
+hérité de NOALYSS, à trancher par le relecteur du lot 4.
+
+== Lot 4 — déclarations de TVA (relecture et clôture, 27 septembre 2026)
+
+=== D-TVA-R01 — Exigibilité à l'encaissement jamais antérieure à l'opération (lot 4, tva ; correctif bloquant)
+
+*Contexte.* La date d'exigibilité d'une opération à l'encaissement était la
+date la plus récente des *autres* écritures de ses lettrages, même quand
+elle précédait l'opération : un avoir lettré avec sa facture (ADR-006 D3),
+une extourne (lettrée ligne à ligne par `Reversals.match_pairs!`) ou une
+facture payée d'avance (acompte) n'étaient déclarés dans aucune période.
+
+*Choix.* Exigibilité = la plus tardive de la date de l'écriture et de la
+date du paiement complet ; la requête retient une écriture d'avant la
+période quand `GREATEST(date, paiement)` tombe dans la période. Specs :
+facture et avoir lettrés, extourne, acompte antérieur à la facture.
+
+*Alternative écartée.* Traiter les avoirs et les extournes à part (sans
+exigibilité propre) : ne couvre pas l'acompte et suppose de reconnaître
+chaque cas.
+
+=== D-TVA-R02 — Liquidation après coup refusée si les écritures ont changé (lot 4, tva ; applique D-TVA-T03)
+
+*Choix.* `settle_vat_return` recalcule et refuse, si le calcul diffère de
+celui enregistré (`stale?`), avec
+`accounting.errors.vat_return.settle_stale` (fr, en, nl), qui invite à
+passer l'écriture à la main.
+
+*Alternative écartée.* Liquider les mouvements du moment (comportement de
+`Ext_Tva::propose_form`) : l'écriture ne correspondrait plus aux montants
+déclarés et figés.
+
+=== D-TVA-R03 — Liquidation française sur les montants déclarés (lot 4, tva ; correctif majeur, met à jour D-TVA-005)
+
+*Contexte.* L'écriture de liquidation était construite au centime depuis les
+mouvements : le compte de dette ne portait pas le montant déclaré (28, 32,
+`sp`), l'écart d'arrondi restait en 44551, les cases saisies n'y figuraient
+pas.
+
+*Choix.* France : comptes de TVA soldés au centime, contrepartie sur les
+montants déclarés (voir D-TVA-005), écart d'arrondi en charge (`658`) ou en
+produit (`758`), comptes paramétrables dans `VatSettlementInput`
+(`rounding_expense_account`, `rounding_income_account`, `advance_account`,
+`refund_account`). Contrôles : une case *calculée* corrigée (ou la case 29,
+sans contrepartie connue) refuse la liquidation automatique
+(`settlement.adjusted`, cases citées) ; la TVA au centime des règles
+(montants `raw` de `Computation`, avant arrondi) doit égaler le solde des
+mouvements (`settlement.mismatch`), sinon l'écart ne serait pas un arrondi.
+Les comptes d'un même côté sont compensés (22 et 27 : une ligne nette en
+44567). Belgique : inchangé (le compte de dette porte 71 ou 72 dès lors
+qu'aucune grille calculée n'est corrigée ; une grille de solde 61 ou 62 reste
+hors écriture, comme dans NOALYSS).
+
+*Alternatives écartées.* Signaler seulement, dans la vue de clôture, les
+cases non reprises : l'écriture resterait fausse. Porter l'écart d'une case
+corrigée en 658/758 : une correction n'est pas un arrondi.
+
+=== D-TVA-R04 — Tiers d'une écriture : dernière ligne qui porte une fiche (lot 4, tva ; correctif mineur)
+
+*Choix.* La CTE `third` ne retient que les lignes sans rôle de TVA *avec*
+`card_id`, et seulement pour les écritures candidates.
+
+=== D-TVA-R05 — Requêtes du calcul bornées aux écritures candidates (lot 4, tva ; performance)
+
+*Choix.* Écritures candidates : celles de la période qui ont une ligne de
+TVA, et celles d'avant la période lettrées avec une écriture de la période
+(seules à pouvoir y devenir exigibles, D-TVA-R01) ; lettrages, paiements et
+tiers ne sont lus que pour elles. Fiches des relevés et de la vue chargées
+par pages de mille clients (`ReportData.cards`), taux et journaux des vues
+de règles lus une fois. Écritures de liquidation écartées des soldes par
+`NOT starts_with(COALESCE(source, ''), 'vat_return:')` (plus de joker
+`LIKE`, source NULL retenue).
+
+*Alternative écartée.* Borner par une date (par exemple un an avant la
+période) : un paiement tardif sortirait du calcul.
+
+=== D-TVA-R06 — Brouillon unique et chevauchements sous verrou (lot 4, tva)
+
+*Choix.* Index unique partiel `vat_return_draft_unique (form, date_from,
+date_to) WHERE status = 'draft'` (migration `vat` 0003) ; verrou
+transactionnel par régime (`pg_advisory_xact_lock`) dans la création et la
+clôture ; une déclaration périodique (belge, CA3, CA12) chevauchant une
+déclaration périodique close *du même régime* est refusée (`overlap`) : une
+CA3 et une CA12, ou une mensuelle et une trimestrielle, ne liquident pas
+deux fois la même TVA.
+
+*Alternative écartée.* Contrainte d'exclusion `EXCLUDE USING gist` : exige
+l'extension `btree_gist` sur chaque instance ; le verrou applicatif suffit,
+l'index unique `vat_return_closed_unique` restant le garde-fou en base.
+
+=== D-TVA-R07 — Grilles 82 et 83 par défaut (lot 4, tva ; met à jour D-TVA-003)
+
+*Choix.* 83 : comptes 20 à 27 (frais d'établissement, incorporelles,
+corporelles, locations-financement, autres) ; 82 : tout achat hors 60 et hors
+classe 2 (services et biens divers, 61, 64…), par exclusion, pour que chaque
+achat tombe dans l'une des grilles 81 à 83.
+
+*Alternative écartée.* 82 = 61 et 64 : d'autres comptes (65, 66…) resteraient
+hors grille.
+
+=== D-TVA-R08 — Bornes libres réservées à la CA12 (lot 4, tva)
+
+*Choix.* `date_from` / `date_to` différents de la période sont refusés hors
+`fr_ca12` (`accounting.errors.vat_return.dates.not_allowed`, fr, en, nl) ;
+des bornes égales à celles de la période restent admises (l'écran de
+contrôle les renvoie). L'écran de contrôle ne les transmet plus que pour une
+CA12.
+
+*Alternative écartée.* Accepter les bornes et les reporter dans le fichier
+Intervat : Intervat ne connaît que le mois, le trimestre ou l'année.
+
+=== D-TVA-R09 — Contrôles des grilles belges, des numéros de TVA et du régime (lot 4, tva)
+
+*Choix.* Correction négative refusée pour un formulaire belge
+(`box.negative`) ; fichier Intervat refusé si le numéro de la société n'est
+pas un numéro belge valide (`declarant_vat_number`, champ `vat_number`) ou si
+un client du listing n'a pas un numéro belge valide, ou un client du relevé
+un numéro étranger de forme valide (`client_vat_number`,
+`lines[i].vat_number`) ; `reset_vat_box_rules` contrôle le régime comme
+`set_vat_box_rules`.
+
+=== D-TVA-R10 — Contrôle du module et du droit à l'envoi des écrans de TVA (lot 4, interface)
+
+*Choix.* Chaque `post` des écrans de TVA (`partiduo-ui-bulma`) appelle
+`require!(MODULE, PERMISSION)` comme les `get`, pour un refus homogène
+(404 module inactif, 403 sans droit) avant tout appel au contrat.
+
+*Alternative écartée.* Un `before_dispatch` commun à `VatScreenBase` :
+masquerait le contrôle aux lecteurs de chaque handler, alors que les autres
+écrans l'écrivent en tête de méthode.

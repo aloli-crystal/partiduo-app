@@ -23,7 +23,8 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |F |Module Facturation |*Terminé* (clôture commune « Clôture du lot 2F »)
 |M |`partiduo-migrate` |*Terminé* (FEC et base NOALYSS ; analytique en annexe jusqu'au lot 5 ; clôture « Clôture du lot M »)
 |3 |Éditions : balances, grand livre, journaux, bilan et compte de résultat FR/BE, rapports personnalisés, FEC, exports CSV et PDF ; écrans ; réconciliation de `partiduo-migrate` par les éditions |*Terminé* (clôture « Clôture du lot 3 »)
-|4–6 |TVA, analytique, stock |À faire
+|4 |TVA : déclarations BE (grilles, listing, relevé intracommunautaire, Intervat) et FR (CA3, CA12), liquidation |*Terminé* (clôture « Clôture du lot 4 »)
+|5–6 |Analytique, stock |À faire
 |===
 
 == Lot P — ce qui existe (26 septembre 2026)
@@ -780,9 +781,111 @@ Vérifications (base de test `partiduo_test_3_final`) :
   arrière puis réapplication avec un profil ACCOUNTANT existant), rien en
   attente depuis l'interface.
 
+== Lot 4 — déclarations de TVA (cœur, 27 septembre 2026)
+
+Cœur (`partiduo-app`, décisions D-TVA-001 à D-TVA-011,
+link:doc/api/vat-returns.adoc[]) :
+
+* Socle (`vat`) : moteur neutre des déclarations (`Vat::Returns` :
+  mouvements, règles successeurs de `tva_belge.parameter_chld` avec
+  exclusions de comptes et filtre de signe, périodes, relevés par client) ;
+  `vat/be/` : grilles 00 à 91 et totaux xx, yy, 71, 72, règles par défaut,
+  fichiers Intervat (déclaration périodique, listing des clients assujettis,
+  relevé intracommunautaire) ; `vat/fr/` : CA3 et CA12 (euros entiers,
+  acomptes de la CA12), règles par défaut. Migration vat 0002 : tables
+  `vat_return`, `vat_return_box`, `vat_return_line`, `vat_box_rule`,
+  `vat_setting` ; déclaration close figée par déclencheurs (seule
+  l'écriture de liquidation s'y rattache, une fois), index unique des
+  déclarations closes.
+* Comptabilité : contrat `Partiduo::Api::Accounting` (`vat_forms`,
+  `preview_vat_return`, `create_vat_return`, `update_vat_return`,
+  `recompute_vat_return`, `delete_vat_return`, `close_vat_return`,
+  `settle_vat_return`, `vat_return(s)`, `vat_return_details`,
+  `vat_return_file` XML/CSV/PDF, `vat_box_rules`, `set_vat_box_rules`,
+  `reset_vat_box_rules`, `vat_settings`, `update_vat_settings`) ; mouvements
+  relus dans les écritures (TVA au prorata des lignes hors taxe,
+  autoliquidation, exigibilité à l'opération ou au paiement complet) ;
+  écriture de liquidation (comptes de TVA soldés vers `451`/`411` ou
+  `44551`/`44567`) ; compte `44567` ajouté au PCG (165 comptes) ; menus
+  `ACC_VAT_RETURNS` et `ACC_VAT_SETTINGS` (D-UI-040 adoptée).
+* Specs (base `partiduo_test_4_0`) : `spec/vat/returns_spec.cr` (10 :
+  périodes, règles, totaux BE, CA3, CA12, XML Intervat),
+  `spec/accounting/vat_returns_be_spec.cr` (12 : grilles d'un trimestre
+  complet, détail, corrections, fichiers, clôture et liquidation, clôture
+  refusée puis liquidation après coup, intégrité en SQL direct, listing,
+  relevé, paramétrage des règles, régime, droits et module),
+  `spec/accounting/vat_returns_fr_spec.cr` (7 : CA3, report et
+  remboursement de crédit, liquidation créditrice et débitrice, TVA à
+  l'encaissement avec paiement partiel puis complet, exigibilité au
+  paiement, CA12, bornes d'un exercice décalé) ; outils
+  `spec/support/vat_returns.cr`. Totaux : 716 + 13 en attente
+  (Comptabilité seule), 575 + 23 en attente (Facturation seule), 762 (les
+  deux), tous verts ; `crystal tool format` et Ameba sans remarque ;
+  garde-fou ADR-005 D3 vert ; `migrate` sur base vierge, retour arrière de
+  vat 0002 puis réapplication ; `genmigrations vat` sans changement ;
+  `partiduo-migrate` (93) et `partiduo-ui-bulma` (197) verts sur l'arbre
+  modifié.
+
+Interface (`partiduo-ui-bulma`, D-UI-039, D-UI-040) : préparation,
+déclaration enregistrée (cases par cadre, relevés, corrections, recalcul,
+clôture et liquidation), contrôle, historique, exports, paramètres
+(mandataire, règles de calcul) ; specs `spec/ui/vat_returns_spec.cr`,
+`spec/ui/vat_returns_rules_spec.cr`.
+
+== Clôture du lot 4 — relecture et vérifications (27 septembre 2026)
+
+Remarques de relecture corrigées (décisions D-TVA-R01 à D-TVA-R10, mises à
+jour de D-TVA-003, D-TVA-004, D-TVA-005, D-TVA-007, D-TVA-009, D-TVA-T03) :
+
+* *Exigibilité à l'encaissement* (bloquant) : jamais antérieure à la date
+  de l'écriture ; une facture et l'avoir lettré avec elle, une écriture et
+  son extourne, une facture payée d'avance sont déclarés dans la bonne
+  période (D-TVA-R01, trois specs).
+* *Liquidation après coup* (majeur) : refusée si les écritures ont changé
+  depuis la clôture (`settle_stale`, D-TVA-R02).
+* *Liquidation française* (majeur) : contrepartie sur les montants déclarés
+  (28 / `sp`, 22, 25 / 27 / `ex`, 26 en `44583`, `ac` en `44581`), écart
+  d'arrondi en `658` / `758` paramétrables ; liquidation automatique refusée
+  pour une case calculée corrigée ou la case 29 (`settlement.adjusted`) et si
+  les règles ne reprennent pas toute la TVA (`settlement.mismatch`) ;
+  comptes `44581` et `44583` ajoutés au PCG (167 comptes) (D-TVA-R03).
+* Mineures : tiers = dernière ligne sans TVA qui porte une fiche (R04) ;
+  requêtes bornées aux écritures candidates, fiches, taux et journaux
+  chargés en bloc, `starts_with` au lieu de `LIKE` pour les écritures de
+  liquidation (R05) ; index unique des brouillons (migration vat 0003),
+  verrou par régime, chevauchement refusé entre déclarations périodiques du
+  même régime (CA3 / CA12) (R06) ; grilles 82 (achats hors 60 et hors
+  classe 2) et 83 (comptes 20 à 27) (R07) ; bornes libres réservées à la
+  CA12 (`dates.not_allowed`, R08) ; grilles belges négatives refusées,
+  numéros de TVA du déclarant et des clients contrôlés avant le fichier
+  Intervat, régime contrôlé par `reset_vat_box_rules` (R09) ;
+  `require!` à l'envoi des écrans de TVA (R10).
+* Hors relecture : spec SAML intermittente corrigée (l'assertion signée et
+  celle qui porte la signature étaient datées séparément ; un changement de
+  seconde entre les deux faussait l'empreinte, `spec/support/saml.cr`).
+
+Vérifications (base de test `partiduo_test_4_final`) :
+
+* `partiduo-app` : 755 exemples + 13 en attente (Comptabilité seule),
+  578 + 25 en attente (Facturation seule), 801 (les deux), tous verts ;
+  dont 17 nouveaux dans `spec/accounting/vat_returns_review_spec.cr` ;
+  `crystal tool format` et Ameba sans remarque ; garde-fou ADR-005 D3 vert.
+* `partiduo-ui-bulma` : 205 exemples verts ; Ameba sans remarque ;
+  garde-fou `Partiduo::Api` vert.
+* `partiduo-migrate` (93) et `partiduo-skel` (24) verts sur l'arbre modifié.
+* `marten migrate` sur base vierge (`partiduo_migrate_4`) : 17 migrations
+  du cœur appliquées (vat 0002 et 0003 comprises), rien en attente.
+
+Reports (lot 4) : exigibilité au prorata des encaissements partiels
+(D-TVA-004) ; annexe 3310-A et numérotation officielle de la CA12
+(D-TVA-006) ; correction ligne à ligne des relevés (D-TVA-009) ; fichier
+EDI-TVA.
+
 == Prochaines étapes
 
-. Lot 4 : TVA (déclarations BE et FR, listings), sur les éditions du lot 3.
+. Lot 5 : analytique (plans, postes, ventilation des écritures, éditions ;
+  reprise de l'analytique par `partiduo-migrate`, B-MIG-001), puis lot 6
+  (stock).
 . Contrat : relever `API_VERSION` (contrat enrichi des lots 2, F et 3,
   D-INV-015) ; proposer `limit` / `offset` pour `general_ledger` et
   `journals` (D-UI-036) et les comptes des rubriques d'un état (D-UI-036) ;

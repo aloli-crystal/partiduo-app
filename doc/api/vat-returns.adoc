@@ -1,0 +1,187 @@
+= Comptabilité : déclarations de TVA
+:toc: left
+:toc-title: Table des matières
+:toclevels: 3
+:icons: font
+:source-language: crystal
+
+Référence du lot 4 (ADR-001 § Lots, ADR-006 D1 : les déclarations de TVA
+relèvent du module Comptabilité). Successeur de l'extension TVA de
+noalyss-plugins (schéma `tva_belge` : déclaration périodique, listing des
+clients assujettis, relevé intracommunautaire, fichiers Intervat), étendu
+aux déclarations françaises CA3 et CA12.
+
+* Contrat : `Partiduo::Api::Accounting` (`src/accounting/api/vat_returns.cr`,
+  types dans `vat_return_types.cr`) ; toutes ses fonctions lèvent
+  `ModuleDisabled` si la Comptabilité est inactive et exigent
+  `accounting.vat.declare`.
+* Règles nationales au socle : `src/vat/be/` (grilles, totaux, règles par
+  défaut, fichiers Intervat), `src/vat/fr/` (CA3, CA12), moteur commun
+  `src/vat/services/returns.cr` ; tables `vat_return`, `vat_return_box`,
+  `vat_return_line`, `vat_box_rule`, `vat_setting` (migration vat 0002).
+* Décisions : `DECISIONS.adoc`, D-TVA-001 à D-TVA-011 ; interface : D-UI-039.
+
+== Formulaires
+
+[cols="1,2,1,1",options="header"]
+|===
+|`form` |Déclaration |Périodicité |Fichier
+
+|`be_periodic` |Déclaration périodique belge (grilles 00 à 91) |`month`, `quarter` |XML Intervat `VATConsignment`
+|`be_client_listing` |Listing annuel des clients assujettis |`year` |XML Intervat `ClientListingConsignment`
+|`be_intra_listing` |Relevé intracommunautaire (codes `L`, `S`, `T`) |`month`, `quarter` |XML Intervat `IntraConsignment`
+|`fr_ca3` |CA3, régime réel normal (3310-CA3) |`month`, `quarter` |CSV, PDF
+|`fr_ca12` |CA12, régime simplifié (annuelle) |`year` |CSV, PDF
+|===
+
+`vat_forms(actor)` rend les formulaires du régime du dossier (tous tant qu'il
+n'est pas provisionné) avec leurs cases : code, clé de libellé
+(`vat.boxes.<régime>.<code>`), clé de section (`vat.sections.…`), case réglée
+par des règles (`ruled`) ou total du formulaire (`total`). Un formulaire d'un
+autre régime que celui du dossier est refusé (`form.regime`).
+
+Cases belges : `00` à `91`, totaux `xx` (54 + 55 + 56 + 57 + 61 + 63), `yy`
+(59 + 62 + 64), `71` (xx − yy si positif) et `72` (yy − xx si positif).
+Cases françaises : opérations (`A1`… `F6`), TVA brute par taux en base et
+taxe (`08.base`, `08.tax`, `09`, `9B`, `10`, `11`, `13`, `14`), `15`, `16`
+(total brut), `17`, TVA déductible `19` à `22`, `23` (total) ; CA3 : `25`
+crédit, `26` remboursement demandé, `27` crédit à reporter, `28` TVA nette
+due, `29` taxes assimilées, `32` total à payer ; CA12 : `25`, `28`, `29`,
+`ac` acomptes versés, `sp` solde à payer, `ex` excédent. Les montants français
+sont déclarés en euros entiers, les belges au centime.
+
+== Calcul
+
+Une déclaration se calcule depuis les écritures, *toutes* les écritures quel
+que soit le droit de l'acteur sur les journaux (une déclaration n'est jamais
+partielle, D-TVA-011).
+
+. *Mouvements* : lignes hors taxe (`vat_role = base`) et de TVA
+  (`vat_role = tax`) des achats et des ventes ; TVA déductible ou due selon
+  les comptes du taux (autoliquidation : les deux) ; TVA rattachée au compte
+  de la ligne hors taxe du même taux, au prorata ; lignes des journaux
+  d'opérations diverses et financiers pour les règles de solde (hors
+  écritures de liquidation). Un avoir donne des montants négatifs.
+. *Exigibilité* (`exigibility`) : `rates` (défaut) — à l'opération, ou au
+  paiement complet pour un taux exigible à l'encaissement
+  (`sale_on_payment`, `purchase_on_payment` du taux) ; `operation` ;
+  `payment` (tous les taux). Une facture est payée quand toutes ses lignes
+  lettrées le sont par des lettrages soldés, à la date la plus récente des
+  paiements de ces lettrages, et jamais avant sa propre date (acompte reçu
+  avant la facture, avoir ou extourne lettrés avec l'écriture qu'ils
+  annulent) ; un paiement partiel ne rend rien exigible (D-TVA-004).
+. *Période* : celle du mois, du trimestre ou de l'année ; des bornes libres
+  (`date_from`, `date_to`) ne sont admises que pour une CA12 (exercice
+  décalé, `dates.not_allowed` ailleurs).
+. *Règles* (`vat_box_rules`, `set_vat_box_rules`, `reset_vat_box_rules`) :
+  une case additionne (`add`) ou retranche (`subtract`) les mouvements d'une
+  source (`base`, `deductible`, `collected`, `balance`), d'un taux (tous si
+  vide), d'une nature de journal ou d'un journal, de comptes (préfixes
+  séparés par des virgules, exclusions possibles), d'un signe (`all`,
+  `positive`, `negative` — un avoir est négatif). Sans paramétrage
+  enregistré, les règles par défaut du régime s'appliquent (D-TVA-002,
+  D-TVA-003, D-TVA-006) ; la première modification les enregistre.
+. *Totaux* du formulaire, recalculés après toute correction.
+
+[source]
+----
+view = Api::Accounting.preview_vat_return(actor,
+  Api::Accounting::VatReturnInput.new(form: "be_periodic", year: 2026, periodicity: "quarter", number: 1)).value!
+view.amount("71") # taxe due à l'État
+Api::Accounting.vat_return_details(actor, id) # apport de chaque règle
+----
+
+== Cycle d'une déclaration
+
+[cols="1,3",options="header"]
+|===
+|Opération |Règle
+
+|`preview_vat_return(actor, input)`
+|Requête de contrôle : calcule sans enregistrer.
+
+|`create_vat_return(actor, input)`
+|Brouillon calculé. Refusé si un brouillon du même formulaire existe pour la
+même période (`draft_exists`, index unique en base) ou si une déclaration
+close en chevauche la période (`overlap`) : du même formulaire, ou, pour une
+déclaration périodique, de toute déclaration périodique du même régime (CA3
+et CA12). Création et clôture sont sérialisées par régime.
+
+|`update_vat_return(actor, id, input)`
+|Corrige des cases (`VatAdjustment`, `nil` rend le montant calculé ; jamais un
+total : `box.not_editable` ; deux décimales au plus ; euros entiers en
+France ; jamais négatif en Belgique : `box.negative`), `client_listing_nihil`,
+`ask_restitution`.
+
+|`recompute_vat_return(actor, id)`
+|Recalcule un brouillon ; les corrections restent.
+
+|`delete_vat_return(actor, id)`
+|Supprime un brouillon.
+
+|`close_vat_return(actor, id, settlement = VatSettlementInput.new)`
+|Clôt. Refusé si les écritures ont changé depuis le calcul (`stale` :
+recalculer d'abord) ou si une déclaration close chevauche la période. Avec
+`settlement` (`nil` pour s'en passer), passe l'écriture de liquidation d'une
+déclaration périodique dans la même transaction.
+
+|`settle_vat_return(actor, id, settlement)`
+|Écriture de liquidation d'une déclaration close qui n'en a pas. Refusée si
+les écritures ont changé depuis la clôture (`settle_stale` : la passer à la
+main).
+
+|`vat_return`, `vat_returns(actor, form, year)`
+|Lecture ; les plus récentes d'abord.
+
+|`vat_return_file(actor, id, format)`
+|`Xml` (formulaires belges : fichier Intervat, refusé si le numéro de TVA
+de la société n'est pas un numéro belge valide, `declarant_vat_number`, ou
+si celui d'un client ne l'est pas, `client_vat_number`), `Csv`, `Pdf`
+(PDF/A-2b des éditions).
+|===
+
+Une déclaration close est figée par PostgreSQL : ni ses cases, ni ses lignes,
+ni elle-même ne changent ou ne s'effacent ; seule l'écriture de liquidation
+peut s'y rattacher, une fois (déclencheurs `vat_return_guard`,
+`vat_return_child_guard`). Deux déclarations closes d'un même formulaire ne
+commencent pas le même jour (index unique).
+
+== Écriture de liquidation
+
+`VatSettlementInput` : journal (défaut : le premier journal d'opérations
+diverses actif), date (défaut : fin de la période), compte de la dette de TVA
+(défaut : compte par défaut `vat`, `451` ou `44551`), compte de la créance
+(défaut : `411` en Belgique, `44567` en France) ; en France, comptes
+d'écart d'arrondi (`rounding_expense_account`, défaut `658` ;
+`rounding_income_account`, `758`), d'acomptes (`advance_account`, `44581`)
+et de remboursement demandé (`refund_account`, `44583`). Chaque compte de
+TVA des mouvements retenus est soldé pour leur montant. En Belgique, la
+différence va à la dette ou à la créance. En France, la contrepartie reprend
+les montants *déclarés* : 28 (CA3) ou `sp` (CA12) à la dette, crédit reporté
+22 repris de la créance, 27 (CA3) ou 25 et `ex` (CA12) à la créance, 26 au
+remboursement, `ac` aux acomptes ; l'écart d'arrondi à l'euro va en charge ou
+en produit. La liquidation automatique est refusée
+(`settlement.adjusted`) si une case calculée a été corrigée ou si la case 29
+est remplie, et (`settlement.mismatch`) si les règles ne reprennent pas toute
+la TVA des mouvements : l'écriture se passe alors à la main. L'écriture passe
+par `post_entry` (droit de saisir dans le journal requis), référence
+`vat_return:<id>` (D-TVA-005).
+
+== Relevés belges
+
+* *Listing des clients* : chiffre d'affaires (`listing`) et TVA
+  (`listing_vat`) par client dont le numéro de TVA commence par `BE`, sur
+  l'année civile ; seuil `threshold` (250 € par défaut) ; lignes triées par
+  numéro de TVA.
+* *Relevé intracommunautaire* : montant par client dont le numéro de TVA
+  n'est pas belge et par code (`intra_l` livraisons de biens, `intra_s`
+  services, `intra_t` opérations triangulaires).
+* Le client est le tiers de l'écriture (dernière ligne sans rôle de TVA qui
+  porte une fiche).
+
+== Paramètres
+
+`vat_settings`, `update_vat_settings` : mandataire des fichiers Intervat
+(identifiant, type `TIN`/`NVAT`…, pays émetteur, nom, adresse, courriel,
+téléphone). Le déclarant est la société du socle
+(`Partiduo::Api::Core.settings`).
