@@ -168,7 +168,7 @@ module Partiduo
           currency = header.base_currency ? nil : item.amount
           Posting.signed_line(item_side, base, currency, item.target, label: item.label,
             vat_rate_id: item.rate.try(&.id), vat_rate_code: item.rate.try(&.code),
-            vat_role: item.rate ? "base" : nil, quantity: item.quantity).try { |line| lines << line }
+            vat_role: item.rate ? "base" : nil, quantity: item.quantity, input_index: item.index).try { |line| lines << line }
           if rate = item.rate
             previous = vat_by_rate[rate.id]?.try(&.[1]) || BigDecimal.new(0)
             vat_by_rate[rate.id] = {rate, previous + item.vat}

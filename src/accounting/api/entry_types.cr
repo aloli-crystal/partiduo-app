@@ -175,6 +175,11 @@ module Partiduo
         end
       end
 
+      # Ligne d'une écriture enregistrée. `input_index` : rang de la ligne
+      # saisie d'origine (`EntryInput.lines[i]`, article `DocumentInput.lines[i]`)
+      # — nul pour une ligne calculée (TVA, tiers, banque) ou antérieure au
+      # lot 5 ; une extourne reprend celui de la ligne qu'elle annule
+      # (D-ANA-012).
       record EntryLineView,
         id : Int64,
         position : Int32,
@@ -192,7 +197,8 @@ module Partiduo
         vat_role : String?,
         quantity : BigDecimal?,
         matching_id : Int64?,
-        matching_code : String? do
+        matching_code : String?,
+        input_index : Int32? = nil do
         def debit : BigDecimal
           side.debit? ? amount : BigDecimal.new(0)
         end

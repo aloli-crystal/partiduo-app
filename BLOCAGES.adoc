@@ -316,6 +316,11 @@ compté dans `rapport.adoc` (D-MIG-012).
 *Levée.* Au lot 5 : reprendre plans, postes et imputations par le contrat
 de l'Analytique et les ajouter à la réconciliation (totaux par poste).
 
+*Mise à jour (lot 5, analytique).* Le contrat de réception existe
+(`Partiduo::Api::Analytic` : plans, groupes, postes, clés, `distribute_entry`,
+opérations diverses, balances pour la réconciliation) ; reste la reprise
+elle-même dans `partiduo-migrate`.
+
 == B-ED-001 — `String#encode` avec `invalid: :skip` perd des octets (lot 3, éditions)
 
 *Constat.* Crystal 1.19.1 : `text.encode("ISO-8859-15", invalid: :skip)`

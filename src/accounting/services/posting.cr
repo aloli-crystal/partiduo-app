@@ -44,7 +44,8 @@ module Partiduo
         vat_rate_id : Int64? = nil,
         vat_rate_code : String? = nil,
         vat_role : String? = nil,
-        quantity : BigDecimal? = nil
+        quantity : BigDecimal? = nil,
+        input_index : Int32? = nil
 
       # Écriture prête à écrire.
       class Draft
@@ -250,10 +251,10 @@ module Partiduo
         errors.concat(line_errors)
         return {nil, errors} unless errors.empty? && header
 
-        lines = input.lines.zip(targets.compact).map do |(line, target)|
+        lines = input.lines.zip(targets.compact).map_with_index do |(line, target), index|
           DraftLine.new(account: target.account, side: line.side, amount: to_base(header, line.amount),
             currency_amount: header.base_currency ? nil : line.amount, card_id: target.card_id,
-            card_code: target.card_code, label: line.label.strip)
+            card_code: target.card_code, label: line.label.strip, input_index: index)
         end
         balance_rounding!(lines)
         {Draft.new(header, input.label.strip, lines), errors}
@@ -323,6 +324,7 @@ module Partiduo
             entry: entry, position: position, account: line.account, card_id: line.card_id,
             side: line.side.code, amount: line.amount, currency_amount: line.currency_amount, label: line.label,
             vat_rate_id: line.vat_rate_id, vat_role: line.vat_role, quantity: line.quantity,
+            input_index: line.input_index,
           ).save!
         end
         payload = {"entry_id" => id.to_s, "ledger_code" => header.ledger.code.to_s}

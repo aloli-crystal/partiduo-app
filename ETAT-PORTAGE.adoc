@@ -24,7 +24,8 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |M |`partiduo-migrate` |*Terminé* (FEC et base NOALYSS ; analytique en annexe jusqu'au lot 5 ; clôture « Clôture du lot M »)
 |3 |Éditions : balances, grand livre, journaux, bilan et compte de résultat FR/BE, rapports personnalisés, FEC, exports CSV et PDF ; écrans ; réconciliation de `partiduo-migrate` par les éditions |*Terminé* (clôture « Clôture du lot 3 »)
 |4 |TVA : déclarations BE (grilles, listing, relevé intracommunautaire, Intervat) et FR (CA3, CA12), liquidation |*Terminé* (clôture « Clôture du lot 4 »)
-|5–6 |Analytique, stock |À faire
+|5 |Analytique : plans, postes, groupes, clés de répartition, ventilation des écritures, opérations diverses, balances et historiques |*Terminé* (cœur et interface ; clôture « Clôture du lot 5 ») ; reprise analytique par `partiduo-migrate` reportée (B-MIG-001)
+|6 |Stock |À faire
 |===
 
 == Lot P — ce qui existe (26 septembre 2026)
@@ -881,20 +882,121 @@ Reports (lot 4) : exigibilité au prorata des encaissements partiels
 (D-TVA-006) ; correction ligne à ligne des relevés (D-TVA-009) ; fichier
 EDI-TVA.
 
+== Lot 5 — Analytique (cœur, 27 septembre 2026)
+
+Cœur (`partiduo-app`, décisions D-ANA-001 à D-ANA-010,
+link:doc/api/analytic.adoc[]) :
+
+* Module `analytic` (requiert la Comptabilité) : modèles et migration
+  analytic 0001 (`analytic_plan`, `analytic_group`, `analytic_post`,
+  `analytic_key`, `analytic_key_row`, `analytic_key_row_post`,
+  `analytic_key_ledger`, `analytic_distribution`, `analytic_operation`,
+  `analytic_setting`) ; intégrité en base : poste du plan de l'opération
+  (clé composée), montant > 0, une ventilation par ligne d'écriture, clés
+  étrangères protectrices vers les écritures et journaux, imputations figées
+  en période ou exercice clos (`analytic_distribution_guard`) ; permission
+  `analytic.operation.write` accordée aux profils ACCOUNTANT existants.
+* Contrat `Partiduo::Api::Analytic` : plans (dix au plus), groupes, postes
+  (actifs ou non), paramètres (`MY_ANALYTIC`, `MY_ANC_FILTER`), clés de
+  répartition (total de 100 %, journaux, `apply_key`), ventilation des lignes
+  (`check_distribution`, `distribute_entry`, `entry_distributions`,
+  `undistributed_lines`), écriture et ventilation en une transaction
+  (`post_entry`, `post_purchase`, `post_sale`, mode obligatoire), extourne
+  ventilée (abonné `entry.cancelled`), opérations diverses analytiques
+  équilibrées par plan, éditions (balance simple, croisée double, par
+  groupe, historique, grand livre, tableau postes × comptes ou fiches) et
+  leurs exports CSV ; `ModuleDisabled` si l'Analytique est inactive, journaux
+  invisibles écartés des éditions (`partial`).
+* Menus `ANA_KEYS`, `ANA_MISC`, `ANA_SETTINGS` ajoutés ; libellés et erreurs
+  fr, en, nl.
+* Specs (base `partiduo_test_5_0`) : `spec/analytic/plans_spec.cr` (9),
+  `keys_spec.cr` (4), `distributions_spec.cr` (14), `reports_spec.cr` (7),
+  outils `spec/support/analytic.cr`. Totaux : 776 + 13 en attente
+  (Comptabilité et Analytique), 555 + 31 en attente (Facturation seule), 835
+  (les trois), tous verts ; `crystal tool format` et Ameba sans remarque ;
+  garde-fou ADR-005 D3 vert ; `migrate` sur base vierge, retour arrière
+  d'analytic 0001 puis réapplication ; `genmigrations analytic` sans
+  changement ; `partiduo-ui-bulma` (216), `partiduo-skel` (24) et
+  `partiduo-migrate` (93) verts sur l'arbre modifié.
+
+Reste (lot 5, à cette date — voir « Clôture du lot 5 ») : écrans de l'Analytique dans `partiduo-ui-bulma` (routes
+`analytic:plans`, `analytic:keys`, `analytic:misc_operations`,
+`analytic:reports`, `analytic:settings`, ventilation dans les écrans de
+saisie) ; reprise des plans, postes et imputations par `partiduo-migrate`
+(B-MIG-001 : ventiler avant de clore les périodes reprises, les imputations
+d'une période close étant figées) ; export PDF des éditions analytiques
+(D-ANA-010) ; formules `{{AXE}}` des rapports personnalisés.
+
+== Lot 5 — interface (partiduo-ui-bulma, 27 septembre 2026)
+
+* Écrans de l'Analytique (D-UI-041) : plans, groupes et postes, paramètres,
+  clés de répartition, opérations diverses analytiques, éditions (balance
+  simple, croisée, par groupe, historique, grand livre, tableau, lignes à
+  ventiler) et leurs exports CSV ; routes `analytic:*`, module inactif :
+  404.
+* Ventilation dans la saisie (D-UI-042, amendé par D-ANA-012) : colonne
+  « Analytique » des opérations diverses, achats et ventes (un poste par
+  plan ou une clé) ; ventilation après coup depuis la consultation d'une
+  écriture ; avertissement du mode obligatoire (D-UI-043).
+
+== Clôture du lot 5 — relecture et vérifications (27 septembre 2026)
+
+Remarques de relecture corrigées (décisions D-ANA-012 à D-ANA-020, D-UI-043,
+D-UI-044, amendement appliqué de D-UI-042) :
+
+* *Lignes désignées par leur saisie* (majeur) : colonne
+  `accounting_entry_line.input_index` (migration accounting 0006),
+  `EntryLineView#input_index` ; `Api::Analytic.post_entry` / `post_purchase`
+  / `post_sale` prennent des `InputDistributionInput(input_index, rows |
+  key_id | post_ids)` ; le cœur calcule les montants (clé ou ligne entière,
+  en devise de tenue). L'interface ne reproduit plus la construction de
+  l'écriture (D-ANA-012).
+* *Mode obligatoire contourné* (majeur) : chemins qui y échappent documentés
+  (`doc/api/analytic.adoc`), requête `distribution_required?`,
+  avertissement et lien « Lignes à ventiler » sur la saisie (D-ANA-018,
+  D-UI-043).
+* Mineures : écriture annulée et extourne non reventilables (D-ANA-014) ;
+  lignes de clé sans poste retirées, clé incomplète signalée et non
+  appliquée (D-ANA-013) ; historique découpé en SQL, export sans plafond,
+  comptages groupés (D-ANA-019) ; sens traduit dans les CSV, montants des
+  messages présentés selon la langue (D-ANA-015, D-UI-044) ; nom du fichier
+  de la balance assaini (D-ANA-016) ; ligne unique des paramètres (migration
+  analytic 0002, D-ANA-017) ; `entry_distributions` permis à qui ventile,
+  ventilations concurrentes sérialisées (D-ANA-020).
+
+Vérifications (base de test `partiduo_test_5_final`) :
+
+* `partiduo-app` : 833 exemples + 13 en attente (Comptabilité et
+  Analytique), 595 + 39 en attente (Facturation seule), 879 (les trois),
+  tous verts ; dont 10 nouveaux dans `spec/analytic/review_spec.cr` ;
+  `crystal tool format` et Ameba sans remarque ; garde-fou ADR-005 D3 vert.
+* `partiduo-ui-bulma` : 232 exemples verts (5 nouveaux) ; Ameba sans
+  remarque ; garde-fou `Partiduo::Api` vert.
+* `partiduo-migrate` (93) et `partiduo-skel` (24) verts sur l'arbre modifié.
+* `marten migrate` sur base vierge (`partiduo_migrate_5`) : migrations du
+  cœur appliquées (accounting 0006, analytic 0001 et 0002 comprises), ligne
+  de paramètres unique créée.
+
+Reports (lot 5) : reprise des plans, postes et imputations par
+`partiduo-migrate` (B-MIG-001) ; export PDF des éditions analytiques
+(D-ANA-010) ; formules `{{AXE}}` des rapports personnalisés ;
+`post_financial` ventilé ; indicateur « lignes à ventiler » sur le tableau
+de bord ; agrégation en SQL des balances (voir DECISIONS, « Reports de la
+relecture du lot 5 »).
+
 == Prochaines étapes
 
-. Lot 5 : analytique (plans, postes, ventilation des écritures, éditions ;
-  reprise de l'analytique par `partiduo-migrate`, B-MIG-001), puis lot 6
-  (stock).
-. Contrat : relever `API_VERSION` (contrat enrichi des lots 2, F et 3,
+. Lot 6 (stock).
+. Reprise analytique par `partiduo-migrate` (B-MIG-001 : ventiler avant de
+  clore les périodes reprises) et reports du lot 5 ci-dessus.
+. Contrat : relever `API_VERSION` (contrat enrichi des lots 2, F, 3 et 5,
   D-INV-015) ; proposer `limit` / `offset` pour `general_ledger` et
   `journals` (D-UI-036) et les comptes des rubriques d'un état (D-UI-036) ;
   signaler B-ED-001 à l'amont de Crystal.
 . Reprise : devises des écritures à passer à `post_entry` quand la source
-  n'en a qu'une (D-MIG-019) ; analytique au lot 5 (B-MIG-001) ; amendement
-  proposé `create_card` avec compte (D-MIG-006).
-. Relever `API_VERSION` (contrat enrichi pendant les lots 2 et F, D-INV-015)
-  et faire adopter l'amendement ADR-003 D7 (`payment.unmatched`, D-2F-003).
+  n'en a qu'une (D-MIG-019) ; amendement proposé `create_card` avec compte
+  (D-MIG-006).
+. Faire adopter l'amendement ADR-003 D7 (`payment.unmatched`, D-2F-003).
 . Accès invité du comptable (ADR-006 D4, rôle `comptable` d'ADR-002).
 . Reports de la relecture 2F (D-2F-013) : listes de l'interface sur des vues
   résumées, logo des modèles à l'écran, envoi de document réservé.

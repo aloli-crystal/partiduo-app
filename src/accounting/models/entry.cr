@@ -87,6 +87,9 @@ module Partiduo
       field :vat_role, :string, max_size: 8, null: true, blank: true
       field :quantity, :decimal, max_digits: 20, decimal_places: 4, null: true, blank: true
       field :matching, :many_to_one, to: Partiduo::Accounting::Matching, null: true, blank: true, related: :lines
+      # Rang de la ligne saisie d'origine (`EntryInput.lines[i]`,
+      # `DocumentInput.lines[i]`) ; nul pour une ligne calculée (D-ANA-012).
+      field :input_index, :int, null: true, blank: true
 
       def debit? : Bool
         side == "debit"

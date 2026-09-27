@@ -1,0 +1,227 @@
+= Analytique : plans, postes, ventilations et éditions
+:toc: left
+:toc-title: Table des matières
+:toclevels: 3
+:icons: font
+:source-language: crystal
+
+Référence du lot 5 (ADR-001 § Lots, ADR-006 D1 : l'Analytique est un module
+qui requiert la Comptabilité ; ADR-003 D6 : « Analytique — plans et postes »).
+Successeur des classes `Anc_*` de NOALYSS (`anc_plan`, `anc_account`,
+`anc_group`, `anc_key`, `anc_operation`, `anc_group_operation`,
+`anc_balance_simple`, `anc_balance_double`, `anc_grandlivre`, `anc_listing`,
+`anc_table`, `anc_acc_list`) et des tables `plan_analytique`,
+`groupe_analytique`, `poste_analytique`, `operation_analytique`,
+`key_distribution*`.
+
+* Contrat : `Partiduo::Api::Analytic` (`src/analytic/api/analytic.cr`, types
+  dans `types.cr`). Toute fonction lève `ModuleDisabled` si l'Analytique est
+  inactive (donc aussi sans la Comptabilité), `Forbidden` sans la permission.
+* Tables : `analytic_plan`, `analytic_group`, `analytic_post`, `analytic_key`,
+  `analytic_key_row`, `analytic_key_row_post`, `analytic_key_ledger`,
+  `analytic_distribution`, `analytic_operation`, `analytic_setting`
+  (migrations analytic 0001 et 0002 — ligne unique des paramètres) ;
+  colonne `accounting_entry_line.input_index` (migration accounting 0006).
+* Décisions : `DECISIONS.adoc`, D-ANA-001 à D-ANA-020.
+
+== Permissions
+
+[cols="1,3",options="header"]
+|===
+|Permission |Fonctions
+
+|`analytic.plan.read` |plans, groupes, postes, clés, paramètres (lecture), `apply_key`
+|`analytic.plan.write` |création, modification, suppression des plans, groupes, postes, clés ; paramètres
+|`analytic.operation.write` |ventilation des écritures, opérations diverses analytiques
+|`analytic.report.read` |ventilations d'une écriture, opérations diverses (lecture), contrôle des lignes non ventilées, éditions et exports
+|_(aucune)_ |`distribution_required?` (tout utilisateur authentifié)
+|===
+
+`entry_distributions` est permis avec `analytic.report.read` *ou*
+`analytic.operation.write` : l'écran de ventilation relit la ventilation
+qu'il modifie.
+
+La ventilation d'une écriture passe aussi par `Partiduo::Api::Accounting` :
+l'acteur doit pouvoir lire l'écriture (`accounting.entry.read`, droit de
+lecture sur le journal) et écrire dans son journal (droit `W`). Les éditions
+écartent les imputations des journaux que l'acteur ne voit pas (`partial`).
+
+== Plans, groupes, postes
+
+[cols="2,3",options="header"]
+|===
+|Fonction |Règle
+
+|`plans`, `plan`, `check_plan`, `create_plan`, `update_plan`, `delete_plan`
+|Nom en majuscules sans espace, unique ; dix plans au plus. La suppression
+emporte groupes, postes, opérations et lignes de clé ; refusée si un poste du
+plan est imputé dans une période close. Une ligne de clé restée sans poste
+est retirée ; la clé devient incomplète (`KeyView#complete?`).
+
+|`groups`, `group`, `create_group`, `update_group`, `delete_group`
+|Code de dix caractères au plus, majuscules sans espace, unique dans le plan.
+Supprimer un groupe détache ses postes.
+
+|`posts`, `post`, `post_by_code`, `check_post`, `create_post`, `update_post`, `delete_post`
+|Code en majuscules sans espace ni `'`, `<`, `>`, unique dans le plan ;
+groupe du même plan ; actif ou inactif (un poste inactif n'est plus proposé,
+sauf sur une ligne qui le porte déjà). Suppression refusée si le poste est
+imputé dans une période close ; sinon ses opérations disparaissent avec lui
+et une ligne de clé restée sans poste est retirée (clé incomplète).
+|===
+
+== Paramètres
+
+`settings` / `update_settings(SettingsInput(mandatory, account_filter))` :
+successeurs de `MY_ANALYTIC` et `MY_ANC_FILTER`. `account_filter` : préfixes de
+comptes séparés par des virgules (chiffres seulement, défaut `6,7`), vide =
+tous les comptes ; `SettingsView#analytic_account?(numéro)` applique le filtre.
+En mode obligatoire, chaque ligne d'un compte ventilé doit être ventilée
+entièrement dans chaque plan.
+
+== Clés de répartition
+
+`keys`, `key`, `keys_for_ledger(ledger_id)`, `check_key`, `create_key`,
+`update_key`, `delete_key`, `apply_key(id, montant)`.
+
+* Une clé : nom, description, lignes (pourcentage > 0, au plus quatre
+  décimales, au plus un poste par plan, au moins un poste) dont le total vaut
+  exactement 100, journaux où elle est proposée.
+* `apply_key` rend les `DistributionRowInput` du montant (valeur absolue) :
+  chaque ligne arrondie au centime, la dernière recevant l'écart d'arrondi ;
+  une ligne nulle est omise.
+* `KeyView#complete?` : lignes à 100 % en tout, chacune avec un poste. Une
+  clé incomplète (après suppression d'un poste ou d'un plan) n'est pas
+  appliquée par `post_entry` / `post_purchase` / `post_sale`
+  (`analytic.errors.key.incomplete`).
+
+== Ventilation des écritures
+
+Une ventilation remplace celle de chaque ligne citée ; `rows` vide la retire.
+
+[source]
+----
+rows = [Api::Analytic::DistributionRowInput.new(BigDecimal.new("600"), [vente.id, projet1.id]),
+        Api::Analytic::DistributionRowInput.new(BigDecimal.new("400"), [atelier.id])]
+Api::Analytic.distribute_entry(actor, entry.id, [Api::Analytic::LineDistributionInput.new(line.id, rows)])
+----
+
+Règles (`check_distribution` les applique sans écrire) :
+
+* la ligne appartient à l'écriture et son compte est ventilé (filtre des
+  paramètres) ;
+* au moins un plan existe ; la date de l'écriture n'est pas dans une période
+  close (ni un exercice clos) ;
+* chaque ligne de ventilation : montant > 0 (quatre décimales au plus), au
+  moins un poste, un seul poste par plan, postes actifs ;
+* dans chaque plan, le total ventilé ne dépasse pas le montant de la ligne
+  (en devise de tenue) ; en mode obligatoire, il l'égale ;
+* l'écriture n'est ni annulée ni une extourne
+  (`analytic.errors.distribution.cancelled_entry`) : l'extourne porte la
+  ventilation inverse de l'écriture annulée, les deux restent symétriques.
+
+Les ventilations d'une même écriture sont sérialisées par un verrou
+transactionnel : deux ventilations concurrentes d'une ligne ne lèvent pas
+d'erreur d'unicité.
+
+`post_entry`, `post_purchase`, `post_sale` enregistrent l'écriture par la
+Comptabilité *et* sa ventilation dans une seule transaction. Chaque
+`InputDistributionInput` désigne une ligne *saisie* par son rang
+(`input_index`, celui de `EntryInput.lines` ou `DocumentInput.lines`) ; le
+cœur retrouve la ligne d'écriture qui en provient
+(`EntryLineView#input_index`) — l'appelant ne reproduit jamais la
+construction de l'écriture (articles nuls écartés, TVA, tiers, arrondis de
+conversion). La ventilation est donnée par :
+
+* `rows` : lignes explicites ;
+* `key_id` : clé appliquée au montant de la ligne d'écriture, en devise de
+  tenue ;
+* `post_ids` : ligne entière, un poste par plan.
+
+[source]
+----
+Api::Analytic.post_purchase(actor, document, [
+  Api::Analytic::InputDistributionInput.new(0, post_ids: [atelier.id, projet1.id]),
+  Api::Analytic::InputDistributionInput.new(2, key_id: cle.id),
+])
+----
+
+Une ligne saisie qui ne produit aucune ligne d'écriture (article nul) est
+ignorée, sauf lignes explicites ; un rang hors de la saisie est refusé
+(`distributions[i].input_index`). En mode obligatoire, une ligne d'un compte
+ventilé absente est refusée (`distributions[input=<n>]`, ou
+`distributions[position=<p>]` pour une ligne calculée) et rien n'est
+enregistré.
+
+=== Chemins qui échappent au mode obligatoire
+
+Le mode obligatoire est contrôlé *à l'enregistrement* seulement par
+`post_entry`, `post_purchase`, `post_sale` de ce contrat. Les écritures
+enregistrées autrement ne sont pas ventilées d'office :
+
+* `Api::Accounting.post_entry`, `post_purchase`, `post_sale` appelés
+  directement — notamment par un acteur sans `analytic.operation.write`
+  (l'interface l'avertit, `distribution_required?`) ;
+* les extraits financiers (`Api::Accounting.post_financial`) ;
+* les écritures nées d'événements (`invoice.issued`, `payment.recorded`),
+  la reprise `partiduo-migrate` et l'import FEC ;
+* les extournes : elles reçoivent la ventilation inverse de l'écriture
+  annulée, ou aucune si celle-ci n'en avait pas.
+
+Ces lignes sont rattrapées *a posteriori* : `undistributed_lines(date_from,
+date_to)` les liste, l'écran « Lignes à ventiler » de l'interface y mène.
+
+`entry_distributions(entry_id)` rend les ventilations d'une écriture ;
+`undistributed_lines(date_from, date_to)` les lignes des comptes ventilés dont
+la ventilation manque ou n'atteint pas le montant dans un plan.
+
+L'annulation d'une écriture ventilée (`Api::Accounting.cancel_entry`) reporte
+sa ventilation, en sens inverse et à la date de l'extourne, sur les lignes
+de même rang de l'extourne (abonné `entry.cancelled`).
+
+== Opérations diverses analytiques
+
+`misc_operations`, `misc_operation`, `check_misc_operation`,
+`create_misc_operation`, `update_misc_operation`, `delete_misc_operation`.
+
+`MiscOperationInput(date, description, rows)` ; chaque `MiscRowInput` porte un
+montant, un sens, des postes (un par plan) et une fiche facultative (quick
+code). Description obligatoire, date dans une période ouverte, total des
+débits égal au total des crédits dans chaque plan.
+
+== Éditions
+
+[cols="2,3",options="header"]
+|===
+|Fonction |Contenu
+
+|`balance(ReportQuery)` |Débit, crédit, solde et sens par poste ; groupe du poste ; total.
+|`cross_balance(CrossBalanceQuery)` |Deux plans croisés ligne à ligne de ventilation ; sous-totaux par poste du premier plan.
+|`group_balance(ReportQuery)` |Postes rangés par groupe, sans groupe en dernier.
+|`history(ReportQuery, offset, limit)` |Opérations par date, découpées en SQL (`limit` : 10 000 au plus) ; `count` et `total` sur toute la sélection.
+|`ledger(ReportQuery)` |Grand livre : une section par poste, solde progressif (débit − crédit).
+|`table(TableQuery)` |Tableau postes × comptes généraux (`TableAxis::Account`) ou fiches (`Card`) ; montants crédit − débit.
+|===
+
+`ReportQuery(plan_id, date_from, date_to, post_from, post_to)` : bornes
+incluses, facultatives ; intervalle de postes par code. Chaque édition a son
+export CSV (`export_balance`, `export_cross_balance`, `export_group_balance`,
+`export_history`, `export_ledger`, `export_table`) : séparateur `;`, UTF-8,
+montants à deux décimales au point, dates `AAAA-MM-JJ`, en-têtes et sens
+(`débit` / `crédit`) traduits. L'export de l'historique n'a pas de plafond.
+Le nom du fichier de la balance reprend le nom du plan réduit à
+`[a-z0-9_-]` (autres caractères remplacés par `-`).
+
+Les montants passés en paramètres des erreurs (`exceeds`, `incomplete`,
+`unbalanced`) sont bruts, au point décimal ; l'interface les présente selon
+la langue.
+
+== Intégrité en base
+
+* Opération : montant > 0, sens `debit` / `credit`, poste *du plan* de
+  l'opération (clé étrangère composée), un poste par plan et par ligne.
+* Ventilation : une par ligne d'écriture ; clés étrangères vers
+  `accounting_entry`, `accounting_entry_line`, `accounting_ledger` (une ligne
+  ventilée ne peut disparaître) ; opération diverse sans écriture.
+* `analytic_distribution_guard` : aucune imputation créée, modifiée ou retirée
+  à une date d'une période close ou d'un exercice clos.

@@ -31,7 +31,7 @@ module Partiduo
             account: line.account!, side: Partiduo::Api::Accounting::Side.from_code(line.side.to_s).opposite,
             amount: line.amount!, currency_amount: line.currency_amount, card_id: line.card_id.try(&.to_i64),
             label: line.label.to_s, vat_rate_id: line.vat_rate_id.try(&.to_i64), vat_role: line.vat_role,
-            quantity: line.quantity,
+            quantity: line.quantity, input_index: line.input_index.try(&.to_i32),
           )
         end
         draft = Posting::Draft.new(header, input.label.strip.presence || entry.label.to_s, lines)

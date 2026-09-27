@@ -8,6 +8,7 @@
 require "marten/cli"
 
 require "../accounting/migrations/**"
+require "../analytic/migrations/**"
 require "../auth/migrations/**"
 require "../core/migrations/**"
 require "../vat/migrations/**"

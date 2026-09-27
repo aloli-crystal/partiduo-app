@@ -4353,3 +4353,454 @@ un numéro étranger de forme valide (`client_vat_number`,
 *Alternative écartée.* Un `before_dispatch` commun à `VatScreenBase` :
 masquerait le contrôle aux lecteurs de chaque handler, alors que les autres
 écrans l'écrivent en tête de méthode.
+
+=== D-ANA-001 — Contrat, permissions et menus de l'Analytique (lot 5, analytique)
+
+*Contexte.* Le manifeste du lot P déclarait `analytic.plan.read`,
+`analytic.plan.write`, `analytic.report.read` et deux menus. NOALYSS distingue
+la saisie analytique (ventilation, opérations diverses `ANCODS`) de la gestion
+des plans (`PLANANC`, `ANCKEY`).
+
+*Choix.* Contrat `Partiduo::Api::Analytic` (`doc/api/analytic.adoc`) ; nouvelle
+permission `analytic.operation.write` (ventiler, opérations diverses),
+accordée aux profils ACCOUNTANT existants par la migration analytic 0001 ;
+menus ajoutés `ANA_KEYS`, `ANA_MISC`, `ANA_SETTINGS` (routes
+`analytic:keys`, `analytic:misc_operations`, `analytic:settings`, résolues
+quand l'interface les fournira). Lecture des ventilations et éditions sous
+`analytic.report.read`. La ventilation d'une écriture exige en plus la lecture
+de l'écriture par `Api::Accounting.entry` et le droit `W` sur son journal
+(`ledger_access`).
+
+*Alternative écartée.* Ventiler sous `analytic.plan.write` : mêlerait la
+saisie courante et la gestion du référentiel analytique.
+
+=== D-ANA-002 — Codes de poste et de groupe uniques dans leur plan (lot 5, analytique)
+
+*Contexte.* NOALYSS contrôle l'unicité d'un nom de poste dans son plan
+(`Anc_Account_Table::check`) mais pose aussi un index unique global
+(`ux_po_name`) ; le code de groupe (`ga_id`) est la clé primaire, donc global.
+
+*Choix.* Unicité `(plan, code)` en base pour les postes et les groupes ;
+recherche d'un poste par plan et code (`post_by_code`). Normalisation reprise
+des déclencheurs : majuscules, espaces retirés ; `'`, `<`, `>` retirés des
+codes de poste ; groupe limité à dix caractères.
+
+*Alternative écartée.* Unicité globale : contredit le message de NOALYSS et
+interdit un même code (« FRANCE ») dans deux axes. Une base NOALYSS reprise
+satisfait les deux règles.
+
+=== D-ANA-003 — Dix plans au plus (lot 5, analytique)
+
+*Contexte.* `Anc_Plan::isAppend` refuse l'ajout au-delà de dix plans (le
+commentaire de la table parle de cinq).
+
+*Choix.* Dix plans au plus (`analytic.errors.plan.limit`), contrôlés à la
+création.
+
+*Alternative écartée.* Pas de limite : les éditions croisées et la saisie
+(une colonne par plan) deviennent illisibles.
+
+=== D-ANA-004 — Clé de répartition : total de 100 %, arrondi sur la dernière ligne (lot 5, analytique)
+
+*Contexte.* `Anc_Key::verify` ne refuse qu'un total supérieur à 100 (avec le
+message « le total ne vaut pas 100 ») ; `fill_table` tronque chaque montant
+au centime (`bcscale(2)`), laissant un reste non ventilé.
+
+*Choix.* Total exactement égal à 100 ; pourcentage > 0 et ≤ 100, quatre
+décimales au plus ; au moins un poste par ligne, un par plan. `apply_key`
+arrondit chaque ligne au centime (demi vers le haut) et donne l'écart à la
+dernière : la somme vaut toujours le montant.
+
+*Alternative écartée.* Reprendre la troncature : une ventilation obligatoire
+issue d'une clé serait toujours incomplète d'un centime.
+
+=== D-ANA-005 — Ventilation : copie des données de la ligne, écriture lue par le contrat (lot 5, analytique)
+
+*Contexte.* `operation_analytique` cite `jrnx.j_id` et recopie date, montant et
+sens ; les éditions de NOALYSS joignent `jrnx` et `jrn`. ADR-006 D3 interdit à
+un module de lire les internes d'un autre.
+
+*Choix.* Une imputation (`analytic_distribution`) par ligne d'écriture
+ventilée, qui recopie à l'enregistrement date, journal, code interne, pièce,
+compte, libellé et montant de la ligne, lus par `Api::Accounting.entry` ;
+les opérations (`analytic_operation`) portent ligne, plan, poste, montant,
+sens, fiche. Les éditions ne lisent que les tables `analytic_*` (une écriture
+est intangible, D-ACC-011). Clés étrangères vers `accounting_entry`,
+`accounting_entry_line`, `accounting_ledger` *sans* suppression en cascade :
+elles protègent la ligne ventilée. Montants strictement positifs (le sens
+suit la ligne) : `oa_positive` n'est pas repris.
+
+*Alternatives écartées.* Joindre les tables de la Comptabilité dans les
+éditions : contraire à ADR-006 D3. Suppression en cascade : une référence
+posée par un module doit protéger la ligne (principe de D-REF-008).
+
+=== D-ANA-006 — Extourne d'une écriture ventilée (lot 5, analytique)
+
+*Contexte.* `Acc_Ledger::reverse` recopie les opérations analytiques en sens
+inverse ; la Comptabilité ne peut appeler l'Analytique.
+
+*Choix.* Abonné `entry.cancelled` (clé `reversal_entry_id`) : chaque ligne
+ventilée transmet sa ventilation, sens inversé, à la ligne de même rang de
+l'extourne, à la date de l'extourne.
+
+*Alternative écartée.* Laisser l'extourne sans ventilation : les éditions
+analytiques garderaient une écriture annulée.
+
+=== D-ANA-007 — Éditions : journaux invisibles écartés (lot 5, analytique)
+
+*Contexte.* NOALYSS ne filtre pas les éditions analytiques par droit sur les
+journaux ; les éditions comptables du lot 3 le font.
+
+*Choix.* Les imputations d'un journal que l'acteur ne voit pas (droit `R` ou
+`W`, ou `accounting.ledger.write`) sont écartées ; la vue porte `partial`.
+Les opérations diverses (sans journal) restent visibles.
+
+*Alternative écartée.* Tout montrer sous `analytic.report.read` : révélerait
+les montants d'un journal protégé.
+
+=== D-ANA-008 — Mode obligatoire, filtre des comptes et totaux par plan (lot 5, analytique)
+
+*Contexte.* `MY_ANALYTIC` (`nu`, `op`, `ob`) ne sert en NOALYSS qu'à l'écran
+(pas de choix « aucun poste » en mode `ob`, « reste » affiché en rouge) ;
+aucun contrôle serveur du total. La Comptabilité ne peut interroger
+l'Analytique pour refuser une écriture non ventilée (ADR-006 D3).
+
+*Choix.* Paramètre `mandatory` (défaut facultatif, `nu` n'a pas de sens module
+actif) et filtre `account_filter` (défaut `6,7`, vide = tous les comptes, comme
+`match_analytic`). Total ventilé par plan jamais supérieur au montant de la
+ligne ; égal en mode obligatoire. Le mode obligatoire est appliqué par
+`Api::Analytic.post_entry`, `post_purchase` et `post_sale` (écriture et
+ventilation dans une transaction) et contrôlé après coup par
+`undistributed_lines` ; les extraits financiers se ventilent après
+enregistrement (`distribute_entry`). Ligne de paramètres créée à la première
+lecture (les specs vident les tables).
+
+*Alternative écartée.* Refuser l'écriture dans la Comptabilité : ferait
+dépendre la Comptabilité de l'Analytique.
+
+=== D-ANA-009 — Imputations figées en période close ; opérations diverses équilibrées (lot 5, analytique)
+
+*Contexte.* NOALYSS refuse seulement la suppression d'un poste utilisé dans
+une période close ; l'opération diverse analytique n'est contrôlée qu'en
+JavaScript (`caod_checkTotal`, commentaire et date).
+
+*Choix.* Déclencheur `analytic_distribution_guard` : aucune imputation créée,
+modifiée ou retirée à une date d'une période ou d'un exercice clos ; les
+commandes le vérifient avant (`distribution.closed_period`,
+`post.closed_period`, `plan.closed_period`). Opération diverse : description
+obligatoire, date dans une période ouverte, débit = crédit dans chaque plan.
+
+*Alternative écartée.* Laisser modifier l'analytique d'une période close :
+les éditions arrêtées changeraient après clôture.
+
+=== D-ANA-010 — Exports CSV seulement (lot 5, analytique)
+
+*Contexte.* NOALYSS exporte les balances analytiques en CSV et en PDF ; la
+sortie PDF des éditions comptables (`ReportOutput`) est interne à la
+Comptabilité.
+
+*Choix.* Exports CSV de chaque édition, aux conventions des éditions
+comptables (D-2F-009) ; le PDF est reporté.
+
+*Alternative écartée.* Dupliquer le moteur PDF dans l'Analytique ; ou citer
+`Partiduo::Accounting::ReportOutput` (interdit, ADR-006 D3). Amendement
+proposé : exposer un rendu PDF neutre (tableau → PDF/A) au socle, partagé
+par les modules.
+
+=== D-ANA-011 — Clé de répartition sur quelques centimes ; filtre sans espace interne (lot 5, analytique, testeur)
+
+*Contexte.* Les specs du testeur (`spec/analytic/rules_spec.cr`) ont
+révélé deux écarts. (1) `apply_key` arrondissait chaque ligne au centime
+et portait l'écart sur la dernière : quatre lignes de 25 % sur 0,02 €
+donnaient 0,01 + 0,01 + 0,01 − 0,01, ligne négative que le contrat refuse
+ensuite. NOALYSS (`Anc_Key::fill_table`, `bcscale(2)`) tronque sans
+porter d'écart. (2) `check_anc_filter` refuse tout espace ; Partiduo
+tolérait « 6 0 », préfixe qui ne désigne aucun compte.
+
+*Choix.* (1) Une ligne ne reçoit jamais plus que le reste à répartir
+(minimum de l'arrondi et du reste) ; la dernière reçoit le reste ; les
+lignes nulles sont omises. D-ANA-004 est inchangé pour les montants
+usuels. (2) Chaque préfixe, espaces extérieurs retirés, doit n'être fait
+que de chiffres ; la liste vide reste admise (tous les comptes).
+
+*Alternative écartée.* Répartition par arrondi des cumuls (plus juste,
+mais change les montants de D-ANA-004 : 33,33 / 33,34 / 33,33 au lieu de
+33,33 / 33,33 / 33,34).
+
+=== D-UI-041 — Écrans de l'Analytique (lot 5, interface)
+
+*Contexte.* Le contrat `Partiduo::Api::Analytic` (lot 5) expose plans,
+groupes, postes, paramètres, clés de répartition, ventilation des
+écritures, opérations diverses analytiques, éditions et exports CSV ; le
+manifeste déclare les menus `analytic:plans`, `keys`, `misc_operations`,
+`reports` et `settings`.
+
+*Choix.* Routes sous `/analytic` (`partiduo-ui-bulma`,
+`src/ui/handlers/analytic/`, gabarits génériques du référentiel et des
+éditions, aucun gabarit nouveau) :
+
+* `plans` (liste), `plan` (consultation : postes et groupes, actions),
+  `plan_new`, `plan_edit`, `plan_delete` ; `post_new` et `group_new` sous
+  le plan (`/plans/<id>/posts/new`), `post`, `post_edit`, `post_delete`,
+  `group_edit`, `group_delete` ; `settings` (mode facultatif ou obligatoire,
+  comptes ventilés), relié depuis la liste des plans.
+* `keys`, `key`, `key_new`, `key_edit`, `key_delete` ; `misc_operations`
+  (filtre par dates), `misc_operation`, `misc_new`, `misc_edit`,
+  `misc_delete`.
+* Lignes de répartition (clés, opérations diverses, ventilation) : un groupe
+  de champs par ligne dans le formulaire générique, champs
+  `<préfixe>-<n>-<champ>` et un choix de poste par plan (`-p<plan>`), comme
+  les colonnes `hplan` de NOALYSS ; deux lignes vides de réserve (pas
+  d'ajout de ligne en JavaScript : on enregistre, puis on rouvre la
+  modification pour en avoir deux de plus). Lignes vides ignorées ; erreurs
+  du contrat `rows[i].champ` rangées sous le champ (`post_ids` sous le
+  premier plan).
+* `entry_distribution` (`/analytic/entries/<id>`) : ventilation après coup
+  d'une écriture enregistrée, une rubrique par ligne d'un compte ventilé ;
+  montant vide = reste de la ligne ; une clé choisie (clés du journal de
+  l'écriture) remplace les lignes saisies. La consultation d'une écriture
+  (`accounting:entry`) gagne une rubrique « Analytique » (ventilation par
+  ligne, lien « Ventiler ») quand le module est actif et qu'un plan existe.
+* Éditions : `reports` (balance simple, entrée du menu), `cross_balance`,
+  `group_balance`, `history` (pages de 500), `ledger` (tronqué à 2 000
+  lignes à l'écran), `table` (postes × comptes ou fiches) et
+  `undistributed` (lignes à ventiler, contrôle du mode obligatoire, avec
+  lien vers la ventilation) ; reliées par des onglets (le gabarit
+  `ui/reports/report.html` accepte désormais `tabs`), critères gardés par
+  écran (D-UI-035), export `?format=csv` produit par le cœur (pas de PDF,
+  D-ANA-010). Un poste mène à son grand livre, une opération à son écriture
+  (ou à l'opération diverse), un compte au grand livre comptable, une fiche
+  au relevé. Avertissement quand le cœur signale des journaux écartés
+  (`partial`).
+
+*Alternatives écartées.* Des gabarits propres à chaque écran : les
+gabarits génériques suffisent ; une grille de répartition animée en Opal :
+second comportement client à maintenir pour un usage peu fréquent.
+
+=== D-UI-042 — Ventilation analytique dans la saisie (lot 5, interface)
+
+*Contexte.* NOALYSS affiche sous chaque ligne de saisie un tableau de
+répartition (un poste par plan et par ligne de ventilation, montant,
+boutons « Nouvelle ligne », « Clef », « Efface détail »). Le contrat offre
+`Api::Analytic.post_entry`, `post_purchase` et `post_sale` (écriture et
+ventilation dans une transaction, lignes désignées par leur position), mais
+pas d'extrait financier ventilé.
+
+*Choix.* Quand le module est actif, que l'acteur a
+`analytic.operation.write` et qu'un plan existe, les formes « opérations
+diverses », « achat » et « vente » gagnent une colonne « Analytique » : un
+choix de poste par plan (tout le montant de la ligne) et, s'il existe des
+clés, une clé de répartition (appliquée par `apply_key` à l'envoi). Les
+champs (`line-<n>-ana-p<plan>`, `line-<n>-ana_key`) restent dans la ligne :
+la navigation au clavier du paquet Opal (Entrée → champ suivant) les
+parcourt sans changement du paquet. L'enregistrement passe alors par
+`Api::Analytic.post_*` (même en l'absence de ventilation, pour que le mode
+obligatoire s'applique) ; positions calculées comme le cœur : lignes
+remplies dans l'ordre, et pour une facture les lignes d'articles de montant
+non nul (placées en tête, avant TVA et tiers). Erreurs `distributions[i]`
+et `distributions[position=n]` rangées sous la ligne concernée. Une
+répartition plus fine (plusieurs postes d'un même plan, montants libres) se
+fait après l'enregistrement, depuis la consultation de l'écriture
+(D-UI-041). Extraits financiers : ventilés depuis la consultation de chaque
+écriture. Sans plan, ou module inactif, la saisie est inchangée.
+
+Toutes les clés sont proposées dans la saisie (le journal peut changer sans
+rechargement de la ligne) ; la ventilation après coup ne propose que les
+clés du journal de l'écriture (`keys_for_ledger`, comme NOALYSS).
+
+*Alternatives écartées.* Sous-tableau de répartition sous chaque ligne :
+double la hauteur de la saisie et casse l'enchaînement au clavier ; bloc
+repliable (`<details>`) : ses champs cachés restent dans l'ordre de
+parcours du paquet Opal, qui ne pourrait pas y placer le curseur.
+
+*Amendement proposé.* `Api::Analytic.post_financial(actor, input,
+distributions)` pour ventiler un extrait à la saisie, et un mode d'emploi
+du champ ventilé pour un utilisateur qui saisit sans
+`analytic.operation.write` alors que la ventilation est obligatoire
+(aujourd'hui, il passe par `Api::Accounting.post_*`, que le mode
+obligatoire ne contrôle pas).
+
+== Clôture du lot 5 — relecture
+
+=== D-ANA-012 — Lignes désignées par leur saisie (`input_index`) (lot 5, relecture ; amende D-UI-042 et D-ANA-008)
+
+*Contexte.* `Api::Analytic.post_entry`, `post_purchase` et `post_sale`
+désignaient les lignes à ventiler par leur *position dans l'écriture
+produite* ; l'interface devait deviner cette position en reproduisant la
+construction du cœur (lignes nulles écartées, TVA insérée entre articles et
+tiers, montant converti nul). Au moindre écart, la ventilation tombait en
+silence sur une autre ligne.
+
+*Choix.* La Comptabilité enregistre le rang de la ligne saisie d'origine
+(`accounting_entry_line.input_index`, migration accounting 0006) et
+l'expose (`EntryLineView#input_index`, nul pour une ligne calculée : TVA,
+tiers, banque ; une extourne reprend celui de la ligne annulée). Le
+contrat de l'Analytique prend des `InputDistributionInput(input_index,
+rows | key_id | post_ids)` : lignes explicites, clé appliquée *par le cœur*
+au montant de la ligne d'écriture (en devise de tenue), ou ligne entière.
+Une ligne saisie qui ne produit aucune ligne d'écriture est ignorée (sauf
+lignes explicites) ; un rang hors de la saisie est refusé. Erreurs
+`distributions[i]`, `distributions[input=n]` (ligne saisie non ventilée en
+mode obligatoire) ou `distributions[position=p]` (ligne calculée).
+L'interface ne calcule plus ni positions ni montants ; le type
+`PositionDistributionInput` disparaît (contrat du lot 5 non encore publié).
+
+*Alternatives écartées.* Garder la position et renvoyer une table de
+correspondance au moment de l'enregistrement : la correspondance doit être
+connue *avant* d'écrire la ventilation, dans la même transaction, et
+l'interface continuerait de manipuler des positions ; ventilation « ligne
+entière » seule : ne couvre pas les clés.
+
+=== D-ANA-013 — Clés de répartition après la suppression d'un poste ou d'un plan (lot 5, relecture)
+
+*Contexte.* La suppression d'un poste ou d'un plan effaçait en cascade les
+postes de clé, mais laissait des lignes de clé sans poste, toujours
+comptées dans les 100 % : `apply_key` produisait une ligne sans poste que la
+ventilation refusait (`post_required`) sans explication.
+
+*Choix.* Après `delete_plan` et `delete_post`, les lignes de clé restées sans
+poste sont retirées. La clé, dont le total n'atteint plus 100 %, est
+signalée incomplète (`KeyView#complete?`, affichée « incomplète, à corriger »
+par l'interface) ; `post_entry` / `post_purchase` / `post_sale` refusent de
+l'appliquer (`analytic.errors.key.incomplete`). La suppression reste
+permise.
+
+*Alternative écartée.* Refuser la suppression d'un poste cité par une clé :
+NOALYSS la permet, et l'utilisateur devrait d'abord modifier chaque clé.
+
+=== D-ANA-014 — Écriture annulée et extourne : ventilation figée (lot 5, relecture ; complète D-ANA-006)
+
+*Contexte.* Rien n'empêchait de reventiler une écriture annulée ou son
+extourne ; les deux ventilations divergeaient et le solde analytique d'une
+écriture annulée n'était plus nul.
+
+*Choix.* `distribute_entry` et `check_distribution` refusent une écriture
+annulée ou une extourne (`analytic.errors.distribution.cancelled_entry`).
+L'interface masque « Ventiler » pour les deux et renvoie à la consultation
+si l'écran de ventilation est demandé.
+
+*Alternative écartée.* Reventiler les deux ensemble : une modification
+d'une écriture annulée n'a pas de sens comptable ; il suffit d'extourner puis
+de ressaisir.
+
+=== D-ANA-015 — Montants des messages d'erreur présentés par l'interface (lot 5, relecture)
+
+*Contexte.* Les paramètres `total`, `amount`, `difference` des erreurs
+`exceeds`, `incomplete`, `unbalanced` sortaient au point décimal quelle que
+soit la langue ; la colonne « Sens » des CSV sortait `debit` / `credit`.
+
+*Choix.* Le cœur passe des montants *bruts* (point décimal, deux décimales,
+`Exports.raw`), comme il passe des dates ISO ; `Format#message` de
+l'interface présente tout paramètre de la forme `-?\d+\.\d+` selon la
+langue et le pays (D-UI-044). La colonne « Sens » des CSV est traduite
+(`analytic.reports.side.debit|credit`).
+
+*Alternative écartée.* Formater dans le cœur selon `I18n.locale` : le cœur
+ignore le pays de la société (séparateurs de `en-BE`, `nl-BE`) que connaît
+l'interface.
+
+=== D-ANA-016 — Nom du fichier de la balance (lot 5, relecture)
+
+*Choix.* `anc-balance-<nom>` : le nom du plan est décomposé (accents
+retirés), mis en minuscules, et tout caractère hors `[a-z0-9_-]` devient
+`-` (`plan` si rien ne reste) ; l'en-tête `Content-Disposition` de
+l'interface reste valide. *Alternative écartée.* L'identifiant du plan :
+moins parlant pour l'utilisateur.
+
+=== D-ANA-017 — Ligne unique des paramètres (lot 5, relecture ; amende D-ANA-008)
+
+*Contexte.* La ligne de paramètres était créée à la première lecture, sans
+contrainte d'unicité : deux premières lectures concurrentes créaient deux
+lignes.
+
+*Choix.* Migration analytic 0002 : colonne `singleton` (vraie, `UNIQUE`,
+`CHECK (singleton)`), doublons éventuels retirés, ligne par défaut insérée
+par la migration. `Settings.current` la relit ; si elle a disparu (base de
+test vidée), il la recrée par `INSERT … ON CONFLICT (singleton) DO NOTHING`.
+Migration séparée plutôt que modification de 0001 : une base déjà migrée au
+lot 5 la reçoit aussi.
+
+=== D-ANA-018 — Chemins qui échappent au mode obligatoire (lot 5, relecture ; complète D-ANA-008)
+
+*Contexte.* En mode obligatoire, un acteur sans `analytic.operation.write`
+enregistre par `Api::Accounting.post_*` sans contrôle de ventilation ; de
+même pour les extraits financiers, les écritures nées d'événements
+(`invoice.issued`, `payment.recorded`), la reprise et les extournes.
+
+*Choix.* Ces chemins sont documentés (`doc/api/analytic.adoc`, « Chemins
+qui échappent au mode obligatoire ») et restent permis : la Comptabilité ne
+dépend pas de l'Analytique (ADR-006 D3). Nouvelle requête
+`Api::Analytic.distribution_required?` (tout utilisateur authentifié) :
+l'interface avertit sur la saisie, avec un lien vers « Lignes à ventiler »
+quand l'acteur peut le lire (D-UI-043). Le rattrapage reste
+`undistributed_lines`.
+
+*Alternatives écartées.* Refuser la saisie à qui ne peut pas ventiler :
+bloquerait un profil de saisie pure dans un dossier où l'Analytique est
+active ; abonné `entry.posted` qui tiendrait une file « à ventiler » :
+redondant avec `undistributed_lines`, qui calcule la même liste à la demande.
+Indicateur sur le tableau de bord : reporté (voir « Reports » ci-dessous).
+
+=== D-ANA-019 — Éditions : découpage en SQL, export complet, comptages groupés (lot 5, relecture)
+
+*Choix.* La sélection d'une édition (`Reports.selection`) calcule d'abord les
+journaux visibles de l'acteur (`SELECT DISTINCT ledger_id`), puis les filtre
+en SQL. `history` découpe la liste en SQL (`OFFSET` / `LIMIT`, 10 000 au plus)
+et calcule `count` et `total` par une requête d'agrégat séparée ;
+`export_history` exporte toute la sélection, sans plafond. `plans` et
+`groups` comptent postes et groupes en une requête `GROUP BY` par table.
+Balances, grand livre et tableau agrègent encore en Crystal sur toutes les
+opérations du plan : acceptable aux volumes d'un dossier de PME, à revoir
+si un dossier dépasse quelques centaines de milliers d'imputations.
+`undistributed_lines` continue de lire les écritures par le contrat de la
+Comptabilité (pages de 200) : l'Analytique ne lit pas les tables de la
+Comptabilité (ADR-005 D3).
+
+=== D-ANA-020 — Lecture de la ventilation et ventilations concurrentes (lot 5, relecture)
+
+*Choix.* `entry_distributions` est permis avec `analytic.report.read` *ou*
+`analytic.operation.write` (l'écran de ventilation relit ce qu'il modifie).
+`distribute_entry` prend un verrou transactionnel par écriture
+(`pg_advisory_xact_lock`) avant de remplacer les ventilations : deux
+ventilations concurrentes d'une ligne se suivent au lieu de lever la
+contrainte d'unicité de `entry_line_id` (erreur 500). *Alternative écartée.*
+`SELECT … FOR UPDATE` sur les imputations existantes : ne protège pas une
+ligne encore sans imputation.
+
+=== D-UI-043 — Avertissement du mode obligatoire à la saisie (lot 5, relecture, interface)
+
+*Choix.* Module Analytique actif et mode obligatoire en vigueur
+(`distribution_required?`) : la saisie d'une écriture affiche un
+avertissement quand l'acteur n'a pas `analytic.operation.write`, ou pour un
+extrait financier (ventilé après coup), avec un lien vers « Lignes à
+ventiler » s'il a `analytic.report.read`. La saisie reste permise
+(D-ANA-018). La rubrique « Analytique » de la consultation est montrée à qui
+peut lire les éditions *ou* ventiler ; « Ventiler » est masqué pour une
+écriture annulée et pour une extourne (D-ANA-014).
+
+=== D-UI-044 — Montants des messages du contrat selon la langue (lot 5, relecture, interface)
+
+*Choix.* `Format#message` présente, en plus des dates ISO, tout paramètre de
+la forme `-?\d+\.\d+` comme un montant de la langue et du pays (autant de
+décimales que la valeur brute) : `1250.50` devient `1 250,50` en français.
+S'applique à tous les modules (écart de la Comptabilité compris).
+
+=== D-UI-042 (amendement appliqué) — Saisie ventilée par ligne saisie
+
+La saisie n'envoie plus de positions ni de montants : pour chaque ligne
+remplie de rang `i` qui porte un choix analytique, un
+`InputDistributionInput(i, key_id:)` (clé) ou `InputDistributionInput(i,
+post_ids:)` (ligne entière). Le cœur calcule les montants (D-ANA-012).
+L'amendement « mode d'emploi pour un utilisateur sans
+`analytic.operation.write` » de D-UI-042 est traité par D-UI-043 ;
+`post_financial` ventilé reste proposé.
+
+=== Reports de la relecture du lot 5
+
+* Indicateur « lignes à ventiler » sur le tableau de bord (D-ANA-018).
+* Agrégation en SQL des balances, du grand livre et du tableau (D-ANA-019).
+* `Api::Analytic.post_financial` ventilé (D-UI-042).
+* Cohérence des droits de l'écran de ventilation : il lit aussi plans,
+  postes et paramètres (`analytic.plan.read`) ; un profil qui ventile sans
+  `analytic.plan.read` reçoit un refus d'accès. Les profils par défaut
+  donnent les deux ensemble ; à revoir avec les profils personnalisés.

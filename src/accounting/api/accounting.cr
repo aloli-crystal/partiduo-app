@@ -258,6 +258,7 @@ module Partiduo
                 vat_rate_code: rate_id.try { |value| rates.put_if_absent(value) { vat_rate_code(value) } },
                 vat_role: line.vat_role, quantity: line.quantity, matching_id: matching_id,
                 matching_code: matching_id.try { |value| Partiduo::Accounting::Matchings.code(value) },
+                input_index: line.input_index.try(&.to_i32),
               )
             end,
           )
