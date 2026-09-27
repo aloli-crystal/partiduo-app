@@ -20,14 +20,21 @@ module Partiduo
     # end
     # ```
     module InitialData
-      # Ce que reçoit un chargeur.
+      # Invitation émise pendant le provisionnement (compte de
+      # l'administrateur) : rendue à l'opérateur par `ProvisionView`, seul
+      # moyen de transmettre le jeton à l'administrateur d'une instance neuve.
+      record Invitation, email : String, token : String, expires_at : Time
+
+      # Ce que reçoit un chargeur. `invitations` : un chargeur qui crée un
+      # compte y dépose son jeton d'invitation.
       record Context,
         actor : Actor,
         tax_regime : String,
         country_code : String,
         locale : String,
         admin_email : String?,
-        module_codes : Array(String)
+        module_codes : Array(String),
+        invitations : Array(Invitation) = [] of Invitation
 
       record Loader, owner : String, name : String, order : Int32, block : Proc(Context, Nil) do
         def id : String

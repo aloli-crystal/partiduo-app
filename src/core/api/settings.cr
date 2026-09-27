@@ -125,8 +125,13 @@ module Partiduo
         admin_email : String? = nil
 
       # Résultat du provisionnement : la configuration créée, les pièces
-      # actives et les chargeurs de données initiales exécutés.
-      record ProvisionView, settings : SettingsView, active_modules : Array(String), loaders : Array(String)
+      # actives, les chargeurs de données initiales exécutés et les
+      # invitations émises (administrateur), que l'opérateur transmet.
+      record ProvisionView,
+        settings : SettingsView,
+        active_modules : Array(String),
+        loaders : Array(String),
+        invitations : Array(InitialData::Invitation) = [] of InitialData::Invitation
 
       # L'instance a-t-elle sa configuration société ? Tout utilisateur
       # authentifié peut le demander.
@@ -207,7 +212,9 @@ module Partiduo
             module_codes: active,
           )
           loaders = InitialData.run(context)
-          Result(ProvisionView).success(ProvisionView.new(SettingsView.from(settings), active, loaders))
+          Result(ProvisionView).success(
+            ProvisionView.new(SettingsView.from(settings), active, loaders, context.invitations)
+          )
         end
       end
 

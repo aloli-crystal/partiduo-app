@@ -1745,3 +1745,85 @@ retrait selon la profondeur, onglets par classe (premier caractère des
 comptes racines). Les colonnes de montants s'ajouteront avec la balance.
 
 *Alternative écartée.* Colonnes de montants vides : trompeuses.
+
+== Vérification du jalon P + 0 + 1 (27 septembre 2026)
+
+=== D-J1-001 — Lien d'invitation de l'administrateur affiché par `provision` (jalon 1)
+
+*Contexte.* `bin/partiduo-provision --admin-email` crée l'administrateur sans
+mot de passe avec un jeton d'invitation, mais le jeton était jeté par le
+chargeur `AUTH.profiles_and_admin` : aucun courriel n'est envoyé par le cœur
+et la commande n'affichait rien. Sur une instance neuve, personne ne pouvait
+donc entrer (le parcours « mot de passe oublié » suppose un envoi de courriel
+configuré). Constaté en provisionnant `demo-fr` et `demo-be`.
+
+*Choix.* `InitialData::Context#invitations` recueille les invitations émises
+par les chargeurs ; `ProvisionView#invitations` les rend ; la commande
+`provision` affiche, dans la langue du dossier, l'adresse, l'échéance et le
+lien `https://<domaine>/invitation/<jeton>` (route de l'interface de
+référence), que l'opérateur transmet à l'administrateur. Le jeton reste à
+usage unique et valable 7 jours ; il n'est montré qu'à l'opérateur qui crée
+l'instance (acteur système), jamais à un utilisateur qui le demande.
+
+*Alternative écartée.* Envoi par courriel depuis la commande : le cœur ne
+produit aucun texte ni courriel (D-UI-013) et le serveur SMTP n'est pas encore
+configuré au provisionnement. Commande séparée `invite` : une étape de plus
+pour chaque instance ; `issue_invitation` reste disponible par le contrat pour
+rouvrir un accès.
+
+=== D-J1-002 — Bases de test nommées `partiduo_j1_*_test` (jalon 1)
+
+*Contexte.* La base attribuée à la vérification (`partiduo_jalon1`) ne
+contient pas « test » ; les `spec_helper` la refusent (garde-fou D-009 qui
+vide la base).
+
+*Choix.* Specs sur `partiduo_j1_app_test`, `partiduo_j1_ui_test` et
+`partiduo_j1_skel_test` (une par dépôt, lancées en parallèle) ; instances
+provisionnées `partiduo_j1_fr` et `partiduo_j1_be`. Garde-fou inchangé.
+
+*Alternative écartée.* Assouplir le garde-fou : il protège les bases réelles.
+
+=== D-J1-003 — Démonstration de bout en bout : `partiduo-skel/scripts/demo_jalon1.cr` (jalon 1)
+
+*Contexte.* Le bac à sable n'ouvre pas de port (B-UI-001) ; les specs de
+chaque dépôt vident leur base et ne portent pas sur une instance
+provisionnée.
+
+*Choix.* Un script composé comme une distribution (cœur + interface Bulma +
+SKEL), dans `partiduo-skel` (seul dépôt qui compose les trois), qui s'exécute
+contre la base d'une instance provisionnée : requêtes HTTP en mémoire à
+travers la pile réelle de Marten (gestionnaire d'erreurs, middlewares dont
+session et CSRF, routage, handlers, gabarits), jeton CSRF lu dans la page
+comme un navigateur, hôte de l'instance en `Host`. Il enrôle
+l'administrateur par son invitation, crée et consulte compte, fiche,
+exercice et journal par l'interface puis par `Partiduo::Api`, active SKEL si
+besoin, vérifie `/ext/SKEL/` (anonyme 302, profil `skel.view` 200, profil sans
+droit 403) et la réception de `entry.posted`. Rejouable (`--password` sans
+`--invitation`) ; code de sortie 1 si une étape échoue.
+
+`scripts/server.cr` : serveur de développement de la même composition, pour
+le même parcours dans un navigateur (compile et démarre ; écoute refusée dans
+le bac à sable, B-J1-001).
+
+*Alternative écartée.* `Marten::Spec::Client` : `require "marten/spec"`
+enregistre les crochets de specs qui synchronisent et vident la base.
+
+=== D-J1-004 — Une commande lancée sur une instance reprend son `PARTIDUO_MODULES` (jalon 1)
+
+*Constat.* Tant que l'administrateur n'a rien activé, l'ensemble actif vient
+de `PARTIDUO_MODULES` (D-018) ; `provision` n'écrit pas `modules_activation`.
+Une commande lancée sans la variable de l'instance (`.env` généré) voit le
+défaut (`accounting,invoicing,analytic`) et, si elle active une pièce, fige ce
+défaut en base (constaté lors d'un premier essai de la démonstration, instance
+reprovisionnée depuis).
+
+*Choix.* D-018 inchangé ; la démonstration et `ETAT-PORTAGE.adoc` passent
+`PARTIDUO_MODULES` de l'instance. Amendement proposé (non appliqué) :
+`Api::Core.provision` enregistre l'ensemble actif dans `modules_activation`,
+ce qui rendrait la base seule source de vérité après le provisionnement ; à
+trancher avec les specs qui changent de configuration par
+`with_active_modules`.
+
+*Alternative écartée.* Appliquer l'amendement maintenant : change le sens de
+D-018 et le comportement de nombreuses specs, hors du périmètre d'une
+vérification.

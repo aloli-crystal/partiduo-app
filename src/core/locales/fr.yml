@@ -216,6 +216,7 @@ fr:
         one: "Création du dossier refusée : %{count} erreur."
         other: "Création du dossier refusée : %{count} erreurs."
       invalid_number: "Valeur numérique illisible (capital, niveau ou durée de session)."
+      invitation: "Invitation de l'administrateur %{email}, valable jusqu'au %{expires}, à lui transmettre : %{url}"
   partiduo:
     api:
       errors:

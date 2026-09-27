@@ -181,6 +181,102 @@ Extension de référence (`partiduo-skel`, D-SKEL-001 à D-SKEL-004) :
   `skel_0001` appliquée, vert.
 * Relecture : aucune remarque transmise à la clôture.
 
+== Vérification du jalon P + 0 + 1 (27 septembre 2026)
+
+Parcours de bout en bout sur deux instances neuves provisionnées par
+`bin/partiduo-provision`, l'une en régime FR avec SKEL dès la création,
+l'autre en régime BE où SKEL est activée ensuite par l'administrateur.
+
+Ce qui marche (vérifié) :
+
+* `bin/partiduo-provision` crée base, migrations (cœur, interface, SKEL),
+  société, jeux de données initiaux et fichiers de service : plan comptable
+  FR de NOALYSS (`mod2`, 163 comptes) et BE (`mod1`, 504 comptes, sans les
+  comptes des fiches d'exemple), taux de TVA (14 FR, 8 BE), catégories de
+  fiches, journaux A01, V01, F01, O01, profils ADMIN et ACCOUNTANT,
+  administrateur invité.
+* Enrôlement : invitation (lien affiché par `provision`, D-J1-001), session
+  d'enrôlement, mot de passe choisi, invitation à usage unique, connexion,
+  tableau de bord.
+* Interface : plan comptable par classe, création d'un compte (parent
+  déduit), refus champ par champ ; fiche client créée, listée, recherchée,
+  consultée ; exercice de 12 périodes créé et consulté ; journaux listés, journal
+  d'achats créé (numérotation `DEM-0001`).
+* `Partiduo::Api` avec l'acteur de l'administrateur : plan du régime, compte,
+  fiche fournisseur, journal, exercices ; acteur sans droit refusé
+  (`Forbidden`).
+* SKEL : 404 tant qu'inactive, activation par `Partiduo::Api::Modules.activate`,
+  anonyme renvoyé vers `/login`, page servie à l'administrateur et à un profil
+  `skel.view`, refusée (403, sans entrée de menu) à un profil sans ce droit,
+  `entry.posted` consigné et affiché.
+
+Ce qui ne marchait pas, corrigé :
+
+* L'administrateur d'une instance neuve ne pouvait pas entrer : le jeton
+  d'invitation était perdu. `provision` affiche désormais le lien
+  (D-J1-001, specs ajoutées).
+
+Limites restantes :
+
+* Serveur HTTP non démarrable dans le bac à sable (B-UI-001, B-J1-001) :
+  parcours fait par requêtes HTTP en mémoire à travers la pile de Marten
+  (D-J1-003), pas dans un navigateur. Passkeys réelles non essayées (B-AUTH-003).
+* `entry.posted` publié par `Partiduo::Events.publish` : aucune écriture
+  n'existe avant le lot 2 (D-SKEL-003).
+* Une commande lancée sur une instance doit reprendre son `PARTIDUO_MODULES`
+  (D-J1-004, amendement proposé).
+
+Specs (bases `partiduo_j1_*_test`, D-J1-002) : `partiduo-app` 356 exemples
+(Comptabilité seule), 322 + 5 en attente (Facturation seule), 356 (les deux) ;
+`partiduo-ui-bulma` 108 ; `partiduo-skel` 22. Format sans changement, Ameba
+sans remarque, garde-fous ADR-005 D3 verts.
+
+=== Démonstration du jalon 1
+
+[source,sh]
+----
+# 1. Ligne de commande de la distribution (cœur + interface + SKEL)
+cd prod-crystal/partiduo/partiduo-skel
+SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install
+shards build partiduo-skel-manage                  # bin/partiduo-skel-manage
+MANAGE="$PWD/bin/partiduo-skel-manage"
+
+# 2. Deux instances vierges ; noter le lien d'invitation affiché
+cd ../partiduo-app
+bin/partiduo-provision --manage "$MANAGE" --name "Démo FR SARL" --regime fr \
+  --siren 732829320 --admin-email admin@demo-fr.test --with skel \
+  --database partiduo_j1_fr demo-fr
+bin/partiduo-provision --manage "$MANAGE" --name "Demo BE SRL" --regime be \
+  --vat BE0417497106 --admin-email admin@demo-be.test \
+  --database partiduo_j1_be demo-be
+
+# 3. Parcours de bout en bout (enrôlement, référentiel, SKEL)
+cd ../partiduo-skel
+PARTIDUO_MODULES=accounting,invoicing,skel \
+DATABASE_URL='postgres:///partiduo_j1_fr?host=/tmp' \
+  crystal run scripts/demo_jalon1.cr -- --host=demo-fr.partiduo.localhost \
+  --email=admin@demo-fr.test --invitation='<lien affiché à l étape 2>'
+PARTIDUO_MODULES=accounting,invoicing \
+DATABASE_URL='postgres:///partiduo_j1_be?host=/tmp' \
+  crystal run scripts/demo_jalon1.cr -- --host=demo-be.partiduo.localhost \
+  --email=admin@demo-be.test --invitation='<lien affiché à l étape 2>'
+# Second passage : sans --invitation (mot de passe choisi au premier :
+# --password, défaut Demo-jalon1-Partiduo-2026 ou $PARTIDUO_DEMO_PASSWORD).
+
+# 4. Dans un navigateur, quand l'écoute locale est permise (B-UI-001) :
+#    serveur composé cœur + interface + SKEL (sans SKEL :
+#    partiduo-ui-bulma/src/server.cr)
+PARTIDUO_MODULES=accounting,invoicing,skel \
+DATABASE_URL='postgres:///partiduo_j1_fr?host=/tmp' \
+  crystal run scripts/server.cr
+# puis http://demo-fr.partiduo.localhost:8000/invitation/<jeton> (instance
+# neuve) ou /login, /accounting/chart, /cards, /fiscal-years,
+# /accounting/ledgers, /ext/SKEL/
+
+# Nettoyage
+dropdb partiduo_j1_fr; dropdb partiduo_j1_be; rm -rf tmp/instances/demo-*
+----
+
 == Prochaines étapes
 
 . Lot 2 : écritures (schéma, saisie, validation, numérotation), consultation,

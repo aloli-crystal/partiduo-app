@@ -36,6 +36,8 @@ ADR-002 D1). Le contrat est `Partiduo::Api::Core` et
 |`Api::Core.provision(Actor.system, ProvisionInput) : Result(ProvisionView)`
 |acteur système
 |Crée la société et charge le jeu de données initial, en une transaction.
+`ProvisionView#invitations` : invitations émises (administrateur), avec le
+jeton à transmettre (D-J1-001).
 |===
 
 Constantes pour l'interface : `Api::Core::TAX_REGIMES` (`fr`, `be`),
@@ -119,4 +121,7 @@ PARTIDUO_MODULES=accounting,invoicing crystal run manage.cr -- provision \
 ----
 
 Elle rend compte dans la langue par défaut du dossier, pluriels compris
-(`core.provision.modules`, `count:`).
+(`core.provision.modules`, `count:`). Avec `--admin-email`, elle affiche le
+lien d'invitation de l'administrateur (`https://<domaine>/invitation/<jeton>`,
+valable 7 jours, à usage unique), seul moyen pour lui d'entrer dans une
+instance neuve : l'opérateur le lui transmet (D-J1-001).

@@ -119,6 +119,11 @@ module Partiduo
           print(I18n.t("core.provision.modules", count: view.active_modules.size,
             codes: view.active_modules.join(", ")))
           print(I18n.t("core.provision.loaders", count: view.loaders.size, names: view.loaders.join(", ")))
+          view.invitations.each do |invitation|
+            print(I18n.t("core.provision.invitation", email: invitation.email,
+              expires: invitation.expires_at.to_utc.to_s("%Y-%m-%d %H:%M UTC"),
+              url: "https://#{settings.domain}/invitation/#{invitation.token}"))
+          end
         end
 
         private def split(value : String) : Array(String)

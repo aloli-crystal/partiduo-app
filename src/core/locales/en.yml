@@ -216,6 +216,7 @@ en:
         one: "Company file creation refused: %{count} error."
         other: "Company file creation refused: %{count} errors."
       invalid_number: "Unreadable numeric value (capital, level or session duration)."
+      invitation: "Invitation for administrator %{email}, valid until %{expires}, to be passed on: %{url}"
   partiduo:
     api:
       errors:

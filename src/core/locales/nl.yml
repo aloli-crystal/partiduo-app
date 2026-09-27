@@ -216,6 +216,7 @@ nl:
         one: "Aanmaken van het dossier geweigerd: %{count} fout."
         other: "Aanmaken van het dossier geweigerd: %{count} fouten."
       invalid_number: "Onleesbare numerieke waarde (kapitaal, niveau of sessieduur)."
+      invitation: "Uitnodiging voor beheerder %{email}, geldig tot %{expires}, door te geven: %{url}"
   partiduo:
     api:
       errors:

@@ -223,3 +223,18 @@ début de ces modifications.
 cours de `partiduo-ui-bulma` terminé.
 *Levé* à la clôture du lot 1 : 22 exemples verts contre l'arbre de travail de
 `partiduo-ui-bulma` (lien `lib/partiduo-ui-bulma` restauré).
+
+== B-J1-001 — Serveur toujours non démarrable ; compilateur interrompu en compilation parallèle (jalon 1)
+
+*Constat.* L'écoute locale reste refusée (`bind` : `Operation not permitted`,
+B-UI-001) : `partiduo-ui-bulma` n'a pas pu être servi à un navigateur. Une
+fois, `crystal spec` dans `partiduo-skel` s'est arrêté sur « you've found a bug
+in the Crystal compiler » pendant que les specs de `partiduo-app` compilaient
+en parallèle ; relancé seul, il est vert.
+
+*Contournement.* Parcours HTTP en mémoire à travers la pile de Marten
+(`partiduo-skel/scripts/demo_jalon1.cr`, D-J1-003) contre les instances
+provisionnées ; compilations des trois dépôts lancées l'une après l'autre.
+
+*Levée.* `sandbox.network.allowLocalBinding: true`, puis le parcours de
+`ETAT-PORTAGE.adoc` § « Démonstration du jalon 1 » dans un navigateur.

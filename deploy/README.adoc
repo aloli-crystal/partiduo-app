@@ -53,7 +53,9 @@ bin/partiduo-provision --name "Exemple SARL" --regime fr --siren 732829320 \
 . `migrate` sur cette base, avec `PARTIDUO_MODULES` = modules + extensions ;
 . commande Marten `provision` : société (`Settings`, ligne unique) puis jeu de
   données initial des pièces actives, selon le régime (`--regime fr|be`), par
-  `Partiduo::Api::Core.provision` — une seule transaction ;
+  `Partiduo::Api::Core.provision` — une seule transaction ; avec
+  `--admin-email`, le lien d'invitation de l'administrateur est affiché, à lui
+  transmettre (D-J1-001) ;
 . génération, dans `--output-dir` (défaut `./tmp/instances/<dossier>/`), de
   `<dossier>.env` (mode 600, clé secrète aléatoire), `<dossier>.nginx.conf`,
   `partiduo-<dossier>.service` et `INSTALL.txt`, la liste des commandes

@@ -28,6 +28,14 @@ describe Partiduo::Core::Commands::Provision do
     end
   end
 
+  it "affiche le lien d'invitation de l'administrateur (D-J1-001)" do
+    code, output, _ = run_provision(
+      "--name=Exemple SARL", "--regime=fr", "--domain=exemple.partiduo.localhost", "--admin-email=patron@exemple.test",
+    )
+    code.should eq(0)
+    output.should match(%r{Invitation de l'administrateur patron@exemple\.test, valable jusqu'au \d{4}-\d\d-\d\d \d\d:\d\d UTC, à lui transmettre : https://exemple\.partiduo\.localhost/invitation/[A-Za-z0-9_-]{20,}})
+  end
+
   it "rend compte en néerlandais pour un dossier en néerlandais" do
     with_active_modules("invoicing") do
       code, output, _ = run_provision(
