@@ -14,6 +14,7 @@ module Partiduo
     Partiduo::Analytic::App,
     Partiduo::Stock::App,
     Partiduo::Followup::App,
+    Partiduo::Micro::App,
   ] of Marten::Apps::Config.class
 
   # Langues livrées (ADR-005 D7) ; les 21 autres langues de l'UE s'ajoutent par

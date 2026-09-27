@@ -1,0 +1,148 @@
+en:
+  micro:
+    module:
+      name: "Micro-business"
+    permissions:
+      register:
+        read: "View registers, URSSAF help and thresholds"
+        write: "Record and reverse receipts and purchases, note returns"
+      settings:
+        write: "Configure the micro-business (natures, rates, thresholds, switches)"
+    menu:
+      micro_receipts: "Receipts"
+      micro_purchases: "Purchases"
+      micro_urssaf: "URSSAF"
+      micro_tax_return: "Income tax return (2042-C-PRO)"
+      micro_thresholds: "Thresholds"
+      micro_settings: "Micro-business"
+    categories:
+      sale_bic: "Sales of goods (BIC)"
+      service_bic: "Services (BIC)"
+      bnc: "Services (BNC)"
+      goods: "Goods for resale"
+      other: "Other purchases"
+    scopes:
+      goods: "Sales and mixed activity"
+      services: "Services"
+    methods:
+      transfer: "Bank transfer"
+      card: "Card"
+      cheque: "Cheque"
+      cash: "Cash"
+      direct_debit: "Direct debit"
+      other: "Other"
+    periodicities:
+      monthly: "Monthly"
+      quarterly: "Quarterly"
+    declaration_statuses:
+      open: "Current period"
+      due: "To declare"
+      late: "Late"
+      declared: "Declared"
+    threshold_statuses:
+      ok: "Below threshold"
+      approaching: "Close to threshold"
+      exceeded: "Threshold exceeded"
+      tolerance_exceeded: "Upper threshold exceeded"
+      not_applicable: "Switch done"
+      unknown: "Threshold not set"
+    default_natures:
+      sale: "Sales of goods"
+      service: "Commercial or craft services"
+      fee: "Professional services"
+      goods: "Purchases of goods"
+      supplies: "Other purchases"
+    reversal_label: "Cancellation of %{number}"
+    export:
+      filename:
+        receipt: "receipts-book"
+        purchase: "purchase-register"
+    columns:
+      number: "No."
+      date: "Date"
+      party: "Customer or supplier"
+      label: "Description"
+      nature: "Category"
+      method: "Payment"
+      reference: "Document"
+      amount: "Amount"
+      vat_amount: "Of which VAT"
+    reports:
+      receipt: "Receipts book"
+      purchase: "Purchases register"
+      period: "From %{from} to %{to}"
+      total: "Total"
+      total_nature: "Total %{nature}"
+      page: "Page %{page} of %{count}"
+    todo:
+      declaration_due: "Declare turnover from %{from} to %{to} to the URSSAF before %{due_on}"
+      declaration_late: "URSSAF return from %{from} to %{to} is late (due %{due_on})"
+    alerts:
+      vat:
+        approaching: "Turnover at %{ratio} % of the VAT exemption threshold (€%{limit})"
+        exceeded: "VAT exemption threshold exceeded (€%{limit}): VAT due from the next 1 January"
+        tolerance_exceeded: "Upper VAT exemption threshold exceeded: VAT due from the day it was exceeded"
+      micro:
+        approaching: "Turnover at %{ratio} % of the micro-business threshold (€%{limit})"
+        exceeded: "Micro-business threshold exceeded (€%{limit}): plan the move to the standard regime"
+    errors:
+      line:
+        nature:
+          unknown: "Unknown nature"
+          disabled: "This nature is no longer used"
+        amount:
+          not_positive: "The amount must be positive"
+          scale: "The amount is expressed in cents"
+        vat_amount:
+          invalid: "Invalid VAT (positive, in cents)"
+          exceeds: "VAT cannot reach the amount received or paid"
+        method:
+          invalid: "Unknown payment method"
+        card:
+          unknown: "Unknown card"
+        attachment:
+          unknown: "Unknown attachment"
+        date:
+          future: "Future date: only record a completed operation"
+          closed_period: "This date's period is closed: correct with a reversal in an open period"
+        reversal:
+          is_reversal: "A reversal cannot be reversed"
+          already: "This line is already reversed"
+          before_line: "The reversal cannot precede the line"
+        too_long: "At most %{max} characters"
+      parameter:
+        code:
+          unknown: "Unknown parameter"
+        text:
+          required: "Enter the box"
+        value:
+          invalid: "Invalid value (positive, at most six decimals)"
+      settings:
+        periodicity:
+          invalid: "Unknown frequency"
+      nature:
+        in_use: "Nature already used: only the label and activation can change"
+        code:
+          invalid: "Code in capitals, digits and _, at most 24 characters"
+          taken: "Code already taken"
+        label:
+          blank: "Enter a label"
+        kind:
+          invalid: "Unknown kind"
+        category:
+          invalid: "Category incompatible with the kind"
+      item:
+        not_item: "This card is not an item"
+      declaration:
+        period:
+          invalid: "This is not the start of a return period"
+        before_end: "The return follows the end of the period"
+        future: "The return cannot be dated in the future"
+        already: "Period already declared"
+      switch:
+        vat:
+          rate_invalid: "Choose an active, non-zero VAT rate other than the exemption"
+          already: "The switch to VAT is already done"
+          item_refused: "Item %{code} not changed (%{error})"
+        real:
+          already: "The switch to the standard regime is already done"

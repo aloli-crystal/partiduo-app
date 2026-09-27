@@ -318,3 +318,28 @@ Clés d'erreur propres : `accounting.errors.billing.no_sale_ledger`,
 `no_financial_ledger`, `no_sales_account`, `customer_not_found`,
 `vat_rate_not_found`, `date_missing`, `deposit_not_posted`, `failed` ; les
 autres viennent de `post_sale` et `post_financial`.
+
+== Écritures de la micro-entreprise (ADR-007 D2)
+
+Abonnés `micro.receipt.recorded` et `micro.purchase.recorded`
+(`Partiduo::Accounting::MicroEntries`, par `post_entry`, DECISIONS D-MIC-004) :
+
+* journal : le journal financier du mode de règlement (caisse pour `cash`,
+  banque sinon, comme pour la Facturation) ;
+* recette : compte du journal au débit du montant encaissé, produit au
+  crédit du hors taxe, TVA collectée au crédit de la TVA ; achat : charge
+  (hors taxe) et TVA déductible au débit, compte du journal au crédit
+  (D-MIC-013) ; contre-passation : sens inversés ;
+* contrepartie : `set_micro_account(actor, clé, compte)` par nature (code de
+  la nature) ou par catégorie (`sale_bic`, `service_bic`, `bnc`, `goods`,
+  `other`, `vat`, `vat_deductible`), lue par `micro_accounts` (écran
+  « Comptes de la micro-entreprise » de l'interface) ; à défaut, compte du régime
+  (`src/accounting/data/micro_accounts.yml`, créé au plan s'il manque), puis
+  compte par défaut `sales` pour une recette ;
+* référence `micro:receipt:<id>` ou `micro:purchase:<id>`, jamais passée deux
+  fois ; une recette issue de la Facturation (`origin` `invoicing`) est
+  ignorée : sa facture et son encaissement ont déjà leurs écritures ; sa
+  contre-passation saisie à la main (remboursement) porte l'origine
+  `manual` et passe l'écriture inverse (D-MIC-011) ;
+* un échec est consigné et ne bloque pas le registre ; `Partiduo::Api::Micro.republish`
+  republie les lignes.

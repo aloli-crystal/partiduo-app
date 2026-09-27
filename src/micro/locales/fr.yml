@@ -1,0 +1,148 @@
+fr:
+  micro:
+    module:
+      name: "Micro-entreprise"
+    permissions:
+      register:
+        read: "Consulter les registres, l'aide URSSAF et les seuils"
+        write: "Saisir et contre-passer recettes et achats, noter les déclarations"
+      settings:
+        write: "Paramétrer la micro-entreprise (natures, taux, seuils, bascules)"
+    menu:
+      micro_receipts: "Recettes"
+      micro_purchases: "Achats"
+      micro_urssaf: "URSSAF"
+      micro_tax_return: "Déclaration de revenus (2042-C-PRO)"
+      micro_thresholds: "Seuils"
+      micro_settings: "Micro-entreprise"
+    categories:
+      sale_bic: "Ventes de marchandises (BIC)"
+      service_bic: "Prestations de services (BIC)"
+      bnc: "Prestations de services (BNC)"
+      goods: "Marchandises revendues"
+      other: "Autres achats"
+    scopes:
+      goods: "Ventes et activité mixte"
+      services: "Prestations de services"
+    methods:
+      transfer: "Virement"
+      card: "Carte bancaire"
+      cheque: "Chèque"
+      cash: "Espèces"
+      direct_debit: "Prélèvement"
+      other: "Autre"
+    periodicities:
+      monthly: "Mensuelle"
+      quarterly: "Trimestrielle"
+    declaration_statuses:
+      open: "Période en cours"
+      due: "À déclarer"
+      late: "En retard"
+      declared: "Déclarée"
+    threshold_statuses:
+      ok: "Sous le seuil"
+      approaching: "Seuil proche"
+      exceeded: "Seuil dépassé"
+      tolerance_exceeded: "Seuil majoré dépassé"
+      not_applicable: "Bascule faite"
+      unknown: "Seuil non paramétré"
+    default_natures:
+      sale: "Ventes de marchandises"
+      service: "Prestations de services commerciales ou artisanales"
+      fee: "Prestations de services libérales"
+      goods: "Achats de marchandises"
+      supplies: "Autres achats"
+    reversal_label: "Annulation de %{number}"
+    export:
+      filename:
+        receipt: "livre-recettes"
+        purchase: "registre-achats"
+    columns:
+      number: "N°"
+      date: "Date"
+      party: "Client ou fournisseur"
+      label: "Nature de l'opération"
+      nature: "Catégorie"
+      method: "Règlement"
+      reference: "Pièce"
+      amount: "Montant"
+      vat_amount: "Dont TVA"
+    reports:
+      receipt: "Livre des recettes"
+      purchase: "Registre des achats"
+      period: "Du %{from} au %{to}"
+      total: "Total"
+      total_nature: "Total %{nature}"
+      page: "Page %{page} sur %{count}"
+    todo:
+      declaration_due: "Déclarer le chiffre d'affaires du %{from} au %{to} à l'URSSAF avant le %{due_on}"
+      declaration_late: "Déclaration URSSAF du %{from} au %{to} en retard (échéance du %{due_on})"
+    alerts:
+      vat:
+        approaching: "Chiffre d'affaires à %{ratio} % du seuil de franchise de TVA (%{limit} €)"
+        exceeded: "Seuil de franchise de TVA dépassé (%{limit} €) : TVA due à partir du 1er janvier suivant"
+        tolerance_exceeded: "Seuil majoré de franchise de TVA dépassé : TVA due dès le jour du dépassement"
+      micro:
+        approaching: "Chiffre d'affaires à %{ratio} % du seuil du régime micro (%{limit} €)"
+        exceeded: "Seuil du régime micro dépassé (%{limit} €) : passage au régime réel à prévoir"
+    errors:
+      line:
+        nature:
+          unknown: "Nature inconnue"
+          disabled: "Cette nature n'est plus utilisée"
+        amount:
+          not_positive: "Le montant doit être positif"
+          scale: "Le montant s'exprime au centime"
+        vat_amount:
+          invalid: "TVA invalide (positive, au centime)"
+          exceeds: "La TVA ne peut atteindre le montant encaissé ou payé"
+        method:
+          invalid: "Mode de règlement inconnu"
+        card:
+          unknown: "Fiche inconnue"
+        attachment:
+          unknown: "Pièce jointe inconnue"
+        date:
+          future: "Date à venir : n'inscrire qu'une opération faite"
+          closed_period: "La période de cette date est close : corriger par une contre-passation dans une période ouverte"
+        reversal:
+          is_reversal: "Une contre-passation ne se contre-passe pas"
+          already: "Cette ligne est déjà contre-passée"
+          before_line: "La contre-passation ne peut précéder la ligne"
+        too_long: "%{max} caractères au plus"
+      parameter:
+        code:
+          unknown: "Paramètre inconnu"
+        text:
+          required: "Indiquer la case"
+        value:
+          invalid: "Valeur invalide (positive, six décimales au plus)"
+      settings:
+        periodicity:
+          invalid: "Périodicité inconnue"
+      nature:
+        in_use: "Nature déjà employée : seuls le libellé et l'activation changent"
+        code:
+          invalid: "Code en majuscules, chiffres et _, 24 caractères au plus"
+          taken: "Code déjà pris"
+        label:
+          blank: "Indiquer un libellé"
+        kind:
+          invalid: "Sens inconnu"
+        category:
+          invalid: "Catégorie incompatible avec le sens"
+      item:
+        not_item: "Cette fiche n'est pas un article"
+      declaration:
+        period:
+          invalid: "Ce n'est pas le début d'une période de déclaration"
+        before_end: "La déclaration suit la fin de la période"
+        future: "La déclaration ne peut pas être datée dans le futur"
+        already: "Période déjà déclarée"
+      switch:
+        vat:
+          rate_invalid: "Choisir un taux de TVA actif, non nul, hors franchise"
+          already: "La bascule vers la TVA est déjà faite"
+          item_refused: "Article %{code} non modifié (%{error})"
+        real:
+          already: "La bascule vers le régime réel est déjà faite"

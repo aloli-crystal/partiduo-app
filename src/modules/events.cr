@@ -32,6 +32,10 @@ module Partiduo
       "payment.unmatched"    => %w[matching_id],
       "card.saved"           => %w[card_id],
       "period.closed"        => %w[period_id],
+      # Recette ou achat inscrit au registre du module micro-entreprise
+      # (ADR-007 D2, D-MIC-002) : la Comptabilité passe l'écriture.
+      "micro.receipt.recorded"  => %w[receipt_id],
+      "micro.purchase.recorded" => %w[purchase_id],
     }
 
     NAMES = SCHEMA.keys
@@ -88,10 +92,23 @@ module Partiduo
     end
 
     # Événements consignés (`JOURNALED`) de noms `names`, dans l'ordre de
-    # publication ; `ids` restreint aux entrées citées.
-    def self.journal(names : Enumerable(String), ids : Enumerable(Int64)? = nil) : Array(JournalEntry)
+    # publication ; `ids` restreint aux entrées citées ; `where` (clé, valeur)
+    # à celles dont la charge utile porte cette valeur, filtré en base.
+    def self.journal(names : Enumerable(String), ids : Enumerable(Int64)? = nil,
+                     where : {String, String}? = nil) : Array(JournalEntry)
       query = Partiduo::Modules::EventLog.filter(name__in: names.to_a)
       query = query.filter(id__in: ids.to_a) if ids
+      if filter = where
+        matching = [] of Int64
+        Marten::DB::Connection.default.open do |db|
+          db.query("SELECT id FROM modules_event_log WHERE name = ANY($1) AND (payload::jsonb) ->> $2 = $3",
+            args: [names.to_a, filter[0], filter[1]]) do |result_set|
+            result_set.each { matching << result_set.read(Int64) }
+          end
+        end
+        return [] of JournalEntry if matching.empty?
+        query = query.filter(id__in: matching)
+      end
       query.order(:id).map do |row|
         payload = row.payload.try(&.as_h?).try(&.transform_values { |value| value.as_s? || value.to_s }) ||
                   {} of String => String

@@ -30,5 +30,6 @@ require "./invoicing/app"
 require "./analytic/app"
 require "./stock/app"
 require "./followup/app"
+require "./micro/app"
 
 require "./partiduo/settings"

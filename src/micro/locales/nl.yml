@@ -1,0 +1,148 @@
+nl:
+  micro:
+    module:
+      name: "Micro-onderneming"
+    permissions:
+      register:
+        read: "Registers, URSSAF-hulp en drempels raadplegen"
+        write: "Ontvangsten en aankopen boeken en tegenboeken, aangiften noteren"
+      settings:
+        write: "Micro-onderneming instellen (aard, tarieven, drempels, overstap)"
+    menu:
+      micro_receipts: "Ontvangsten"
+      micro_purchases: "Aankopen"
+      micro_urssaf: "URSSAF"
+      micro_tax_return: "Inkomstenaangifte (2042-C-PRO)"
+      micro_thresholds: "Drempels"
+      micro_settings: "Micro-onderneming"
+    categories:
+      sale_bic: "Verkoop van goederen (BIC)"
+      service_bic: "Diensten (BIC)"
+      bnc: "Diensten (BNC)"
+      goods: "Handelsgoederen"
+      other: "Andere aankopen"
+    scopes:
+      goods: "Verkoop en gemengde activiteit"
+      services: "Diensten"
+    methods:
+      transfer: "Overschrijving"
+      card: "Bankkaart"
+      cheque: "Cheque"
+      cash: "Contant"
+      direct_debit: "Domiciliëring"
+      other: "Andere"
+    periodicities:
+      monthly: "Maandelijks"
+      quarterly: "Driemaandelijks"
+    declaration_statuses:
+      open: "Lopende periode"
+      due: "Aan te geven"
+      late: "Te laat"
+      declared: "Aangegeven"
+    threshold_statuses:
+      ok: "Onder de drempel"
+      approaching: "Drempel nabij"
+      exceeded: "Drempel overschreden"
+      tolerance_exceeded: "Verhoogde drempel overschreden"
+      not_applicable: "Overstap gedaan"
+      unknown: "Drempel niet ingesteld"
+    default_natures:
+      sale: "Verkoop van goederen"
+      service: "Commerciële of ambachtelijke diensten"
+      fee: "Vrije beroepsdiensten"
+      goods: "Aankoop van goederen"
+      supplies: "Andere aankopen"
+    reversal_label: "Annulering van %{number}"
+    export:
+      filename:
+        receipt: "ontvangstenboek"
+        purchase: "aankoopregister"
+    columns:
+      number: "Nr."
+      date: "Datum"
+      party: "Klant of leverancier"
+      label: "Omschrijving"
+      nature: "Categorie"
+      method: "Betaling"
+      reference: "Stuk"
+      amount: "Bedrag"
+      vat_amount: "Waarvan btw"
+    reports:
+      receipt: "Ontvangstenboek"
+      purchase: "Aankoopregister"
+      period: "Van %{from} tot %{to}"
+      total: "Totaal"
+      total_nature: "Totaal %{nature}"
+      page: "Pagina %{page} van %{count}"
+    todo:
+      declaration_due: "Omzet van %{from} tot %{to} aangeven bij de URSSAF vóór %{due_on}"
+      declaration_late: "URSSAF-aangifte van %{from} tot %{to} te laat (vervaldag %{due_on})"
+    alerts:
+      vat:
+        approaching: "Omzet op %{ratio} % van de btw-vrijstellingsdrempel (€ %{limit})"
+        exceeded: "Btw-vrijstellingsdrempel overschreden (€ %{limit}): btw verschuldigd vanaf 1 januari daarna"
+        tolerance_exceeded: "Verhoogde btw-vrijstellingsdrempel overschreden: btw verschuldigd vanaf de dag van overschrijding"
+      micro:
+        approaching: "Omzet op %{ratio} % van de drempel van het microregime (€ %{limit})"
+        exceeded: "Drempel van het microregime overschreden (€ %{limit}): overstap naar het normale regime plannen"
+    errors:
+      line:
+        nature:
+          unknown: "Onbekende aard"
+          disabled: "Deze aard wordt niet meer gebruikt"
+        amount:
+          not_positive: "Het bedrag moet positief zijn"
+          scale: "Het bedrag wordt in centen uitgedrukt"
+        vat_amount:
+          invalid: "Ongeldige btw (positief, in centen)"
+          exceeds: "De btw kan het ontvangen of betaalde bedrag niet bereiken"
+        method:
+          invalid: "Onbekende betaalwijze"
+        card:
+          unknown: "Onbekende fiche"
+        attachment:
+          unknown: "Onbekende bijlage"
+        date:
+          future: "Toekomstige datum: enkel een uitgevoerde verrichting boeken"
+          closed_period: "De periode van deze datum is afgesloten: corrigeren met een tegenboeking in een open periode"
+        reversal:
+          is_reversal: "Een tegenboeking wordt niet tegengeboekt"
+          already: "Deze lijn is al tegengeboekt"
+          before_line: "De tegenboeking kan de lijn niet voorafgaan"
+        too_long: "Hoogstens %{max} tekens"
+      parameter:
+        code:
+          unknown: "Onbekende parameter"
+        text:
+          required: "Het vak invullen"
+        value:
+          invalid: "Ongeldige waarde (positief, hoogstens zes decimalen)"
+      settings:
+        periodicity:
+          invalid: "Onbekende periodiciteit"
+      nature:
+        in_use: "Aard al gebruikt: enkel omschrijving en activering wijzigen"
+        code:
+          invalid: "Code in hoofdletters, cijfers en _, hoogstens 24 tekens"
+          taken: "Code al in gebruik"
+        label:
+          blank: "Een omschrijving invullen"
+        kind:
+          invalid: "Onbekende soort"
+        category:
+          invalid: "Categorie past niet bij de soort"
+      item:
+        not_item: "Deze fiche is geen artikel"
+      declaration:
+        period:
+          invalid: "Dit is niet het begin van een aangifteperiode"
+        before_end: "De aangifte volgt het einde van de periode"
+        future: "De aangifte kan niet in de toekomst gedateerd zijn"
+        already: "Periode al aangegeven"
+      switch:
+        vat:
+          rate_invalid: "Een actief btw-tarief kiezen, niet nul, buiten de vrijstelling"
+          already: "De overstap naar btw is al gedaan"
+          item_refused: "Artikel %{code} niet gewijzigd (%{error})"
+        real:
+          already: "De overstap naar het normale regime is al gedaan"

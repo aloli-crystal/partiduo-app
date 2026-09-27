@@ -1,5 +1,14 @@
 fr:
   accounting:
+    micro:
+      accounts:
+        sale_bic: "Ventes de marchandises"
+        service_bic: "Prestations de services"
+        bnc: "Prestations de services"
+        goods: "Achats de marchandises"
+        other: "Achats non stockés de matières et fournitures"
+        vat: "TVA collectée"
+        vat_deductible: "TVA déductible sur autres biens et services"
     module:
       name: "Comptabilité"
     permissions:
@@ -262,6 +271,11 @@ fr:
         already_posted: "Cet événement est déjà comptabilisé."
         not_dismissed: "Cet événement n'est pas écarté."
         reason_too_long: "%{max} caractères au plus."
+      micro:
+        no_financial_ledger: "Aucun journal financier actif : créez-en un pour comptabiliser les registres de la micro-entreprise."
+        no_account: "Aucun compte pour la catégorie %{category} : paramétrez-le pour la micro-entreprise."
+        key_invalid: "Nature ou catégorie invalide (lettres, chiffres et _, 26 caractères au plus)."
+        not_direct_use: "Le compte %{number} n'est pas utilisable en saisie."
       matching:
         too_few_lines: "Choisissez au moins deux lignes à lettrer."
         line_not_found: "La ligne %{id} n'existe pas."

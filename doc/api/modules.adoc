@@ -270,6 +270,12 @@ obligatoires :
 (ajouté au lot 2F, DECISIONS D-2F-003) ; clés `entry_ids`, `sources`
 |`card.saved` |`card_id` |Socle, fiche enregistrée
 |`period.closed` |`period_id` |Socle ou Comptabilité, clôture
+|`micro.receipt.recorded` |`receipt_id` |Micro-entreprise, recette inscrite ou contre-passée
+(ADR-007 D2, DECISIONS D-MIC-002) ; clés `number`, `date`, `amount`, `vat_amount`, `nature_code`,
+`category`, `method`, `card_id`, `party_name`, `label`, `reference`, `attachment_id`, `origin`,
+`source`, `reversal_of_id`
+|`micro.purchase.recorded` |`purchase_id` |Micro-entreprise, achat inscrit ou contre-passé ; mêmes
+clés, sans `vat_amount` ni `source`
 |===
 
 Publication, dans la transaction de la commande :

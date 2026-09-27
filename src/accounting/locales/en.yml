@@ -1,5 +1,14 @@
 en:
   accounting:
+    micro:
+      accounts:
+        sale_bic: "Sales of goods"
+        service_bic: "Services"
+        bnc: "Services"
+        goods: "Purchases of goods"
+        other: "Non-stock purchases of materials and supplies"
+        vat: "Output VAT"
+        vat_deductible: "Deductible VAT on other goods and services"
     module:
       name: "Accounting"
     permissions:
@@ -262,6 +271,11 @@ en:
         already_posted: "This event is already posted."
         not_dismissed: "This event is not dismissed."
         reason_too_long: "%{max} characters at most."
+      micro:
+        no_financial_ledger: "No active financial ledger: create one to post the micro-business registers."
+        no_account: "No account for category %{category}: set it for the micro-business."
+        key_invalid: "Invalid nature or category (letters, digits and _, at most 26 characters)."
+        not_direct_use: "Account %{number} cannot be used in entries."
       matching:
         too_few_lines: "Select at least two lines to match."
         line_not_found: "Line %{id} does not exist."

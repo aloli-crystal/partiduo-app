@@ -27,19 +27,24 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |5 |Analytique : plans, postes, groupes, clés de répartition, ventilation des écritures, opérations diverses, balances et historiques |*Terminé* (cœur et interface ; clôture « Clôture du lot 5 ») ; reprise analytique par `partiduo-migrate` reportée (B-MIG-001)
 |6 |Stock, prévisions budgétaires, suivi (GED : extension `partiduo-document`) |*Terminé* (cœur et interface ; clôture « Clôture du lot 6 ») ; reprise par `partiduo-migrate` reportée
 |E |Justificatifs (`partiduo-document`), facturation électronique (`partiduo-einvoicing`, adaptateurs XP Z12-013 et NOALYSS-PEPPOL), SUPER PDP (`partiduo-superpdp`), factures non électroniques (cœur et interface) |*Terminé* (clôture « Clôture du lot E »)
+|G |Module `micro` (ADR-007 D1, D2) : registres, aide URSSAF, 2042-C-PRO, seuils, partie double par la Comptabilité (cœur) ; interface simplifiée (D3) |*Terminé* (cœur, interface simplifiée, écrans de paramétrage ; clôture « Clôture du lot G »)
 |===
 
-*État (27 septembre 2026, clôture du lot E).* Lot en cours : aucun. Les
-lots P à 6 du plan et le lot E (justificatifs, facturation électronique,
-SUPER PDP, factures non électroniques) sont terminés, les trois jalons
+*État (27 septembre 2026, clôture du lot G).* Lot en cours : aucun. Les
+lots P à 6 du plan, le lot E (justificatifs, facturation électronique,
+SUPER PDP, factures non électroniques) et le lot G (micro-entreprise :
+module `micro`, interface simplifiée, section « Clôture du lot G ») sont
+terminés, les trois jalons
 vérifiés, et la critique de complétude (section du même nom) a comblé les
 écarts faisables au prompt, aux ADR et à la maquette. Ce qui reste est
 listé dans « Prochaines étapes » et dans BLOCAGES.adoc. Specs :
-`partiduo-app` 1028 exemples (tous modules), 966 + 16 en attente
-(Comptabilité seule), 709 + 45 en attente (Facturation seule) ;
-`partiduo-ui-bulma` 282 ; `partiduo-document` 69 ; `partiduo-einvoicing`
-92 ; `partiduo-superpdp` 71 (dont 5 contre le bac à sable SUPER PDP) ;
-`partiduo-skel` 24 ; `partiduo-migrate` 93 ; tous verts.
+`partiduo-app` 1060 exemples (Comptabilité et Facturation), 998 + 22 en
+attente (Comptabilité seule), 741 + 51 (Facturation seule), 690 + 65
+(micro), 752 + 49 (micro et Facturation), 1010 + 18 (micro, Facturation et
+Comptabilité) ; `partiduo-ui-bulma` 309 ; `partiduo-skel` 24 ;
+`partiduo-document` 69 ; `partiduo-einvoicing` 92 ; `partiduo-superpdp` 71
+(dont 5 contre le bac à sable SUPER PDP) ; `partiduo-migrate` 93 ; tous
+verts (extensions et reprise : chiffres de la clôture du lot E).
 
 == Lot P — ce qui existe (26 septembre 2026)
 
@@ -1517,10 +1522,149 @@ migration en attente ; `genmigrations einvoicing` : aucun écart. Commit
 `development` dans `partiduo-app`, `partiduo-ui-bulma`, `partiduo-document`,
 `partiduo-einvoicing`, `partiduo-superpdp`.
 
+== Module micro-entreprise — ADR-007 D1, D2 (cœur, 27 septembre 2026)
+
+Cœur (`partiduo-app`), module officiel `micro` sans dépendance (décisions
+D-MIC-001 à D-MIC-010, blocage B-MIC-001, contrat link:doc/api/micro.adoc[]) :
+
+* Application `src/micro/` : manifeste `MICRO` (permissions
+  `micro.register.read`, `micro.register.write`, `micro.settings.write` ;
+  menus Recettes, Achats, URSSAF, 2042-C-PRO, Seuils, paramètres),
+  `ModuleDisabled` sur toute fonction du contrat si inactif ; migration
+  micro 0001 ; jeu de données initial `MICRO.parameters`.
+* Registres natifs : livre des recettes et registre des achats, numérotés
+  par année sous verrou, saisie directe (date, client ou fournisseur, nature,
+  montant, TVA comprise, mode de règlement, pièce, pièce jointe du socle),
+  intangibles dès l'inscription et fermés aux périodes closes (déclencheur),
+  contre-passation datée ; éditions CSV et PDF/A-2b, récapitulatif annuel
+  des achats.
+* Facturation par événements seulement : `invoice.issued`,
+  `payment.recorded`, `payment.matched` (recette ventilée par nature
+  d'article, TVA au prorata), `payment.unmatched` (contre-passation).
+* URSSAF : chiffre d'affaires par catégorie (ventes BIC, services BIC, BNC),
+  périodicité mensuelle ou trimestrielle, échéances et « À traiter »
+  (`todo`), cotisations, CFP et versement libératoire estimés aux taux datés
+  (`micro_parameter`, jamais en dur), déclaration notée ; montants de la
+  2042-C-PRO ; seuils de franchise de TVA et du régime micro (datés,
+  proratisés l'année de création), alertes ; bascules guidées vers la TVA
+  (articles du socle en franchise → taux normal) et vers le réel
+  (activation de la Comptabilité, republication).
+* Événements `micro.receipt.recorded`, `micro.purchase.recorded` ;
+  Comptabilité : abonnés `Partiduo::Accounting::MicroEntries` (écriture de
+  trésorerie, contrepartie paramétrée par nature ou catégorie,
+  `accounting_micro_account`, migration accounting 0010,
+  `set_micro_account`), sans appel entre modules ; une recette issue de la
+  Facturation n'est pas comptabilisée deux fois.
+* `partiduo-provision --modules micro[,invoicing[,accounting]]` (aide mise à
+  jour, spec de la commande `provision`).
+* Configurations de specs et matrice de CI : `micro`, `micro,invoicing`,
+  `micro,invoicing,accounting` en plus des trois de l'ADR-006 D7.
+* Specs : `spec/micro/registers_spec.cr` (12), `spec/micro/urssaf_spec.cr` (9),
+  `spec/integration/micro_spec.cr` (6), `spec/core/provision_command_spec.cr`
+  (+1).
+* Vérifications (base `partiduo_test_g_micro`, `scripts/specs-modules.sh
+  --order random`) : 977 + 18 en attente (Comptabilité, Analytique, Stock,
+  Suivi), 720 + 47 (Facturation, Stock, Suivi), 1039 + 2 (tous hors micro),
+  623 + 65 (micro seul), 685 + 49 (micro et Facturation), 943 + 18 (micro,
+  Facturation et Comptabilité), tous verts ; `crystal tool format --check`
+  et Ameba sans remarque ; garde-fou ADR-005 D3 vert ; `genmigrations
+  micro` : aucun écart (`accounting` : seul l'écart antérieur de D-ED-006) ;
+  retour arrière puis réapplication de micro 0001 et accounting 0010.
+
+Reste : vérifier les paramètres initiaux aux sources (B-MIC-001) ; faire
+adopter l'amendement D-MIC-003 ; module `liberal` (ADR-007 D6) et extension
+`partiduo-teledec` (D4). L'interface simplifiée (D3) est faite : section
+suivante.
+
+== Interface simplifiée de la micro-entreprise — ADR-007 D3 (partiduo-ui-bulma, 27 septembre 2026)
+
+Interface (`partiduo-ui-bulma`, uniquement par `Partiduo::Api`, décisions
+D-UI-061 à D-UI-067, blocage B-UI-009) :
+
+* Mode simplifié (`src/ui/simple_mode.cr`) quand `MICRO` est actif et
+  l'acteur lit les registres : menu réduit (Tableau de bord, Recettes,
+  Achats, Factures, URSSAF, Justificatifs) composé depuis
+  `Api::Modules.menu` ; utilisateur de la société toujours en mode
+  simplifié ; comptable (rôle `accountant`) en mode complet par défaut,
+  bascule par le menu de l'utilisateur (`POST /mode`, cookie
+  `partiduo_mode`) ; paramètres de la micro-entreprise dans ce menu.
+* Tableau de bord simplifié (`src/ui/micro_dashboard.cr`) : chiffre
+  d'affaires encaissé de l'année et du mois, dépensé, prochaine échéance
+  URSSAF et cotisations estimées, factures à encaisser, jauges des seuils,
+  dernières recettes, « À traiter » (`Api::Micro.todo`).
+* Écrans `/micro/…` (`src/ui/handlers/micro/`, gabarits
+  `templates/ui/micro/`) : livre des recettes et registre des achats
+  (année, total, éditions CSV et PDF du contrat), saisie en quelques champs
+  pensée pour le téléphone (photo du justificatif), consultation et
+  annulation datée du jour ; URSSAF (montants à reporter en euros entiers,
+  déclaration notée), 2042-C-PRO, seuils, paramètres ; facture allégée
+  (`create_document`, taux `VATEX-FR-FRANCHISE` d'office en franchise,
+  donc mention 293 B ; taux choisi après la bascule).
+* Vocabulaire courant (« encaissé », « dépensé », « annuler ») ; libellés
+  fr, en, nl ; styles du mode dans `app.css` (une colonne sous 768 px).
+* Specs : `spec/ui/micro_spec.cr` (10), `spec/ui/accessibility_spec.cr`
+  (+1, écrans du mode simplifié) ; recherche des clés absentes corrigée
+  (« missing translation », D-UI-067).
+* Vérifications (base `partiduo_test_g_ui`) : `partiduo-ui-bulma` 293
+  exemples verts (ordre aléatoire) ; `crystal tool format --check` et Ameba
+  sans remarque ; garde-fou `Partiduo::Api` vert ; `partiduo-skel` 24 verts.
+  Non vu dans un navigateur ni sur un téléphone (B-UI-009).
+
+Reste (à la clôture du lot G) : essai sur téléphone (B-UI-009). Les
+bascules guidées, paramètres datés, natures et le paramétrage comptable ont
+leurs écrans depuis la clôture (D-UI-068).
+
+== Clôture du lot G — relecture (27 septembre 2026)
+
+Remarques de relecture traitées (décisions D-MIC-011 à D-MIC-018,
+D-UI-068, D-TST-G-003) :
+
+* Chiffre d'affaires compté deux fois après un lettrage fusionné puis
+  défait : `payment.unmatched` contre-passe toutes les recettes de lettrage
+  des factures citées (D-MIC-016).
+* Remboursement d'une recette issue de la Facturation noté par
+  contre-passation : origine `manual`, écriture inverse en Comptabilité
+  (D-MIC-011).
+* TVA déductible au registre des achats (`vat_amount`, 44566 / 411,
+  catégorie `vat_deductible`), champ affiché après la bascule (D-MIC-013).
+* Écrans : natures, taux et seuils datés, natures des articles, bascules
+  guidées vers la TVA et le régime réel, republication vers la
+  Comptabilité, comptes de la micro-entreprise côté Comptabilité,
+  récapitulatif par nature au pied des registres (D-UI-068).
+* « À traiter » borné à l'année précédente, déclarations d'une année en une
+  requête et paramètres lus une fois (D-MIC-012) ; TVA d'une facture
+  encaissée ventilée par taux (D-MIC-014) ; journal des événements filtré
+  en base (`Events.journal(…, where:)`) ; pièce jointe lisible par l'acteur
+  ou déposée par lui (D-MIC-015) ; pages de registre plafonnées à 10 000
+  lignes, totaux par agrégat (D-MIC-017) ; noms de fichiers et libellé
+  d'annulation traduits (D-MIC-018) ; D-MIC-005 corrigée
+  (`RECORDED_PREFIX`), avec spec d'intégration.
+* Specs nouvelles : `spec/micro/review_spec.cr` (5),
+  `spec/integration/micro_review_spec.cr` (5), `spec/micro/registers_spec.cr`
+  (+1), `spec/ui/micro_settings_spec.cr` (7).
+
+Vérifications (bases `partiduo_test_g_final`, `…_ui`, `…_skel`, un
+`CRYSTAL_CACHE_DIR` par exécution) : `scripts/specs-modules.sh` tout vert —
+998 + 22 en attente (Comptabilité, Analytique, Stock, Suivi), 741 + 51
+(Facturation, Stock, Suivi), 1060 + 6 (Comptabilité et Facturation), 690 +
+65 (micro seul), 752 + 49 (micro et Facturation), 1010 + 18 (micro,
+Facturation et Comptabilité) ; `partiduo-ui-bulma` 309 ; `partiduo-skel`
+24 ; `crystal tool format` et Ameba sans remarque (cœur et interface) ;
+garde-fous ADR-005 D3 verts ; `marten migrate` sur base vierge
+(`partiduo_migrate_g`), second passage sans migration en attente,
+`genmigrations micro` sans écart. Commits `development` dans
+`partiduo-app` et `partiduo-ui-bulma`.
+
 == Prochaines étapes
 
-Liste à l'issue de la critique de complétude et du lot E ; chaque point
-renvoie à sa décision ou à son blocage.
+Liste à l'issue de la critique de complétude, du lot E et du lot G ;
+chaque point renvoie à sa décision ou à son blocage.
+
+. *Micro-entreprise (après le lot G)* : vérifier aux sources les taux,
+  seuils et cases initiaux (B-MIC-001) ; essai du mode simplifié sur un
+  téléphone (B-UI-009) ; faire adopter l'amendement D-MIC-003 ; module
+  `liberal` (ADR-007 D6) et extension `partiduo-teledec` (D4) ; noter
+  plusieurs déclarations URSSAF passées d'un coup (D-MIC-012).
 
 . *Facturation électronique* : écran de saisie libre de l'écriture d'une
   facture reçue dans EINV (D-EINV-025) ; statut de plateforme sur l'écran de
@@ -1570,7 +1714,7 @@ crystal run manage.cr -- migrate                   # base de développement
 # PARTIDUO_TIME_ZONE=Europe/Brussels                # fuseau de l'instance (défaut Europe/Paris)
 createdb --encoding=UTF8 partiduo_test             # une fois
 crystal spec                                       # base partiduo_test
-DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' scripts/specs-modules.sh   # trois configurations
+DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' scripts/specs-modules.sh   # six configurations (ADR-006 D7, ADR-007)
 crystal tool format src spec && ameba
 crystal run scripts/interface_boundary.cr -- src   # garde-fou ADR-005 D3
 bin/partiduo-provision --help                      # création d'une instance

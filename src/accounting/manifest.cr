@@ -69,4 +69,10 @@ Partiduo::Modules.register do
   on("invoice.issued") { |event| Partiduo::Accounting::Billing.on_event(event) }
   on("credit_note.issued") { |event| Partiduo::Accounting::Billing.on_event(event) }
   on("payment.recorded") { |event| Partiduo::Accounting::Billing.on_event(event) }
+
+  # Écritures des registres de la micro-entreprise (ADR-007 D2) : trésorerie
+  # et contrepartie selon le paramétrage par nature ; un échec ne bloque pas
+  # le registre, qui peut republier ses lignes.
+  on("micro.receipt.recorded") { |event| Partiduo::Accounting::MicroEntries.on_event(event) }
+  on("micro.purchase.recorded") { |event| Partiduo::Accounting::MicroEntries.on_event(event) }
 end

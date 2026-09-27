@@ -19,8 +19,8 @@ l'auteur (agent).
 
 * Une application Marten par dossier de `src/`, selon l'ADR-001 § Organisation
   du code : `modules`, `auth`, `core`, `cards`, `vat`, `accounting`,
-  `invoicing`, `analytic`, `stock` et `followup` (lot 6, D-STK-001,
-  D-FUP-001).
+  `invoicing`, `analytic`, `stock`, `followup` (lot 6, D-STK-001,
+  D-FUP-001) et `micro` (ADR-007, D-MIC-001).
 * Espace de noms : `Partiduo::<App>` (`Partiduo::Accounting`,
   `Partiduo::Cards`…). Rien au niveau supérieur, sauf les classes de
   migration, nommées par Marten (`Migration::Accounting::V0001`).
@@ -158,7 +158,9 @@ est interne et peut changer.
   (`entry_id`), `invoice.issued` (`invoice_id`), `credit_note.issued`
   (`credit_note_id`), `delivery_note.issued` (`delivery_note_id`, lot 6,
   D-STK-004), `payment.recorded` (`payment_id`), `payment.matched`
-  (`matching_id`), `card.saved` (`card_id`), `period.closed` (`period_id`).
+  (`matching_id`), `card.saved` (`card_id`), `period.closed` (`period_id`),
+  `micro.receipt.recorded` (`receipt_id`), `micro.purchase.recorded`
+  (`purchase_id`) (ADR-007 D2, D-MIC-002).
 ** publication *dans la transaction* de la commande :
    `Partiduo::Events.publish("entry.posted", {"entry_id" => id.to_s}, actor_user_id: actor.user_id)` ;
    hors transaction, `publish` en ouvre une ;
@@ -185,7 +187,7 @@ est interne et peut changer.
   `DATABASE_URL=postgres:///partiduo_test_<agent>?host=/tmp crystal spec`
   (nom contenant `test`, sinon refus). Créer la base une fois :
   `createdb --encoding=UTF8 partiduo_test_<agent>`.
-* Les trois configurations : `scripts/specs-modules.sh`.
+* Les configurations de modules (ADR-006 D7, ADR-007, D-MIC-008) : `scripts/specs-modules.sh`.
 * Avant de rendre la main : `crystal tool format src spec`, `ameba`, specs
   vertes dans les trois configurations.
 
@@ -6707,3 +6709,551 @@ pièces jointes du socle, sans écriture.
 *Choix.* `ui.units.kilobytes` (Ko, KB, kB). Les pièces orphelines ne sont pas
 nettoyées dans ce lot : le socle n'a pas de notion de pièce « en attente ».
 Voir B-UI-008.
+
+== Module micro-entreprise — ADR-007 D1 et D2 (27 septembre 2026)
+
+=== D-MIC-001 — Application `micro/`, module `MICRO` sans dépendance ; menus dans les rubriques existantes (G:micro, micro)
+
+*Contexte.* ADR-007 D1 crée un module officiel `micro` qui ne dépend que du
+socle ; D3 (interface simplifiée) relève de `partiduo-ui-bulma`.
+
+*Choix.* Application Marten `src/micro/` (`Partiduo::Micro`), manifeste
+`MICRO` (`Kind::Module`, aucune dépendance), permissions
+`micro.register.read`, `micro.register.write`, `micro.settings.write`,
+contrat `Partiduo::Api::Micro` (`doc/api/micro.adoc`). Menus rattachés aux
+rubriques du socle : Recettes et Achats sous `ENTRY`, URSSAF, 2042-C-PRO et
+Seuils sous `REPORTS`, paramètres sous `SETTINGS` ; le menu réduit du mode
+simplifié (D3) est composé par l'interface. Le module n'est pas réservé au
+régime FR (aucun blocage à l'activation) : ses paramètres initiaux sont
+français.
+
+*Alternative écartée.* Une rubrique de premier niveau `MICRO` déclarée par
+le module : les rubriques de premier niveau appartiennent au socle (C4) et
+l'interface simplifiée choisit elle-même ce qu'elle montre.
+
+=== D-MIC-002 — Événements `micro.receipt.recorded` et `micro.purchase.recorded` à charge utile complète, non journalisés (G:micro, micro ; ajout à la liste fermée)
+
+*Contexte.* ADR-007 D2 : chaque recette ou achat publie un événement auquel
+la Comptabilité s'abonne ; ADR-006 D3 interdit à la Comptabilité de relire
+le module micro.
+
+*Choix.* Ajout à `Partiduo::Events::SCHEMA` (clé obligatoire `receipt_id`
+ou `purchase_id`). La charge utile porte tout ce qu'il faut pour passer
+l'écriture : `number`, `date`, `amount` (négatif pour une contre-passation),
+`vat_amount`, `nature_code`, `category`, `method`, `card_id`, `party_name`,
+`label`, `reference`, `attachment_id`, `origin`, `source`, `reversal_of_id`.
+Ces événements ne sont pas ajoutés à `JOURNALED` : la Comptabilité activée
+plus tard les obtient par `Partiduo::Api::Micro.republish`, idempotent côté
+Comptabilité (référence `micro:receipt:<id>`).
+
+*Alternative écartée.* Les journaliser : `JOURNALED` est aussi la liste des
+événements de l'historique « à comptabiliser » de la Facturation
+(`Billing::EVENTS`), qui les aurait mal interprétés.
+
+=== D-MIC-003 — Registres intangibles dès l'inscription ; correction par contre-passation seulement (G:micro, micro ; amendement proposé à ADR-007 D1)
+
+*Contexte.* ADR-007 D1 : registres « intangibles une fois la période close
+(correction par contre-passation datée) ». Autoriser la modification en
+période ouverte désynchroniserait l'écriture déjà passée par la Comptabilité
+(il n'existe pas d'événement de modification).
+
+*Choix.* Une ligne ne se modifie ni ne s'efface jamais (déclencheur
+`micro_register_guard`, `BEFORE UPDATE OR DELETE`) ; aucune ligne n'entre
+dans une période close du socle (même déclencheur, `BEFORE INSERT`) ; la
+contre-passation (`reverse_receipt`, `reverse_purchase`) inscrit une ligne
+de montant opposé, datée au plus tôt de la ligne, hors période close, une
+seule par ligne (index unique partiel). Une saisie directe ne peut pas être
+datée dans le futur. `LineView#locked` signale une ligne d'une période close.
+
+*Amendement proposé.* ADR-007 D1 : lire « intangibles dès leur inscription,
+et aucune inscription dans une période close ».
+
+*Alternative écartée.* Modification libre jusqu'à la clôture : plus souple
+pour l'utilisateur, mais sans écriture comptable correspondante.
+
+=== D-MIC-004 — Écriture de trésorerie unique ; paramétrage par nature dans `accounting_micro_account` (G:micro, comptabilité)
+
+*Contexte.* ADR-007 D2 : la Comptabilité passe l'écriture « selon un
+paramétrage par nature ». `accounting_default_account` refuse les codes
+autres que `^[a-z_]{1,32}$` (contrainte de la migration 0001).
+
+*Choix.* `Partiduo::Accounting::MicroEntries` passe, par `post_entry`, une
+écriture au journal financier du mode de règlement (`Billing.financial_ledger`) :
+recette = compte du journal au débit, produit (hors taxe) et TVA collectée
+au crédit ; achat = charge au débit, compte du journal au crédit ;
+contre-passation = sens inversés. Contrepartie : table
+`accounting_micro_account` (migration accounting 0010, clé = code de nature
+ou catégorie, `set_micro_account`, `micro_accounts`), puis compte du régime
+(`src/accounting/data/micro_accounts.yml` : 707, 706, 607, 606, 44571 en
+France ; 700, 604, 601, 451 en Belgique), créé au plan s'il manque, puis
+compte par défaut `sales` pour une recette. Le tiers n'est pas imputé
+(comptabilité de trésorerie du micro-entrepreneur). Une recette issue de la
+Facturation est ignorée : sa facture et son encaissement ont déjà leurs
+écritures (D-INT-001), il n'y a donc jamais de double compte ; sa
+contre-passation saisie à la main (remboursement) passe au contraire son
+écriture (D-MIC-011). Un achat porte sa TVA déductible (D-MIC-013).
+
+*Alternative écartée.* Deux écritures (vente au compte client puis
+encaissement lettré) : plus proche d'une comptabilité d'engagement, sans
+objet pour une recette encaissée au comptant ; lignes `micro:` dans
+`accounting_default_account` : refusées par sa contrainte.
+
+=== D-MIC-005 — Recettes issues de la Facturation : ventilation par nature d'article, TVA au prorata, délettrage contre-passé (G:micro, micro)
+
+*Contexte.* ADR-007 D1 : « une facture encaissée devient une recette sans
+ressaisie ». Deux événements portent un encaissement (ADR-006 D3) :
+`payment.recorded`, publié par `Invoicing::Payments.record!` pour tout
+règlement saisi dans la Facturation — le contrat refuse cette saisie quand
+la Comptabilité est active (`invoicing.errors.payment.accounting_active`) —,
+et `payment.matched`, publié par la Comptabilité au lettrage d'un paiement
+avec une facture. Un règlement saisi dans la Facturation (Comptabilité alors
+inactive) puis comptabilisé par l'historique (`post_invoicing_history`,
+écriture `payment:<id>` lettrée d'office) produit les deux : l'absence de
+double compte tient à `Matchings::RECORDED_PREFIX`, qui exclut les
+écritures `payment:` du montant de `payment.matched` (montant nul, aucune
+recette de plus). Spec : `spec/integration/micro_review_spec.cr`.
+_(Texte corrigé à la clôture du lot G : la version précédente disait que la
+Facturation ne publiait `payment.recorded` que Comptabilité inactive.)_
+
+*Choix.* `invoice.issued` relève la facture (`micro_invoice`, charge utile
+seule ; à défaut, relecture du journal des événements du socle) ; à
+l'encaissement, la somme est ventilée par nature selon les parts hors taxe
+des articles (`set_item_nature`, sinon nature par défaut des paramètres),
+la TVA au prorata du TTC, répartie entre natures par taux (D-MIC-014), le
+reste d'arrondi à la plus grande part ;
+référence `payment:<id>` ou `matching:<id>:invoice:<id>` inscrite une fois
+par nature. `payment.unmatched` contre-passe à la date du jour toutes les
+recettes vivantes issues d'un lettrage des factures citées (D-MIC-016).
+Un échec est consigné et ne bloque jamais la Facturation ni la Comptabilité.
+`credit_note.issued` n'est pas suivi : un avoir réduit le reste à encaisser ;
+le remboursement d'une somme déjà encaissée se note par contre-passation.
+
+*Alternative écartée.* Lire la facture par `Partiduo::Api::Invoicing` :
+interdit sans `depends_on "INVOICING"` (ADR-006 D3, C3).
+
+=== D-MIC-006 — Paramètres datés à codes fermés ; valeurs initiales à vérifier chaque année (G:micro, micro)
+
+*Contexte.* ADR-007 D1 : taux et seuils « paramétrables, datés, jamais
+écrits en dur ».
+
+*Choix.* Table `micro_parameter` (code, `valid_from`, valeur numérique ou
+texte) ; codes admis `Partiduo::Api::Micro::PARAMETER_CODES` (une faute de
+frappe est refusée). Valeurs initiales dans `src/micro/data/parameters.yml`,
+chargées au provisionnement et modifiables : cotisations sociales 12,3 %
+(ventes), 21,2 % (services BIC), 23,1 % puis 24,6 % (2025) et 26,1 % (2026)
+(BNC) ; CFP 0,1 %, 0,3 %, 0,2 % ; versement libératoire 1 %, 1,7 %, 2,2 % ;
+franchise de TVA 85 000 / 37 500 €, seuils majorés 93 500 / 41 250 € ;
+régime micro 188 700 / 77 700 € puis 203 100 / 83 600 € (2026) ; alerte à
+80 % ; cases 5KO, 5KP, 5HQ et 5TA, 5TB, 5TE. Relevées de mémoire le
+27 septembre 2026 sans accès aux sources officielles : à vérifier par
+l'opérateur. Une cotisation se calcule au taux en vigueur au début de la
+période ; un taux absent est signalé (`missing_rates`) et compté zéro,
+jamais inventé.
+
+*Alternative écartée.* Constantes dans le code : contraire à ADR-007.
+
+=== D-MIC-007 — Seuils : activité mixte, prorata du seuil micro l'année de création (G:micro, micro)
+
+*Contexte.* Les seuils portent sur le chiffre d'affaires de l'année civile ;
+en activité mixte, le seuil des ventes s'applique au total et celui des
+services aux seules prestations.
+
+*Choix.* `thresholds` compare le total au seuil « goods » et les prestations
+(BIC et BNC) au seuil « services », avec les seuils en vigueur au 1er
+janvier. Le seuil du régime micro est proratisé (jours d'activité ÷ jours
+de l'année) l'année du début d'activité ; la franchise de TVA ne l'est pas.
+Statuts `approaching` (≥ `alert.ratio`), `exceeded`, `tolerance_exceeded`
+(TVA), `not_applicable` après la bascule ; les alertes vont dans « À
+traiter ». Le maintien du régime micro l'année qui suit un premier
+dépassement n'est pas calculé : l'alerte invite à préparer le passage.
+
+*Alternative écartée.* Calculer les conséquences exactes (deux années
+consécutives) : dépend d'informations hors du registre (années antérieures
+reprises).
+
+=== D-MIC-008 — Trois configurations de specs de plus : `micro`, `micro,invoicing`, `micro,invoicing,accounting` (G:micro)
+
+*Contexte.* ADR-006 D7 et ADR-007 (Conséquences) : configurations de specs
+supplémentaires.
+
+*Choix.* `scripts/specs-modules.sh` et la matrice de la CI ajoutent ces trois
+listes, littérales (sans Stock, Suivi ni Analytique). Les specs du module
+(`spec/micro/`) sont en `describe_module "MICRO"` ; celles de bout en bout
+(`spec/integration/micro_spec.cr`) forcent chacune leur configuration
+(`with_active_modules`), y compris `micro,accounting`.
+
+*Alternative écartée.* Ajouter Stock et Suivi aux configurations micro :
+sans rapport avec le public visé, allonge la CI.
+
+=== D-MIC-009 — Bascules guidées par le socle seulement (G:micro, micro)
+
+*Contexte.* ADR-007 D1 : bascule « vers la TVA (le module Facturation cesse
+d'apposer la mention 293 B) ou vers le régime réel (activation de la
+Comptabilité) », sans appel entre modules.
+
+*Choix.* La mention 293 B naît du taux d'exonération `VATEX-FR-FRANCHISE`
+des lignes. `vat_switch_plan` liste les articles du socle à ce taux et
+propose le taux normal le plus élevé ; `switch_to_vat` leur donne le taux
+choisi par `Partiduo::Api::Cards.update_card` (l'acteur doit avoir
+`cards.card.write`) et note la date. `switch_to_real` active la
+Comptabilité par `Partiduo::Api::Modules.activate` (`core.modules.manage`),
+note la date et republie les registres ; le plan comptable n'étant pas
+chargé par l'activation, `republish` se relance une fois le plan chargé
+(les écritures déjà passées ne sont pas doublées).
+
+*Alternative écartée.* Un réglage « franchise » lu par la Facturation :
+exigerait un appel ou un événement nouveau vers ce module.
+
+=== D-MIC-010 — Échéances URSSAF, « À traiter », éditions (G:micro, micro)
+
+*Contexte.* ADR-007 D1 : périodicité mensuelle ou trimestrielle, échéances
+dans « À traiter », registres édités en PDF et CSV.
+
+*Choix.* Échéance au dernier jour du mois qui suit la période ;
+`todo(actor, today)` rend les déclarations dues ou en retard depuis le
+début d'activité (paramètre), à défaut depuis la première recette, au plus
+tôt le 1er janvier de l'année précédente (D-MIC-012), et les alertes de
+seuil ; l'interface les affiche. `mark_declared` note la
+déclaration faite (après la fin de la période). Chiffre d'affaires =
+encaissé hors TVA, contre-passations comprises à leur date ; 2042-C-PRO en
+euros entiers (arrondi commercial). Éditions : CSV (`;`, cellules protégées,
+D-2F-009) et PDF/A-2b par une mise en page propre au module (il ne peut
+citer celle de la Comptabilité ; service neutre du contrat : B-CRIT-001).
+Modes de règlement alignés sur la Facturation (`cheque`, et non `check`).
+
+*Alternative écartée.* Échéances exactes du calendrier URSSAF (dates
+décalées au jour ouvré) : paramétrage supplémentaire sans gain réel.
+
+== Interface simplifiée de la micro-entreprise — ADR-007 D3 (partiduo-ui-bulma, 27 septembre 2026)
+
+=== D-UI-061 — Mode simplifié : condition, choix du comptable, présentation seulement (G:interface-simplifiee, interface)
+
+*Contexte.* ADR-007 D3 : « quand `micro` est actif », un mode simplifié ;
+« le mode complet reste accessible au comptable (rôle `comptable`) ».
+
+*Choix.* `PartiduoUi::SimpleMode` : le mode s'offre quand le module `MICRO`
+est actif et que l'acteur a `micro.register.read`. Un utilisateur de la
+société (rôle `member`, administrateur compris) est toujours en mode
+simplifié ; un comptable (rôle `accountant`) est en mode complet par défaut
+et passe d'un mode à l'autre par le menu de l'utilisateur (`POST /mode`,
+cookie `partiduo_mode` `simple` ou `full`, `HttpOnly`, `SameSite=Lax`),
+refusé (403) à tout autre rôle. Le mode ne change que la présentation (menu,
+tableau de bord, facture allégée proposée) : les droits restent ceux du
+contrat et toute route permise reste joignable par son adresse ; les
+paramètres de la micro-entreprise sont dans le menu de l'utilisateur
+(avec liens vers société, utilisateurs, modules, fiches selon les droits).
+
+*Alternative écartée.* Interdire les routes du mode complet aux membres :
+double emploi avec les permissions des profils, et bloquerait un
+administrateur qui doit régler la société ou les utilisateurs.
+
+=== D-UI-062 — Menu réduit composé par l'interface depuis le menu de l'utilisateur (G:interface-simplifiee, interface)
+
+*Contexte.* ADR-007 D3 : menu réduit (Tableau de bord, Recettes, Achats,
+Factures, URSSAF, Justificatifs) ; D-MIC-001 : ce menu est composé par
+l'interface.
+
+*Choix.* Entrées retenues par code dans `Api::Modules.menu` (donc seulement
+si le module est actif et la permission accordée) : `DASHBOARD`,
+`MICRO_RECEIPTS`, `MICRO_PURCHASES`, `INV_DOCUMENTS`, `MICRO_URSSAF`,
+`DOCUMENT_INBOX` (extension `partiduo-document`), avec des libellés propres
+(`ui.micro.menu.*`), sans rubrique. 2042-C-PRO et seuils sont joints depuis
+l'écran URSSAF et le tableau de bord.
+
+*Alternative écartée.* Déclarer le menu réduit dans le manifeste du cœur :
+les rubriques de premier niveau appartiennent au socle (C4) et un menu est
+un choix d'interface (ADR-005 D1).
+
+=== D-UI-063 — Tableau de bord simplifié et vocabulaire courant (G:interface-simplifiee, interface)
+
+*Choix.* `PartiduoUi::MicroDashboard` : tuiles « Chiffre d'affaires »
+(encaissé hors TVA de l'année), « Encaissé en <mois> », « Dépensé en
+<année> », « URSSAF avant le <date> » (cotisations estimées, chiffre
+d'affaires de la période), « Factures à encaisser » si la Facturation est
+active ; jauges des seuils (franchise de TVA, régime micro ; ton selon le
+statut du contrat, `role="img"` décrit) ; dernières recettes ; « À traiter »
+de `Api::Micro.todo` (dates et montants présentés selon la langue),
+compteurs d'extensions, sécurité du compte, brouillons de factures. La
+prochaine échéance est la déclaration en retard, sinon due, sinon la
+période en cours, jamais antérieure au début d'activité (à défaut, à la
+première recette ; sans l'un ni l'autre, à l'année en cours) : sans ce
+filtre, les périodes de l'année précédente apparaîtraient « en retard ».
+Libellés du mode : « encaissé », « dépensé », « annuler » (et non
+« contre-passer ») ; aucune occurrence de « débit » ou « crédit » (spec).
+
+=== D-UI-064 — Saisie d'une recette ou d'un achat pensée pour le téléphone (G:interface-simplifiee, interface)
+
+*Choix.* Une colonne au téléphone : montant en premier (clavier décimal,
+grand), date du jour par défaut (`type="date"`), nature (par défaut celle
+des paramètres pour une recette), mode de règlement (virement pour une
+recette, carte pour un achat), client ou fournisseur par son nom libre,
+photo du justificatif (`accept="image/*,application/pdf"`,
+`capture="environment"`, déposée au socle par `store_attachment` et gardée
+si la saisie est refusée) ; désignation, n° de pièce et TVA comprise (après
+la bascule vers la TVA seulement) sous « Plus de détails » (`<details>`
+natif). « Enregistrer et en saisir une autre » ramène au formulaire. Une
+ligne ne se modifie pas (D-MIC-003) : l'écran de la ligne propose
+« Annuler cette ligne », contre-passation datée du jour après confirmation.
+Éditions CSV et PDF : celles du contrat (`export_receipts`,
+`export_purchases`), depuis le pied de la liste.
+
+*Alternative écartée.* Choisir le client par sa fiche du socle : un champ
+de plus, inutile au livre des recettes (le nom suffit, ADR-007 D1).
+
+=== D-UI-065 — URSSAF : montants à reporter en euros entiers, déclaration notée en un clic (G:interface-simplifiee, interface)
+
+*Choix.* L'écran URSSAF met en tête la prochaine déclaration : chiffre
+d'affaires par catégorie arrondi à l'euro (à reporter, comme le demande le
+formulaire de l'URSSAF) et au centime (encaissé), cotisations estimées et
+taux, taux absents signalés ; « J'ai déclaré sur le site de l'URSSAF »
+(référence facultative) appelle `mark_declared` à la date du jour. Suivent
+les échéances de l'année (onglets des trois dernières années), puis les
+liens vers la 2042-C-PRO (cases du millésime, euros entiers) et les seuils.
+
+*Alternative écartée.* Saisir la date de déclaration : la déclaration se
+note le jour où elle est faite ; une date antérieure resterait possible par
+le contrat.
+
+=== D-UI-066 — Facture allégée : mêmes commandes, taux de franchise d'office (G:interface-simplifiee, interface)
+
+*Contexte.* ADR-007 D3 : « mêmes commandes du module Facturation, moins de
+champs, mention 293 B automatique en franchise » ; D-MIC-009 : la mention
+naît du taux `VATEX-FR-FRANCHISE` des lignes.
+
+*Choix.* `GET/POST /micro/invoices/new` : client existant (liste) ou
+nouveau (nom seul, fiche créée dans la première catégorie de clients, et
+seulement si le reste de la saisie est lisible), trois lignes (désignation,
+quantité, prix), échéance facultative ; `Api::Invoicing.create_document`
+crée le brouillon (lignes `free`), puis l'écran habituel de la facture
+valide, envoie et encaisse. Tant que le module micro n'a pas noté la
+bascule vers la TVA (`vat_liable_since`), chaque ligne prend le taux actif
+d'exonération `VATEX-FR-FRANCHISE` et le formulaire l'annonce ; après la
+bascule, un taux est choisi (hors franchise et autoliquidation ; par défaut
+le taux normal le plus élevé). En mode simplifié, « Nouvelle facture » de
+la liste des documents mène à ce formulaire ; le comptable garde un lien
+vers le formulaire complet.
+
+*Alternative écartée.* Masquer des champs du formulaire complet par
+gabarit : même handler, règles de préremplissage entremêlées, et la
+franchise n'y serait pas appliquée d'office.
+
+=== D-UI-067 — Recherche de « missing translation » dans les specs de l'interface (G:interface-simplifiee, tests)
+
+*Contexte.* Marten rend une clé absente sous la forme « missing
+translation: … » ; plusieurs specs antérieures cherchent « translation
+missing », qui n'apparaît jamais.
+
+*Choix.* Les specs de l'interface cherchent désormais « missing
+translation » (mode simplifié, `shell_spec.cr`, `accessibility_spec.cr` :
+toujours vertes) ; une clé absente a été trouvée ainsi dans le mode
+simplifié (paramètre `scope` d'`I18n.t`, interprété comme portée de
+traduction, renommé `area`).
+
+*Alternative écartée.* Garder l'ancienne chaîne : le contrôle ne
+contrôlait rien.
+
+== Tests du lot G — micro-entreprise et interface simplifiée (27 septembre 2026)
+
+=== D-TST-G-001 — Ni contre-passation saisie ni déclaration URSSAF datées dans le futur (G:tests, micro)
+
+*Contexte.* La saisie directe refuse une date à venir (« n'inscrire
+qu'une opération faite »), mais `reverse_receipt` et `reverse_purchase`
+acceptaient une contre-passation datée dans le futur (contrôle de date
+appelé avec `manual: false`), et `mark_declared` une déclaration datée
+après le jour : le chiffre d'affaires d'une période à venir, ou une
+déclaration pas encore faite, pouvaient ainsi être inscrits.
+
+*Choix.* `Registers.reverse_errors` prend `manual` (vrai par défaut) :
+une contre-passation saisie par le contrat est refusée à une date à venir
+(`micro.errors.line.date.future`) ; celle du délettrage
+(`payment.unmatched`, `Feeds`) garde `manual: false`, datée du jour ou de
+la ligne. `mark_declared` refuse `declared_on` postérieur au jour
+(`micro.errors.declaration.future`, fr, en, nl). L'interface passait déjà
+la date du jour : rien n'y change. Specs : `spec/micro/rules_spec.cr`,
+`spec/micro/declarations_spec.cr`.
+
+*Alternative écartée.* Laisser la date libre et compter sur l'interface :
+le contrat est la seule garantie pour les autres interfaces et
+extensions.
+
+=== D-TST-G-002 — Bases de test du lot G (G:tests)
+
+*Contexte.* Les specs du cœur et de l'interface tournent en parallèle
+d'autres agents.
+
+*Choix.* Cœur : `partiduo_test_g_specs` ; interface :
+`partiduo_test_g_specs_ui` (le nom donné, en minuscules, comme
+PostgreSQL le replie).
+
+*Alternative écartée.* Une seule base pour les deux dépôts : leurs
+migrations et jeux de données se marcheraient dessus.
+
+== Clôture du lot G — relecture (27 septembre 2026)
+
+=== D-MIC-011 — Contre-passation saisie d'une recette issue de la Facturation : origine `manual`, écriture inverse (G:clôture, micro, comptabilité)
+
+*Contexte.* `reverse_receipt!` recopiait l'origine de la ligne ;
+`MicroEntries` ignore toute recette d'origine autre que `manual`. Dans la
+configuration micro + Facturation + Comptabilité, un remboursement noté par
+contre-passation (D-MIC-005) d'une recette `invoicing` n'avait aucune
+écriture : registre et comptabilité divergeaient sans alerte.
+
+*Choix.* Une contre-passation saisie par le contrat (`reverse_receipt`)
+porte l'origine `manual` ; sa `source` d'origine est gardée pour la
+traçabilité. La Comptabilité passe donc l'écriture inverse (banque au
+crédit, produit et TVA collectée au débit). La contre-passation du
+délettrage (`Feeds`, `manual: false`) garde l'origine `invoicing` : le
+délettrage a déjà défait l'encaissement en Comptabilité.
+
+*Alternative écartée.* Refuser la contre-passation d'une recette
+`invoicing` quand la Facturation est active et renvoyer vers l'avoir :
+l'avoir réduit ce qui reste à encaisser mais ne note pas une somme rendue,
+et le module ne peut pas savoir si la Facturation est active sans lire le
+registre des modules pour un motif métier.
+
+=== D-MIC-012 — « À traiter » borné à l'année précédente ; calculs URSSAF en une requête par année (G:clôture, micro)
+
+*Contexte.* `todo` parcourait toutes les années depuis le début
+d'activité : une activité reprise (début en 2015, module activé en 2026)
+affichait des dizaines d'échéances « en retard » que le registre ne peut
+pas renseigner ; chaque période relisait le chiffre d'affaires et six à
+neuf paramètres.
+
+*Choix.* `todo` part du début d'activité (à défaut, de la première recette)
+mais jamais avant le 1er janvier de l'année précédente — la même borne que
+la prochaine échéance de l'interface (D-UI-063). `declarations(year)` lit le
+chiffre d'affaires de l'année en une requête (`GROUP BY` mois et
+catégorie), les déclarations faites en une requête et tous les paramètres
+une fois (`Parameters::Snapshot`, le temps de l'appel) ; `todo` partage ce
+cliché avec `thresholds`.
+
+*Alternative écartée.* Noter plusieurs déclarations passées d'un coup :
+utile, mais une commande de plus ; la borne suffit à retirer le bruit, et
+une déclaration antérieure reste notable par `mark_declared`.
+
+=== D-MIC-013 — TVA déductible au registre des achats (G:clôture, micro, comptabilité)
+
+*Contexte.* Après `switch_to_vat`, le micro-entrepreneur récupère la TVA de
+ses achats ; le registre n'avait pas de TVA et `MicroEntries` passait la
+charge toutes taxes comprises.
+
+*Choix.* `micro_purchase.vat_amount` (migration micro 0001, non encore
+publiée : complétée plutôt qu'une migration 0002 ; même contrainte de signe
+que les recettes), `PurchaseInput#vat_amount`, charge utile
+`micro.purchase.recorded` (`vat_amount`). La Comptabilité passe la charge
+hors taxe et la TVA au compte de la catégorie `vat_deductible` (44566 en
+France, 411 en Belgique, `micro_accounts.yml`, paramétrable). Récapitulatifs
+(`purchase_totals`) et tableau de bord : dépensé hors TVA déductible.
+L'interface ne montre le champ qu'après la bascule, comme pour les recettes.
+
+*Alternative écartée.* Une ligne de TVA calculée d'après le taux de la
+nature : les achats mêlent souvent plusieurs taux sur un ticket.
+
+=== D-MIC-014 — TVA d'une facture encaissée ventilée par taux (G:clôture, micro)
+
+*Contexte.* `split` répartissait la TVA d'un encaissement au prorata des
+parts hors taxe, toutes natures confondues : faux dès que deux natures
+portent des taux différents (après la bascule vers la TVA).
+
+*Choix.* `invoice.issued` relève aussi la TVA par taux (`vat` →
+`micro_invoice.vats`) et le taux de chaque part. La TVA de chaque taux est
+répartie sur les natures au prorata de leurs parts à ce taux ;
+l'encaissement se ventile au prorata du TTC de chaque nature, sa TVA au
+prorata de la TVA de chaque nature. Une facture relevée sans TVA par taux
+garde l'ancienne règle.
+
+*Alternative écartée.* Pondérer la seule TVA : l'encaissement resterait
+ventilé sur le hors taxe, et la TVA d'une nature pourrait dépasser sa part.
+
+=== D-MIC-015 — Pièce jointe d'une saisie : lisible par l'acteur ou déposée par lui (G:clôture, micro)
+
+*Contexte.* La pièce jointe d'une saisie n'était vérifiée qu'en existence,
+avec l'acteur système : un utilisateur ayant seulement
+`micro.register.write` pouvait rattacher n'importe quelle pièce du dossier.
+
+*Choix.* `Registers.attachment_errors(id, actor)` : acceptée si l'acteur a
+`core.attachment.read` ou l'a déposée lui-même (`uploaded_by_id`) — cas de
+la photo du justificatif prise à la saisie ; sinon « pièce jointe
+inconnue », sans révéler qu'elle existe. La fiche reste vérifiée par le
+système (le livre des recettes se contente du nom).
+
+*Alternative écartée.* Exiger `core.attachment.read` : un profil de saisie
+simple ne pourrait plus joindre la photo qu'il vient de déposer.
+
+=== D-MIC-016 — Délettrage : toutes les recettes de lettrage de la facture (G:clôture, micro)
+
+*Contexte.* Un lettrage qui en absorbe un autre (fusion) ne publie que son
+surplus ; `payment.unmatched` ne contre-passait que les recettes du
+lettrage défait. Facture de 100, acompte 40 (M1), solde 60 lettré avec
+fusion (M2), délettrage de M2, nouveau lettrage (M3, 100) : 140 au registre.
+
+*Choix.* À `payment.unmatched`, contre-passer toutes les recettes vivantes
+de source `matching:%:invoice:<id>` pour chaque facture de `sources`, comme
+la Facturation retire tous les règlements `matching` du document ; sans
+facture citée, celles du lettrage défait. Spec : fusion, délettrage,
+relettrage (`spec/integration/micro_review_spec.cr`).
+
+*Alternative écartée.* Nommer les lettrages remplacés dans la charge utile
+de `payment.matched` : change la charge utile d'un événement de la
+Comptabilité pour un seul abonné.
+
+=== D-MIC-017 — Pages de registre plafonnées, totaux par agrégat, journal filtré en base (G:clôture, micro, socle)
+
+*Contexte.* `RegisterQuery.limit` n'était pas borné (l'interface demandait
+100 000 lignes, puis `views` construisait un `id__in` de cette taille, près
+de la limite de 65 535 paramètres de PostgreSQL) ; les totaux de l'année
+chargeaient toutes les lignes ; la relecture d'une facture émise avant
+l'activation chargeait tout le journal `invoice.issued`.
+
+*Choix.* `MAX_LIMIT` = 10 000 : `limit` au-delà est ramené au plafond,
+`limit` ou `offset` négatif lève `ArgumentError` ; `views` lit les
+contre-passations par tranches de `MAX_LIMIT`. Nouvelles requêtes
+`receipts_total`, `purchases_total` (`TotalsView`) et `receipt_totals`,
+`purchase_totals` par agrégat SQL. `Partiduo::Events.journal` prend un
+filtre `where: {clé, valeur}` appliqué en base (`payload ->> clé`).
+L'interface affiche les 10 000 lignes les plus récentes d'une année et
+prend ses totaux par agrégat.
+
+*Alternative écartée.* Relever toutes les factures manquantes à
+l'activation du module : un abonné de plus à l'activation, pour un cas
+rare.
+
+=== D-MIC-018 — Libellés d'édition et d'annulation traduits (G:clôture, micro)
+
+*Choix.* Noms des fichiers exportés dans i18n
+(`micro.export.filename.receipt|purchase` : `livre-recettes`,
+`receipts-book`, `ontvangstenboek`…) ; libellé par défaut d'une
+contre-passation dans le vocabulaire courant du mode simplifié
+(« Annulation de %{number} », « Cancellation of », « Annulering van »).
+
+=== D-UI-068 — Écrans du paramétrage de la micro-entreprise (G:clôture, interface)
+
+*Contexte.* Le contrat offrait natures, nature des articles, paramètres
+datés, bascules guidées, republication, récapitulatif des achats et
+paramétrage comptable sans aucun écran, alors que l'alerte de seuil invite
+à « préparer le passage ».
+
+*Choix.* Depuis « Paramètres de la micro-entreprise » : « Natures »
+(`/micro/natures`, liste, création, modification), « Taux et seuils »
+(`/micro/parameters`, valeurs datées par code, libellés traduits,
+suppression), « Natures des articles » (`/micro/items`), « Passer à la TVA »
+(`/micro/switch/vat` : articles en franchise, taux proposé, date ; formulaire
+seulement avec `cards.card.write`), « Passer au régime réel »
+(`/micro/switch/real`, formulaire seulement avec `core.modules.manage`),
+« Republier vers la Comptabilité » (`POST /micro/republish`, Comptabilité
+active), et côté Comptabilité « Comptes de la micro-entreprise »
+(`/accounting/micro-accounts`, clés = catégories, `vat`,
+`vat_deductible` et codes de nature). Les listes des recettes et des achats
+portent au pied le total, la TVA et le récapitulatif par nature de
+l'année. Toutes ces commandes exigent `micro.settings.write` (ou les droits
+de la Comptabilité) ; le contrat vérifie de nouveau. Spec :
+`spec/ui/micro_settings_spec.cr`.
+
+*Alternative écartée.* Un seul grand écran de paramètres : illisible au
+téléphone, et chaque commande a ses propres droits.
+
+=== D-TST-G-003 — Bases de la clôture du lot G (G:clôture, tests)
+
+*Choix.* Cœur : `partiduo_test_g_final` ; interface :
+`partiduo_test_g_final_ui` (lancée en parallèle du cœur) ; migrations sur
+base vierge : `partiduo_migrate_g`.

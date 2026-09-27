@@ -1,5 +1,14 @@
 nl:
   accounting:
+    micro:
+      accounts:
+        sale_bic: "Verkoop van goederen"
+        service_bic: "Diensten"
+        bnc: "Diensten"
+        goods: "Aankoop van goederen"
+        other: "Niet-voorraadhoudende aankopen van materialen en benodigdheden"
+        vat: "Te betalen btw"
+        vat_deductible: "Aftrekbare btw"
     module:
       name: "Boekhouding"
     permissions:
@@ -262,6 +271,11 @@ nl:
         already_posted: "Deze gebeurtenis is al geboekt."
         not_dismissed: "Deze gebeurtenis is niet terzijde gelegd."
         reason_too_long: "Hoogstens %{max} tekens."
+      micro:
+        no_financial_ledger: "Geen actief financieel dagboek: maak er een aan om de registers van de micro-onderneming te boeken."
+        no_account: "Geen rekening voor categorie %{category}: stel ze in voor de micro-onderneming."
+        key_invalid: "Ongeldige aard of categorie (letters, cijfers en _, hoogstens 26 tekens)."
+        not_direct_use: "Rekening %{number} is niet bruikbaar bij het boeken."
       matching:
         too_few_lines: "Kies ten minste twee regels om af te punten."
         line_not_found: "Regel %{id} bestaat niet."

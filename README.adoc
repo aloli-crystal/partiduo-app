@@ -136,6 +136,7 @@ Référence par domaine (AsciiDoc) :
 * link:doc/api/core-settings.adoc[]
 * link:doc/api/followup.adoc[]
 * link:doc/api/invoicing.adoc[]
+* link:doc/api/micro.adoc[]
 * link:doc/api/modules.adoc[]
 * link:doc/api/socle-referentiel.adoc[]
 * link:doc/api/stock.adoc[]
@@ -148,7 +149,7 @@ Référence par domaine (AsciiDoc) :
 createdb --encoding=UTF8 partiduo_test
 crystal spec                              # tous les modules actifs
 PARTIDUO_MODULES=invoicing crystal spec   # une configuration
-scripts/specs-modules.sh                  # les trois configurations de l'ADR-006 D7
+scripts/specs-modules.sh                  # configurations de l'ADR-006 D7 et de l'ADR-007
 ----
 
 Les specs reconstruisent le schéma de la base de test *par les migrations* à

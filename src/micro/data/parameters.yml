@@ -1,0 +1,52 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Paramètres datés chargés dans une instance neuve (jeu de données initial du
+# module micro, ADR-007 D1) : ce sont des *données*, modifiables par
+# l'administrateur (`Partiduo::Api::Micro.set_parameter`) et à mettre à jour
+# chaque année. Rien de ce qui suit n'est lu par le code autrement que par la
+# table `micro_parameter`. Valeurs relevées le 27 septembre 2026, à vérifier
+# sur urssaf.fr, impots.gouv.fr et le formulaire 2042-C-PRO du millésime
+# (DECISIONS D-MIC-006).
+#
+# Codes :
+# * rate.social.<catégorie>  — cotisations sociales, % du chiffre d'affaires ;
+# * rate.cfp.<catégorie>     — contribution à la formation professionnelle, % ;
+# * rate.flat_tax.<catégorie> — versement libératoire de l'impôt sur le revenu, % ;
+# * threshold.vat.<goods|services>           — franchise en base de TVA (293 B) ;
+# * threshold.vat_tolerance.<goods|services> — seuil majoré de la franchise ;
+# * threshold.micro.<goods|services>         — régime micro (art. 50-0 et 102 ter) ;
+# * alert.ratio — part du seuil (en %) à partir de laquelle une alerte est levée ;
+# * box.<catégorie>, box.flat_tax.<catégorie> — cases de la 2042-C-PRO (texte).
+parameters:
+  - {code: rate.social.sale_bic, valid_from: "2024-01-01", value: "12.3"}
+  - {code: rate.social.service_bic, valid_from: "2024-07-01", value: "21.2"}
+  - {code: rate.social.bnc, valid_from: "2024-07-01", value: "23.1"}
+  - {code: rate.social.bnc, valid_from: "2025-01-01", value: "24.6"}
+  - {code: rate.social.bnc, valid_from: "2026-01-01", value: "26.1"}
+  - {code: rate.cfp.sale_bic, valid_from: "2024-01-01", value: "0.1"}
+  - {code: rate.cfp.service_bic, valid_from: "2024-01-01", value: "0.3"}
+  - {code: rate.cfp.bnc, valid_from: "2024-01-01", value: "0.2"}
+  - {code: rate.flat_tax.sale_bic, valid_from: "2024-01-01", value: "1"}
+  - {code: rate.flat_tax.service_bic, valid_from: "2024-01-01", value: "1.7"}
+  - {code: rate.flat_tax.bnc, valid_from: "2024-01-01", value: "2.2"}
+  - {code: threshold.vat.goods, valid_from: "2025-01-01", value: "85000"}
+  - {code: threshold.vat.services, valid_from: "2025-01-01", value: "37500"}
+  - {code: threshold.vat_tolerance.goods, valid_from: "2025-01-01", value: "93500"}
+  - {code: threshold.vat_tolerance.services, valid_from: "2025-01-01", value: "41250"}
+  - {code: threshold.micro.goods, valid_from: "2023-01-01", value: "188700"}
+  - {code: threshold.micro.services, valid_from: "2023-01-01", value: "77700"}
+  - {code: threshold.micro.goods, valid_from: "2026-01-01", value: "203100"}
+  - {code: threshold.micro.services, valid_from: "2026-01-01", value: "83600"}
+  - {code: alert.ratio, valid_from: "2020-01-01", value: "80"}
+  - {code: box.sale_bic, valid_from: "2020-01-01", text: "5KO"}
+  - {code: box.service_bic, valid_from: "2020-01-01", text: "5KP"}
+  - {code: box.bnc, valid_from: "2020-01-01", text: "5HQ"}
+  - {code: box.flat_tax.sale_bic, valid_from: "2020-01-01", text: "5TA"}
+  - {code: box.flat_tax.service_bic, valid_from: "2020-01-01", text: "5TB"}
+  - {code: box.flat_tax.bnc, valid_from: "2020-01-01", text: "5TE"}
+natures:
+  - {code: SALE, kind: receipt, category: sale_bic}
+  - {code: SERVICE, kind: receipt, category: service_bic}
+  - {code: FEE, kind: receipt, category: bnc}
+  - {code: GOODS, kind: purchase, category: goods}
+  - {code: SUPPLIES, kind: purchase, category: other}

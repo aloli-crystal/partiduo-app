@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Comptes proposés par défaut aux écritures du module micro-entreprise
+# (ADR-007 D2), par régime, quand ni la nature ni la catégorie n'ont de
+# compte paramétré (`Partiduo::Api::Accounting.set_micro_account`). Un compte
+# absent du plan est créé à la première écriture (DECISIONS D-MIC-004).
+fr:
+  sale_bic: "707"
+  service_bic: "706"
+  bnc: "706"
+  goods: "607"
+  other: "606"
+  vat: "44571"
+  vat_deductible: "44566"
+be:
+  sale_bic: "700"
+  service_bic: "700"
+  bnc: "700"
+  goods: "604"
+  other: "601"
+  vat: "451"
+  vat_deductible: "411"

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # CI de partiduo-app : format, Ameba, garde-fou d'interface (ADR-005 D3), specs
-# sur PostgreSQL dans les trois configurations de modules (ADR-006 D7).
+# sur PostgreSQL dans les configurations de modules (ADR-006 D7, ADR-007).
 name: CI
 
 on:
@@ -45,6 +45,13 @@ jobs:
             modules: invoicing,stock,followup
           - configuration: comptabilite-et-facturation
             modules: accounting,invoicing,analytic,stock,followup
+          # Module micro-entreprise (ADR-007, D-MIC-008).
+          - configuration: micro-seul
+            modules: micro
+          - configuration: micro-et-facturation
+            modules: micro,invoicing
+          - configuration: micro-facturation-et-comptabilite
+            modules: micro,invoicing,accounting
     services:
       postgres:
         image: postgres:18

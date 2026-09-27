@@ -568,3 +568,33 @@ rattacher à l'enregistrement de l'écriture, puis une tâche planifiée qui
 supprime les pièces non rattachées de plus de 24 heures ; ou un dépôt
 temporaire côté interface. À décider avec la conservation des pièces
 (ADR-005).
+
+== B-MIC-001 — Taux URSSAF, seuils et cases de la 2042-C-PRO non vérifiés aux sources (module micro)
+
+*Constat.* Les valeurs initiales de `src/micro/data/parameters.yml`
+(D-MIC-006) ont été saisies sans accès à urssaf.fr, impots.gouv.fr ni au
+formulaire 2042-C-PRO du millésime (pas d'accès réseau pendant le lot). Le
+code n'en dépend pas : ce sont des données datées, modifiables par
+`Partiduo::Api::Micro.set_parameter`.
+
+*Levée.* Vérifier chaque valeur et sa date d'effet aux sources officielles,
+corriger le fichier (instances neuves) et les instances existantes
+(`set_parameter`, écran « Taux et seuils » `/micro/parameters` de
+l'interface) ; refaire cette vérification à chaque loi de
+financement et loi de finances.
+
+== B-UI-009 — Mode simplifié non essayé sur un téléphone ni dans un navigateur (G:interface-simplifiee, interface)
+
+*Constat.* Le volet du navigateur a refusé d'ouvrir les pages du mode
+simplifié enregistrées localement, et le bac à sable n'ouvre pas de port
+(B-UI-001) : saisie d'une recette au téléphone (clavier décimal, appareil
+photo par `capture="environment"`), jauges des seuils et mise en page sur
+une colonne n'ont pas été vues.
+
+*Contournement.* Rendu, champs, étiquettes et règles automatisables de
+WCAG 2.2 AA vérifiés par les specs (`spec/ui/micro_spec.cr`,
+`spec/ui/accessibility_spec.cr`) ; styles propres au mode dans `app.css`
+(une colonne sous 768 px, cibles de 44 px).
+
+*Levée.* Essai sur un téléphone réel (avec B-UI-001 levé) : saisie d'une
+recette avec photo, facture allégée, déclaration URSSAF notée.

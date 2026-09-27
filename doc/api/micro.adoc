@@ -1,0 +1,152 @@
+= Micro-entreprise : registres, URSSAF, 2042-C-PRO, seuils
+:toc: left
+:toc-title: Table des matières
+:toclevels: 3
+:icons: font
+:source-language: crystal
+
+Référence du module officiel `micro` (ADR-007 D1, D2). Sans équivalent dans
+NOALYSS : les obligations viennent du Code de commerce (art. L123-28) et du
+CGI (art. 50-0, 102 ter, 293 B).
+
+* Contrat : `Partiduo::Api::Micro` (`src/micro/api/micro.cr`, types dans
+  `types.cr`). Module `MICRO`, sans dépendance ; toute fonction lève
+  `ModuleDisabled` s'il est inactif, `Forbidden` sans la permission.
+* Tables : `micro_settings`, `micro_nature`, `micro_receipt`,
+  `micro_purchase`, `micro_counter`, `micro_parameter`, `micro_declaration`,
+  `micro_item_nature`, `micro_invoice` (migration micro 0001) ; côté
+  Comptabilité, `accounting_micro_account` (migration accounting 0010).
+* Données initiales : `MICRO.parameters` (natures par défaut dans la langue
+  de l'instance, paramètres datés de `src/micro/data/parameters.yml`).
+* Instance : `partiduo-provision --modules micro[,invoicing[,accounting]]`.
+* Décisions : `DECISIONS.adoc`, D-MIC-001 à D-MIC-010.
+
+== Permissions
+
+[cols="1,3",options="header"]
+|===
+|Permission |Fonctions
+
+|`micro.register.read` |registres (lecture, éditions CSV et PDF, récapitulatif des achats), paramètres, natures, déclarations URSSAF, « À traiter », 2042-C-PRO, seuils
+|`micro.register.write` |saisie et contre-passation (recettes, achats), requêtes de contrôle, déclaration notée
+|`micro.settings.write` |paramètres, natures, nature des articles, paramètres datés, chargement des valeurs par défaut, republication, bascules
+|===
+
+La bascule vers la TVA exige aussi `cards.card.write` (modification des
+articles), la bascule vers le réel `core.modules.manage` (activation de la
+Comptabilité).
+
+== Registres (ADR-007 D1)
+
+[cols="2,3",options="header"]
+|===
+|Fonction |Effet
+
+|`receipts(actor, query)`, `receipt(actor, id)` |livre des recettes, par date puis numéro (`LineView`) ; page d'au plus `MAX_LIMIT` (10 000) lignes, `limit` ou `offset` négatif refusé (`ArgumentError`)
+|`receipts_total(actor, query)`, `purchases_total(actor, query)` |totaux d'une requête par agrégat (`TotalsView` : nombre, montant, TVA), sans charger les lignes
+|`check_receipt(actor, input)` |requête de contrôle de la saisie
+|`record_receipt(actor, ReceiptInput)` |inscrit la recette (`R2026-00001`), publie `micro.receipt.recorded`
+|`reverse_receipt(actor, ReverseInput)` |contre-passation datée (montant opposé), publie l'événement ; origine `manual` même pour une recette issue de la Facturation (remboursement, écriture inverse en Comptabilité, D-MIC-011)
+|`export_receipts(actor, query, ExportFormat)` |édition CSV ou PDF/A-2b (`FileView`)
+|`purchases`, `purchase`, `check_purchase`, `record_purchase`, `reverse_purchase`, `export_purchases` |même chose pour le registre des achats (`A2026-00001`), `micro.purchase.recorded`
+|`purchase_totals(actor, year)`, `receipt_totals(actor, year)` |récapitulatif annuel par nature (`NatureTotalView` : montant, TVA, hors taxe, nombre de lignes)
+|`republish(actor)` |republie les événements de toutes les lignes (Comptabilité activée plus tard)
+|===
+
+Règles :
+
+* saisie : date faite (pas à venir), hors période close du socle ; nature
+  active du bon sens ; montant positif au centime ; TVA comprise positive et
+  inférieure au montant (collectée pour une recette, déductible pour un
+  achat, D-MIC-013) ; mode de règlement parmi `transfer`, `card`,
+  `cheque`, `cash`, `direct_debit`, `other` ; fiche du socle existante ;
+  pièce jointe lisible par l'acteur (`core.attachment.read`) ou déposée par
+  lui (D-MIC-015) ; client ou fournisseur par fiche ou par nom libre ;
+* numérotation par registre et par année, sous verrou (`micro_counter`) ;
+* *intangibilité* : une ligne ne se modifie ni ne s'efface (déclencheur
+  `micro_register_guard`) ; aucune ligne n'entre dans une période close ; la
+  correction est une contre-passation, au plus tôt à la date de la ligne et
+  jamais à venir, une seule par ligne (index unique) ; `LineView#locked` signale une ligne
+  d'une période close ;
+* erreurs sous `micro.errors.line.*`.
+
+== Alimentation par la Facturation
+
+Abonnements du manifeste (aucun appel au module Facturation, ADR-006 D3) :
+
+* `invoice.issued` : la facture est relevée (`micro_invoice` : client,
+  numéro, TVA par taux, TTC, parts hors taxe par article et taux) ; une
+  facture émise avant l'activation du module est relue dans le journal des
+  événements du socle, filtré en base (`Events.journal(…, where:)`) ;
+* `payment.recorded` : le règlement saisi dans la Facturation (Comptabilité
+  inactive : elle refuse sinon la saisie) devient une recette (`origin`
+  `invoicing`, `source` `payment:<id>`) ;
+* `payment.matched` : l'encaissement lettré en Comptabilité devient une
+  recette (`source` `matching:<id>:invoice:<id>`, montant de `amounts`,
+  date `matched_on`). Un règlement `payment:` comptabilisé plus tard et
+  lettré d'office n'y compte pour rien (`Matchings::RECORDED_PREFIX`) : il
+  n'est inscrit qu'une fois (D-MIC-005) ;
+* `payment.unmatched` : toutes les recettes vivantes issues d'un lettrage
+  des factures citées (`matching:%:invoice:<id>`, y compris celles des
+  lettrages absorbés par une fusion) sont contre-passées à la date du jour.
+
+La recette est ventilée par nature selon les articles de la facture
+(`set_item_nature`, sinon la nature par défaut des paramètres) : la TVA de
+chaque taux est répartie entre les natures selon leurs parts à ce taux,
+l'encaissement au prorata du TTC de chaque nature (D-MIC-014). Un échec est
+consigné et ne bloque jamais la Facturation.
+
+== Aide à la déclaration URSSAF
+
+* `declarations(actor, year, today)` : périodes de l'année selon la
+  périodicité (`monthly` ou `quarterly`), échéance au dernier jour du mois
+  suivant, chiffre d'affaires hors TVA par catégorie (`sale_bic`,
+  `service_bic`, `bnc`), cotisations sociales, contribution à la formation
+  professionnelle et versement libératoire (si l'option est prise) *estimés*
+  aux taux en vigueur au début de la période ; `missing_rates` nomme un taux
+  absent (jamais inventé) ; statut `open`, `due`, `late`, `declared`.
+* `mark_declared(actor, DeclarationInput)` : déclaration faite sur le site de
+  l'URSSAF (pas de télétransmission, ADR-007 Questions ouvertes), datée
+  après la fin de la période et au plus tard du jour.
+* `todo(actor, today)` : « À traiter » — déclarations dues ou en retard
+  depuis le début d'activité (ou la première recette), au plus tôt le
+  1er janvier de l'année précédente (D-MIC-012), alertes de seuil. Le
+  chiffre d'affaires d'une année se lit en une requête (par mois) et les
+  paramètres une fois par appel.
+
+== 2042-C-PRO
+
+`tax_return(actor, year)` : chiffre d'affaires annuel par catégorie, en
+euros entiers, avec la case du millésime (`box.<catégorie>` ou
+`box.flat_tax.<catégorie>` selon l'option pour le versement libératoire).
+
+== Seuils et bascules
+
+* `thresholds(actor, year)` : franchise en base de TVA (seuil et seuil
+  majoré) et régime micro (proratisé l'année du début d'activité), en
+  vigueur au 1er janvier ; « marchandises » comparé au chiffre d'affaires
+  total, « services » aux prestations ; statuts `ok`, `approaching` (à
+  partir de `alert.ratio` %), `exceeded`, `tolerance_exceeded`,
+  `not_applicable` (bascule faite), `unknown` ; alertes `micro.alerts.*`.
+* `vat_switch_plan(actor)` puis `switch_to_vat(actor, VatSwitchInput)` : les
+  articles au taux de franchise (`VATEX-FR-FRANCHISE`) prennent le taux
+  choisi, la Facturation cesse d'apposer la mention 293 B.
+* `switch_to_real(actor, effective_on)` : active la Comptabilité et republie
+  les registres ; si le plan comptable n'est pas encore chargé, relancer
+  `republish` après l'avoir chargé.
+
+== Paramètres datés (jamais en dur)
+
+`parameters`, `parameter_value`, `set_parameter`, `delete_parameter`,
+`load_defaults`. Codes admis : `PARAMETER_CODES` — `rate.social.*`,
+`rate.cfp.*`, `rate.flat_tax.*` (en %), `threshold.vat.*`,
+`threshold.vat_tolerance.*`, `threshold.micro.*` (`goods`, `services`, en
+euros), `alert.ratio`, `box.*` (texte). Valeur en vigueur à une date : celle
+dont `valid_from` est la plus récente au plus tard à cette date.
+
+== Partie double automatique (ADR-007 D2)
+
+Quand la Comptabilité est active, elle s'abonne à `micro.receipt.recorded` et
+`micro.purchase.recorded` (`Partiduo::Accounting::MicroEntries`) et passe une
+écriture de trésorerie au journal financier du mode de règlement : voir
+link:accounting-entries.adoc[] § Écritures de la micro-entreprise.

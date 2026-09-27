@@ -125,7 +125,8 @@ module Partiduo
         end
         if CardAccount.filter(account_id: id).exists? || CardCategoryAccount.filter(base_account_id: id).exists? ||
            Ledger.filter(default_account_id: id).exists? || DefaultAccount.filter(account_id: id).exists? ||
-           EntryLine.filter(account_id: id).exists? || Matching.filter(account_id: id).exists?
+           EntryLine.filter(account_id: id).exists? || Matching.filter(account_id: id).exists? ||
+           MicroAccount.filter(account_id: id).exists?
           errors << FieldError.base("accounting.errors.account.in_use")
         end
         errors
