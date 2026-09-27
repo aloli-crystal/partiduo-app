@@ -1,0 +1,222 @@
+= Comptabilité : éditions
+:toc: left
+:toc-title: Table des matières
+:toclevels: 3
+:icons: font
+:source-language: crystal
+
+Référence du lot 3 du module Comptabilité (ADR-001 § Lots, ADR-005 D2 et
+§ Ergonomie : « export CSV et PDF depuis chaque liste », ADR-003 : l'extension
+`noalyss-export` est absorbée) : balances générale, des tiers et âgée, grand
+livre, journaux, bilan et compte de résultat des régimes FR et BE, rapports
+personnalisés, fichier des écritures comptables (FEC), exports CSV et PDF.
+Le contrat est `Partiduo::Api::Accounting` (`src/accounting/api/reports.cr`,
+types dans `report_types.cr`) ; toutes ses fonctions lèvent `ModuleDisabled`
+si la Comptabilité est inactive. Décisions : `DECISIONS.adoc`, D-ED-001 à
+D-ED-011 ; réconciliation de `partiduo-migrate` : D-MIG-022.
+
+== Règles communes
+
+* *Droit* : `accounting.report.read` pour toute édition ;
+  `accounting.report.write` pour créer, modifier ou effacer un rapport
+  personnalisé (le profil ACCOUNTANT la reçoit, y compris dans un dossier
+  existant : migration accounting 0005).
+* *Journaux* : une édition ne lit que les journaux visibles de l'acteur
+  (droit `R` ou `W`, ou administration des journaux), comme
+  `get_ledger_sql` de NOALYSS. Le FEC, qui doit être complet, est refusé à
+  un acteur qui ne les voit pas tous (D-ED-011) ; le bilan et le compte de
+  résultat le signalent (`partial`, D-ED-013).
+* *Période* : `date_to` vaut par défaut la date du jour de l'instance ;
+  `date_from` le premier jour de l'exercice qui contient `date_to` (à
+  défaut, le 1ᵉʳ janvier). Le *solde d'ouverture* d'une balance ou d'un
+  grand livre est celui des lignes du même exercice antérieures à
+  `date_from` : les à-nouveaux sont des écritures de l'exercice (D-ED-001).
+* *Montants* en devise de tenue, `BigDecimal` ; une balance donne ses soldes
+  en deux colonnes (`SplitBalance` : `debit` si le solde signé
+  débit − crédit est positif, `credit` sinon) ; grand livre, balance âgée et
+  relevés donnent des soldes signés.
+* *Bornes de comptes* : `account_from` ≤ numéro ; `account_to` couvre le
+  compte et ses sous-comptes (`4` couvre `411`, D-ED-002).
+* Aucune édition n'écrit ; aucune ne renvoie de modèle.
+
+== Balances
+
+[cols="3,4",options="header"]
+|===
+|Appel |Rôle (successeur NOALYSS)
+
+|`trial_balance(actor, TrialBalanceQuery) : TrialBalanceView`
+|Balance générale (`Acc_Balance::get_row`) : par compte, ouverture, débit et
+crédit de la période, solde final, nombre de lignes ; sous-totaux par classe
+(`classes`), total (soldes additionnés colonne par colonne), synthèse des
+classes 1 à 5, 6 et 7 et résultat (`summary_add`), `delta` = débit − crédit.
+Filtres : journaux (`ledger_ids`, `ledger_kinds`), bornes de comptes,
+`nonzero_only` (`unsold`).
+
+|`auxiliary_balance(actor, AuxiliaryBalanceQuery) : AuxiliaryBalanceView`
+|Balance des tiers (`balance_card.inc.php`) : mêmes colonnes par fiche,
+compte collectif de la fiche ; `kind` (défaut : clients et fournisseurs),
+`account` (préfixe des comptes retenus, `411`).
+
+|`aged_balance(actor, AgedBalanceQuery) : AgedBalanceView`
+|Balance âgée (`Balance_Age`) au jour `as_of` : par fiche, reste dû, échu,
+tranches non échu / 1 à 30 / 31 à 60 / plus de 60 jours (ADR-005 D9) et
+éléments ouverts (ligne non lettrée ; reliquat d'un lettrage partiel daté de
+sa plus ancienne échéance). Mêmes règles que `account_statement` arrêté à
+`as_of` (D-ED-003). `NotFound` si `card` n'existe pas.
+|===
+
+== Grand livre et journaux
+
+[cols="3,4",options="header"]
+|===
+|Appel |Rôle
+
+|`general_ledger(actor, GeneralLedgerQuery) : GeneralLedgerView`
+|Grand livre (`impress_gl_comptes`, `impress_poste`) : une section par compte
+(ou par fiche avec `by_card`, ou pour la seule fiche `card`) avec solde
+d'ouverture, mouvements (date, journal, pièce, code interne, libellé,
+compte, fiche, débit, crédit, solde progressif, lettre), totaux et solde de
+clôture. Un compte sans mouvement ni solde d'ouverture est omis.
+
+|`journals(actor, JournalQuery) : JournalView`
+|Journaux (`impress_jrn`, `Print_Ledger_*`) : par journal, écritures avec
+leurs lignes (extournes et écritures annulées comprises), totaux par mois et
+par compte (journal centralisateur), total général.
+|===
+
+== Bilan et compte de résultat
+
+`financial_statement(actor, FinancialStatementQuery) : FinancialStatementView`
+établit l'état `kind` (`BalanceSheet`, `IncomeStatement`) du régime `regime`
+(`fr` ou `be` ; défaut : celui de l'instance ; `NotFound` sinon —
+`statement_regimes` les liste). États intégrés
+(`src/accounting/data/statements/<régime>.yml`, D-ED-005) :
+
+* *FR* : bilan et compte de résultat du modèle abrégé du plan comptable
+  général (d'après les formulaires `fr_plan_abrege_perso_*` de NOALYSS) ;
+  actif en brut, amortissements et dépréciations, net ;
+* *BE* : bilan et compte de résultats du schéma abrégé (arrêté royal du
+  29 avril 2019 ; d'après `bnb.form` de NOALYSS).
+
+Chaque rubrique (`FinancialStatementLineView`) porte son code, sa clé de
+libellé (`accounting.statements.<régime>.<état>.<code>`), son style
+(`heading`, `line`, `subtotal`, `total`), son niveau, ses montants (`gross`,
+`less`, `net`) et, avec `compare` (défaut), la valeur des mêmes dates un an
+plus tôt (`previous`). La vue donne aussi :
+
+* `difference` : actif − passif (bilan), résultat de la balance − résultat
+  de l'état (compte de résultat) ; nul quand tout compte est repris ;
+* `result` : produits − charges de la période (hors comptes d'affectation
+  69 et 79 en BE, comme `net_result`) ;
+* `partial` : vrai si l'acteur ne voit pas tous les journaux ; l'état ne
+  porte alors que sur les journaux visibles (l'export le dit en sous-titre,
+  l'interface l'affiche en avertissement, D-ED-013).
+* `unmapped` : comptes soldés des classes de l'état qu'aucune rubrique ne
+  reprend ;
+* `anomalies` : comptes dont le solde est à contre-sens de leur type
+  (`Acc_Bilan::verify`).
+
+Le résultat de l'exercice figure au passif (`[12%-S]+[7%-S]-[6%-s]` en FR,
+`[7%-S]-[6%-s]` « à affecter » en BE) tant que les comptes de gestion ne
+sont pas soldés : le bilan s'équilibre avant comme après la clôture.
+
+Un bilan est une position à `date_to` : il part toujours du début de
+l'exercice de `date_to`, quelle que soit `date_from` (la vue rend la date
+retenue dans `date_from` ; N-1 : début de l'exercice de `date_to` − 1 an).
+
+== Formules
+
+Rubriques des états et lignes des rapports personnalisés s'écrivent dans la
+syntaxe de NOALYSS (`Impress::parse_formula`), analysée sans `eval`
+(D-ED-004) :
+
+[cols="1,3",options="header"]
+|===
+|Élément |Valeur
+
+|`[606%]`, `[606]` |comptes commençant par `606` ; le compte `606` seul
+|suffixe `-d`, `-c` |total débit, total crédit
+|suffixe `-s`, `-S` |débit − crédit, crédit − débit
+|sans suffixe |solde en valeur absolue (comme NOALYSS)
+|suffixe `-D`, `-C` (Partiduo) |somme des soldes débiteurs, des soldes créditeurs, compte par compte et, sur un compte collectif, fiche de tiers par fiche de tiers (les lignes à fiche Banque ou Article restent au niveau du compte)
+|`{QCODE}`, `{QCODE-s}` |lignes d'une fiche, mêmes suffixes
+|`$CODE` |autre rubrique d'un état intégré
+|`+ - * /`, `( )`, nombres |division par zéro = 0
+|`abs`, `round(x[, n])`, `min`, `max` |fonctions admises ; `n` entier de 0 à 10
+|`FROM=MM.AAAA` en fin de formule |calcul à partir du premier jour de ce mois
+|===
+
+Refusés, avec une erreur sous `lines[<i>].formula` : syntaxe
+(`formula.syntax`, avec la position), fonction inconnue, analytique
+`{{…}}` (lot 5), variable hors état intégré, clause `FROM` invalide,
+formule de plus de 1 000 caractères (`report.formula.too_long`) ou de plus
+de 50 niveaux d'imbrication (`formula.depth`), `round` avec un nombre de
+décimales constant hors de 0 à 10 (`formula.round` ; calculé, il donne 0).
+
+Dans le libellé d'une ligne de rapport, `[606-T]` et `[606-t]` sont
+remplacés au calcul par l'intitulé du premier compte dont le numéro
+commence par `606`, en majuscules ou en minuscules (comme NOALYSS).
+
+== Rapports personnalisés
+
+Successeurs de `formulaire` et `form_definition` (tables
+`accounting_report`, `accounting_report_line`, migration accounting 0005) :
+
+[cols="3,1,3",options="header"]
+|===
+|Appel |Droit |Rôle
+
+|`reports(actor)`, `report(actor, id)` |`report.read` |Définitions (nom, lignes : position, libellé, formule)
+|`check_report(actor, input, id = nil) : Result(Nil)` |`report.write` |Requête de contrôle
+|`create_report`, `update_report(actor, id, input)` |`report.write` |Nom unique, 1 à 500 lignes, libellé et formule valides ; la modification remplace toutes les lignes
+|`delete_report(actor, id) : Result(Nil)` |`report.write` |Efface le rapport et ses lignes
+|`run_report(actor, id, date_from, date_to) : ReportResultView` |`report.read` |Montant de chaque ligne sur la période
+|===
+
+== Exports CSV et PDF
+
+`export(actor, query, format : ExportFormat) : FileView`, surchargé pour
+chaque requête (`TrialBalanceQuery`, `AuxiliaryBalanceQuery`,
+`AgedBalanceQuery`, `GeneralLedgerQuery`, `JournalQuery`,
+`FinancialStatementQuery`) ; `export_report(actor, id, format, date_from,
+date_to)` pour un rapport personnalisé. `FileView` : nom
+(`trial-balance-20260101-20261231.csv`…), type, contenu (D-ED-009).
+
+* *CSV* : `;`, UTF-8, en-têtes dans la langue courante, montants au point
+  décimal, dates `AAAA-MM-JJ`, texte protégé contre les formules.
+* *PDF* : PDF/A-2b, A4 (paysage pour balances, grand livre et journaux),
+  polices DejaVu embarquées, montants et dates selon la langue, en-tête
+  (société, titre, période) et pied numéroté sur chaque page.
+
+== FEC
+
+`fec(actor, FecQuery) : Result(FileView)` produit le fichier des écritures
+comptables d'un exercice (article A47 A-1 du LPF), successeur de
+`noalyss-export` (`Export_FEC_CSV`) — D-ED-007 :
+
+* 18 zones dans l'ordre réglementaire, ligne d'en-tête, séparateur `|`
+  (défaut) ou tabulation (`FecSeparator`), fin de ligne CRLF ;
+* encodage ISO 8859-15 (défaut) ou UTF-8 (`FecEncoding`) ;
+* dates `AAAAMMJJ` ; `Debit` et `Credit` à la virgule décimale ;
+* toutes les écritures de l'exercice (`fiscal_year_id`, ou des dates dans un
+  même exercice ; défaut : l'exercice du jour), extournes comprises, par date
+  puis ordre d'enregistrement ; `EcritureNum` en séquence continue ;
+  `PieceRef` = pièce, sinon code interne ; `ValidDate` = date
+  d'enregistrement ; `CompAuxNum`/`CompAuxLib` = fiche de tiers de la ligne
+  (hors articles et banques) ; `EcritureLet`/`DateLet` = lettrage ;
+  `Montantdevise`/`Idevise` pour une écriture en devise étrangère ; lignes à
+  zéro omises ;
+* nom `<SIREN>FEC<clôture>.txt` (`000000000` sans SIREN).
+
+Refus : dates hors d'un même exercice (`date_from`,
+`accounting.errors.fec.fiscal_year`) ; journaux invisibles de l'acteur
+(`base`, `accounting.errors.fec.ledgers`).
+
+== Menus
+
+Rubrique « Éditions » (`REPORTS`) : `ACC_TRIAL_BALANCE`,
+`ACC_AUXILIARY_BALANCE`, `ACC_AGED_BALANCE`, `ACC_GENERAL_LEDGER`,
+`ACC_JOURNALS`, `ACC_BALANCE_SHEET`, `ACC_INCOME_STATEMENT`, `ACC_REPORTS`,
+`ACC_FEC`, tous sous `accounting.report.read` ; routes résolues par
+l'interface (une route qu'elle ne fournit pas masque l'entrée).

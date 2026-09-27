@@ -3546,3 +3546,366 @@ une URL qui n'utilise pas de socket Unix est acceptée avec un avertissement.
 (3) Les cellules de *texte* des CSV qui commencent par `=`, `+`, `-`, `@`,
 une tabulation ou un retour chariot sont précédées d'une apostrophe ; les
 colonnes numériques ne le sont pas.
+
+== Interface du lot 3 — éditions (27 septembre 2026)
+
+=== D-UI-035 — Filtres persistants : un cookie par écran, redirection vers les critères gardés (lot 3, interface)
+
+*Contexte.* ADR-005 D5 : « filtres persistants » ; le socle n'a pas de
+préférence enregistrée par utilisateur (D-REF-010, D-UI-018).
+
+*Choix.* `PartiduoUi::PersistentFilters` : les critères déclarés par l'écran
+(jamais `format`, `page` ni un paramètre inconnu) sont gardés dans un cookie
+`partiduo_f_<écran>` (`HttpOnly`, `SameSite=Lax`, 180 jours, 1 500 octets au
+plus, sinon non écrit). Une visite sans critère *redirige* vers l'adresse des
+critères gardés : l'adresse affichée porte toujours ce qui est appliqué
+(lien partageable, retour arrière fidèle). Le formulaire envoie `f=1`, gardé
+avec les critères : une case décochée ou un champ effacé est un choix, pas un
+retour aux valeurs par défaut. `?reset=1` (lien « Réinitialiser ») oublie les
+critères. Appliqué aux neuf écrans des éditions et à la liste des écritures.
+
+*Complément (clôture du lot 3).* Les rapports personnalisés partagent un
+seul cookie (`partiduo_f_report`) : les dates se reprennent d'un rapport à
+l'autre, et l'en-tête `Cookie` ne grossit pas avec le nombre de rapports
+consultés (un cookie par rapport pouvait dépasser 8 Ko : 431 ou 400).
+
+*Alternative écartée.* `localStorage` et JavaScript : invisible sans
+JavaScript et hors de portée du serveur ; préférence en base : le contrat
+n'en a pas (amendement à proposer si un filtre doit suivre l'utilisateur
+d'un appareil à l'autre).
+
+=== D-UI-036 — Écrans des éditions ; navigation transverse (lot 3, interface)
+
+*Choix.* Routes des manifestes sous `/accounting/reports/` :
+`trial_balance`, `auxiliary_balance`, `aged_balance`, `general_ledger`,
+`journals`, `balance_sheet`, `income_statement`, `reports` (rapports
+personnalisés : liste, calcul, création, modification, suppression) et
+`fec`. Un gabarit commun `ui/reports/report.html` : critères (formulaire GET
+à étiquettes visibles), avertissements (mouvements déséquilibrés, bilan
+déséquilibré, comptes non repris), synthèse, rubriques en tableaux
+(`PartiduoUi::Table` avec lignes de pied pour les totaux ; balances triables,
+grand livre et journaux dans l'ordre comptable). Exports : `?format=csv` et
+`?format=pdf` appellent `Api::Accounting.export` (fichier produit par le
+cœur, mêmes critères) ; aucun calcul dans l'interface. Grand livre et
+journaux : affichage tronqué à 2 000 lignes (avertissement), l'export reste
+complet. Dates par défaut : début de l'exercice de la période de travail →
+fin de cette période (journaux : la période de travail). FEC : exercice,
+séparateur, encodage ; refus du contrat rangés sous le champ.
+
+Navigation transverse (ADR-005 D5) : un numéro de compte ou un code de tiers
+mène à « Comptes et tiers » sur la même période ; un mouvement agrégé (débit,
+crédit d'une balance) au grand livre du compte ou du tiers
+(`account_from = account_to = numéro`, que le cœur étend aux sous-comptes) ;
+un solde au relevé ; une tranche de la balance âgée au détail des éléments
+ouverts du tiers ; une écriture à sa consultation ; le résultat d'un état à
+l'autre état ; une ligne de rapport personnalisé d'une seule référence de
+compte (`[70%]`, `[512]`) au grand livre de ce compte.
+
+*Complément (clôture du lot 3).* La coupe à 2 000 lignes se fait à
+l'intérieur d'une section (grand livre : lignes d'un compte ; journaux :
+lignes d'écritures, la dernière écriture pouvant être coupée), les totaux
+de la section restant ceux du cœur : un 512 de 50 000 lignes n'est plus
+rendu en entier. Côté cœur, `general_ledger` et `journals` chargent encore
+toutes les lignes : *à proposer* au contrat, `limit` / `offset` dans
+`GeneralLedgerQuery` et `JournalQuery` (reporté, amendement du contrat).
+Les fichiers du cœur (PDF, FEC en ISO 8859-15) sont renvoyés dans une
+`String` que Marten écrit telle quelle (`IO#print` des octets ; ni la
+compression ni la journalisation de l'interface ne la transforment) : Marten
+n'offre pas de réponse faite d'octets (`Response` et `Response::Streaming`
+ne prennent que des `String`). Une spec vérifie l'identité octet pour octet
+(FEC en ISO 8859-15 avec €, Œ, é ; PDF).
+
+*Limite.* Les rubriques du bilan et du compte de résultat ne sont pas des
+liens : `FinancialStatementLineView` n'expose pas les comptes qui les
+composent. *Amendement proposé* : `accounts : Array(String)` (préfixes ou
+numéros) sur la ligne, pour relier chaque rubrique à la balance filtrée.
+
+*Alternative écartée.* Un gabarit par édition : neuf gabarits presque
+identiques ; tableaux HTML triables côté client : second langage client.
+
+=== D-UI-037 — Soldes au plan comptable (lot 3, interface ; lève D-UI-020)
+
+*Choix.* Avec le droit `accounting.report.read`, le plan comptable gagne une
+colonne « Solde » : solde de clôture de la balance du contrat
+(`trial_balance`) sur l'exercice de la période de travail, relié au relevé
+du compte. Seuls les comptes mouvementés en ont un ; un compte parent reste
+vide (l'interface ne cumule rien). Sans le droit : colonne absente.
+
+*Alternative écartée.* Cumul des sous-comptes dans l'interface : règle de
+calcul hors du cœur (ADR-005 D2).
+
+*Complément (clôture du lot 3).* Les soldes sont calculés une fois par
+requête, échec compris (droit refusé, exercice introuvable) : l'échec
+n'est plus recalculé pour chaque compte du plan.
+
+== Lot 3 — éditions (cœur et reprise, 27 septembre 2026)
+
+=== D-ED-001 — Période par défaut et solde d'ouverture des éditions (lot 3, éditions)
+
+*Contexte.* `Acc_Balance::get_row` somme les lignes des périodes choisies,
+avec des colonnes à part pour les écritures d'ouverture (`jr_optype = 'OPE'`)
+qu'aucune table de Partiduo ne marque.
+
+*Choix.* Une édition porte sur `date_from`…`date_to` (défaut : début de
+l'exercice qui contient `date_to`, date du jour). Le solde d'ouverture d'une
+balance ou d'un grand livre est celui des lignes *du même exercice*
+antérieures à `date_from` ; les à-nouveaux sont des écritures de l'exercice,
+comptées en mouvements quand la période part du début de l'exercice (comme
+NOALYSS). Les écritures extournées et leurs extournes figurent partout
+(elles sont validées).
+
+*Alternative écartée.* Cumul depuis la première écriture du dossier :
+double compte dès qu'un dossier passe ses à-nouveaux.
+
+=== D-ED-002 — Bornes de comptes (lot 3, éditions ; écart à NOALYSS)
+
+*Contexte.* NOALYSS compare le texte (`j_poste::text <= '4'`) : « jusqu'à 4 »
+exclut `411`.
+
+*Choix.* `account_to` couvre le compte et ses sous-comptes
+(`number <= to OR number LIKE to || '%'`) ; `account_from` reste une
+comparaison de texte.
+
+=== D-ED-003 — Balance âgée : tranches et date d'arrêt (lot 3, éditions)
+
+*Contexte.* `Balance_Age` classe à < 30, 30-60, 60-90, > 90 jours depuis la
+date, sur les seuls journaux d'achats et de ventes ; ADR-005 D9 fixe non
+échu / 1-30 / 31-60 / > 60 depuis l'échéance, déjà servies par
+`account_statement` (D-ACC-017).
+
+*Choix.* Tranches et règles de D-ACC-017 ; la balance est *arrêtée à
+`as_of`* : seules les écritures datées au plus tard ce jour-là comptent,
+lettrages partiels compris (D-TST-002). Par défaut, clients et fournisseurs
+(les natures `employee`, `other`… sur demande par `kind`). Même règle pour
+la balance des tiers et le grand livre des tiers.
+
+*Alternative écartée.* Tranches de NOALYSS : deux présentations de la même
+créance dans l'interface.
+
+=== D-ED-004 — Formules des états sans `eval` (lot 3, éditions)
+
+*Contexte.* NOALYSS remplace les références par des montants puis évalue la
+chaîne en PHP (`eval`), après un filtre (`check_formula`).
+
+*Choix.* Analyseur à descente récursive (`Partiduo::Accounting::Formula`) :
+références de comptes et de fiches avec les suffixes de NOALYSS (`-d`, `-c`,
+`-s`, `-S`, aucun = valeur absolue), `$CODE` (rubriques des états intégrés),
+`+ - * /`, parenthèses, `abs`, `round`, `min`, `max`, `FROM=MM.AAAA` ; division
+par zéro = 0. Ajouts : `-D` / `-C`, somme des soldes débiteurs / créditeurs
+compte par compte et fiche par fiche, pour répartir un compte de tiers
+entre actif et passif. Refusés : comparaisons et conditions (`?:`),
+analytique `{{…}}` jusqu'au lot 5.
+
+*Alternative écartée.* Interpréter les formules de NOALYSS à l'identique :
+impose un évaluateur d'expressions PHP, et les formulaires fournis
+abusent de la valeur absolue.
+
+=== D-ED-005 — États intégrés FR et BE (lot 3, éditions)
+
+*Contexte.* NOALYSS livre des formulaires (`.form`) et des gabarits (RTF,
+ODS) : FR « système abrégé » (2007) en valeurs absolues, avec `C43D` et
+`C43C` égaux ; BE `bnb.form` au schéma d'avant 2016, soldes signés.
+
+*Choix.* États réécrits en données (`src/accounting/data/statements/fr.yml`,
+`be.yml`) dans la même syntaxe : FR bilan (brut, amortissements, net) et
+compte de résultat du modèle abrégé du PCG ; BE bilan et compte de
+résultats du schéma abrégé (arrêté royal du 29 avril 2019 : apport,
+résultat à affecter…). Soldes signés, tiers répartis par `-D` / `-C`,
+résultat de l'exercice calculé au passif tant que les classes 6 et 7 ne
+sont pas soldées. L'état signale les comptes qu'aucune rubrique ne reprend
+et les soldes à contre-sens (`Acc_Bilan::verify`) ; colonne N-1 = mêmes
+dates un an plus tôt. Libellés en fr, en et nl
+(`accounting.statements.<régime>.<état>.<code>`) ; rendu par les exports
+CSV et PDF, pas de gabarit bureautique.
+
+*Complément (clôture du lot 3).* `result` (synthèse, repris par la reprise,
+D-MIG-022) exclut les préfixes `result_excludes` du fichier du régime :
+69 et 79 (affectations) en BE, comme `net_result` du compte de résultats ;
+après l'affectation, `difference` du compte de résultats reste nulle.
+
+*Alternative écartée.* Porter les `.form` et les gabarits RTF/ODS tels
+quels : états faux (valeurs absolues) ou périmés (BE), et rendu
+bureautique hors du périmètre de l'interface.
+
+=== D-ED-006 — Rapports personnalisés en base (lot 3, éditions)
+
+*Choix.* Tables `accounting_report` et `accounting_report_line` (migration
+accounting 0005, successeurs de `formulaire` et `form_definition`), formules
+de D-ED-004 sans `$CODE`, nom unique, 500 lignes au plus ; nouvelle
+permission `accounting.report.write` (le profil ACCOUNTANT la reçoit à sa
+création). Import et export des définitions (`.bin` de NOALYSS) non repris.
+
+*Complément (clôture du lot 3).* (1) Les profils ACCOUNTANT des dossiers
+déjà provisionnés reçoivent aussi `accounting.report.write` : insertion
+idempotente dans la migration accounting 0005 (`ON CONFLICT DO NOTHING`,
+retour arrière sans effet), qui dépend désormais de `auth 0002`. (2)
+Libellés : `[606-T]` et `[606-t]` sont remplacés au calcul par l'intitulé du
+premier compte dont le numéro commence par le préfixe, en majuscules ou en
+minuscules, vide si aucun compte ne correspond (`Impress::parse_formula`) ;
+la définition garde le motif brut. (3) Formule d'une ligne : 1 000
+caractères au plus (`accounting.errors.report.formula.too_long`, D-ED-014).
+
+*Note.* `genmigrations accounting` propose toujours de changer
+`accounting_billing_dismissal.event_id` (colonne `reference` de la
+migration 0004, champ `big_int` du modèle) : écart antérieur au lot 3, sans
+effet, laissé tel quel.
+
+=== D-ED-007 — FEC conforme (lot 3, éditions ; absorbe `noalyss-export`)
+
+*Choix.* Un fichier par exercice (dates d'un même exercice, défaut :
+l'exercice du jour en entier), toutes écritures comprises (extournes aussi),
+ordre date puis enregistrement ; `EcritureNum` en séquence continue dans le
+fichier (comme `Export_FEC_CSV`) ; `PieceRef` = pièce, sinon code interne ;
+`PieceDate` = date d'écriture ; `ValidDate` = date d'enregistrement (fuseau
+de l'instance) ; compte auxiliaire = fiche de la ligne hors articles et
+banques ; `EcritureLet` = code du lettrage, `DateLet` = sa date ; montant en
+devise et code ISO seulement pour une écriture en devise étrangère ; lignes à
+zéro omises. Séparateur `|` par défaut (tabulation au choix), ISO 8859-15
+par défaut (UTF-8 au choix), CRLF. Nom `<SIREN>FEC<clôture>.txt`,
+`000000000` sans SIREN (instance BE). Le FEC exige que l'acteur voie tous les
+journaux (D-ED-011). Vérifié par la reprise : le FEC réexporté puis relu
+par `partiduo-migrate` redonne la balance de la source (D-MIG-022).
+
+*Alternative écartée.* `EcritureNum` = code interne (hexadécimal, non
+continu) ; un FEC multi-exercices.
+
+=== D-ED-008 — Encodage ISO 8859-15 du FEC fait à la main (lot 3, éditions)
+
+*Contexte.* `String#encode("ISO-8859-15", invalid: :skip)` de Crystal 1.19.1
+perd des octets *valides* sur un texte long (voir BLOCAGES B-ED-001).
+
+*Choix.* Encodage caractère par caractère (`Fec.iso`) : latin-1 hors des
+huit positions propres à 8859-15, les huit caractères de 8859-15 (€, Œ, œ,
+Š, š, Ž, ž, Ÿ), ponctuation typographique translittérée, `?` pour le reste.
+
+=== D-ED-009 — Exports CSV et PDF des éditions (lot 3, éditions)
+
+*Choix.* Le cœur produit les fichiers (`export`, `export_report`) à partir
+d'un tableau neutre : CSV `;` UTF-8, en-têtes traduits, montants au point
+décimal (convention des exports de la Facturation, D-2F-009) ; PDF/A-2b
+(`pdf-a`), A4, paysage pour les tableaux larges, en-tête et pied numéroté.
+La conformité PDF/A-2b est vérifiée par `pdf-validate` dans les specs, pas à
+chaque export (coût). Les polices DejaVu sont embarquées une seconde fois
+par la Comptabilité (`ReportOutput`), qui ne cite pas les internes de la
+Facturation (ADR-006 D3).
+
+*Alternative écartée.* PDF rendu par l'interface : règle de présentation
+hors du cœur, dupliquée par chaque interface.
+
+=== D-ED-010 — Menus des éditions (lot 3, éditions)
+
+*Choix.* Menus `ACC_AUXILIARY_BALANCE`, `ACC_AGED_BALANCE`, `ACC_JOURNALS`,
+`ACC_BALANCE_SHEET`, `ACC_INCOME_STATEMENT`, `ACC_REPORTS` ajoutés sous
+`REPORTS`, routes `accounting:<nom>` ; une route que l'interface ne fournit
+pas masque l'entrée (`Shell.resolve`).
+
+=== D-ED-011 — Éditions et droits par journal (lot 3, éditions)
+
+*Choix.* Chaque édition ne lit que les journaux visibles de l'acteur
+(`get_ledger_sql`) ; le FEC, qui doit être complet, est refusé
+(`accounting.errors.fec.ledgers`) si un journal lui est invisible.
+
+=== D-ED-012 — Codes de fiche des formules : caractères réservés refusés (lot 3, tests)
+
+*Contexte.* Les specs du testeur reprennent `ImpressTest::test_check_formula`
+de NOALYSS : `{T*EL-s}`, `{T+EL-s}`, `{T/EL-s}` y sont refusés. Le parseur
+passait le code par `Cards.format_code`, qui ôte ces caractères :
+`{T*EL}` était lu comme `{TEL}`, sans erreur.
+
+*Choix.* Un code de fiche `{…}` qui contient un blanc, un opérateur ou un
+caractère ôté par le quick code (`Formula::CARD_FORBIDDEN`) est refusé
+(`accounting.errors.formula.card`).
+
+*Alternative écartée.* Garder la normalisation silencieuse : une faute de
+frappe dans une formule désignerait une autre fiche.
+
+=== D-ED-013 — Bilan à date depuis le début de l'exercice ; état partiel signalé (lot 3, clôture)
+
+*Contexte.* Relecture : le bilan était calculé sur les seuls mouvements de
+`date_from` à `date_to` ; une `date_from` en cours d'exercice rendait les
+classes 1 à 5 fausses sans alerte. Bilan et compte de résultat portent sur
+les journaux visibles de l'acteur sans le dire, alors que le FEC est refusé
+dans ce cas (D-ED-011).
+
+*Choix.* (1) Un bilan part toujours du début de l'exercice qui contient
+`date_to` (`ReportData.fiscal_start`), quelle que soit `date_from` ; la vue
+rend cette date dans `date_from`. Colonne N-1 : du début de l'exercice de
+`date_to − 1 an` à cette date. Le compte de résultat garde la période
+demandée. (2) `FinancialStatementView#partial` (défaut `false`, ajout
+compatible du contrat) est vrai si l'acteur ne voit pas tous les journaux ;
+l'export l'écrit en sous-titre, l'interface l'affiche en avertissement.
+
+*Alternative écartée.* Refuser l'état comme le FEC : un utilisateur à qui
+un journal est masqué garde un usage légitime des états (suivi de son
+périmètre), à condition d'être prévenu ; `opening: true` : le solde
+d'ouverture serait compté à part, alors que les formules ne lisent que
+débit et crédit.
+
+=== D-ED-014 — Formules : longueur, profondeur et `round` bornés (lot 3, clôture)
+
+*Contexte.* Relecture : l'analyseur récursif sans limite de profondeur
+laissait une formule de dizaines de milliers de `(` ou de `-` faire
+déborder la pile de la fibre, ce qui arrête tout le processus (déni de
+service par un utilisateur authentifié) ; `round(x, n)` convertissait `n`
+sans contrôle (`OverflowError`, calcul démesuré, erreur 500).
+
+*Choix.* Formule de 1 000 caractères au plus (`Formula::MAX_LENGTH` :
+`accounting.errors.report.formula.too_long` dans `ReportDefinitions.errors`,
+`formula.too_long` si l'analyseur est appelé directement) ; 50 niveaux
+d'imbrication au plus, comptés à chaque facteur (parenthèse, signe, appel ;
+`formula.depth`) ; nombre de décimales de `round` entier de 0 à 10
+(`formula.round`), contrôlé dès l'analyse pour une constante et au calcul
+sinon (la ligne vaut alors 0, comme toute erreur de calcul).
+
+*Alternative écartée.* Analyseur itératif (pile explicite) : plus long à
+écrire et à relire, pour des formules qui dépassent rarement quelques
+niveaux.
+
+=== D-ED-015 — `-D` / `-C` : seules les fiches de tiers répartissent un compte (lot 3, clôture)
+
+*Contexte.* Relecture : les sommes des états sont calculées par couple
+compte × fiche ; les lignes des journaux financiers portent la fiche Banque,
+les OD et les à-nouveaux du même 512 n'en portent pas. Un 512 débiteur de
+5 000 sans fiche et créditeur de 6 000 avec la fiche Banque était montré
+5 000 en disponibilités et 6 000 en emprunts, au lieu de 1 000 au passif, sans
+écart au bilan.
+
+*Choix.* Pour `-D` et `-C`, les sommes sont regroupées par compte et par
+fiche *de tiers* seulement (natures de `Balances::AUXILIARY_KINDS`) ; les
+lignes à fiche Banque ou Article sont rattachées au compte
+(`ReportData.neutral_card_ids`). S'applique aux états intégrés et aux
+rapports personnalisés ; `{QCODE}` garde les lignes de sa fiche, quelle
+que soit sa nature.
+
+*Alternative écartée.* Retirer la fiche Banque dans la requête SQL :
+`{BANQUE}` ne trouverait plus ses lignes.
+
+=== D-UI-038 — Écran du FEC : droit vérifié dès l'affichage (lot 3, tests)
+
+*Contexte.* L'écran du FEC n'appelle le cœur qu'au téléchargement : un
+utilisateur sans `accounting.report.read` voyait le formulaire (200), alors
+que le menu le lui masque et que les autres éditions répondent 403.
+
+*Choix.* `FecHandler` appelle `require!("ACCOUNTING", REPORT_READ)` avant de
+construire le formulaire (403, ou 404 si la Comptabilité est inactive).
+
+=== D-MIG-022 — Réconciliation par les éditions (lot 3, migrate)
+
+*Contexte.* ADR-001 : rapport « complété au lot 3 » ; ETAT-PORTAGE : balance
+âgée et totaux à rapprocher des éditions.
+
+*Choix.* Les chiffres « après » viennent des éditions : balance générale
+(`trial_balance`, lignes, débit, crédit par compte), journaux (`journals` :
+par journal et par mois), balance âgée (`aged_balance` par nature de fiche,
+tiers ayant des lignes en classe 4). Nouveaux tableaux comparés : FEC de
+chaque exercice réexporté par l'instance en UTF-8 puis relu par
+`Fec::Reader` (`fec-relu.csv`, par compte) ; contrôles `editions.csv`
+(balance équilibrée, résultat, nombre d'écritures du FEC). Bilan et compte
+de résultat du régime de l'instance, et comptes non repris par leurs
+rubriques, figurent pour information, hors réconciliation. La balance âgée
+« avant » est désormais arrêtée à la date de référence, comme l'édition
+(écritures et lignes de lettrage postérieures ignorées).
+
+*Alternative écartée.* Garder la relecture par `entries` et
+`account_statement` : la reprise ne vérifierait pas les éditions que le
+dossier produira.

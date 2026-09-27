@@ -315,3 +315,16 @@ compté dans `rapport.adoc` (D-MIG-012).
 
 *Levée.* Au lot 5 : reprendre plans, postes et imputations par le contrat
 de l'Analytique et les ajouter à la réconciliation (totaux par poste).
+
+== B-ED-001 — `String#encode` avec `invalid: :skip` perd des octets (lot 3, éditions)
+
+*Constat.* Crystal 1.19.1 : `text.encode("ISO-8859-15", invalid: :skip)`
+d'un texte de quelques kilo-octets entièrement représentable renvoie un
+résultat tronqué (un chiffre de date disparu au-delà du premier millier
+d'octets) ; sans `invalid:`, le même texte s'encode correctement.
+
+*Contournement.* Encodage ISO 8859-15 écrit dans le FEC (D-ED-008), vérifié
+par les specs.
+
+*Levée.* Signaler l'anomalie à l'amont de Crystal (`String#encode`, tampon
+d'iconv) ; revenir à `encode` quand elle sera corrigée.

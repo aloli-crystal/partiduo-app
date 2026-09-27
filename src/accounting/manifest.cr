@@ -18,6 +18,8 @@ Partiduo::Modules.register do
   permission "accounting.ledger.write"
   permission "accounting.matching.write"
   permission "accounting.report.read"
+  # Rapports personnalisés (`formulaire`, `form_definition`).
+  permission "accounting.report.write"
   permission "accounting.vat.declare"
   permission "accounting.period.close"
 
@@ -38,6 +40,12 @@ Partiduo::Modules.register do
   menu "ACC_TRIAL_BALANCE", parent: "REPORTS", order: 10, route: "accounting:trial_balance", permission: "accounting.report.read"
   menu "ACC_GENERAL_LEDGER", parent: "REPORTS", order: 20, route: "accounting:general_ledger", permission: "accounting.report.read"
   menu "ACC_FEC", parent: "REPORTS", order: 30, route: "accounting:fec", permission: "accounting.report.read"
+  menu "ACC_AUXILIARY_BALANCE", parent: "REPORTS", order: 12, route: "accounting:auxiliary_balance", permission: "accounting.report.read"
+  menu "ACC_AGED_BALANCE", parent: "REPORTS", order: 14, route: "accounting:aged_balance", permission: "accounting.report.read"
+  menu "ACC_JOURNALS", parent: "REPORTS", order: 25, route: "accounting:journals", permission: "accounting.report.read"
+  menu "ACC_BALANCE_SHEET", parent: "REPORTS", order: 26, route: "accounting:balance_sheet", permission: "accounting.report.read"
+  menu "ACC_INCOME_STATEMENT", parent: "REPORTS", order: 27, route: "accounting:income_statement", permission: "accounting.report.read"
+  menu "ACC_REPORTS", parent: "REPORTS", order: 28, route: "accounting:reports", permission: "accounting.report.read"
 
   menu "ACC_VAT_RETURN", parent: "VAT", order: 10, route: "accounting:vat_return", permission: "accounting.vat.declare"
 

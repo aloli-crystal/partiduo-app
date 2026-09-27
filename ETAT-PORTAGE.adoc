@@ -22,7 +22,8 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |2 |Écritures, consultation, lettrage |*Terminé* (clôture commune « Clôture du lot 2F »)
 |F |Module Facturation |*Terminé* (clôture commune « Clôture du lot 2F »)
 |M |`partiduo-migrate` |*Terminé* (FEC et base NOALYSS ; analytique en annexe jusqu'au lot 5 ; clôture « Clôture du lot M »)
-|3–6 |Éditions, TVA, analytique, stock |À faire
+|3 |Éditions : balances, grand livre, journaux, bilan et compte de résultat FR/BE, rapports personnalisés, FEC, exports CSV et PDF ; écrans ; réconciliation de `partiduo-migrate` par les éditions |*Terminé* (clôture « Clôture du lot 3 »)
+|4–6 |TVA, analytique, stock |À faire
 |===
 
 == Lot P — ce qui existe (26 septembre 2026)
@@ -694,12 +695,98 @@ Vérifications (base de test `partiduo_test_M_final`) :
 * `marten migrate` sur base vierge (`partiduo_migrate_M`) : 14 migrations
   du cœur appliquées, `migrate --check` sans migration en attente.
 
+== Lot 3 — éditions (cœur, 27 septembre 2026)
+
+Cœur (`partiduo-app`, décisions D-ED-001 à D-ED-011, blocage B-ED-001,
+link:doc/api/accounting-reports.adoc[]) :
+
+* Balances : générale (`trial_balance` : ouverture, mouvements, soldes,
+  classes, synthèse 1-5 / 6 / 7, filtres de journaux et de comptes, comptes
+  soldés masqués), des tiers (`auxiliary_balance`), âgée (`aged_balance`,
+  tranches d'ADR-005 D9, éléments ouverts, arrêtée à `as_of`).
+* Grand livre par compte ou par tiers (`general_ledger`, solde d'ouverture,
+  solde progressif, lettre) ; journaux (`journals`, écritures et lignes,
+  totaux par mois et par compte).
+* Bilan et compte de résultat FR (modèle abrégé du PCG) et BE (schéma
+  abrégé 2019) : états en données (`src/accounting/data/statements/`),
+  formules de NOALYSS analysées sans `eval` (`Formula`, suffixes `-D`/`-C`
+  ajoutés), colonne N-1, écart actif − passif, comptes non repris, soldes à
+  contre-sens (`financial_statement`).
+* Rapports personnalisés (`formulaire`/`form_definition`, migration
+  accounting 0005, permission `accounting.report.write`).
+* FEC conforme à l'article A47 A-1 (`fec`, absorbe `noalyss-export`) ;
+  exports CSV et PDF/A-2b de chaque édition (`export`, `export_report`).
+* Menus des éditions (D-ED-010) ; libellés fr, en, nl.
+* Specs : 29 exemples nouveaux (`spec/accounting/balances_spec.cr`,
+  `ledger_reports_spec.cr`, `statements_spec.cr`, `fec_exports_spec.cr`,
+  `formula_spec.cr` ; outils `spec/support/reports.cr`), dont validation
+  PDF/A-2b par `pdf-validate`.
+
+Reprise (`partiduo-migrate`, D-MIG-022) : les chiffres « après » du rapport
+de réconciliation viennent des éditions (balance générale, journaux,
+balance âgée) ; FEC de chaque exercice réexporté par l'instance puis relu
+et comparé à la source (`fec-relu.csv`) ; contrôles `editions.csv` ; bilan
+et compte de résultat pour information ; balance âgée « avant » arrêtée à
+la date de référence. FEC de démonstration et base NOALYSS de démonstration
+réconciliés au centime par les éditions.
+
+Vérifications (base de test `partiduo_test_3_0`) :
+
+* `partiduo-app` : 656 exemples + 13 en attente (Comptabilité seule),
+  557 + 19 en attente (Facturation seule), 702 (les deux), tous verts ;
+  `crystal tool format` et Ameba sans remarque ; garde-fou ADR-005 D3 vert ;
+  `genmigrations accounting` : seul l'écart antérieur noté en D-ED-006.
+* `partiduo-migrate` : 93 exemples verts (nouveau
+  `spec/partiduo_migrate/editions_spec.cr`) ; format et Ameba sans remarque.
+
+Interface (`partiduo-ui-bulma`, D-UI-035 à D-UI-038) : écrans des neuf
+éditions sous `/accounting/reports/`, filtres persistants, exports CSV et
+PDF du cœur, navigation transverse, soldes au plan comptable.
+
+== Clôture du lot 3 — relecture et vérifications (27 septembre 2026)
+
+Remarques de relecture corrigées (décisions D-ED-013 à D-ED-015,
+compléments de D-ED-005, D-ED-006, D-UI-035 à D-UI-037) :
+
+* *Formules* (majeur, déni de service) : 1 000 caractères au plus
+  (`accounting.errors.report.formula.too_long`), 50 niveaux d'imbrication
+  (`formula.depth`) ; `round(x, n)` : `n` entier de 0 à 10
+  (`formula.round`), contrôlé à l'analyse et au calcul (D-ED-014).
+* *`-D` / `-C`* (majeur) : seules les fiches de tiers répartissent un
+  compte entre actif et passif ; les lignes à fiche Banque ou Article
+  restent au compte (un 512 avec à-nouveau sans fiche et mouvements
+  bancaires n'a qu'un solde) ; états et rapports personnalisés (D-ED-015).
+* *Bilan* (majeur) : toujours depuis le début de l'exercice de `date_to` ;
+  `FinancialStatementView#partial` quand l'acteur ne voit pas tous les
+  journaux, écrit dans l'export et affiché par l'interface (D-ED-013).
+* Mineures : `result` BE hors 69/79 (`result_excludes`) ; libellés
+  `[606-T]` / `[606-t]` ; `accounting.report.write` accordée aux profils
+  ACCOUNTANT existants par la migration accounting 0005 ; grand livre et
+  journaux coupés à 2 000 lignes à l'intérieur d'une section ; soldes du
+  plan comptable calculés une fois par requête ; un seul cookie de filtres
+  pour les rapports personnalisés ; fichiers du cœur rendus octet pour
+  octet (spec FEC ISO 8859-15 et PDF). Reportés : `limit` / `offset` du
+  grand livre et des journaux au contrat (D-UI-036).
+
+Vérifications (base de test `partiduo_test_3_final`) :
+
+* `partiduo-app` : 687 exemples + 13 en attente (Comptabilité seule),
+  563 + 21 en attente (Facturation seule), 733 (les deux), tous verts ;
+  `crystal tool format` et Ameba sans remarque ; garde-fou ADR-005 D3 vert.
+* `partiduo-ui-bulma` : 187 exemples verts ; Ameba sans remarque ;
+  garde-fou `Partiduo::Api` vert.
+* `marten migrate` sur base vierge (`partiduo_migrate_3`) : 15 migrations
+  du cœur appliquées (accounting 0005 comprise, vérifiée aussi en retour
+  arrière puis réapplication avec un profil ACCOUNTANT existant), rien en
+  attente depuis l'interface.
+
 == Prochaines étapes
 
-. Lot 3 : éditions (balance, grand livre, journaux, balance âgée, bilan et
-  compte de résultat) ; y rapprocher la réconciliation de
-  `partiduo-migrate` (balance âgée « avant » par un lettrage relu en SQL,
-  D-MIG-015) et le type des comptes repris (D-MIG-018).
+. Lot 4 : TVA (déclarations BE et FR, listings), sur les éditions du lot 3.
+. Contrat : relever `API_VERSION` (contrat enrichi des lots 2, F et 3,
+  D-INV-015) ; proposer `limit` / `offset` pour `general_ledger` et
+  `journals` (D-UI-036) et les comptes des rubriques d'un état (D-UI-036) ;
+  signaler B-ED-001 à l'amont de Crystal.
 . Reprise : devises des écritures à passer à `post_entry` quand la source
   n'en a qu'une (D-MIG-019) ; analytique au lot 5 (B-MIG-001) ; amendement
   proposé `create_card` avec compte (D-MIG-006).

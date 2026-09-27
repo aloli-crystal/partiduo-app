@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Bilan et compte de résultats, régime BE : schéma abrégé des comptes
+# annuels (Code des sociétés et des associations, art. 3:3 de l'arrêté
+# royal du 29 avril 2019), sur le PCMN, d'après le formulaire de NOALYSS
+# `html/document/fr_be/bnb.form` (soldes signés `-s` et signes inversés au
+# passif), mis à jour pour le schéma en vigueur (DECISIONS D-ED-005).
+# Mêmes clés que `fr.yml` ; libellés `accounting.statements.be.<état>.<code>`.
+# Comptes d'affectation (69, 79) : hors du résultat de l'exercice de la
+# synthèse, comme `net_result` du compte de résultats (D-ED-005).
+result_excludes: ["69", "79"]
+balance_sheet:
+  covers: ["1", "2", "3", "4", "5"]
+  rubrics:
+    - {code: assets, style: heading, level: 0}
+    - {code: fixed_assets, style: heading, level: 1}
+    - {code: formation_expenses, level: 2, net: "[20%-s]"}
+    - {code: intangible, level: 2, net: "[21%-s]"}
+    - {code: tangible, level: 2, net: "[22%-s]+[23%-s]+[24%-s]+[25%-s]+[26%-s]+[27%-s]"}
+    - {code: financial, level: 2, net: "[28%-s]"}
+    - {code: total_fixed, style: subtotal, level: 1, sum: [formation_expenses, intangible, tangible, financial]}
+    - {code: current_assets, style: heading, level: 1}
+    - {code: long_term_receivables, level: 2, net: "[29%-s]"}
+    - {code: stocks, level: 2, net: "[3%-s]"}
+    - {code: short_term_receivables, level: 2, net: "[40%-s]+[41%-s]"}
+    - {code: investments, level: 2, net: "[50%-s]+[51%-s]+[52%-s]+[53%-s]"}
+    - {code: cash, level: 2, net: "[54%-s]+[55%-D]+[56%-s]+[57%-s]+[58%-s]"}
+    - {code: accruals_assets, level: 2, net: "[490%-s]+[491%-s]"}
+    - {code: total_current, style: subtotal, level: 1, sum: [long_term_receivables, stocks, short_term_receivables, investments, cash, accruals_assets]}
+    - {code: total_assets, style: total, level: 0, sum: [total_fixed, total_current]}
+    - {code: liabilities, style: heading, level: 0}
+    - {code: equity, style: heading, level: 1}
+    - {code: contribution, level: 2, net: "[10%-S]+[11%-S]"}
+    - {code: revaluation, level: 2, net: "[12%-S]"}
+    - {code: reserves, level: 2, net: "[13%-S]"}
+    - {code: retained_earnings, level: 2, net: "[14%-S]"}
+    - {code: result_pending, level: 2, net: "[7%-S]-[6%-s]"}
+    - {code: capital_grants, level: 2, net: "[15%-S]"}
+    - {code: total_equity, style: subtotal, level: 1, sum: [contribution, revaluation, reserves, retained_earnings, result_pending, capital_grants]}
+    - {code: provisions, style: subtotal, level: 1, net: "[16%-S]"}
+    - {code: debts, style: heading, level: 1}
+    - {code: long_term_debts, level: 2, net: "[17%-S]"}
+    - {code: current_portion, level: 2, net: "[42%-S]"}
+    - {code: financial_debts, level: 2, net: "[43%-S]+[55%-C]"}
+    - {code: trade_debts, level: 2, net: "[44%-S]"}
+    - {code: advances_received, level: 2, net: "[46%-S]"}
+    - {code: tax_social_debts, level: 2, net: "[45%-S]"}
+    - {code: other_debts, level: 2, net: "[47%-S]+[48%-S]"}
+    - {code: accruals_liabilities, level: 2, net: "[492%-S]+[493%-S]"}
+    - {code: total_debts, style: subtotal, level: 1, sum: [long_term_debts, current_portion, financial_debts, trade_debts, advances_received, tax_social_debts, other_debts, accruals_liabilities]}
+    - {code: total_liabilities, style: total, level: 0, sum: [total_equity, provisions, total_debts]}
+income_statement:
+  covers: ["60", "61", "62", "63", "64", "65", "66", "67", "68", "70", "71", "72", "73", "74", "75", "76", "77", "78"]
+  rubrics:
+    - {code: revenue, level: 2, net: "[70%-S]"}
+    - {code: other_operating_income, level: 2, net: "[71%-S]+[72%-S]+[73%-S]+[74%-S]"}
+    - {code: purchases, level: 2, net: "[60%-s]+[61%-s]"}
+    - {code: gross_margin, style: subtotal, level: 1, net: "$revenue+$other_operating_income-$purchases"}
+    - {code: wages, level: 2, net: "[62%-s]"}
+    - {code: depreciation, level: 2, net: "[630%-s]"}
+    - {code: write_downs, level: 2, net: "[631%-s]+[632%-s]+[633%-s]+[634%-s]"}
+    - {code: provisions, level: 2, net: "[635%-s]+[636%-s]+[637%-s]"}
+    - {code: other_operating_charges, level: 2, net: "[64%-s]"}
+    - {code: operating_result, style: total, level: 1, net: "$gross_margin-$wages-$depreciation-$write_downs-$provisions-$other_operating_charges"}
+    - {code: financial_income, level: 2, net: "[75%-S]"}
+    - {code: financial_charges, level: 2, net: "[65%-s]"}
+    - {code: non_recurring_income, level: 2, net: "[76%-S]"}
+    - {code: non_recurring_charges, level: 2, net: "[66%-s]"}
+    - {code: result_before_tax, style: total, level: 1, net: "$operating_result+$financial_income-$financial_charges+$non_recurring_income-$non_recurring_charges"}
+    - {code: deferred_taxes, level: 2, net: "[780%-S]-[680%-s]"}
+    - {code: income_taxes, level: 2, net: "[67%-s]-[77%-S]"}
+    - {code: result_of_year, style: total, level: 1, net: "$result_before_tax+$deferred_taxes-$income_taxes"}
+    - {code: untaxed_reserves, level: 2, net: "[789%-S]-[689%-s]"}
+    - {code: net_result, style: total, level: 0, net: "$result_of_year+$untaxed_reserves"}
