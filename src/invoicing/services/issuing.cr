@@ -196,6 +196,13 @@ module Partiduo
             "invoice_id"     => credited.id.to_s,
             "invoice_number" => credited.number.to_s,
           }), actor_user_id: actor.user_id)
+        when "delivery_note"
+          # Sortie de stock (module Stock, lot 6, D-STK-004).
+          Partiduo::Events.publish("delivery_note.issued", {
+            "delivery_note_id" => document_id.to_s,
+            "number"           => document.number.to_s,
+            "issue_date"       => document.issue_date.try(&.to_s("%Y-%m-%d")) || "",
+          }, actor_user_id: actor.user_id)
         when "invoice", "deposit_invoice"
           # `deposit_sources` : factures d'acompte déduites (`invoice:<id>`),
           # pour que l'écriture de la facture finale extourne leurs ventes

@@ -42,6 +42,7 @@ fr:
       acc_balance_sheet: "Bilan"
       acc_income_statement: "Compte de résultat"
       acc_reports: "Rapports personnalisés"
+      acc_forecasts: "Prévisions budgétaires"
       acc_vat_return: "Déclaration de TVA"
       acc_vat_returns: "Déclarations de TVA enregistrées"
       acc_vat_settings: "Paramètres de la TVA"
@@ -330,6 +331,23 @@ fr:
           too_long: "Le libellé compte au plus %{max} caractères."
         formula:
           too_long: "La formule compte au plus %{max} caractères."
+      forecast:
+        name:
+          blank: "Indiquez le nom de la prévision."
+          too_long: "Le nom compte au plus %{max} caractères."
+        period:
+          unknown: "Période inconnue (%{id})."
+          order: "La dernière période précède la première."
+          outside: "Cette période n'appartient pas à la prévision (%{id})."
+          twice: "Cette période a déjà un montant."
+        label:
+          blank: "Indiquez le libellé."
+          too_long: "Le libellé compte au plus %{max} caractères."
+        formula:
+          blank: "Indiquez la formule du réel."
+          too_long: "La formule compte au plus %{max} caractères."
+        amount:
+          scale: "Le montant compte au plus %{max} décimales."
       fec:
         fiscal_year: "Le FEC couvre un seul exercice : les dates doivent appartenir au même exercice."
         ledgers: "Le FEC reprend tous les journaux : vous n'avez pas accès à chacun d'eux."

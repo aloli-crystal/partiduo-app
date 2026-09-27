@@ -1,0 +1,64 @@
+= Comptabilité : prévisions budgétaires
+:toc: left
+:toc-title: Table des matières
+:toclevels: 3
+:icons: font
+:source-language: crystal
+
+Référence du lot 6 (ADR-001 § Lots : « prévisions »). Successeur de
+`Anticipation`, `Forecast_Category_MTable`, `Forecast_Item_MTable` et des
+tables `forecast`, `forecast_category`, `forecast_item` de NOALYSS.
+
+* Contrat : `Partiduo::Api::Accounting` (`src/accounting/api/forecasts.cr`,
+  types dans le même fichier) ; module Comptabilité (D-FCT-001).
+* Tables : `accounting_forecast`, `accounting_forecast_category`,
+  `accounting_forecast_item`, `accounting_forecast_amount` (migration
+  accounting 0007).
+* Permissions : `accounting.report.read` (lecture, comparaison),
+  `accounting.report.write` (écriture), comme les rapports personnalisés.
+* Menu : `ACC_FORECASTS` (Éditions), route `accounting:forecasts`.
+
+== Modèle
+
+* Prévision : nom (255 caractères), première et dernière périodes du socle ;
+  elle couvre toutes les périodes entre les deux.
+* Catégorie : libellé, rang.
+* Élément : libellé, *formule du réel* (syntaxe des rapports : `[70%]`,
+  `[706-S]`, `{QCODE}`, opérations, `FROM=MM.AAAA` ; pas de `$CODE`),
+  montant estimé de chaque période, montant initial ajouté à la première
+  période (`fi_amount_initial`), rang, montants propres à certaines périodes
+  (D-FCT-002) ; montants à quatre décimales au plus.
+
+== Fonctions
+
+[cols="2,3",options="header"]
+|===
+|Fonction |Règle
+
+|`forecasts`, `forecast`
+|Liste par nom ; détail avec catégories, éléments et montants par période.
+
+|`check_forecast`, `create_forecast`, `update_forecast`, `delete_forecast`
+|Nom obligatoire ; périodes connues, la dernière après la première. Changer
+les périodes retire les montants des périodes sorties. La suppression emporte
+catégories et éléments.
+
+|`clone_forecast`
+|Copie complète sous un nouveau nom (montant initial compris, que NOALYSS
+omettait).
+
+|`create_forecast_category`, `update_forecast_category`, `delete_forecast_category`
+|Libellé obligatoire (255 caractères).
+
+|`check_forecast_item`, `create_forecast_item`, `update_forecast_item`, `delete_forecast_item`
+|Libellé et formule obligatoires, formule valide ; une période propre à un
+montant appartient à la prévision, une seule fois.
+
+|`forecast_report`
+|Pour chaque élément et chaque période : estimé (montant propre à la période,
+sinon montant de l'élément ; montant initial à la première) et réel (formule
+calculée sur la seule période, journaux visibles de l'acteur, arrondi au
+centime) ; cumuls (`estimated_cumulative`, `real_cumulative`), totaux,
+écarts (`differences`), sommes par catégorie. `invalid_items` : éléments
+dont la formule ne se calcule plus (réel à zéro).
+|===

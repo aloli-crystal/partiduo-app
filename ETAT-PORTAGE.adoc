@@ -25,8 +25,13 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |3 |Éditions : balances, grand livre, journaux, bilan et compte de résultat FR/BE, rapports personnalisés, FEC, exports CSV et PDF ; écrans ; réconciliation de `partiduo-migrate` par les éditions |*Terminé* (clôture « Clôture du lot 3 »)
 |4 |TVA : déclarations BE (grilles, listing, relevé intracommunautaire, Intervat) et FR (CA3, CA12), liquidation |*Terminé* (clôture « Clôture du lot 4 »)
 |5 |Analytique : plans, postes, groupes, clés de répartition, ventilation des écritures, opérations diverses, balances et historiques |*Terminé* (cœur et interface ; clôture « Clôture du lot 5 ») ; reprise analytique par `partiduo-migrate` reportée (B-MIG-001)
-|6 |Stock |À faire
+|6 |Stock, prévisions budgétaires, suivi (GED : extension `partiduo-document`) |*Terminé* (cœur et interface ; clôture « Clôture du lot 6 ») ; reprise par `partiduo-migrate` reportée
 |===
+
+Lot en cours : aucun. Les lots P à 6 du plan sont terminés (lot 6 clos le
+27 septembre 2026) ; restent les reprises, reports et amendements listés dans
+« Prochaines étapes ». Specs : 979 exemples dans `partiduo-app` (tous
+modules), 253 dans `partiduo-ui-bulma`.
 
 == Lot P — ce qui existe (26 septembre 2026)
 
@@ -984,9 +989,122 @@ Reports (lot 5) : reprise des plans, postes et imputations par
 de bord ; agrégation en SQL des balances (voir DECISIONS, « Reports de la
 relecture du lot 5 »).
 
+== Lot 6 — Stock, prévisions, suivi (cœur, 27 septembre 2026)
+
+Cœur (`partiduo-app`, décisions D-STK-001 à D-STK-008, D-FCT-001, D-FCT-002,
+D-FUP-001 à D-FUP-006) :
+
+* Module `STOCK` (application `stock`, `depends_on_any "INVOICING",
+  "ACCOUNTING"`, link:doc/api/stock.adoc[]) : dépôts, dépôt par défaut,
+  articles suivis (code stock commun), opérations manuelles et inventaires
+  (écarts comptés, proposition des quantités théoriques), historique, état
+  entre deux dates, quantité d'une fiche, valorisation au coût moyen pondéré,
+  exports CSV ; mouvements automatiques par les événements (bon de
+  livraison, facture, avoir, écritures d'achats et de ventes, extourne), sans
+  double compte quand la Facturation et la Comptabilité sont actives ;
+  migration stock 0001 (contraintes, ligne unique des paramètres,
+  permissions des profils ACCOUNTANT).
+* Événement `delivery_note.issued` publié par la Facturation (C4, D-STK-004).
+* Prévisions budgétaires dans la Comptabilité (link:doc/api/accounting-forecasts.adoc[]) :
+  prévisions, catégories, éléments (formule du réel, montant par période,
+  montant initial, montants propres à une période), copie, comparaison
+  estimé / réel / cumuls / écarts ; migration accounting 0007 ; menu
+  `ACC_FORECASTS`.
+* Module `FOLLOWUP` (application `followup`, sans dépendance,
+  link:doc/api/followup.adoc[]) : types d'action (13 types de NOALYSS au
+  provisionnement), étiquettes, actions (référence par type, état, priorité,
+  rappel, destinataire, contact, fiches concernées, commentaires, actions
+  liées, opérations rattachées), recherche, rappels, export CSV ; migration
+  followup 0001 ; rubrique de menu `FOLLOW_UP` déclarée par `CORE` (D-FUP-002,
+  amendement proposé à ADR-005).
+* CI et `scripts/specs-modules.sh` : Stock et Suivi actifs dans les trois
+  configurations.
+* Specs (base `partiduo_test_6_0`) : `spec/stock/stock_spec.cr` (12),
+  `spec/stock/feeds_spec.cr` (7), `spec/followup/followup_spec.cr` (9),
+  `spec/accounting/forecasts_spec.cr` (4), outils `spec/support/stock.cr` ;
+  totaux : 865 + 13 en attente (Comptabilité, Analytique, Stock, Suivi),
+  624 + 40 en attente (Facturation, Stock, Suivi), 911 (tous), verts ;
+  `crystal tool format` et Ameba sans remarque ; garde-fou ADR-005 D3 vert.
+
+Écrans : voir « Lot 6 — interface » ci-dessous (faits). Reste : voir
+« Clôture du lot 6 ».
+
+== Lot 6 — interface (partiduo-ui-bulma, 27 septembre 2026)
+
+Écrans par `Partiduo::Api` seulement (D-UI-045 à D-UI-047 ; routes : README
+de l'interface) :
+
+* *Stock* : dépôts et dépôt par défaut, articles suivis, opérations
+  manuelles, inventaire (proposition puis quantités comptées), état,
+  historique, valorisation, exports CSV du cœur ; routes `stock:*`.
+* *Prévisions budgétaires* : prévisions, catégories, éléments (montants
+  propres à une période), copie, comparaison estimé / réel / écart et CSV ;
+  routes `accounting:forecast*`.
+* *Suivi* : actions (recherche, saisie, consultation, commentaires, état,
+  actions liées, opérations rattachées), rappels, types d'action (types de
+  base), étiquettes, export CSV ; routes `followup:*`.
+* Navigation transverse : fiche d'un tiers → ses actions ; fiche d'un
+  article suivi → historique de son stock ; écriture → actions qui la
+  citent. Modules inactifs : 404.
+
+Vérifications (base `partiduo_test_6_1`) : `partiduo-ui-bulma` 243 exemples
+verts (11 nouveaux : `spec/ui/stock_spec.cr`, `forecasts_spec.cr`,
+`followup_spec.cr`) ; format et Ameba sans remarque ; garde-fou
+`Partiduo::Api` vert.
+
+Reste (interface du lot 6) : rappels sur le tableau de bord ; actions liées
+sur la consultation d'un document de la Facturation ; complétion des fiches
+dans le formulaire des actions (D-UI-046).
+
+== Clôture du lot 6 — relecture et vérifications (27 septembre 2026)
+
+Remarques de la relecture traitées (DECISIONS, « Clôture du lot 6 —
+relecture ») :
+
+* ADR-006 D3 : amendement proposé explicite (lecture du contrat d'une pièce
+  `depends_on_any` depuis l'abonné d'un de ses événements) ; exception de la
+  spec d'isolation restreinte au seul `src/stock/services/feeds.cr`.
+* Stock : facture tirée d'une chaîne documentaire déjà livrée (parcours
+  borné, D-STK-010) ; lignes d'articles d'une écriture = rôle nul ou `base`
+  (D-STK-011) ; code stock par défaut validé et suivi sous verrou
+  (D-STK-012) ; période close lue par `Partiduo::Api::Core`, migration
+  stock 0001 dépendante de `core` (D-STK-013).
+* Suivi : export CSV réellement sans plafond (D-FUP-007).
+* Prévisions : formule vide admise (réel nul) et contextes des formules à
+  date de début mis en cache (D-FCT-003).
+* Interface : inventaire sans compte prérempli pour un stock théorique
+  négatif, erreurs rangées sous la bonne fiche (D-UI-049) ; format d'heure
+  traduit (D-UI-050).
+* Dette de sécurité suivie : B-SEC-001 (visibilité des actions par groupe,
+  droits par dépôt ; avertissement exigé de la reprise).
+
+Vérifications (bases `partiduo_test_6_final`, `partiduo_migrate_6`) :
+
+* `partiduo-app` : 933 exemples + 13 en attente (Comptabilité, Analytique,
+  Stock, Suivi), 684 + 41 en attente (Facturation, Stock, Suivi), 979
+  (tous), verts (`scripts/specs-modules.sh`) ; format et Ameba sans
+  remarque ; garde-fou ADR-005 D3 vert ;
+* `partiduo-ui-bulma` : 253 exemples verts ; format et Ameba sans remarque ;
+  garde-fou `Partiduo::Api` vert ;
+* `crystal run manage.cr -- migrate` sur une base vierge : toutes les
+  migrations appliquées (dont `accounting_0007_forecasts`,
+  `stock_0001_stock`, `followup_0001_followup`).
+
+Reste (lot 6) : reprise par `partiduo-migrate` (`stock_*`, `forecast*` —
+D-FCT-002, D-FCT-003 —, `action_gestion*`, avertissements B-SEC-001) ;
+droits par dépôt (D-STK-006) et visibilité des actions par groupe
+(D-FUP-001) ; amendement ADR-006 D3 à faire adopter (D-STK-001) ; lecture
+des fiches en bloc par le contrat du socle (D-STK-013) ; livraison par ligne
+(D-STK-010) ; rappels sur le tableau de bord, actions liées sur un document
+de la Facturation (interface).
+
 == Prochaines étapes
 
-. Lot 6 (stock).
+. Reprise du lot 6 par `partiduo-migrate` (stock, prévisions, suivi) avec
+  les avertissements de B-SEC-001 ; puis droits par dépôt et visibilité des
+  actions par groupe avant toute reprise qui s'en sert.
+. Faire adopter les amendements proposés : ADR-006 D3 (D-STK-001), ADR-005
+  (rubrique `FOLLOW_UP`, D-FUP-002).
 . Reprise analytique par `partiduo-migrate` (B-MIG-001 : ventiler avant de
   clore les périodes reprises) et reports du lot 5 ci-dessus.
 . Contrat : relever `API_VERSION` (contrat enrichi des lots 2, F, 3 et 5,

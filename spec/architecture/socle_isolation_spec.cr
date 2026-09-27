@@ -7,8 +7,8 @@ require "../spec_helper"
 # un compte comptable appartient à la Comptabilité, qui cite le socle ; jamais
 # l'inverse.
 SOCLE_DIRS    = %w[core cards vat modules auth]
-MODULE_NAMES  = %w[Accounting Invoicing Analytic Stock]
-MODULE_TABLES = %w[accounting_ invoicing_ analytic_ stock_]
+MODULE_NAMES  = %w[Accounting Invoicing Analytic Stock Followup]
+MODULE_TABLES = %w[accounting_ invoicing_ analytic_ stock_ followup_]
 
 describe "Isolation du socle (ADR-006 D3)" do
   it "ne cite ni le contrat, ni les internes, ni les tables d'un module" do

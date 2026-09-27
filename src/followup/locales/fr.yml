@@ -1,0 +1,79 @@
+fr:
+  followup:
+    module:
+      name: "Suivi"
+    permissions:
+      action:
+        read: "Consulter les actions de suivi"
+        write: "Créer et modifier les actions de suivi"
+      settings:
+        write: "Paramétrer les types d'action et les étiquettes"
+    menu:
+      fup_actions: "Actions"
+      fup_reminders: "Rappels"
+      fup_types: "Types d'action"
+      fup_tags: "Étiquettes"
+    states:
+      todo: "À faire"
+      follow: "À suivre"
+      closed: "Clôturé"
+      abandoned: "Abandonné"
+    priorities:
+      p1: "Haute"
+      p2: "Normale"
+      p3: "Basse"
+    columns:
+      reference: "Référence"
+      date: "Date"
+      hour: "Heure"
+      type: "Type"
+      title: "Titre"
+      card: "Destinataire"
+      state: "État"
+      priority: "Priorité"
+      remind_on: "Rappel"
+      tags: "Étiquettes"
+    default_types:
+      di: "Document interne"
+      bcl: "Bon de commande client"
+      bfo: "Bon de commande fournisseur"
+      fac: "Facture"
+      rap: "Lettre de rappel"
+      co: "Courrier"
+      prp: "Proposition"
+      el: "Courriel"
+      ds: "Divers"
+      nfr: "Note de frais"
+      rfo: "Réception commande fournisseur"
+      rcl: "Réception commande client"
+      rmg: "Réception magasin"
+    errors:
+      action_type:
+        code_required: "Le préfixe est obligatoire."
+        code_too_long: "Le préfixe compte au plus %{max} caractères."
+        code_invalid: "Le préfixe ne contient que des lettres et des chiffres."
+        code_taken: "Le préfixe %{code} est déjà utilisé."
+        label_required: "Le libellé est obligatoire."
+        label_too_long: "Le libellé compte au plus %{max} caractères."
+        next_number_invalid: "Le prochain numéro vaut au moins 1."
+        in_use: "Ce type d'action est utilisé : suppression impossible."
+      tag:
+        label_required: "Le libellé de l'étiquette est obligatoire."
+        label_too_long: "Le libellé de l'étiquette compte au plus %{max} caractères."
+        label_taken: "L'étiquette %{label} existe déjà."
+        color_invalid: "La couleur est un nombre de 1 à 10."
+      action:
+        type_unknown: "Type d'action inconnu (%{id})."
+        title_too_long: "Le titre compte au plus %{max} caractères."
+        hour_invalid: "Heure invalide (HH:MM)."
+        priority_invalid: "Priorité invalide."
+        state_invalid: "État invalide."
+        card_unknown: "Fiche inconnue (%{id})."
+        tag_unknown: "Étiquette inconnue (%{id})."
+      comment:
+        text_required: "Le commentaire est vide."
+        text_too_long: "Le commentaire compte au plus %{max} caractères."
+      link:
+        invalid: "Référence d'opération invalide (par exemple entry:42)."
+      relation:
+        self: "Une action ne peut être liée à elle-même."

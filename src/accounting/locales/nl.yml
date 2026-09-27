@@ -42,6 +42,7 @@ nl:
       acc_balance_sheet: "Balans"
       acc_income_statement: "Resultatenrekening"
       acc_reports: "Aangepaste rapporten"
+      acc_forecasts: "Budgetprognoses"
       acc_vat_return: "Btw-aangifte"
       acc_vat_returns: "Opgeslagen btw-aangiften"
       acc_vat_settings: "Btw-instellingen"
@@ -330,6 +331,23 @@ nl:
           too_long: "De omschrijving telt hoogstens %{max} tekens."
         formula:
           too_long: "De formule telt hoogstens %{max} tekens."
+      forecast:
+        name:
+          blank: "Geef de naam van de prognose op."
+          too_long: "De naam telt hoogstens %{max} tekens."
+        period:
+          unknown: "Onbekende periode (%{id})."
+          order: "De laatste periode komt vóór de eerste."
+          outside: "Deze periode hoort niet bij de prognose (%{id})."
+          twice: "Deze periode heeft al een bedrag."
+        label:
+          blank: "Geef de omschrijving op."
+          too_long: "De omschrijving telt hoogstens %{max} tekens."
+        formula:
+          blank: "Geef de formule van het werkelijke bedrag op."
+          too_long: "De formule telt hoogstens %{max} tekens."
+        amount:
+          scale: "Het bedrag telt hoogstens %{max} decimalen."
       fec:
         fiscal_year: "Het FEC dekt één boekjaar: de datums moeten tot hetzelfde boekjaar behoren."
         ledgers: "Het FEC bevat alle dagboeken: u hebt niet tot elk ervan toegang."

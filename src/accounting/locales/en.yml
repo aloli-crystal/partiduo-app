@@ -42,6 +42,7 @@ en:
       acc_balance_sheet: "Balance sheet"
       acc_income_statement: "Income statement"
       acc_reports: "Custom reports"
+      acc_forecasts: "Budget forecasts"
       acc_vat_return: "VAT return"
       acc_vat_returns: "Saved VAT returns"
       acc_vat_settings: "VAT settings"
@@ -330,6 +331,23 @@ en:
           too_long: "The label has at most %{max} characters."
         formula:
           too_long: "The formula has at most %{max} characters."
+      forecast:
+        name:
+          blank: "Enter the forecast name."
+          too_long: "The name has at most %{max} characters."
+        period:
+          unknown: "Unknown period (%{id})."
+          order: "The last period comes before the first one."
+          outside: "This period is not part of the forecast (%{id})."
+          twice: "This period already has an amount."
+        label:
+          blank: "Enter the label."
+          too_long: "The label has at most %{max} characters."
+        formula:
+          blank: "Enter the formula of the actual amount."
+          too_long: "The formula has at most %{max} characters."
+        amount:
+          scale: "The amount has at most %{max} decimals."
       fec:
         fiscal_year: "The FEC covers a single fiscal year: the dates must belong to the same fiscal year."
         ledgers: "The FEC includes every ledger: you do not have access to all of them."

@@ -25,11 +25,13 @@ module Partiduo
       "entry.cancelled"    => %w[entry_id],
       "invoice.issued"     => %w[invoice_id],
       "credit_note.issued" => %w[credit_note_id],
-      "payment.recorded"   => %w[payment_id],
-      "payment.matched"    => %w[matching_id],
-      "payment.unmatched"  => %w[matching_id],
-      "card.saved"         => %w[card_id],
-      "period.closed"      => %w[period_id],
+      # Bon de livraison émis (lot 6) : sortie de stock (D-STK-004).
+      "delivery_note.issued" => %w[delivery_note_id],
+      "payment.recorded"     => %w[payment_id],
+      "payment.matched"      => %w[matching_id],
+      "payment.unmatched"    => %w[matching_id],
+      "card.saved"           => %w[card_id],
+      "period.closed"        => %w[period_id],
     }
 
     NAMES = SCHEMA.keys

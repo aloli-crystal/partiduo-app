@@ -1,0 +1,105 @@
+= Suivi : actions et relations avec les tiers
+:toc: left
+:toc-title: Table des matières
+:toclevels: 3
+:icons: font
+:source-language: crystal
+
+Référence du lot 6 (ADR-001 § Lots : « GED et suivi » ; la GED devient
+l'extension `partiduo-document`, ADR-003). Successeur de `Follow_Up`,
+`Follow_Up_Detail`, `Follow_Up_Other_Concerned`, `Tag`, `Document_Type` et
+des tables `action_gestion`, `document_type`, `document_state`,
+`action_gestion_comment`, `action_person`, `action_gestion_related`,
+`action_gestion_operation`, `tags`, `action_tags`.
+
+* Contrat : `Partiduo::Api::Followup` (`src/followup/api/followup.cr`, types
+  dans `types.cr`). Module `FOLLOWUP`, sans dépendance (D-FUP-001) ; toute
+  fonction lève `ModuleDisabled` s'il est inactif, `Forbidden` sans la
+  permission.
+* Tables : `followup_action_type`, `followup_tag`, `followup_action`,
+  `followup_comment`, `followup_action_card`, `followup_relation`,
+  `followup_link`, `followup_action_tag` (migration followup 0001).
+* Données initiales : `FOLLOWUP.action_types` (les 13 types de NOALYSS dans la
+  langue de l'instance, `load_default_action_types`).
+* Décisions : `DECISIONS.adoc`, D-FUP-001 à D-FUP-006.
+
+== Permissions
+
+[cols="1,3",options="header"]
+|===
+|Permission |Fonctions
+
+|`followup.action.read` |types, étiquettes, actions (lecture, recherche, rappels, export)
+|`followup.action.write` |création, modification, état, commentaires, liens entre actions, opérations rattachées, étiquettes d'une action, suppression
+|`followup.settings.write` |types d'action et étiquettes (création, modification, suppression), chargement des types par défaut
+|===
+
+== Types d'action et étiquettes
+
+[cols="2,3",options="header"]
+|===
+|Fonction |Règle
+
+|`action_types`, `action_type`, `create_action_type`, `update_action_type`, `delete_action_type`
+|Préfixe (`dt_prefix`) de 10 caractères au plus, lettres et chiffres, mis en
+majuscules, unique ; libellé (80 caractères) ; prochain numéro (1 au moins).
+Suppression refusée si une action est de ce type.
+
+|`load_default_action_types`
+|DI, BCL, BFO, FAC, RAP, CO, PRP, EL, DS, NFR, RFO, RCL, RMG ; un préfixe
+existant est conservé ; renvoie les préfixes créés.
+
+|`tags`, `create_tag`, `update_tag`, `delete_tag`
+|Libellé unique sans casse (60 caractères), description, active, couleur de
+1 à 10. Supprimer une étiquette la retire des actions.
+|===
+
+== Actions
+
+`ActionInput` : type, date, titre (vide = libellé du type), heure `HH:MM`,
+priorité (1 haute, 2 normale, 3 basse), état (`todo`, `follow`, `closed`,
+`abandoned`), rappel, fiche destinataire (`nil` = action interne), contact,
+autres fiches concernées, étiquettes, commentaire.
+
+[cols="2,3",options="header"]
+|===
+|Fonction |Règle
+
+|`check_action`, `create_action`
+|Référence `<préfixe>-<n>` attribuée par le type sous verrou (un numéro déjà
+pris est sauté, D-FUP-003) ; auteur = acteur ; commentaire non vide = premier
+commentaire.
+
+|`update_action`
+|Remplace l'action entière (fiches concernées et étiquettes comprises) ;
+référence et auteur inchangés ; commentaire non vide ajouté.
+
+|`set_state`, `add_comment`, `set_tags`, `delete_action`
+|État parmi les quatre ; commentaire non vide (10 000 caractères) ;
+suppression avec commentaires et liens.
+
+|`relate`, `unrelate`
+|Paire d'actions non orientée ; une action n'est pas liée à elle-même.
+`ActionView#related` : actions liées dans les deux sens.
+
+|`link`, `unlink`, `actions_linked_to`
+|Opération d'un module citée par sa référence (`entry:42`, `invoice:7`),
+sans vérification (D-FUP-005).
+
+|`actions`, `count_actions`, `export_actions`
+|`ActionQuery` : texte (titre ou commentaire, ou référence exacte), fiche
+(destinataire, contact ou concernée), type, état ou `open_only` (défaut),
+`internal_only`, dates, rappel au plus tard, étiquettes (l'une ou toutes) ;
+par date décroissante ; `limit` 10 000 au plus. Export CSV sans plafond
+(`limit` et `offset` ignorés, lecture par paquets de 1 000).
+
+|`reminders`
+|Actions ouvertes dont le rappel tombe ce jour (`today`) ou est dépassé
+(`late`).
+|===
+
+== Menus
+
+Rubrique `FOLLOW_UP` (« Suivi », déclarée par `CORE`, D-FUP-002) :
+`FUP_ACTIONS`, `FUP_REMINDERS`, `FUP_TYPES`, `FUP_TAGS` ; routes
+`followup:*` à fournir par l'interface.

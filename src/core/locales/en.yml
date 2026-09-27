@@ -22,6 +22,7 @@ en:
     menu:
       dashboard: "Dashboard"
       billing: "Invoicing"
+      follow_up: "Follow-up"
       entry: "Entry"
       consult: "Inquiry"
       reference: "Master data"

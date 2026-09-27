@@ -1,0 +1,71 @@
+nl:
+  stock:
+    module:
+      name: "Voorraad"
+    permissions:
+      movement:
+        read: "Voorraad raadplegen"
+        write: "Manuele voorraadbewegingen en inventarissen invoeren"
+      settings:
+        write: "Magazijnen en opgevolgde artikelen instellen"
+    menu:
+      stock_changes: "Voorraadbewegingen"
+      stock_inventory: "Inventaris"
+      stock_state: "Voorraadtoestand"
+      stock_history: "Voorraadhistoriek"
+      stock_valuation: "Voorraadwaardering"
+      stock_repositories: "Magazijnen"
+      stock_items: "Opgevolgde artikelen"
+    directions:
+      in: "In"
+      out: "Uit"
+    change_kinds:
+      change: "Manuele beweging"
+      inventory: "Inventaris"
+    columns:
+      date: "Datum"
+      repository: "Magazijn"
+      stock_code: "Voorraadcode"
+      card: "Fiche"
+      card_name: "Artikel"
+      direction: "Richting"
+      quantity: "Hoeveelheid"
+      unit_cost: "Eenheidskost"
+      source: "Oorsprong"
+      comment: "Opmerking"
+      opening: "Beginvoorraad"
+      quantity_in: "In"
+      quantity_out: "Uit"
+      closing: "Eindvoorraad"
+      value: "Waarde"
+      total: "Totaal"
+    errors:
+      repository:
+        name_required: "De naam van het magazijn is verplicht."
+        name_too_long: "De naam van het magazijn telt hoogstens %{max} tekens."
+        name_taken: "Het magazijn %{name} bestaat al."
+        country_invalid: "Het land is een code van twee letters."
+        too_long: "Dit veld telt hoogstens %{max} tekens."
+        in_use: "Dit magazijn heeft bewegingen en kan niet worden verwijderd."
+      settings:
+        repository_unknown: "Onbekend magazijn (%{id})."
+      item:
+        card_unknown: "Onbekende fiche (%{id})."
+        not_an_item: "De fiche %{code} is geen artikel."
+        too_long: "De voorraadcode telt hoogstens %{max} tekens."
+        invalid: "De voorraadcode bevat geen spaties."
+      change:
+        repository_unknown: "Onbekend magazijn (%{id})."
+        closed_period: "De datum %{date} valt in een afgesloten periode."
+        too_long: "De opmerking telt hoogstens %{max} tekens."
+        lines_required: "Voer minstens één artikel in."
+        quantity_zero: "De hoeveelheid mag niet nul zijn."
+        quantity_scale: "De hoeveelheid telt hoogstens %{max} decimalen."
+        not_tracked: "Dit artikel wordt niet in voorraad opgevolgd (%{id})."
+        cost_on_exit: "Een uitgaande beweging heeft geen eenheidskost."
+        cost_negative: "De eenheidskost mag niet negatief zijn."
+        cost_scale: "De eenheidskost telt hoogstens %{max} decimalen."
+      inventory:
+        lines_required: "Voer minstens één geteld artikel in."
+        code_twice: "De voorraadcode %{code} is twee keer geteld."
+        counted_negative: "De getelde hoeveelheid mag niet negatief zijn."

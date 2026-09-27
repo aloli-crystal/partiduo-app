@@ -46,6 +46,8 @@ Partiduo::Modules.register do
   menu "ACC_BALANCE_SHEET", parent: "REPORTS", order: 26, route: "accounting:balance_sheet", permission: "accounting.report.read"
   menu "ACC_INCOME_STATEMENT", parent: "REPORTS", order: 27, route: "accounting:income_statement", permission: "accounting.report.read"
   menu "ACC_REPORTS", parent: "REPORTS", order: 28, route: "accounting:reports", permission: "accounting.report.read"
+  # Prévisions budgétaires (`forecast`, lot 6, D-FCT-001).
+  menu "ACC_FORECASTS", parent: "REPORTS", order: 29, route: "accounting:forecasts", permission: "accounting.report.read"
 
   menu "ACC_VAT_RETURN", parent: "VAT", order: 10, route: "accounting:vat_return", permission: "accounting.vat.declare"
   # Historique et paramètres des déclarations (proposition D-UI-040, adoptée au lot 4).

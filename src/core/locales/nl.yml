@@ -22,6 +22,7 @@ nl:
     menu:
       dashboard: "Dashboard"
       billing: "Facturatie"
+      follow_up: "Opvolging"
       entry: "Invoer"
       consult: "Raadpleging"
       reference: "Basisgegevens"

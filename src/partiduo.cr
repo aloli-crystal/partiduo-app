@@ -28,5 +28,7 @@ require "./cards/app"
 require "./accounting/app"
 require "./invoicing/app"
 require "./analytic/app"
+require "./stock/app"
+require "./followup/app"
 
 require "./partiduo/settings"

@@ -1,0 +1,148 @@
+= Stock : dépôts, mouvements, inventaire, valorisation
+:toc: left
+:toc-title: Table des matières
+:toclevels: 3
+:icons: font
+:source-language: crystal
+
+Référence du lot 6 (ADR-001 § Lots, ADR-006 D1 : le Stock est un module qui
+requiert la Facturation *ou* la Comptabilité, `depends_on_any`, ADR-003 D2).
+Successeur des classes `Stock`, `Stock_Goods` et des écrans `stock_*.inc.php`
+de NOALYSS, des tables `stock_repository`, `stock_goods`, `stock_change` et de
+l'attribut « code stock » des fiches (`ATTR_DEF_STOCK`).
+
+* Contrat : `Partiduo::Api::Stock` (`src/stock/api/stock.cr`, types dans
+  `types.cr`). Toute fonction lève `ModuleDisabled` si le Stock est inactif,
+  `Forbidden` sans la permission.
+* Tables : `stock_repository`, `stock_setting` (ligne unique), `stock_item`,
+  `stock_change`, `stock_movement` (migration stock 0001).
+* Décisions : `DECISIONS.adoc`, D-STK-001 à D-STK-008.
+
+== Permissions
+
+[cols="1,3",options="header"]
+|===
+|Permission |Fonctions
+
+|`stock.movement.read` |paramètres (lecture), dépôts, articles suivis, opérations, historique, quantité, état, valorisation, exports
+|`stock.movement.write` |opérations manuelles, inventaires (proposition, contrôle, enregistrement), suppression d'une opération
+|`stock.settings.write` |dépôts (création, modification, suppression), dépôt par défaut, articles suivis
+|===
+
+NOALYSS donnait des droits par dépôt et par profil (`profile_sec_repository`) ;
+ils ne sont pas repris (D-STK-006).
+
+== Dépôts et paramètres
+
+[cols="2,3",options="header"]
+|===
+|Fonction |Règle
+
+|`repositories`, `repository`, `check_repository`, `create_repository`, `update_repository`, `delete_repository`
+|Nom unique sans casse (100 caractères), adresse, ville, pays (code ISO à
+deux lettres, mis en majuscules), téléphone. Le premier dépôt créé devient le
+dépôt par défaut. Suppression refusée si le dépôt porte des mouvements ou
+des opérations (`stock.errors.repository.in_use`).
+
+|`settings`, `update_settings`
+|Dépôt par défaut : celui où la Facturation et la Comptabilité inscrivent
+leurs mouvements. `nil` : aucun mouvement automatique.
+|===
+
+== Articles suivis
+
+Un article est suivi en stock s'il a un *code stock* (`ATTR_DEF_STOCK`) :
+`track_item(actor, ItemInput(card_id, stock_code))`. La fiche doit être de
+nature `item` ; code vide = quick code de la fiche ; plusieurs fiches peuvent
+partager un code (les quantités se cumulent par code, comme `sg_code`).
+`untrack_item` cesse le suivi ; les mouvements passés gardent leur code. Une
+fiche suivie disparaît de la liste si elle est supprimée ; une fiche qui porte
+des mouvements ne peut plus l'être.
+
+== Mouvements
+
+Un mouvement (`MovementView`) a un dépôt, une fiche, un code stock figé, un
+sens (`in`, `out`), une quantité strictement positive (quatre décimales au
+plus, refusées au-delà), une date, un coût unitaire facultatif (entrées) et une
+origine (`source`) :
+
+[cols="1,3",options="header"]
+|===
+|Origine |Événement et règle (D-STK-004)
+
+|_(vide)_ |opération manuelle ou inventaire (`change_id`)
+|`delivery_note:<id>` |`delivery_note.issued` : sortie des articles livrés
+|`invoice:<id>` |`invoice.issued` : sortie, sauf facture d'acompte, facture issue d'un bon de livraison, ou d'un devis ou d'une commande qui a donné un bon de livraison émis
+|`credit_note:<id>` |`credit_note.issued` : retour en stock (entrée)
+|`entry:<id>` |`entry.posted` d'un journal d'achats ou de ventes, hors écritures de la Facturation (`invoice:`, `credit_note:`) : achat au débit = entrée au coût unitaire hors taxe ÷ quantité, vente au crédit = sortie, un avoir inverse le sens ; une extourne inscrit les mouvements inverses de l'écriture annulée, à sa date
+|===
+
+Seuls les articles suivis bougent, dans le dépôt par défaut ; une origine
+déjà inscrite ne l'est pas deux fois ; un échec est consigné
+(`partiduo.stock`) et n'annule jamais l'émission ni l'écriture.
+
+== Opérations manuelles et inventaires
+
+[cols="2,3",options="header"]
+|===
+|Fonction |Règle
+
+|`check_change`, `record_change`
+|`ChangeInput(repository_id, date, lines, comment)` ; chaque ligne :
+fiche suivie, quantité *signée* non nulle (positive = entrée), coût unitaire
+facultatif d'une entrée (positif ou nul). Refusée dans une période close ou
+un exercice clos du socle.
+
+|`inventory_proposal`
+|Quantités théoriques du dépôt au jour donné, pour chaque code stock suivi
+(`take_last_inventory`).
+
+|`check_inventory`, `record_inventory`
+|`InventoryInput(repository_id, date, lines, comment)` ; chaque ligne :
+fiche suivie, quantité *comptée* (positive ou nulle), coût unitaire facultatif
+d'un surplus. L'écart avec la quantité théorique au jour de l'inventaire
+devient un mouvement ; pas d'écart, pas de mouvement. Un code stock n'est
+compté qu'une fois ; deux inventaires d'un même dépôt sont sérialisés.
+
+|`changes`, `change`, `delete_change`
+|Liste filtrée (dépôt, dates, nature), détail avec ses mouvements ;
+suppression de l'opération et de ses mouvements, refusée en période close.
+|===
+
+== Historique, état, valorisation
+
+[cols="2,3",options="header"]
+|===
+|Fonction |Règle
+
+|`movements`, `count_movements`, `export_movements`
+|`MovementQuery` : dépôt, fiche, code stock (sans casse), sens, dates,
+préfixe d'origine, `limit` (10 000 au plus) et `offset` ; par date. L'export
+CSV n'a pas de plafond.
+
+|`quantity`
+|Quantité d'une fiche suivie (son code) au jour donné, dans un dépôt ou dans
+tous.
+
+|`state`, `export_state`
+|`StateQuery(date_from, date_to, repository_id)` : par dépôt et code stock,
+stock initial (avant `date_from`), entrées, sorties, stock final
+(`StateRowView#closing`).
+
+|`valuation`, `export_valuation`
+|Au jour donné : quantité par dépôt et code, *coût moyen pondéré* du code
+(Σ quantité × coût ÷ Σ quantité des mouvements valorisés jusqu'à ce jour,
+tous dépôts confondus, quatre décimales), valeur arrondie au centime ;
+`nil` sans entrée valorisée. `ValuationView#total` (D-STK-005).
+|===
+
+Exports CSV : séparateur `;`, UTF-8, quantités à quatre décimales, montants à
+deux, dates `AAAA-MM-JJ`, texte protégé contre les formules (D-2F-009),
+en-têtes dans la langue courante (`stock.columns.*`).
+
+== Menus
+
+`STOCK_CHANGES` et `STOCK_INVENTORY` (Saisie), `STOCK_STATE` et
+`STOCK_HISTORY` (Consultation), `STOCK_VALUATION` (Éditions),
+`STOCK_REPOSITORIES` et `STOCK_ITEMS` (Référentiel) ; routes `stock:*` à
+fournir par l'interface.

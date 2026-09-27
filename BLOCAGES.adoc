@@ -333,3 +333,23 @@ par les specs.
 
 *Levée.* Signaler l'anomalie à l'amont de Crystal (`String#encode`, tampon
 d'iconv) ; revenir à `encode` quand elle sera corrigée.
+
+== B-SEC-001 — Restrictions de visibilité reportées : dette de sécurité (lot 6, relecture)
+
+*Constat.* Deux restrictions de NOALYSS ne sont pas encore portées :
+
+* Suivi (D-FUP-001) : NOALYSS limite la visibilité d'une action au groupe
+  de profils destinataire (`action_gestion.ag_dest`). Dans Partiduo, toute
+  personne qui a `followup.action.read` voit toutes les actions, internes
+  comprises, et leurs commentaires.
+* Stock (D-STK-006) : NOALYSS limite la lecture et l'écriture de chaque dépôt
+  par profil (`profile_sec_repository`). Dans Partiduo, les droits sont
+  globaux.
+
+*Contournement.* Aucun dans le cœur : les permissions globales suffisent
+pour un dossier sans cloisonnement. Ces deux restrictions doivent être
+rétablies *avant* la reprise des données NOALYSS qui s'en servent. En
+attendant, la reprise des actions et des dépôts (`partiduo-migrate`, à
+écrire) doit au minimum *avertir* dans son rapport quand `ag_dest` n'est pas
+vide (valeur autre que « tous ») ou quand `profile_sec_repository` contient
+des lignes, en indiquant que le cloisonnement ne sera pas appliqué.

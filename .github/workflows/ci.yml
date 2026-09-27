@@ -40,11 +40,11 @@ jobs:
       matrix:
         include:
           - configuration: comptabilite-seule
-            modules: accounting,analytic
+            modules: accounting,analytic,stock,followup
           - configuration: facturation-seule
-            modules: invoicing
+            modules: invoicing,stock,followup
           - configuration: comptabilite-et-facturation
-            modules: accounting,invoicing,analytic
+            modules: accounting,invoicing,analytic,stock,followup
     services:
       postgres:
         image: postgres:18

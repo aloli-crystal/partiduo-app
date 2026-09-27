@@ -15,6 +15,8 @@ require "../vat/migrations/**"
 require "../cards/migrations/**"
 require "../invoicing/migrations/**"
 require "../modules/migrations/**"
+require "../stock/migrations/**"
+require "../followup/migrations/**"
 
 # Commandes de gestion du cœur (`provision`).
 require "../core/commands/**"

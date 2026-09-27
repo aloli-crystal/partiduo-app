@@ -1,0 +1,79 @@
+en:
+  followup:
+    module:
+      name: "Follow-up"
+    permissions:
+      action:
+        read: "View follow-up actions"
+        write: "Create and edit follow-up actions"
+      settings:
+        write: "Configure action types and tags"
+    menu:
+      fup_actions: "Actions"
+      fup_reminders: "Reminders"
+      fup_types: "Action types"
+      fup_tags: "Tags"
+    states:
+      todo: "To do"
+      follow: "To follow up"
+      closed: "Closed"
+      abandoned: "Abandoned"
+    priorities:
+      p1: "High"
+      p2: "Normal"
+      p3: "Low"
+    columns:
+      reference: "Reference"
+      date: "Date"
+      hour: "Time"
+      type: "Type"
+      title: "Title"
+      card: "Recipient"
+      state: "Status"
+      priority: "Priority"
+      remind_on: "Reminder"
+      tags: "Tags"
+    default_types:
+      di: "Internal document"
+      bcl: "Customer purchase order"
+      bfo: "Supplier purchase order"
+      fac: "Invoice"
+      rap: "Reminder letter"
+      co: "Letter"
+      prp: "Proposal"
+      el: "Email"
+      ds: "Miscellaneous"
+      nfr: "Expense report"
+      rfo: "Supplier order receipt"
+      rcl: "Customer order receipt"
+      rmg: "Warehouse receipt"
+    errors:
+      action_type:
+        code_required: "The prefix is required."
+        code_too_long: "The prefix has at most %{max} characters."
+        code_invalid: "The prefix contains only letters and digits."
+        code_taken: "The prefix %{code} is already used."
+        label_required: "The label is required."
+        label_too_long: "The label has at most %{max} characters."
+        next_number_invalid: "The next number is at least 1."
+        in_use: "This action type is in use and cannot be deleted."
+      tag:
+        label_required: "The tag label is required."
+        label_too_long: "The tag label has at most %{max} characters."
+        label_taken: "The tag %{label} already exists."
+        color_invalid: "The colour is a number from 1 to 10."
+      action:
+        type_unknown: "Unknown action type (%{id})."
+        title_too_long: "The title has at most %{max} characters."
+        hour_invalid: "Invalid time (HH:MM)."
+        priority_invalid: "Invalid priority."
+        state_invalid: "Invalid status."
+        card_unknown: "Unknown card (%{id})."
+        tag_unknown: "Unknown tag (%{id})."
+      comment:
+        text_required: "The comment is empty."
+        text_too_long: "The comment has at most %{max} characters."
+      link:
+        invalid: "Invalid operation reference (for example entry:42)."
+      relation:
+        self: "An action cannot be linked to itself."

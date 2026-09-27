@@ -1,0 +1,71 @@
+en:
+  stock:
+    module:
+      name: "Stock"
+    permissions:
+      movement:
+        read: "View stock"
+        write: "Enter manual stock movements and inventories"
+      settings:
+        write: "Configure warehouses and stock items"
+    menu:
+      stock_changes: "Stock movements"
+      stock_inventory: "Inventory"
+      stock_state: "Stock status"
+      stock_history: "Stock history"
+      stock_valuation: "Stock valuation"
+      stock_repositories: "Warehouses"
+      stock_items: "Stock items"
+    directions:
+      in: "In"
+      out: "Out"
+    change_kinds:
+      change: "Manual movement"
+      inventory: "Inventory"
+    columns:
+      date: "Date"
+      repository: "Warehouse"
+      stock_code: "Stock code"
+      card: "Card"
+      card_name: "Item"
+      direction: "Direction"
+      quantity: "Quantity"
+      unit_cost: "Unit cost"
+      source: "Origin"
+      comment: "Comment"
+      opening: "Opening stock"
+      quantity_in: "In"
+      quantity_out: "Out"
+      closing: "Closing stock"
+      value: "Value"
+      total: "Total"
+    errors:
+      repository:
+        name_required: "The warehouse name is required."
+        name_too_long: "The warehouse name has at most %{max} characters."
+        name_taken: "The warehouse %{name} already exists."
+        country_invalid: "The country is a two-letter code."
+        too_long: "This field has at most %{max} characters."
+        in_use: "This warehouse has movements and cannot be deleted."
+      settings:
+        repository_unknown: "Unknown warehouse (%{id})."
+      item:
+        card_unknown: "Unknown card (%{id})."
+        not_an_item: "The card %{code} is not an item."
+        too_long: "The stock code has at most %{max} characters."
+        invalid: "The stock code contains no spaces."
+      change:
+        repository_unknown: "Unknown warehouse (%{id})."
+        closed_period: "The date %{date} falls in a closed period."
+        too_long: "The comment has at most %{max} characters."
+        lines_required: "Enter at least one item."
+        quantity_zero: "The quantity cannot be zero."
+        quantity_scale: "The quantity has at most %{max} decimals."
+        not_tracked: "This item is not tracked in stock (%{id})."
+        cost_on_exit: "An outgoing movement has no unit cost."
+        cost_negative: "The unit cost cannot be negative."
+        cost_scale: "The unit cost has at most %{max} decimals."
+      inventory:
+        lines_required: "Enter at least one counted item."
+        code_twice: "The stock code %{code} is counted twice."
+        counted_negative: "The counted quantity cannot be negative."

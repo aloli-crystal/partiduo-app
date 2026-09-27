@@ -19,7 +19,8 @@ l'auteur (agent).
 
 * Une application Marten par dossier de `src/`, selon l'ADR-001 § Organisation
   du code : `modules`, `auth`, `core`, `cards`, `vat`, `accounting`,
-  `invoicing`, `analytic` (`stock` au lot 6).
+  `invoicing`, `analytic`, `stock` et `followup` (lot 6, D-STK-001,
+  D-FUP-001).
 * Espace de noms : `Partiduo::<App>` (`Partiduo::Accounting`,
   `Partiduo::Cards`…). Rien au niveau supérieur, sauf les classes de
   migration, nommées par Marten (`Migration::Accounting::V0001`).
@@ -155,7 +156,8 @@ est interne et peut changer.
 * Événements : liste fermée `Partiduo::Events::SCHEMA` (nom → clés de charge
   utile obligatoires) — `entry.posted` (`entry_id`), `entry.cancelled`
   (`entry_id`), `invoice.issued` (`invoice_id`), `credit_note.issued`
-  (`credit_note_id`), `payment.recorded` (`payment_id`), `payment.matched`
+  (`credit_note_id`), `delivery_note.issued` (`delivery_note_id`, lot 6,
+  D-STK-004), `payment.recorded` (`payment_id`), `payment.matched`
   (`matching_id`), `card.saved` (`card_id`), `period.closed` (`period_id`).
 ** publication *dans la transaction* de la commande :
    `Partiduo::Events.publish("entry.posted", {"entry_id" => id.to_s}, actor_user_id: actor.user_id)` ;
@@ -4804,3 +4806,491 @@ L'amendement « mode d'emploi pour un utilisateur sans
   postes et paramètres (`analytic.plan.read`) ; un profil qui ventile sans
   `analytic.plan.read` reçoit un refus d'accès. Les profils par défaut
   donnent les deux ensemble ; à revoir avec les profils personnalisés.
+
+== Lot 6 — Stock, prévisions budgétaires, suivi
+
+=== D-STK-001 — Module Stock : application `stock`, `depends_on_any` (lot 6, stock-previsions)
+
+*Contexte.* ADR-006 D1 fait du Stock un module qui requiert la Facturation
+*ou* la Comptabilité (ADR-003 D2). Il doit lire les documents et les écritures
+dont il reçoit les événements ; la convention C3 ne permet de citer le
+contrat d'un autre module que s'il est déclaré en `depends_on`.
+
+*Choix.* Application `stock` (`Partiduo::Stock`, contrat
+`Partiduo::Api::Stock`, tables `stock_*`), module `STOCK` en
+`depends_on_any "INVOICING", "ACCOUNTING"`. La spec d'isolation admet le
+contrat d'une pièce citée en `depends_on_any` (le Stock ne l'appelle que
+depuis l'abonné d'un événement que cette pièce publie, donc active). Les trois
+configurations de la CI et de `scripts/specs-modules.sh` activent le Stock et
+le Suivi (le Stock y trouve toujours une de ses dépendances) ; ses refus sont
+testés par `with_active_modules`.
+
+*Alternative écartée.* Faire porter les quantités dans la charge utile des
+événements pour ne rien relire : charges utiles alourdies et figées pour un
+seul abonné, contraire à C4 (« l'abonné relit ce qu'il lui faut »).
+
+=== D-STK-002 — Articles suivis : table `stock_item`, code stock commun (lot 6, stock-previsions)
+
+*Contexte.* NOALYSS suit en stock les fiches qui ont l'attribut « code stock »
+(`ATTR_DEF_STOCK`), partagé au besoin par plusieurs fiches ; le socle ne
+connaît pas le Stock (spec d'isolation du socle).
+
+*Choix.* Table `stock_item` du module (fiche, code stock en majuscules,
+quick code par défaut), clé étrangère vers `cards_card` en `ON DELETE
+CASCADE` (lien accessoire, D-ACC-001) ; un mouvement fige le code et cite la
+fiche sans cascade (une fiche qui a bougé ne se supprime plus). Les quantités
+se cumulent par code stock.
+
+*Alternative écartée.* Un attribut libre dans `cards_card.extra` : le socle
+porterait une donnée du Stock, et un changement de catégorie la perdrait.
+
+=== D-STK-003 — Dépôt par défaut pour les mouvements automatiques (lot 6, stock-previsions)
+
+*Contexte.* NOALYSS demande le dépôt dans la saisie d'un achat ou d'une
+vente. Les documents de la Facturation et les écritures n'en portent pas.
+
+*Choix.* Paramètre unique `stock_setting.default_repository` (ligne unique,
+comme D-ANA-017) ; le premier dépôt créé le devient. Sans dépôt par défaut,
+aucun mouvement automatique n'est inscrit (les opérations manuelles restent
+possibles). Droits par dépôt et par profil (`profile_sec_repository`) : voir
+D-STK-006.
+
+*Alternative écartée.* Ajouter un dépôt aux documents et aux écritures :
+modifie deux contrats pour un module facultatif ; à proposer si le besoin
+multi-dépôt automatique apparaît.
+
+=== D-STK-004 — Alimentation par les événements ; événement `delivery_note.issued` (lot 6, stock-previsions)
+
+*Contexte.* « Alimenté par événements des livraisons et factures » ; aucun
+événement n'existait pour le bon de livraison ; la Facturation et la
+Comptabilité peuvent être actives ensemble (une facture produit aussi une
+écriture de vente, `invoice:<id>`).
+
+*Choix.*
+
+* Nouvel événement `delivery_note.issued` (`delivery_note_id`, plus
+  `number`, `issue_date`), publié par la Facturation à l'émission d'un bon
+  de livraison ; ajouté à `SCHEMA` (C4), non rejouable.
+* Facturation : bon de livraison = sortie ; facture = sortie, sauf facture
+  d'acompte et facture issue d'un bon de livraison, ou rattachée à une
+  chaîne documentaire qui compte un bon de livraison émis (parcours borné,
+  D-STK-010) ; avoir = entrée (retour),
+  comme la vente à quantité négative de NOALYSS.
+* Comptabilité : `entry.posted` d'un journal d'achats (débit = entrée, coût
+  unitaire = hors taxe ÷ quantité) ou de ventes (crédit = sortie), lignes
+  d'articles saisies seulement (`input_index`, rôle nul ou `base`, D-STK-011), quantité 1 à
+  défaut ; les écritures produites par la Facturation (`invoice:`,
+  `credit_note:`) sont écartées ; une extourne inscrit les mouvements inverses
+  à sa date (plutôt que d'effacer ceux d'origine : l'historique reste juste).
+* Une origine (`source`) n'est inscrite qu'une fois ; l'abonné s'exécute dans
+  un point de sauvegarde, et un échec est consigné (`partiduo.stock`) sans
+  annuler l'opération d'origine (comme la comptabilisation, D-INT-001).
+
+*Alternative écartée.* Laisser l'exception de l'abonné annuler l'émission
+(C4 par défaut) : une facture intangible ne doit pas être refusée pour un
+stock mal paramétré.
+
+=== D-STK-005 — Valorisation au coût moyen pondéré (lot 6, stock-previsions)
+
+*Contexte.* NOALYSS ne valorise pas le stock (quantités seulement) ; la
+tâche demande une valorisation.
+
+*Choix.* Coût moyen pondéré périodique depuis l'origine, par code stock, tous
+dépôts confondus : Σ(quantité signée × coût) ÷ Σ(quantité signée) des
+mouvements valorisés jusqu'à la date (entrées d'achat, entrées manuelles et
+surplus d'inventaire saisis avec un coût ; la sortie qui extourne un achat
+garde son coût et s'en retranche). Coût unitaire à quatre décimales, valeur
+arrondie au centime ; `nil` sans entrée valorisée. Calcul à la demande, rien
+n'est stocké.
+
+*Alternative écartée.* Premier entré, premier sorti ou coût moyen après
+chaque entrée : exige d'affecter chaque sortie à des lots ou de figer un coût
+à chaque mouvement ; réversible plus tard (les coûts d'entrée sont conservés).
+
+=== D-STK-006 — Pas de droits par dépôt (lot 6, stock-previsions)
+
+*Contexte.* NOALYSS restreint la lecture et l'écriture de chaque dépôt par
+profil (`profile_sec_repository`, `R`/`W`).
+
+*Choix.* Trois permissions globales (`stock.movement.read`,
+`stock.movement.write`, `stock.settings.write`), accordées aux profils
+ACCOUNTANT existants par la migration. Les droits par dépôt sont reportés.
+
+*Alternative écartée.* Table de droits par dépôt dès maintenant : aucun écran
+ni besoin exprimé ; s'ajoutera comme les droits par journal (D-ACC-005).
+
+=== D-STK-007 — Inventaire : écarts calculés, opérations en période close refusées (lot 6, stock-previsions)
+
+*Contexte.* NOALYSS enregistre un inventaire comme des mouvements signés
+saisis à la main, après une proposition des quantités de l'exercice
+(`take_last_inventory`).
+
+*Choix.* Deux commandes : `record_change` (quantités signées, comme NOALYSS)
+et `record_inventory` (quantités *comptées* ; l'écart avec la quantité
+théorique au jour de l'inventaire devient le mouvement, sous verrou du
+dépôt). `inventory_proposal` donne les quantités théoriques. Une opération
+manuelle (création, suppression) est refusée dans une période close ou un
+exercice clos du socle ; les mouvements automatiques suivent les règles de
+leur document ou de leur écriture.
+
+*Alternative écartée.* Un déclencheur en base sur les périodes closes :
+refuserait aussi les mouvements des abonnés (facture émise hors exercice
+ouvert en Facturation seule) et les ferait disparaître silencieusement.
+
+=== D-STK-008 — Exports CSV du stock (lot 6, stock-previsions)
+
+*Choix.* `export_movements`, `export_state`, `export_valuation` aux
+conventions des éditions (`;`, UTF-8, D-2F-009) ; quantités à quatre
+décimales. Pas d'export PDF (comme D-ANA-010).
+
+=== D-FCT-001 — Prévisions budgétaires dans la Comptabilité (lot 6, stock-previsions)
+
+*Contexte.* Le réel d'une prévision (`forecast_item.fi_account`) est une
+formule de rapport calculée sur les écritures (`Impress::parse_formula`) :
+NOALYSS range les prévisions dans la comptabilité.
+
+*Choix.* Modèles `Forecast`, `ForecastCategory`, `ForecastItem`,
+`ForecastAmount` dans l'application `accounting` (migration 0007), fonctions
+dans `Partiduo::Api::Accounting` (`src/accounting/api/forecasts.cr`),
+permissions des rapports (`accounting.report.read` / `.write`), menu
+`ACC_FORECASTS` sous Éditions. Le réel réutilise le moteur de formules des
+rapports (`Formula`, `ReportData.sums` sur la seule période, journaux
+visibles de l'acteur) ; une formule invalide vaut zéro et est signalée.
+`clone_forecast` exige un nom (NOALYSS préfixait « clone », texte que le cœur
+ne produit pas).
+
+*Alternative écartée.* Un module `FORECAST` séparé : une pièce de plus à
+activer pour une fonction qui ne vit pas sans la Comptabilité, et un contrat
+public du moteur de formules à créer.
+
+=== D-FCT-002 — Montants propres à une période (lot 6, stock-previsions)
+
+*Contexte.* NOALYSS range dans `forecast_item` à la fois l'élément mensuel
+(`fi_pid = 0`) et ses exceptions (`fi_pid` = période), reliées par la même
+formule dans la catégorie.
+
+*Choix.* Table `accounting_forecast_amount` (élément, période, montant,
+unique) : l'exception appartient à son élément ; périodes hors de la
+prévision refusées, retirées si la prévision change de périodes. La reprise
+par `partiduo-migrate` rattachera chaque `fi_pid` non nul à l'élément de même
+formule de sa catégorie.
+
+*Alternative écartée.* Reprendre la table telle quelle : la correspondance
+par formule est fragile (deux éléments de même formule).
+
+=== D-FUP-001 — Module Suivi : application `followup`, sans dépendance (lot 6, stock-previsions)
+
+*Contexte.* Le suivi de NOALYSS (`follow_up`, `action_gestion`) est un CRM
+léger : actions datées vers un tiers. La GED (`document`) devient
+l'extension `partiduo-document` ; les devis, commandes et factures, que
+NOALYSS rangeait parmi les actions, sont ceux de la Facturation (ADR-006).
+
+*Choix.* Module `FOLLOWUP` (`Partiduo::Followup`, contrat
+`Partiduo::Api::Followup`, tables `followup_*`), sans dépendance : types
+d'action, états, priorités, rappels, commentaires, fiches concernées,
+actions liées, opérations rattachées, étiquettes, recherche, export CSV ;
+permissions `followup.action.read`, `.write`, `followup.settings.write`,
+accordées aux profils ACCOUNTANT existants. Non repris : lignes d'articles
+d'une action (`action_detail`) et conversion en vente
+(`convert_from_follow`), remplacées par la chaîne documentaire de la
+Facturation ; documents et modèles de documents (GED) ; visibilité par groupe
+de profils (`ag_dest`) et options par type (`document_option`), reportées.
+
+*Alternative écartée.* Placer le suivi au socle : le socle ne cite aucun
+module et le suivi est facultatif (ADR-006 D1).
+
+=== D-FUP-002 — Rubrique de menu `FOLLOW_UP` (lot 6, stock-previsions ; amendement proposé à ADR-005)
+
+*Contexte.* ADR-005 énumère les rubriques du menu latéral (Tableau de bord,
+Facturation, Saisie, Consultation, Référentiel, Éditions, TVA, Analytique,
+Paramètres) ; le suivi n'entre dans aucune.
+
+*Choix.* `CORE` déclare une rubrique `FOLLOW_UP` (« Suivi », rang 25, après
+Facturation), vide — donc absente — tant que le Suivi est inactif. Le Stock,
+lui, se range dans les rubriques existantes (Saisie, Consultation,
+Éditions, Référentiel). *Amendement proposé* : ajouter « Suivi » à la liste
+d'ADR-005.
+
+*Alternative écartée.* Ranger le suivi sous Consultation : ses écrans
+créent et modifient.
+
+=== D-FUP-003 — Références des actions : compteur du type sous verrou (lot 6, stock-previsions)
+
+*Contexte.* NOALYSS numérote par une séquence par type (`seq_doc_type_<id>`)
+et saute les références déjà prises.
+
+*Choix.* Colonne `next_number` du type, lue et avancée sous `SELECT … FOR
+UPDATE` (C3 : pas de séquence) ; une référence déjà prise est sautée ;
+référence unique en base. Le prochain numéro est modifiable ; changer le
+préfixe ne renomme pas les références attribuées.
+
+*Alternative écartée.* Séquences PostgreSQL par type : contraire à C3 et
+non transactionnelles.
+
+=== D-FUP-004 — États fixes (lot 6, stock-previsions)
+
+*Choix.* Les quatre états de `document_state` deviennent des codes fixes
+(`todo`, `follow`, `closed`, `abandoned`, contrainte en base), libellés
+traduits ; les deux derniers terminent l'action. La recherche écarte par
+défaut les actions terminées (`s_status is null`).
+
+*Alternative écartée.* Table d'états paramétrable : NOALYSS ne l'expose pas.
+
+=== D-FUP-005 — Opérations rattachées par référence (lot 6, stock-previsions)
+
+*Contexte.* `action_gestion_operation` cite une écriture (`jr_id`) ; le Suivi
+ne dépend d'aucun module.
+
+*Choix.* `followup_link.reference` : référence libre au format `<objet>:<id>`
+(`entry:42`, `invoice:7`), contrôlée dans sa forme seulement ;
+`actions_linked_to(reference)` sert l'écran de l'écriture ou du document.
+
+*Alternative écartée.* Clé étrangère vers `accounting_entry` : lierait le
+Suivi à la Comptabilité.
+
+=== D-FUP-006 — Types d'action par défaut au provisionnement (lot 6, stock-previsions)
+
+*Choix.* Chargeur de données initiales `FOLLOWUP.action_types` : les 13 types
+de NOALYSS (préfixes conservés, libellés dans la langue de l'instance,
+« Réception magazine » corrigé en « Réception magasin »), par
+`load_default_action_types` (C6).
+
+== Interface du lot 6 — stock, prévisions, suivi (27 septembre 2026)
+
+=== D-UI-045 — Écrans des prévisions budgétaires (lot 6, interface)
+
+*Contexte.* Le contrat (`Api::Accounting.forecast*`) expose la prévision
+entière (`ForecastView`) mais pas de lecture d'une catégorie ou d'un élément
+par son seul identifiant.
+
+*Choix.* Routes imbriquées sous la prévision
+(`/accounting/forecasts/<id>/categories/<category_id>/…`,
+`/accounting/forecasts/<id>/items/<item_id>/…`) : l'écran lit la prévision
+par le contrat et y cherche la catégorie ou l'élément ; absent de cette
+prévision : 404. Élément : un champ `period-<id>` par période de la
+prévision, vide = montant par période ; les erreurs `period_amounts[i]` sont
+rangées sous le champ de la période envoyée en i-ième position.
+Comparaison : un tableau (estimé, réel, écart par élément ; totaux par
+catégorie), export CSV du tableau par l'interface (le cœur n'a pas d'export
+des prévisions). Aucun calcul dans l'interface hors la somme des lignes
+affichées (colonne « Total »).
+
+*Alternative écartée.* Parcourir toutes les prévisions pour retrouver une
+catégorie par son identifiant (coût croissant) ; proposer au cœur
+`forecast_category(id)` : non nécessaire.
+
+=== D-UI-046 — Suivi : fiches par quick code, actions liées aux écritures (lot 6, interface)
+
+*Contexte.* Une action cite un destinataire, un contact et d'autres fiches ;
+le formulaire générique n'a pas de complétion.
+
+*Choix.* Fiches saisies par leur quick code (champ texte, plusieurs codes
+séparés par des espaces pour les fiches concernées), résolues par
+`Api::Cards.card_by_code` ; code inconnu : erreur sous le champ. Actions
+liées : par la référence de l'autre action (`DI-12`,
+`action_by_reference`) ; opérations rattachées : référence libre du cœur
+(`entry:42`), lien vers la consultation si le module est actif. Liste :
+recherche du cœur (1 000 actions au plus, avertissement au-delà), tableau
+paginé par l'interface, export CSV du cœur. La fiche d'un tiers mène à ses
+actions ; la consultation d'une écriture liste les actions qui la citent
+(`actions_linked_to`). Rappels : page dédiée (le tableau de bord n'est pas
+modifié).
+
+*Alternative écartée.* Liste déroulante de toutes les fiches (inutilisable
+au-delà de quelques centaines) ; complétion HTMX dans le formulaire
+générique (à reprendre si le besoin se confirme, extension de
+`Form::Field`).
+
+=== D-UI-047 — Écrans du Stock (lot 6, interface)
+
+*Choix.* Dépôts et articles suivis sous « Référentiel », opérations et
+inventaire sous « Saisie », état et historique sous « Consultation »,
+valorisation sous « Éditions » (menus du manifeste). Opération manuelle :
+lignes `lines-<n>-{card_id,quantity,unit_cost}` (quantité signée), lignes
+vides ignorées et compactées avant l'envoi. Inventaire en deux temps sur un
+même écran : « Préparer » (quantités théoriques par `inventory_proposal`,
+jeton caché `prepared` = dépôt/date), puis « Enregistrer » ; dépôt ou date
+changés entre-temps : nouvelle proposition. Éditions sur le socle des
+éditions du lot 3 (critères gardés, D-UI-035), exports CSV du cœur ;
+stock final négatif signalé (`pd-row-warning`). La fiche d'un article suivi
+mène à l'historique de son code stock.
+
+*Alternative écartée.* Inventaire saisi sans proposition (NOALYSS reprend
+le dernier inventaire) : le cœur calcule déjà la quantité théorique.
+
+=== D-STK-009 — Ligne de document à quantité négative : retour en stock (lot 6, tests)
+
+*Contexte.* Les specs du lot 6 ont montré qu'une ligne de facture à
+quantité négative (retour de marchandise, admis par la Facturation qui ne
+refuse que la quantité nulle) produisait une *sortie* : l'abonné prenait la
+valeur absolue de la quantité et fixait le sens par la nature du document.
+NOALYSS (`Acc_Ledger_Sale::insert`, `$nNeg`) inverse le sens d'une ligne de
+vente à quantité négative.
+
+*Choix.* `Partiduo::Stock::Feeds.from_document` calcule une quantité signée
+vue du stock (bon de livraison et facture : `-quantité`, avoir :
+`+quantité`) ; son signe donne le sens, sa valeur absolue la quantité du
+mouvement. Spec : `spec/stock/feeds_rules_spec.cr`.
+
+*Alternative écartée.* Refuser les quantités négatives dans les documents :
+la Facturation les admet déjà (remises, reprises) et NOALYSS aussi.
+
+=== D-UI-048 — Droit vérifié avant la lecture d'un formulaire du Stock (lot 6, tests)
+
+*Contexte.* Un utilisateur sans `stock.movement.write` qui envoyait un
+formulaire d'opération incomplet recevait 422 (erreurs de saisie) au lieu de
+403 ; de même pour le suivi d'un article sans `stock.settings.write`.
+
+*Choix.* `StockChangeNewHandler#post` et `StockItemNewHandler#post` appellent
+`require!` avant de lire le formulaire, comme leurs `get`. Spec :
+`partiduo-ui-bulma/spec/ui/lot6_rules_spec.cr`.
+
+*Alternative écartée.* Laisser le contrat refuser : il n'est pas appelé
+quand la saisie est déjà rejetée par l'écran.
+
+== Clôture du lot 6 — relecture (27 septembre 2026)
+
+=== D-STK-001 (amendement proposé à ADR-006 D3) — Lecture du contrat d'une pièce `depends_on_any`
+
+*Contexte.* La relecture relève que `Partiduo::Stock::Feeds` appelle
+`Partiduo::Api::Invoicing.document` et `Partiduo::Api::Accounting.entry`,
+alors qu'ADR-006 D3 dit que « les modules communiquent uniquement par le
+socle et par les événements ». D-STK-001 justifiait ce choix sans le
+présenter comme un écart à l'ADR, et la spec d'isolation l'admettait pour
+tout le module Stock.
+
+*Amendement proposé.* ADR-006 D3 est complété ainsi : « un module qui cite
+une pièce en `depends_on_any` peut lire le *contrat* de cette pièce
+(`Partiduo::Api::<Pièce>`), en lecture seule et seulement depuis l'abonné
+d'un événement que cette pièce publie (la pièce est alors active) ». Les ADR
+ne sont pas modifiés ; l'amendement attend sa validation.
+
+*Choix appliqué.* `spec/architecture/module_isolation_spec.cr` n'admet plus
+les pièces `depends_on_any` que dans la liste `DEPENDS_ON_ANY_READERS`,
+réduite au seul fichier `src/stock/services/feeds.cr` ; tout autre fichier du
+Stock qui citerait la Facturation ou la Comptabilité fait échouer la spec.
+
+*Alternative écartée.* Enrichir les charges utiles de
+`delivery_note.issued`, `invoice.issued`, `credit_note.issued` et
+`entry.posted` avec les lignes d'articles et les quantités, puis retirer
+l'exception : quatre charges utiles alourdies et figées (C4) pour un seul
+abonné ; reste possible si l'amendement est refusé.
+
+=== D-STK-010 — Facture et chaîne documentaire livrée (lot 6, relecture ; complète D-STK-004)
+
+*Contexte.* `Feeds.delivered?` ne remontait qu'un niveau : pour la chaîne
+« devis → commande → bon de livraison émis », une facture tirée *du devis*
+ne voyait pas le bon de livraison (dérivé de la commande) et sortait les
+articles une seconde fois.
+
+*Choix.* La facture est « déjà livrée » si elle provient d'un bon de
+livraison, ou si la chaîne à laquelle elle appartient compte un bon de
+livraison émis : on remonte les documents sources jusqu'à la racine, puis on
+parcourt en largeur tous ses descendants (sauf la facture elle-même), sans
+repasser par un document vu, à six niveaux au plus (`CHAIN_DEPTH`). Spec :
+`spec/stock/feeds_spec.cr` (« facture tirée du devis… »). Limite connue : une
+livraison *partielle* dans la chaîne suffit à ne pas sortir la facture ; la
+correction fine (livraison marquée par ligne) est reportée.
+
+*Alternative écartée.* Marquer la livraison sur chaque ligne de document :
+modifie le modèle de la Facturation pour un module facultatif.
+
+=== D-STK-011 — Lignes d'articles d'une écriture : rôle `base` ou aucun (lot 6, relecture)
+
+*Contexte.* `from_lines` écartait `vat_role == "vat"`, rôle que la
+Comptabilité ne pose jamais (elle n'utilise que `base` et `tax`).
+
+*Choix.* `Feeds.item_line?(input_index, vat_role)` : ligne saisie et rôle
+nul ou `base` ; toute ligne `tax` (ou de rôle inconnu) est écartée. Spec :
+`spec/stock/feeds_rules_spec.cr`.
+
+*Alternative écartée.* `vat_role != "tax"` : laisserait passer un rôle
+ajouté plus tard sans examen.
+
+=== D-STK-012 — Code stock par défaut validé ; suivi sous verrou (lot 6, relecture)
+
+*Contexte.* Le code stock repris de la fiche (code saisi vide) était calculé
+après la validation, et deux `track_item` concurrents sur une même fiche
+levaient une violation d'unicité brute.
+
+*Choix.* `Rules.effective_code` calcule le code effectif (saisi, sinon quick
+code de la fiche, normalisé et tronqué à 40) et `item_errors` le valide
+(longueur, pas de blanc). `track_item` prend un verrou consultatif
+transactionnel par fiche (`stock_item:<card_id>`) avant de chercher l'article
+existant : le second appel met à jour au lieu d'échouer.
+
+*Alternative écartée.* `SELECT … FOR UPDATE` : ne verrouille rien quand
+l'article n'existe pas encore, qui est justement le cas concurrent.
+
+=== D-STK-013 — Lecture du socle par le Stock et le Suivi (lot 6, relecture)
+
+*Contexte.* Le Stock et le Suivi lisaient en SQL les tables du socle
+(`cards_card`, `cards_category`, `core_period`, `core_fiscal_year`), et la
+migration stock 0001 ne dépendait pas de `core`.
+
+*Choix.* La période close passe désormais par le contrat du socle
+(`Partiduo::Api::Core.period_for`, la clôture d'un exercice clôt ses
+périodes). La lecture des fiches en bloc reste en SQL (`Stock::Cards`,
+`Followup::Cards`, jointure de l'état du stock) : `Partiduo::Api::Cards` n'a
+pas de lecture par identifiants, et la jointure sert au tri des éditions.
+Ces lectures portent sur des colonnes stables (`id`, `code`, `name`,
+`category_id`, `kind`) ; toute évolution de ces colonnes doit chercher
+`cards_card` dans `src/stock` et `src/followup`. La migration stock 0001
+déclare `depends_on :core, "0003_period_guard_fiscal_year_move"`.
+
+*Alternative écartée.* Ajouter maintenant `Partiduo::Api::Cards.cards_by_ids`
+et une vue triable : extension du contrat du socle à faire dans un lot du
+socle ; proposée ici comme évolution.
+
+=== D-FUP-007 — Export des actions sans plafond (lot 6, relecture)
+
+*Contexte.* `export_actions` se disait « sans plafond » mais passait par la
+recherche paginée (10 000 lignes au plus) : l'export était tronqué sans le
+signaler.
+
+*Choix.* `Actions.search_all` lit tous les identifiants de la recherche
+sans LIMIT (`limit` et `offset` ignorés), puis les résumés par paquets de
+1 000. `doc/api/followup.adoc` le précise. Spec :
+`spec/followup/followup_rules_spec.cr`.
+
+*Alternative écartée.* Garder le plafond et signaler la troncature :
+l'export sert justement à sortir toute la recherche.
+
+=== D-FCT-003 — Élément de prévision sans formule (lot 6, relecture)
+
+*Contexte.* NOALYSS admet un élément de prévision sans formule
+(`fi_account` vide, réel nul) ; Partiduo exigeait une formule, ce qui aurait
+fait échouer la reprise de ces éléments. Le rapport lançait par ailleurs une
+requête par élément et par période pour les formules à date de début.
+
+*Choix.* Formule vide admise (champ `formula` `blank: true`, écran sans
+`required`, aide « Vide : réel nul ») ; son réel vaut zéro et elle n'est pas
+signalée comme invalide. Règle de reprise : `fi_account` vide ou nul →
+formule vide. Les contextes des formules à date de début sont mis en cache
+par couple (début, fin de période). Spec :
+`spec/accounting/forecasts_rules_spec.cr`.
+
+*Alternative écartée.* Garder l'obligation et remplacer, à la reprise, la
+formule vide par `0` : altère la donnée reprise.
+
+=== D-UI-049 — Inventaire : compte vide pour un stock théorique négatif, erreurs par fiche (lot 6, relecture, interface)
+
+*Contexte.* Le formulaire d'inventaire préremplissait la quantité comptée
+par la quantité théorique, négative quand des sorties dépassent le stock :
+le cœur refusait (`counted_negative`) et il fallait corriger chaque ligne non
+comptée. Les erreurs `lines[i]` étaient par ailleurs rangées d'après un
+filtre différent de celui des lignes envoyées.
+
+*Choix.* Une ligne à théorique négatif reste vide, donc n'est pas envoyée
+(aucun mouvement). `sent_rows` est le seul filtre (fiche de la proposition,
+quantité comptée non vide), partagé par la lecture et par le rangement des
+erreurs ; une erreur `lines[i]` s'affiche sous la ligne affichée de la même
+fiche. Specs : `partiduo-ui-bulma/spec/ui/stock_spec.cr`.
+
+*Alternative écartée.* Préremplir `max(théorique, 0)` : enverrait un compte
+de zéro que l'utilisateur n'a pas fait, et donc une entrée en stock.
+
+=== D-UI-050 — Format d'heure du suivi traduit (lot 6, relecture, interface)
+
+*Choix.* Le texte indicatif du champ heure passe par
+`ui.followup.hour_placeholder` (fr `hh:mm`, en `HH:MM`, nl `UU:MM`).

@@ -262,6 +262,8 @@ obligatoires :
 |`entry.cancelled` |`entry_id` |Comptabilité, écriture annulée
 |`invoice.issued` |`invoice_id` |Facturation, à la validation
 |`credit_note.issued` |`credit_note_id` |Facturation
+|`delivery_note.issued` |`delivery_note_id` |Facturation, bon de livraison émis
+(ajouté au lot 6, DECISIONS D-STK-004) ; clés `number`, `issue_date`
 |`payment.recorded` |`payment_id` |Facturation, encaissement saisi
 |`payment.matched` |`matching_id` |Comptabilité, lettrage
 |`payment.unmatched` |`matching_id` |Comptabilité, délettrage ou extourne d'une écriture lettrée

@@ -24,6 +24,8 @@ Partiduo::Modules.register do
 
   menu "DASHBOARD", order: 10, route: "core:dashboard"
   menu "BILLING", order: 20
+  # Suivi des actions et relations (module FOLLOWUP, lot 6, D-FUP-001).
+  menu "FOLLOW_UP", order: 25
   menu "ENTRY", order: 30
   menu "CONSULT", order: 40
   menu "REFERENCE", order: 50

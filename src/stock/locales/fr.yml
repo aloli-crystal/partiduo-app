@@ -1,0 +1,71 @@
+fr:
+  stock:
+    module:
+      name: "Stock"
+    permissions:
+      movement:
+        read: "Consulter les stocks"
+        write: "Saisir les mouvements manuels et les inventaires"
+      settings:
+        write: "Paramétrer les dépôts et les articles suivis"
+    menu:
+      stock_changes: "Mouvements de stock"
+      stock_inventory: "Inventaire"
+      stock_state: "État des stocks"
+      stock_history: "Historique des stocks"
+      stock_valuation: "Valorisation des stocks"
+      stock_repositories: "Dépôts"
+      stock_items: "Articles suivis en stock"
+    directions:
+      in: "Entrée"
+      out: "Sortie"
+    change_kinds:
+      change: "Mouvement manuel"
+      inventory: "Inventaire"
+    columns:
+      date: "Date"
+      repository: "Dépôt"
+      stock_code: "Code stock"
+      card: "Fiche"
+      card_name: "Article"
+      direction: "Sens"
+      quantity: "Quantité"
+      unit_cost: "Coût unitaire"
+      source: "Origine"
+      comment: "Commentaire"
+      opening: "Stock initial"
+      quantity_in: "Entrées"
+      quantity_out: "Sorties"
+      closing: "Stock final"
+      value: "Valeur"
+      total: "Total"
+    errors:
+      repository:
+        name_required: "Le nom du dépôt est obligatoire."
+        name_too_long: "Le nom du dépôt compte au plus %{max} caractères."
+        name_taken: "Le dépôt %{name} existe déjà."
+        country_invalid: "Le pays est un code à deux lettres."
+        too_long: "Ce champ compte au plus %{max} caractères."
+        in_use: "Ce dépôt porte des mouvements : suppression impossible."
+      settings:
+        repository_unknown: "Dépôt inconnu (%{id})."
+      item:
+        card_unknown: "Fiche inconnue (%{id})."
+        not_an_item: "La fiche %{code} n'est pas un article."
+        too_long: "Le code stock compte au plus %{max} caractères."
+        invalid: "Le code stock ne contient pas d'espace."
+      change:
+        repository_unknown: "Dépôt inconnu (%{id})."
+        closed_period: "La date %{date} tombe dans une période close."
+        too_long: "Le commentaire compte au plus %{max} caractères."
+        lines_required: "Saisissez au moins un article."
+        quantity_zero: "La quantité ne peut être nulle."
+        quantity_scale: "La quantité compte au plus %{max} décimales."
+        not_tracked: "Cet article n'est pas suivi en stock (%{id})."
+        cost_on_exit: "Une sortie n'a pas de coût unitaire."
+        cost_negative: "Le coût unitaire ne peut être négatif."
+        cost_scale: "Le coût unitaire compte au plus %{max} décimales."
+      inventory:
+        lines_required: "Saisissez au moins un article compté."
+        code_twice: "Le code stock %{code} est compté deux fois."
+        counted_negative: "La quantité comptée ne peut être négative."

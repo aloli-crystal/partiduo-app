@@ -1,0 +1,79 @@
+nl:
+  followup:
+    module:
+      name: "Opvolging"
+    permissions:
+      action:
+        read: "Opvolgingsacties raadplegen"
+        write: "Opvolgingsacties aanmaken en wijzigen"
+      settings:
+        write: "Actietypes en labels instellen"
+    menu:
+      fup_actions: "Acties"
+      fup_reminders: "Herinneringen"
+      fup_types: "Actietypes"
+      fup_tags: "Labels"
+    states:
+      todo: "Te doen"
+      follow: "Op te volgen"
+      closed: "Afgesloten"
+      abandoned: "Stopgezet"
+    priorities:
+      p1: "Hoog"
+      p2: "Normaal"
+      p3: "Laag"
+    columns:
+      reference: "Referentie"
+      date: "Datum"
+      hour: "Uur"
+      type: "Type"
+      title: "Titel"
+      card: "Bestemmeling"
+      state: "Status"
+      priority: "Prioriteit"
+      remind_on: "Herinnering"
+      tags: "Labels"
+    default_types:
+      di: "Intern document"
+      bcl: "Bestelbon klant"
+      bfo: "Bestelbon leverancier"
+      fac: "Factuur"
+      rap: "Herinneringsbrief"
+      co: "Brief"
+      prp: "Voorstel"
+      el: "E-mail"
+      ds: "Diversen"
+      nfr: "Onkostennota"
+      rfo: "Ontvangst bestelling leverancier"
+      rcl: "Ontvangst bestelling klant"
+      rmg: "Ontvangst magazijn"
+    errors:
+      action_type:
+        code_required: "Het voorvoegsel is verplicht."
+        code_too_long: "Het voorvoegsel telt hoogstens %{max} tekens."
+        code_invalid: "Het voorvoegsel bevat alleen letters en cijfers."
+        code_taken: "Het voorvoegsel %{code} is al in gebruik."
+        label_required: "De omschrijving is verplicht."
+        label_too_long: "De omschrijving telt hoogstens %{max} tekens."
+        next_number_invalid: "Het volgende nummer is minstens 1."
+        in_use: "Dit actietype is in gebruik en kan niet worden verwijderd."
+      tag:
+        label_required: "De naam van het label is verplicht."
+        label_too_long: "De naam van het label telt hoogstens %{max} tekens."
+        label_taken: "Het label %{label} bestaat al."
+        color_invalid: "De kleur is een getal van 1 tot 10."
+      action:
+        type_unknown: "Onbekend actietype (%{id})."
+        title_too_long: "De titel telt hoogstens %{max} tekens."
+        hour_invalid: "Ongeldig uur (UU:MM)."
+        priority_invalid: "Ongeldige prioriteit."
+        state_invalid: "Ongeldige status."
+        card_unknown: "Onbekende fiche (%{id})."
+        tag_unknown: "Onbekend label (%{id})."
+      comment:
+        text_required: "De opmerking is leeg."
+        text_too_long: "De opmerking telt hoogstens %{max} tekens."
+      link:
+        invalid: "Ongeldige verwijzing naar een verrichting (bijvoorbeeld entry:42)."
+      relation:
+        self: "Een actie kan niet aan zichzelf worden gekoppeld."
