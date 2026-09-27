@@ -103,13 +103,21 @@ module Partiduo
           kind: LedgerKind.from_code(ledger.kind.to_s),
           description: ledger.description.to_s,
           enabled: ledger.enabled == true,
-          default_account: ledger.default_account.try { |account| account_view(account) },
+          default_account: Partiduo::Accounting::Ledgers.account_of(ledger).try { |account| account_view(account) },
           receipt_prefix: ledger.receipt_prefix.to_s,
           receipt_padding: ledger.receipt_padding!.to_i32,
           last_receipt_number: ledger.last_receipt_number!.to_i64,
           currency_code: ledger.currency_code.to_s,
           access: access,
+          bank_card_id: ledger.bank_card_id.try(&.to_i64),
+          bank_card_code: ledger.bank_card_id.try { |id| bank_card_code(id.to_i64) },
         )
+      end
+
+      private def self.bank_card_code(card_id : Int64) : String?
+        Partiduo::Api::Cards.card(Actor.system, card_id).code
+      rescue NotFound
+        nil
       end
     end
   end

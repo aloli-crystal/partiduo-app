@@ -240,6 +240,8 @@ fi
 
 HOST="$DOSSIER.$DOMAIN"
 DATABASE_URL="postgres:///$DATABASE?host=$PG_SOCKET"
+# createdb et les outils libpq passent par le même socket Unix que l'instance.
+export PGHOST="$PG_SOCKET"
 ACTIVE="$MODULES"
 [ -z "$EXTENSIONS" ] || ACTIVE="${ACTIVE:+$ACTIVE,}$EXTENSIONS"
 [ -n "$ACTIVE" ] || ACTIVE="none"
@@ -253,7 +255,7 @@ if [ "$SKIP_CREATEDB" = 1 ]; then
   echo "== 1. Base : $DATABASE existante (--skip-createdb)"
 else
   echo "== 1. Base"
-  run createdb --owner="$OWNER" --encoding=UTF8 "$DATABASE"
+  run env PGHOST="$PG_SOCKET" createdb --owner="$OWNER" --encoding=UTF8 "$DATABASE"
 fi
 
 # --- 2. Migrations -------------------------------------------------------------

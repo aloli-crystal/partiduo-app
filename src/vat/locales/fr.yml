@@ -36,6 +36,7 @@ fr:
         dnor: "TVA 8,5 % DOM"
         dr: "TVA 2,1 % DOM"
         dprs: "TVA 1,05 % DOM (presse)"
+        dom1: "TVA 1,75 % DOM"
         cor13: "TVA 13 % Corse"
         cor09: "TVA 0,9 % Corse"
         exp: "Exportation hors UE"

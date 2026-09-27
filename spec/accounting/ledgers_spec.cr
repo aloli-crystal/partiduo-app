@@ -43,20 +43,46 @@ describe_module "ACCOUNTING", "Journaux (jrn_def)" do
       sale.code.should eq("V10")
     end
 
-    it "exige le compte de banque d'un journal financier, utilisable directement" do
+    it "exige la fiche Banque d'un journal financier, dont le compte devient celui du journal (D-ACC-010)" do
       bank_account
       AccountingSpec.base_currency
+      bank = ReferentialSpec.category("BANK", "bank")
+      customers = ReferentialSpec.category("CUSTOMER", "customer")
+      card = ReferentialSpec.card(bank.id, "Banque du Centre")
+      unlinked = ReferentialSpec.card(bank.id, "Banque sans compte")
+      client = ReferentialSpec.card(customers.id, "Client")
+      Api.assign_card_account(system, Api::AssignCardAccountInput.new(card.id, "512")).value!
 
-      Api.create_ledger(system, AccountingSpec.ledger_input("Banque", Api::LedgerKind::Financial)).error_keys
-        .should eq(["accounting.errors.ledger.default_account.required"])
-      Api.create_ledger(system, AccountingSpec.ledger_input("Banque", Api::LedgerKind::Financial, default_account: "51"))
-        .error_keys.should eq(["accounting.errors.ledger.default_account.not_direct_use"])
-      Api.create_ledger(system, AccountingSpec.ledger_input("Banque", Api::LedgerKind::Financial, default_account: "519"))
-        .error_keys.should eq(["accounting.errors.ledger.default_account.not_found"])
+      financial = ->(code : String?) { AccountingSpec.ledger_input("Banque", Api::LedgerKind::Financial, bank_card: code) }
+      Api.create_ledger(system, financial.call(nil)).error_keys.should eq(["accounting.errors.ledger.bank_card.required"])
+      Api.create_ledger(system, financial.call("INCONNU")).error_keys.should eq(["accounting.errors.ledger.bank_card.not_found"])
+      Api.create_ledger(system, financial.call(client.code)).error_keys.should eq(["accounting.errors.ledger.bank_card.not_bank"])
+      Api.create_ledger(system, financial.call(unlinked.code)).error_keys.should eq(["accounting.errors.ledger.bank_card.no_account"])
 
-      view = Api.create_ledger(system, AccountingSpec.ledger_input("Banque", Api::LedgerKind::Financial, default_account: "512")).value!
+      view = Api.create_ledger(system, financial.call(card.code)).value!
       view.code.should eq("F01")
-      view.default_account.try(&.number).should eq("512")
+      view.bank_card_id.should eq(card.id)
+      view.bank_card_code.should eq(card.code)
+      view.default_account.try(&.number).should eq("512") # compte de la fiche, pas stocké
+
+      # La fiche citée par un journal ne s'efface pas.
+      Partiduo::Api::Cards.delete_card(system, card.id).failure?.should be_true
+    end
+
+    it "refuse en base un journal financier sans fiche Banque" do
+      AccountingSpec.base_currency
+      expect_raises(Exception, /accounting_ledger_financial_bank_card_check/) do
+        Marten::DB::Connection.default.open do |db|
+          db.exec("INSERT INTO accounting_ledger (code, name, kind, description, enabled, receipt_prefix, receipt_padding, " \
+                  "last_receipt_number, currency_code, created_at, updated_at) " \
+                  "VALUES ('F09', 'Sans banque', 'financial', '', true, '', 0, 0, 'EUR', now(), now())")
+        end
+      end
+    end
+
+    it "prend la devise de tenue du dossier quand la saisie n'en donne pas" do
+      Partiduo::Api::Core.ensure_base_currency(system, "CHF", "Franc suisse")
+      AccountingSpec.create_ledger("Achats").currency_code.should eq("CHF")
     end
 
     it "refuse nom ou code déjà pris, champs invalides, devise non déclarée au socle" do

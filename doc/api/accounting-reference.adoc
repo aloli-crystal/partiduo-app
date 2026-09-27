@@ -104,17 +104,25 @@ En base : `CHECK` sur numéro, libellé, type, parent, et déclencheur
 
 `LedgerInput(name, kind, code = nil, description = "", enabled = true,
 default_account = nil, receipt_prefix = "", receipt_padding = 0,
-next_receipt_number = nil, currency_code = "EUR")` :
+next_receipt_number = nil, currency_code = nil, bank_card = nil)` :
 
 * `kind` (`LedgerKind`) : `Purchase`, `Sale`, `Financial`, `Misc` ; libellés
   `accounting.ledger_kinds.<code>` ;
 * `code` absent : initiale du type (A, V, F, O) et rang en base 36 (`A01`) ;
-* `default_account` obligatoire pour un journal financier (compte de banque ou
-  de caisse, utilisable directement) ;
+* `default_account` (facultatif, utilisable directement) : compte proposé
+  d'un journal d'achats, de ventes ou d'opérations diverses ; ignoré pour un
+  journal financier ;
+* `bank_card` : quick code de la fiche Banque d'un journal financier,
+  obligatoire pour lui (`jrn_def_bank` est une fiche, D-ACC-010) ; la fiche
+  est de nature `bank` et rattachée à un compte utilisable directement, qui
+  devient le compte du journal (`LedgerView#default_account`, déduit, pas
+  stocké) ; `LedgerView#bank_card_id`, `#bank_card_code` ; une fiche citée par
+  un journal ne s'efface pas ;
 * pièces : `receipt_prefix` + numéro complété à `receipt_padding` chiffres ;
   `LedgerView#next_receipt` donne le prochain numéro sans le réserver ;
   `next_receipt_number` repositionne le compteur ;
-* `currency_code` : devise déclarée au socle (`Api::Core.currency`).
+* `currency_code` : devise déclarée au socle (`Api::Core.currency`) ; `nil` =
+  la devise de tenue du dossier (`Api::Core.base_currency`).
 
 Le lot 2 réserve un numéro par `Partiduo::Accounting::Receipts.take!` dans la
 transaction de l'écriture (compteur verrouillé, pas de trou si l'écriture est
@@ -152,6 +160,25 @@ catégorie — compte calculé (`B0001`, puis le plus grand `B…` + 1) si la
 catégorie crée un compte par fiche, sinon le compte de base. Les rattachements
 disparaissent avec la fiche ou la catégorie effacée (clé étrangère en cascade).
 
+== Comptes de TVA des taux
+
+Héritiers de `tva_rate.tva_poste` (D-ACC-009) : compte de TVA déductible
+(achats) et de TVA collectée (ventes) de chaque taux du socle.
+
+[cols="3,1,3",options="header"]
+|===
+|Appel |Droit |Rôle
+
+|`vat_rate_accounts(actor) : Array(VatRateAccountsView)`, `vat_rate_account(actor, vat_rate_id) : VatRateAccountsView?`
+|`accounting.account.read`
+|Comptes de TVA des taux paramétrés.
+
+|`set_vat_rate_accounts(actor, VatRateAccountsInput(vat_rate_id, deductible_account, collected_account))`
+|`accounting.account.write`
+|Comptes existants, utilisables directement ; les deux pour un taux
+autoliquidé (`accounting.errors.vat_rate_account.*`).
+|===
+
 == Jeu de données initial
 
 `load_initial_data(actor, regime, locale = "fr") : Result(InitialDataView)`
@@ -159,6 +186,9 @@ disparaissent avec la fiche ou la catégorie effacée (clé étrangère en casca
 `ACCOUNTING.reference_data` (ordre 20) : plan comptable du régime
 (`src/accounting/data/chart_{be,fr}.yml`, produits par
 `scripts/chart_from_noalyss.cr` depuis `mod1` et `mod2`), comptes par défaut,
-compte de base des catégories de fiches par défaut du socle, journaux `A01`,
-`V01`, `F01`, `O01` nommés dans la langue du dossier. Refusé si le plan ou les
-journaux ne sont pas vides.
+compte de base des catégories de fiches par défaut du socle, comptes de TVA
+des taux du régime (section `vat_accounts`), fiche Banque du journal
+financier (catégorie `BANK`, compte `510001` en FR, `550` en BE), journaux
+`A01`, `V01`, `F01`, `O01` nommés dans la langue du dossier. Types de compte
+corrigés par rapport aux modèles de NOALYSS (D-ACC-008). Refusé si le plan ou
+les journaux ne sont pas vides.

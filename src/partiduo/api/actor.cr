@@ -12,7 +12,17 @@ module Partiduo
     #
     # `level` : niveau de la session (0 enrôlement, 1 mot de passe,
     # 2 mot de passe + TOTP, 3 passkey), 3 pour l'acteur système.
-    record Actor, user_id : Int64?, permissions : Set(String), system : Bool = false, level : Int32 = 0 do
+    #
+    # `elevated` : la session a atteint le niveau qu'exige l'utilisateur
+    # (ADR-002 D2, D6). Faux : l'acteur est authentifié, mais seules les
+    # opérations de son propre compte lui sont ouvertes
+    # (`Guard.authorize_account!`) ; `Guard.authorize!` le refuse, même sans
+    # permission citée (D-AUTH-013).
+    #
+    # `session_id` : session d'où vient l'acteur (conservée quand un
+    # changement de sécurité coupe les autres sessions).
+    record Actor, user_id : Int64?, permissions : Set(String), system : Bool = false, level : Int32 = 0,
+      elevated : Bool = true, session_id : Int64? = nil do
       # Acteur technique : toutes les permissions. Réservé aux outils en ligne
       # de commande et aux abonnés d'événements, jamais à une requête HTTP.
       def self.system : Actor
@@ -24,8 +34,9 @@ module Partiduo
         new(nil, Set(String).new)
       end
 
-      def self.user(user_id : Int64, permissions : Enumerable(String), level : Int32 = 0) : Actor
-        new(user_id, permissions.to_set, false, level)
+      def self.user(user_id : Int64, permissions : Enumerable(String), level : Int32 = 0,
+                    elevated : Bool = true, session_id : Int64? = nil) : Actor
+        new(user_id, permissions.to_set, false, level, elevated, session_id)
       end
 
       def authenticated? : Bool

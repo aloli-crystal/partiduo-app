@@ -56,7 +56,9 @@ fr:
         expired: "La demande a expiré ; recommencez la connexion."
         invalid_code: "Code incorrect."
         locked: "Compte bloqué après trop d'échecs. Demandez un lien de déblocage ou contactez l'administrateur."
-        throttled: "Trop de tentatives : réessayez dans %{seconds} secondes."
+        throttled:
+          one: "Trop de tentatives : réessayez dans %{count} seconde."
+          other: "Trop de tentatives : réessayez dans %{count} secondes."
       passkey:
         challenge: "La demande a expiré ; recommencez."
         invalid: "La clé d'accès n'a pas pu être vérifiée."

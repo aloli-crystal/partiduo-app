@@ -160,7 +160,13 @@ module Partiduo
       record FederatedIdentityView, id : Int64, provider : String, subject : String, last_used_at : Time?
 
       # Jeton à transmettre hors bande (courriel), en clair une seule fois.
-      record TokenView, user_id : Int64, purpose : String, token : String, expires_at : Time
+      # Jeton à remettre hors bande. `email` : adresse *enregistrée* de
+      # l'utilisateur, seule destinataire admise du courriel ; `locale` : sa
+      # langue ; `domain` : nom d'hôte configuré de l'instance (celui du lien,
+      # jamais l'en-tête `Host` de la requête) ; `country_code` : pays de la
+      # société (présentation des dates).
+      record TokenView, user_id : Int64, purpose : String, token : String, expires_at : Time,
+        email : String = "", locale : String = "fr", domain : String = "", country_code : String = ""
 
       record UserView,
         id : Int64,

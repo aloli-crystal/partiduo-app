@@ -20,7 +20,7 @@ module Partiduo
 
       record Values, name : String, kind : LedgerKind, code : String?, description : String, enabled : Bool,
         default_account : Account?, receipt_prefix : String, receipt_padding : Int32,
-        next_receipt_number : Int64?, currency_code : String
+        next_receipt_number : Int64?, currency_code : String, bank_card_id : Int64?
 
       # `actor` : l'appelant, pour vérifier la devise auprès du socle.
       def self.validate(actor : Partiduo::Api::Actor, input : Partiduo::Api::Accounting::LedgerInput,
@@ -30,17 +30,64 @@ module Partiduo
         name = input.name.strip
         code = input.code.try(&.strip.upcase).presence
         prefix = input.receipt_prefix.strip
-        currency = input.currency_code.strip.upcase
+        currency = input.currency_code.try(&.strip.upcase).presence || base_currency(actor)
 
         name_errors(name, current_id, errors)
         code_errors(code, current_id, errors) if code
-        account = default_account(input, errors)
+        account = input.kind.financial? ? nil : default_account(input, errors)
+        bank_card_id = input.kind.financial? ? bank_card(input, errors) : nil
         numbering_errors(input, prefix, errors)
         currency_errors(actor, currency, errors)
 
         return {nil, errors} unless errors.empty?
         {Values.new(name, input.kind, code, input.description.strip, input.enabled, account, prefix,
-          input.receipt_padding, input.next_receipt_number, currency), errors}
+          input.receipt_padding, input.next_receipt_number, currency, bank_card_id), errors}
+      end
+
+      # Devise de tenue du dossier (`Partiduo::Api::Core.base_currency`), la
+      # devise d'un journal qui n'en précise pas ; `EUR` si le socle n'en a pas.
+      def self.base_currency(actor : Partiduo::Api::Actor) : String
+        Partiduo::Api::Core.base_currency(actor).code
+      rescue Partiduo::Api::NotFound
+        "EUR"
+      end
+
+      # Fiche Banque d'un journal financier (`Acc_Ledger::verify_ledger` :
+      # `jrn_def_bank` retrouvée par quick code), de nature `bank`, rattachée
+      # à un compte utilisable directement — le compte du journal.
+      private def self.bank_card(input : Partiduo::Api::Accounting::LedgerInput, errors : Array(FieldError)) : Int64?
+        code = input.bank_card.try(&.strip).presence
+        if code.nil?
+          errors << FieldError.new("bank_card", "accounting.errors.ledger.bank_card.required")
+          return
+        end
+        card = Partiduo::Api::Cards.card_by_code(Partiduo::Api::Actor.system, code)
+        if card.nil?
+          errors << FieldError.new("bank_card", "accounting.errors.ledger.bank_card.not_found", {"code" => code})
+          return
+        end
+        unless card.kind == "bank"
+          errors << FieldError.new("bank_card", "accounting.errors.ledger.bank_card.not_bank", {"code" => card.code})
+          return
+        end
+        account = CardAccount.filter(card_id: card.id).first.try(&.account)
+        if account.nil?
+          errors << FieldError.new("bank_card", "accounting.errors.ledger.bank_card.no_account", {"code" => card.code})
+        elsif !account.direct_use
+          errors << FieldError.new("bank_card", "accounting.errors.ledger.bank_card.not_direct_use",
+            {"code" => card.code, "number" => account.number.to_s})
+        end
+        card.id
+      end
+
+      # Compte d'un journal : celui de sa fiche Banque pour un journal
+      # financier (déduit, pas stocké), sinon son compte par défaut.
+      def self.account_of(ledger : Ledger) : Account?
+        if card_id = ledger.bank_card_id
+          CardAccount.filter(card_id: card_id).first.try(&.account)
+        else
+          ledger.default_account
+        end
       end
 
       private def self.name_errors(name : String, current_id, errors : Array(FieldError)) : Nil
@@ -61,15 +108,11 @@ module Partiduo
         end
       end
 
-      # Compte par défaut : obligatoire pour un journal financier, existant et
-      # utilisable directement.
+      # Compte par défaut (facultatif) : existant et utilisable directement.
       private def self.default_account(input : Partiduo::Api::Accounting::LedgerInput,
                                        errors : Array(FieldError)) : Account?
         number = Chart.normalize(input.default_account || "")
-        if number.empty?
-          errors << FieldError.new("default_account", "accounting.errors.ledger.default_account.required") if input.kind.financial?
-          return
-        end
+        return if number.empty?
         account = Account.filter(number: number).first
         if account.nil?
           errors << FieldError.new("default_account", "accounting.errors.ledger.default_account.not_found", {"number" => number})
@@ -118,6 +161,7 @@ module Partiduo
         ledger.receipt_prefix = values.receipt_prefix
         ledger.receipt_padding = values.receipt_padding
         ledger.currency_code = values.currency_code
+        ledger.bank_card_id = values.bank_card_id
         if next_number = values.next_receipt_number
           ledger.last_receipt_number = next_number - 1
         end

@@ -23,9 +23,14 @@ module Partiduo
         field == BASE
       end
 
-      # Message traduit dans la langue courante (`I18n.locale`).
+      # Message traduit dans la langue courante (`I18n.locale`). Un paramètre
+      # `count` entier choisit la forme du pluriel (`one` / `other`, ADR-005 D7).
       def message : String
-        I18n.t(key, params)
+        if count = params["count"]?.try(&.to_i64?)
+          I18n.t(key, params, count: count)
+        else
+          I18n.t(key, params)
+        end
       end
     end
   end

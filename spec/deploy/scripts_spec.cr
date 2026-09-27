@@ -27,7 +27,7 @@ describe "bin/partiduo-provision" do
       "--modules", "accounting", "--with", "skel", "--owner", "partiduo", "--domain", "compta.example", "exemple-sarl")
 
     code.should eq(0)
-    output.should contain("+ createdb --owner=partiduo --encoding=UTF8 partiduo_exemple_sarl")
+    output.should contain("+ env PGHOST=/tmp createdb --owner=partiduo --encoding=UTF8 partiduo_exemple_sarl")
     output.should contain("manage.cr -- migrate")
     output.should contain("-- provision --domain=exemple-sarl.compta.example --modules=accounting --with=skel " \
                           "'--name=Exemple SARL' --regime=fr")

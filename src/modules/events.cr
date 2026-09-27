@@ -82,13 +82,10 @@ module Partiduo
     # Exécute le bloc après la validation de la transaction courante (effet
     # extérieur d'un abonné : il n'a pas lieu si l'opération est annulée). Hors
     # transaction, le bloc est exécuté aussitôt.
+    # Dans une commande imbriquée (point de sauvegarde), le bloc est abandonné
+    # si ce point est annulé (`Partiduo::Api::Transaction`, D-024).
     def self.after_commit(&block : -> Nil) : Nil
-      connection = Marten::DB::Connection.default
-      if connection.in_transaction?
-        connection.observe_transaction_commit(block)
-      else
-        block.call
-      end
+      Partiduo::Api::Transaction.after_commit(block)
     end
   end
 end

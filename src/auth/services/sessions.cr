@@ -50,8 +50,12 @@ module Partiduo
         session.save!
       end
 
-      def self.revoke_all(user : User, now : Time = Time.utc) : Int64
-        Session.filter(user_id: user.pk, revoked_at__isnull: true).update(revoked_at: now).to_i64
+      # Révoque toutes les sessions de l'utilisateur, sauf `except` (session
+      # courante conservée après un changement de sécurité fait par lui).
+      def self.revoke_all(user : User, now : Time = Time.utc, except : Int64? = nil) : Int64
+        sessions = Session.filter(user_id: user.pk, revoked_at__isnull: true)
+        sessions = sessions.exclude(id: except) if except
+        sessions.update(revoked_at: now).to_i64
       end
 
       # Acteur du contrat pour une session. Session d'un niveau inférieur à
@@ -60,12 +64,11 @@ module Partiduo
       # authentifié (sécurité du compte, enrôlement) lui restent permises.
       def self.actor(session : Session) : Partiduo::Api::Actor
         user = session.user!
-        permissions = if (session.level || 0).to_i32 >= Levels.required(user)
-                        Permissions.of_user(user)
-                      else
-                        Set(String).new
-                      end
-        Partiduo::Api::Actor.user(user.pk!.as(Int64), permissions, (session.level || 0).to_i32)
+        level = (session.level || 0).to_i32
+        elevated = level > Levels::ENROLLMENT && level >= Levels.required(user)
+        permissions = elevated ? Permissions.of_user(user) : Set(String).new
+        Partiduo::Api::Actor.user(user.pk!.as(Int64), permissions, level, elevated: elevated,
+          session_id: session.pk.try(&.as(Int64)))
       end
     end
   end

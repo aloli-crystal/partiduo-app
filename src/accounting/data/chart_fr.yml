@@ -32,27 +32,27 @@ accounts:
   - ["21", "immobilisations corporelles", "2", asset, false]
   - ["23", "immobilisations en cours", "2", asset, false]
   - ["27", "autres immobilisations financieres", "2", asset, false]
-  - ["280", "Amortissements des immobilisations incorporelles", "2", asset, true]
-  - ["281", "Amortissements des immobilisations corporelles", "2", asset, true]
-  - ["290", "Provisions pour dépréciation des immobilisations incorporelles", "2", asset, true]
-  - ["291", "Provisions pour dépréciation des immobilisations corporelles (même ventilation que celle du compte 21)", "2", asset, true]
-  - ["297", "Provisions pour dépréciation des autres immobilisations financières", "2", asset, true]
+  - ["280", "Amortissements des immobilisations incorporelles", "2", asset_contra, true]
+  - ["281", "Amortissements des immobilisations corporelles", "2", asset_contra, true]
+  - ["290", "Provisions pour dépréciation des immobilisations incorporelles", "2", asset_contra, true]
+  - ["291", "Provisions pour dépréciation des immobilisations corporelles (même ventilation que celle du compte 21)", "2", asset_contra, true]
+  - ["297", "Provisions pour dépréciation des autres immobilisations financières", "2", asset_contra, true]
   - ["31", "matieres premières (et fournitures)", "3", asset, false]
   - ["32", "autres approvisionnements", "3", asset, false]
   - ["33", "en-cours de production de biens", "3", asset, false]
   - ["34", "en-cours de production de services", "3", asset, false]
   - ["35", "stocks de produits", "3", asset, false]
   - ["37", "stocks de marchandises", "3", asset, false]
-  - ["391", "Provisions pour dépréciation des matières premières (et fournitures)", "3", asset, true]
-  - ["392", "Provisions pour dépréciation des autres approvisionnements", "3", asset, true]
-  - ["393", "Provisions pour dépréciation des en-cours de production de biens", "3", asset, true]
-  - ["394", "Provisions pour dépréciation des en-cours de production de services", "3", asset, true]
-  - ["395", "Provisions pour dépréciation des stocks de produits", "3", asset, true]
-  - ["397", "Provisions pour dépréciation des stocks de marchandises", "3", asset, true]
-  - ["400", "Fournisseurs et Comptes rattachés", "4", asset, true]
+  - ["391", "Provisions pour dépréciation des matières premières (et fournitures)", "3", asset_contra, true]
+  - ["392", "Provisions pour dépréciation des autres approvisionnements", "3", asset_contra, true]
+  - ["393", "Provisions pour dépréciation des en-cours de production de biens", "3", asset_contra, true]
+  - ["394", "Provisions pour dépréciation des en-cours de production de services", "3", asset_contra, true]
+  - ["395", "Provisions pour dépréciation des stocks de produits", "3", asset_contra, true]
+  - ["397", "Provisions pour dépréciation des stocks de marchandises", "3", asset_contra, true]
+  - ["400", "Fournisseurs et Comptes rattachés", "4", liability, true]
   - ["409", "Fournisseurs débiteurs", "4", asset, true]
   - ["410", "Clients et Comptes rattachés", "4", asset, true]
-  - ["419", "Clients créditeurs", "4", asset, true]
+  - ["419", "Clients créditeurs", "4", liability, true]
   - ["421", "Personnel - Rémunérations dues", "4", liability, true]
   - ["428", "Personnel - Charges à payer et produits à recevoir", "4", liability, true]
   - ["43", "Sécurité sociale et autres organismes sociaux", "4", liability, false]
@@ -62,17 +62,17 @@ accounts:
   - ["45", "Groupe et associes", "4", liability, false]
   - ["46", "Débiteurs divers et créditeurs divers", "4", context, false]
   - ["47", "comptes transitoires ou d'attente", "4", context, false]
-  - ["481", "Charges à répartir sur plusieurs exercices", "4", liability, true]
-  - ["486", "Charges constatées d'avance", "4", liability, true]
-  - ["487", "Produits constatés d'avance", "4", asset, true]
-  - ["491", "Provisions pour dépréciation des comptes de clients", "4", liability, true]
-  - ["496", "Provisions pour dépréciation des comptes de débiteurs divers", "4", liability, true]
+  - ["481", "Charges à répartir sur plusieurs exercices", "4", asset, true]
+  - ["486", "Charges constatées d'avance", "4", asset, true]
+  - ["487", "Produits constatés d'avance", "4", liability, true]
+  - ["491", "Provisions pour dépréciation des comptes de clients", "4", asset_contra, true]
+  - ["496", "Provisions pour dépréciation des comptes de débiteurs divers", "4", asset_contra, true]
   - ["50", "valeurs mobilières de placement", "5", asset, false]
   - ["51", "banques, établissements financiers et assimilés", "5", asset, false]
   - ["53", "Caisse", "5", asset, false]
   - ["54", "régies d'avance et accréditifs", "5", asset, false]
   - ["58", "virements internes", "5", asset, false]
-  - ["590", "Provisions pour dépréciation des valeurs mobilières de placement", "5", asset, true]
+  - ["590", "Provisions pour dépréciation des valeurs mobilières de placement", "5", asset_contra, true]
   - ["60", "Achats (sauf 603)", "6", expense, false]
   - ["603", "variations des stocks (approvisionnements et marchandises)", "6", expense, true]
   - ["61", "autres charges externes - Services extérieurs", "6", expense, false]
@@ -113,13 +113,9 @@ accounts:
   - ["207", "Fonds commercial", "20", asset, true]
   - ["208", "Autres immobilisations incorporelles", "20", asset, true]
   - ["4100001", "Clients divers", "410", asset, true]
+  - ["44551", "TVA à décaisser", "445", liability, true]
   - ["4456", "TVA Déductible", "445", asset, false]
-  - ["445662", "TVA 5,5% - France métropolitaine - Taux réduit", "445", liability, true]
-  - ["445663", "TVA 2,1% - France métropolitaine - Taux super réduit", "445", liability, true]
   - ["4457", "TVA à reverser", "445", liability, false]
-  - ["44571", "TVA France métropolitaine - Taux normal", "445", asset, true]
-  - ["44572", "TVA 5,5% - France métropolitaine - Taux réduit", "445", asset, true]
-  - ["44573", "TVA 2,1% - France métropolitaine - Taux super réduit", "445", asset, true]
   - ["455", "Associés - Comptes courants", "45", liability, true]
   - ["510001", "Banque", "51", asset, true]
   - ["658", "Ecart de conversion", "65", expense, true]
@@ -147,7 +143,9 @@ accounts:
   - ["4456607", "TVA 1,05% - DOM - Taux publications de presse Déductible", "4456", asset, true]
   - ["4456608", "TVA x% - DOM - Taux octroi de mer Déductible", "4456", asset, true]
   - ["4456609", "TVA x% - DOM - Taux immobilisations Déductible", "4456", asset, true]
-  - ["445661", "TVA France métropolitaine - Taux normal", "4456", liability, true]
+  - ["445661", "TVA France métropolitaine - Taux normal", "4456", asset, true]
+  - ["445662", "TVA 5,5% - France métropolitaine - Taux réduit", "4456", asset, true]
+  - ["445663", "TVA 2,1% - France métropolitaine - Taux super réduit", "4456", asset, true]
   - ["445701", "TVA France métropolitaine - Taux immobilisations Collectée", "4457", liability, true]
   - ["4457010", "TVA 13% - Corse - Taux I Collectée", "4457", liability, true]
   - ["4457011", "TVA 8% - Corse - Taux II Collectée", "4457", liability, true]
@@ -168,6 +166,9 @@ accounts:
   - ["445707", "TVA 1,05% - DOM - Taux publications de presse Collectée", "4457", liability, true]
   - ["445708", "TVA x% - DOM - Taux octroi de mer Collectée", "4457", liability, true]
   - ["445709", "TVA x% - DOM - Taux immobilisations Collectée", "4457", liability, true]
+  - ["44571", "TVA France métropolitaine - Taux normal", "4457", liability, true]
+  - ["44572", "TVA 5,5% - France métropolitaine - Taux réduit", "4457", liability, true]
+  - ["44573", "TVA 2,1% - France métropolitaine - Taux super réduit", "4457", liability, true]
 default_accounts:
   customer: "410"
   supplier: "400"
@@ -176,6 +177,7 @@ default_accounts:
   sales: "707"
   internal_transfer: "58"
   current_account: "455"
+  vat: "44551"
   non_deductible: "67"
 card_categories:
   CUSTOMER: {base_account: "410", create_account: true}
@@ -185,7 +187,23 @@ card_categories:
   PURCHASE: {base_account: "60", create_account: true}
   EXPENSE: {base_account: "61", create_account: true}
 ledgers:
-  - {kind: purchase, code: "A01", receipt_prefix: "A-", receipt_padding: 5, default_account: null}
-  - {kind: sale, code: "V01", receipt_prefix: "V-", receipt_padding: 5, default_account: null}
-  - {kind: financial, code: "F01", receipt_prefix: "F-", receipt_padding: 5, default_account: "510001"}
-  - {kind: misc, code: "O01", receipt_prefix: "O-", receipt_padding: 5, default_account: null}
+  - {kind: purchase, code: "A01", receipt_prefix: "A-", receipt_padding: 5, bank_account: null}
+  - {kind: sale, code: "V01", receipt_prefix: "V-", receipt_padding: 5, bank_account: null}
+  - {kind: financial, code: "F01", receipt_prefix: "F-", receipt_padding: 5, bank_account: "510001"}
+  - {kind: misc, code: "O01", receipt_prefix: "O-", receipt_padding: 5, bank_account: null}
+vat_accounts:
+  "NOR": ["445661", "44571"]
+  "TR55": ["445662", "44572"]
+  "TP021": ["445663", "44573"]
+  "DNOR": ["4456603", "445703"]
+  "DR": ["4456605", "445705"]
+  "DPRS": ["4456607", "445707"]
+  "DOM1": ["4456606", "445706"]
+  "COR13": ["44566010", "4457010"]
+  "COR09": ["44566013", "4457013"]
+  "EXP": ["44566018", "4457018"]
+  "INTL": ["44566020", "4457020"]
+  "INTS": ["44566015", "4457015"]
+  "FRANC": ["44566017", "4457017"]
+  "AUTOL": ["44566019", "4457019"]
+  "INT": ["445661", "44571"]

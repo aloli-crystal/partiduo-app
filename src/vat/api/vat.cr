@@ -97,16 +97,18 @@ module Partiduo
         end
       end
 
-      # Modifie un taux. Le taux lui-même ne change pas une fois cité (une
-      # fiche, une écriture, une facture le référencent) : on crée un nouveau
-      # taux et on désactive l'ancien.
+      # Modifie un taux. Ce qui qualifie les pièces qui le citent (une fiche,
+      # une écriture, une facture) ne change plus une fois le taux cité :
+      # taux, code, catégorie UNCL5305, motif d'exonération, autoliquidation
+      # et exigibilité (D-REF-009). On crée un nouveau taux et on désactive
+      # l'ancien ; libellé, description et activation restent libres.
       def self.update_rate(actor : Actor, id : Int64, input : RateInput) : Result(RateView)
         Guard.authorize!(actor, "vat.rate.write", module_code: "VAT")
         Transaction.run do
           rate = Partiduo::Vat::Rate.all.lock.filter(id: id).first || raise NotFound.new("vat_rate", id)
           values = Partiduo::Vat::RateRules.normalize(input)
           errors = Partiduo::Vat::RateRules.validate(values, id)
-          if errors.empty? && (values.rate != rate.rate || values.code != rate.code) && referenced?(id)
+          if errors.empty? && qualifying_change?(rate, values) && referenced?(id)
             errors << Partiduo::Vat::RateRules.error("rate", "in_use")
           end
           next Result(RateView).failure(errors) unless errors.empty?
@@ -149,6 +151,12 @@ module Partiduo
           created << input.code
         end
         created
+      end
+
+      private def self.qualifying_change?(rate : Partiduo::Vat::Rate, values : Partiduo::Vat::RateRules::Values) : Bool
+        values.rate != rate.rate || values.code != rate.code || values.category != rate.category ||
+          values.exemption_code != rate.exemption_code.to_s || values.reverse_charge != rate.reverse_charge ||
+          values.sale_on_payment != rate.sale_on_payment || values.purchase_on_payment != rate.purchase_on_payment
       end
 
       private def self.referenced?(id : Int64) : Bool

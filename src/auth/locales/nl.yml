@@ -56,7 +56,9 @@ nl:
         expired: "De aanvraag is verlopen; meld u opnieuw aan."
         invalid_code: "Onjuiste code."
         locked: "Account geblokkeerd na te veel mislukte pogingen. Vraag een deblokkeerlink aan of neem contact op met de beheerder."
-        throttled: "Te veel pogingen: probeer het over %{seconds} seconden opnieuw."
+        throttled:
+          one: "Te veel pogingen: probeer het over %{count} seconde opnieuw."
+          other: "Te veel pogingen: probeer het over %{count} seconden opnieuw."
       passkey:
         challenge: "De aanvraag is verlopen; begin opnieuw."
         invalid: "De toegangssleutel kon niet worden geverifieerd."

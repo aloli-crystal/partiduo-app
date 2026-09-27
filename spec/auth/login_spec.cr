@@ -50,7 +50,7 @@ describe "Connexion par mot de passe et limitation des tentatives" do
     AuthSpec.login(password: "Mauvais42MotDePasse") # 3ᵉ échec : temporisation
     throttled = AuthSpec.login                      # même le bon mot de passe est refusé sans examen
     throttled.error_keys.should eq(["auth.errors.login.throttled"])
-    throttled.errors.first.params["seconds"].to_i.should be > 0
+    throttled.errors.first.params["count"].to_i.should be > 0
     AuthSpec.user_model(created.user.id).failed_attempts.should eq(3)
 
     age_failures(created.user.id)

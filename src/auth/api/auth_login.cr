@@ -32,20 +32,23 @@ module Partiduo
           return login_failure("auth.errors.login.invalid_credentials")
         end
 
-        if refusal = throttled(user, "login.password", context)
-          return refusal
-        end
+        reservation, refusal = reserve_attempt(user, "login.password", context.ip)
+        return Result(LoginView).failure(refusal) if refusal
 
         unless Partiduo::Auth::Passwords.verify(user, input.password)
           return failed_attempt(user, "login.password", "auth.errors.login.invalid_credentials", context)
         end
 
         unless user.can_sign_in?
+          Partiduo::Auth::Throttle.release(user, reservation)
           Partiduo::Auth::Audit.record("login.password", "FAIL", user: user, ip: context.ip, detail: "access_denied")
           return login_failure("auth.errors.login.access_denied")
         end
 
         if second_factor_needed?(user)
+          # Mot de passe juste : la tentative est rendue, sans remettre le
+          # compteur à zéro (les échecs du second facteur continuent de compter).
+          Partiduo::Auth::Throttle.release(user, reservation)
           factors = second_factors(user)
           if factors.empty?
             Partiduo::Auth::Audit.record("login.password", "FAIL", user: user, ip: context.ip, detail: "passkey_only")
@@ -73,9 +76,8 @@ module Partiduo
         user = pending.try(&.user)
         return login_failure("auth.errors.login.expired") if pending.nil? || user.nil?
 
-        if refusal = throttled(user, "login.second_factor", context)
-          return refusal
-        end
+        _reservation, refusal = reserve_attempt(user, "login.second_factor", context.ip)
+        return Result(LoginView).failure(refusal) if refusal
 
         method, accepted = case input.kind
                            when "totp"          then {"totp", Partiduo::Auth::Totp.verify!(user, input.code)}
@@ -83,6 +85,7 @@ module Partiduo
                            else                      {"", false}
                            end
         return failed_attempt(user, "login.second_factor", "auth.errors.login.invalid_code", context, "code") unless accepted
+        Partiduo::Auth::Throttle.record_success(user) # les deux facteurs sont prouvés
 
         claimed = Partiduo::Auth::Challenges.consume(PENDING_PURPOSE, input.pending_token)
         return login_failure("auth.errors.login.expired") if claimed.nil?
@@ -202,12 +205,15 @@ module Partiduo
       end
 
       # Jeton de remise à zéro du mot de passe, à envoyer par courriel par
-      # l'interface. `nil` si l'adresse est inconnue — l'interface affiche la
-      # même réponse dans les deux cas.
+      # l'interface, à l'adresse *enregistrée* (`TokenView#email`). `nil` si
+      # l'adresse est inconnue, ou si un jeton a été émis il y a moins de
+      # `Tokens::REQUEST_INTERVAL` — l'interface affiche la même réponse dans
+      # tous les cas.
       def self.request_password_reset(actor : Actor, email : String) : TokenView?
         Guard.require_module!("AUTH")
         user = Partiduo::Auth::User.filter(email: normalize_email(email)).first
         return if user.nil? || !user.can_sign_in?
+        return if Partiduo::Auth::Tokens.recently_issued?(user, "password_reset")
         token_view(user, "password_reset", Partiduo::Auth::Config::RESET_TTL)
       end
 
@@ -239,6 +245,7 @@ module Partiduo
         Guard.require_module!("AUTH")
         user = Partiduo::Auth::User.filter(email: normalize_email(email)).first
         return if user.nil? || !user.locked?
+        return if Partiduo::Auth::Tokens.recently_issued?(user, "unlock")
         token_view(user, "unlock", Partiduo::Auth::Config::UNLOCK_TTL)
       end
 
@@ -298,14 +305,11 @@ module Partiduo
         session = Partiduo::Auth::Sessions.find(session_token)
         return Result(SessionView).failure(FieldError.base("auth.errors.login.expired")) if session.nil?
         user = session.user!
-        if wait = Partiduo::Auth::Throttle.retry_after(user)
-          return Result(SessionView).failure(FieldError.base("auth.errors.login.throttled", {"seconds" => wait.total_seconds.ceil.to_i.to_s}))
-        end
-        return Result(SessionView).failure(FieldError.base("auth.errors.login.locked")) if user.locked?
+        _reservation, refusal = reserve_attempt(user, "session.elevate")
+        return Result(SessionView).failure(refusal) if refusal
         unless Partiduo::Auth::Totp.verify!(user, code)
-          Partiduo::Auth::Throttle.record_failure(user)
-          Partiduo::Auth::Audit.record("session.elevate", "FAIL", user: user, detail: "totp")
-          return Result(SessionView).failure(FieldError.new("code", "auth.errors.login.invalid_code"))
+          locked = confirm_failed_attempt(user, "session.elevate", detail: "totp")
+          return Result(SessionView).failure(locked || FieldError.new("code", "auth.errors.login.invalid_code"))
         end
         Partiduo::Auth::Throttle.record_success(user)
         raise_level(session, Partiduo::Auth::Levels::TWO_FACTOR, "totp")
@@ -348,26 +352,39 @@ module Partiduo
         Result(LoginView).failure(FieldError.base(key, params))
       end
 
-      # Refus sans examen du secret : compte bloqué, ou temporisation en cours.
-      private def self.throttled(user : Partiduo::Auth::User, action : String, context : LoginContext) : Result(LoginView)?
-        if user.locked?
-          Partiduo::Auth::Audit.record(action, "FAIL", user: user, ip: context.ip, detail: "locked")
-          return login_failure("auth.errors.login.locked")
+      # Réserve une tentative avant tout examen du secret (`Throttle.reserve`,
+      # D-AUTH-012). Refus consigné, sans examen : compte bloqué, ou
+      # temporisation en cours.
+      protected def self.reserve_attempt(user : Partiduo::Auth::User, action : String,
+                                         ip : String = "") : {Partiduo::Auth::Throttle::Reservation, FieldError?}
+        reservation = Partiduo::Auth::Throttle.reserve(user)
+        return {reservation, nil} if reservation.granted
+        if reservation.locked
+          Partiduo::Auth::Audit.record(action, "FAIL", user: user, ip: ip, detail: "locked")
+          return {reservation, FieldError.base("auth.errors.login.locked")}
         end
-        if wait = Partiduo::Auth::Throttle.retry_after(user)
-          Partiduo::Auth::Audit.record(action, "FAIL", user: user, ip: context.ip, detail: "throttled")
-          return login_failure("auth.errors.login.throttled", {"seconds" => wait.total_seconds.ceil.to_i.to_s})
-        end
-        nil
+        Partiduo::Auth::Audit.record(action, "FAIL", user: user, ip: ip, detail: "throttled")
+        seconds = Math.max(1, (reservation.wait || 1.second).total_seconds.ceil.to_i)
+        {reservation, FieldError.base("auth.errors.login.throttled", {"count" => seconds.to_s})}
+      end
+
+      # Secret faux : l'échec réservé est confirmé et consigné. Au blocage,
+      # toutes les sessions de l'utilisateur sont coupées ; renvoie alors
+      # l'erreur `locked`.
+      protected def self.confirm_failed_attempt(user : Partiduo::Auth::User, action : String, ip : String = "",
+                                                detail : String? = nil) : FieldError?
+        count = Partiduo::Auth::Throttle.confirm_failure(user)
+        Partiduo::Auth::Audit.record(action, "FAIL", user: user, ip: ip, detail: detail || "attempt #{count}")
+        return unless user.locked?
+        Partiduo::Auth::Audit.record("account.lock", "FAIL", user: user, ip: ip, detail: "#{count} échecs")
+        Partiduo::Auth::Sessions.revoke_all(user)
+        FieldError.base("auth.errors.login.locked")
       end
 
       private def self.failed_attempt(user : Partiduo::Auth::User, action : String, key : String,
                                       context : LoginContext, field : String = FieldError::BASE) : Result(LoginView)
-        count = Partiduo::Auth::Throttle.record_failure(user)
-        Partiduo::Auth::Audit.record(action, "FAIL", user: user, ip: context.ip, detail: "attempt #{count}")
-        if user.locked?
-          Partiduo::Auth::Audit.record("account.lock", "FAIL", user: user, ip: context.ip, detail: "#{count} échecs")
-          return login_failure("auth.errors.login.locked")
+        if locked = confirm_failed_attempt(user, action, context.ip)
+          return Result(LoginView).failure(locked)
         end
         Result(LoginView).failure(FieldError.new(field, key))
       end
@@ -430,7 +447,13 @@ module Partiduo
 
       private def self.token_view(user : Partiduo::Auth::User, purpose : String, ttl : Time::Span) : TokenView
         token, raw = Partiduo::Auth::Tokens.issue(user, purpose, ttl)
-        TokenView.new(user.pk!.as(Int64), purpose, raw, token.expires_at!)
+        settings = begin
+          Partiduo::Api::Core.settings(Actor.system)
+        rescue NotFound
+          nil
+        end
+        TokenView.new(user.pk!.as(Int64), purpose, raw, token.expires_at!, user.email.to_s, user.locale.to_s,
+          settings.try(&.domain.presence) || Partiduo::Config.domain, settings.try(&.country_code) || "")
       end
 
       private def self.store_password(user : Partiduo::Auth::User, password : String) : Nil

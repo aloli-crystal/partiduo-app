@@ -123,7 +123,9 @@ module Partiduo
         receipt_padding : Int32,
         last_receipt_number : Int64,
         currency_code : String,
-        access : LedgerAccess do
+        access : LedgerAccess,
+        bank_card_id : Int64? = nil,
+        bank_card_code : String? = nil do
         # Numéro de la prochaine pièce (`Acc_Ledger::guess_pj`), sans le réserver.
         def next_receipt : String
           Partiduo::Accounting::Receipts.format(receipt_prefix, receipt_padding, last_receipt_number + 1)
@@ -132,10 +134,14 @@ module Partiduo
 
       # Saisie d'un journal. `code` : `nil` ou vide = attribué comme NOALYSS
       # (initiale du type puis rang en base 36 : `A01`, `V02`…).
-      # `default_account` : numéro du compte par défaut, obligatoire pour un
-      # journal financier (compte de la banque ou de la caisse).
+      # `default_account` : numéro du compte par défaut d'un journal d'achats,
+      # de ventes ou d'opérations diverses ; ignoré pour un journal financier.
+      # `bank_card` : quick code de la fiche Banque (catégorie de nature
+      # `bank`) d'un journal financier, obligatoire pour lui (`jrn_def_bank`,
+      # D-ACC-010) ; le compte du journal est celui de la fiche.
       # `next_receipt_number` : repositionne la numérotation des pièces
-      # (`jrn_def_pj_seq`) ; `nil` = inchangée.
+      # (`jrn_def_pj_seq`) ; `nil` = inchangée. `currency_code` : `nil` = la
+      # devise de tenue du dossier (`Partiduo::Api::Core.base_currency`).
       record LedgerInput,
         name : String,
         kind : LedgerKind,
@@ -146,7 +152,18 @@ module Partiduo
         receipt_prefix : String = "",
         receipt_padding : Int32 = 0,
         next_receipt_number : Int64? = nil,
-        currency_code : String = "EUR"
+        currency_code : String? = nil,
+        bank_card : String? = nil
+
+      # Comptes de TVA d'un taux du socle (`tva_rate.tva_poste`) : compte de
+      # TVA déductible (achats) et de TVA collectée (ventes).
+      record VatRateAccountsView, vat_rate_id : Int64, vat_rate_code : String,
+        deductible_account : AccountView?, collected_account : AccountView?
+
+      # Saisie des comptes de TVA d'un taux, par numéro ; les deux sont
+      # obligatoires pour un taux autoliquidé.
+      record VatRateAccountsInput, vat_rate_id : Int64, deductible_account : String? = nil,
+        collected_account : String? = nil
 
       # --- Fiches et catégories ------------------------------------------------
 

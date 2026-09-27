@@ -56,7 +56,9 @@ en:
         expired: "The request has expired; sign in again."
         invalid_code: "Incorrect code."
         locked: "Account locked after too many failures. Request an unlock link or contact the administrator."
-        throttled: "Too many attempts: try again in %{seconds} seconds."
+        throttled:
+          one: "Too many attempts: try again in %{count} second."
+          other: "Too many attempts: try again in %{count} seconds."
       passkey:
         challenge: "The request has expired; start again."
         invalid: "The passkey could not be verified."

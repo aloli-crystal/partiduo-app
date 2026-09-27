@@ -69,6 +69,7 @@ fr:
       vat_deductible_tax: "TVA déductible par l'impôt"
       private_expense: "Dépenses à charge du gérant"
     initial_data:
+      bank_card: "Banque"
       ledgers:
         purchase:
           name: "Achats"
@@ -116,7 +117,12 @@ fr:
         default_account:
           not_found: "Le compte %{number} n'existe pas."
           not_direct_use: "Le compte %{number} ne peut pas être utilisé directement."
-          required: "Un journal financier a un compte de banque ou de caisse."
+        bank_card:
+          required: "Un journal financier cite la fiche de sa banque ou de sa caisse."
+          not_found: "Aucune fiche ne porte le code %{code}."
+          not_bank: "La fiche %{code} n'est pas une fiche de banque."
+          no_account: "La fiche %{code} n'est rattachée à aucun compte."
+          not_direct_use: "Le compte %{number} de la fiche %{code} ne peut pas être utilisé directement."
         receipt_prefix:
           too_long: "Le préfixe compte au plus %{max} caractères."
         receipt_padding:
@@ -131,6 +137,13 @@ fr:
           invalid: "Usage de compte par défaut inconnu."
         account:
           not_found: "Le compte %{number} n'existe pas."
+      vat_rate_account:
+        vat_rate_id:
+          not_found: "Ce taux de TVA n'existe pas."
+        account:
+          not_found: "Le compte %{number} n'existe pas."
+          not_direct_use: "Le compte %{number} ne peut pas être utilisé directement."
+          required: "Un taux autoliquidé a un compte de TVA déductible et un compte de TVA collectée."
       card_account:
         card_id:
           not_found: "Cette fiche n'existe pas."

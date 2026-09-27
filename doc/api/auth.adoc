@@ -22,9 +22,11 @@ que ce contrat : elle garde le jeton de session dans un cookie, affiche les
 3 passkey avec vérification de l'utilisateur. Le 3 ne s'empile pas sur le 2.
 
 |Niveau exigé
-|`max(Core::Settings#auth_minimum_level, 3 si comptable)`. Session en dessous :
-acteur authentifié *sans aucune permission* ; il peut seulement enrôler une
-méthode ou élever sa session.
+|`max(Core::Settings#auth_minimum_level, 3 si comptable)`. Session en dessous
+(ou session d'enrôlement) : acteur authentifié, `elevated` faux, *sans aucune
+permission* ; `Guard.authorize!` le refuse même sans permission citée ; seules
+les opérations de son compte (`Guard.authorize_account!` : sécurité du
+compte, enrôlement, menu, liste des modules) lui restent ouvertes (D-AUTH-013).
 
 |Mot de passe
 |`password-policy`, préréglage « 14 caractères sans caractère spécial
@@ -35,11 +37,17 @@ exige un second facteur.
 |Tentatives
 |Temporisation à partir du 3ᵉ échec (5 s, doublée, plafond 15 min), blocage au
 10ᵉ ; déblocage par l'administrateur, par jeton, ou par remise à zéro du mot
-de passe.
+de passe. Chaque tentative est *réservée* en base, de façon atomique, avant
+l'examen du secret : des requêtes simultanées n'examinent pas plus de secrets
+que la temporisation n'en admet (D-AUTH-012). Même règle pour le mot de passe
+actuel (`change_password`) et le code de `disable_totp`. Au blocage, toutes
+les sessions sont coupées.
 
 |TOTP
 |RFC 6238 par défaut : SHA-1, 6 chiffres, 30 s ; QR code *et* secret base32 ;
-anti-rejeu par `last_otp_counter`.
+anti-rejeu par `last_otp_counter`, enregistré par une mise à jour
+conditionnelle (un même code n'est accepté qu'une fois, même sous des
+requêtes simultanées).
 
 |Passkeys
 |ES256 et RS256, credential découvrable, vérification exigée, attestation
@@ -49,6 +57,14 @@ anti-rejeu par `last_otp_counter`.
 |Fédération (D3)
 |SAML intégré, OIDC par la même interface d'adaptateur. Identité
 (`provider` + `subject`) rattachée par la société ; pas d'auto-provisionnement.
+SAML : confirmation `bearer` de l'assertion signée (requête, destinataire,
+échéance) et identifiant d'assertion à usage unique (D-AUTH-014).
+
+|Sessions
+|Un changement de sécurité coupe les *autres* sessions : mot de passe changé,
+TOTP désactivé, passkey retirée (la session courante reste) ; mot de passe,
+adresse, rôle ou profil changés par l'administrateur, remise à zéro du mot de
+passe, blocage : toutes.
 
 |Comptable (D4)
 |Rôle `accountant` : nominatif, niveau 3, sans permission administrative
@@ -116,10 +132,11 @@ Les octets passent en base64url, tels que les renvoie le navigateur.
 
 [source]
 ----
-enrollment = Partiduo::Api::Auth.begin_totp_enrollment(actor)
+enrollment = Partiduo::Api::Auth.begin_totp_enrollment(actor)   # commande (POST) ; niveau 2 si un TOTP est actif
 # enrollment.qr_code.modules[y][x] (vrai = sombre, ajouter 4 modules de marge),
 # enrollment.secret_base32, enrollment.provisioning_uri
-codes = Partiduo::Api::Auth.confirm_totp_enrollment(actor, code).value!.codes
+Partiduo::Api::Auth.pending_totp_enrollment(actor)          # requête : secret en attente, ou nil
+codes = Partiduo::Api::Auth.confirm_totp_enrollment(actor, code).value!.codes  # niveau 2 si un TOTP est actif
 Partiduo::Api::Auth.disable_totp(actor, code)              # niveau 2
 Partiduo::Api::Auth.regenerate_recovery_codes(actor)       # niveau 2
 ----
@@ -158,7 +175,11 @@ mot de passe (`change_password` sans mot de passe actuel).
 |Rouvre l'accès d'un utilisateur qui a perdu ses moyens (D7).
 
 |`request_password_reset(anonymous, email)` → `TokenView?`, `reset_password(anonymous, jeton, mot de passe)`
-|Jeton d'une heure ; lève aussi un blocage et coupe les sessions.
+|Jeton d'une heure ; lève aussi un blocage et coupe les sessions. `TokenView`
+porte l'adresse *enregistrée* (`email`, seule destinataire), la langue
+(`locale`), le nom d'hôte configuré de l'instance (`domain`, base du lien) et
+le pays (`country_code`). `nil` aussi si un jeton de même usage a moins de
+deux minutes (`Tokens::REQUEST_INTERVAL`).
 
 |`request_unlock(anonymous, email)` → `TokenView?`, `unlock_with_token(anonymous, jeton)`
 |Déblocage par courriel d'un compte bloqué.
@@ -187,8 +208,9 @@ Chaque fonction prend l'acteur en premier argument, sauf `actor(jeton)` et
 |`Actor`, `SessionView?`, `Result(SessionView)`
 
 |`security_overview`, `dismiss_passkey_prompt`, `change_password`, `begin_totp_enrollment`,
-`confirm_totp_enrollment`, `begin_passkey_registration`, `finish_passkey_registration`, `rename_passkey`
-|authentifié
+`pending_totp_enrollment`, `confirm_totp_enrollment`, `begin_passkey_registration`,
+`finish_passkey_registration`, `rename_passkey`
+|authentifié, même sous le niveau exigé (`begin_`/`confirm_totp_enrollment` : niveau 2 si un TOTP est déjà actif)
 |vues, `Result`
 
 |`disable_totp`, `regenerate_recovery_codes`, `remove_passkey`

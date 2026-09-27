@@ -35,14 +35,14 @@ module Partiduo
       # Pièces enregistrées (socle, modules, extensions) et leur état.
       # Tout utilisateur authentifié peut les lire.
       def self.list(actor : Actor) : Array(ModuleView)
-        Guard.authorize!(actor, nil, module_code: MODULE_CODE)
+        Guard.authorize_account!(actor, module_code: MODULE_CODE)
         active_codes = Partiduo::Modules::State.active_codes
         Partiduo::Modules.manifests.values.map { |manifest| view(manifest, active_codes) }
       end
 
       # Une pièce ; `NotFound` si le code est inconnu.
       def self.get(actor : Actor, code : String) : ModuleView
-        Guard.authorize!(actor, nil, module_code: MODULE_CODE)
+        Guard.authorize_account!(actor, module_code: MODULE_CODE)
         manifest = Partiduo::Modules[code.upcase]? || raise NotFound.new("module", code)
         view(manifest, Partiduo::Modules::State.active_codes)
       end
@@ -108,7 +108,7 @@ module Partiduo
       # profil (ADR-003 D4). Le catalogue n'est pas confidentiel (il découle
       # des manifestes) : tout utilisateur authentifié peut le lire.
       def self.permissions(actor : Actor) : Array(PermissionView)
-        Guard.authorize!(actor, nil, module_code: MODULE_CODE)
+        Guard.authorize_account!(actor, module_code: MODULE_CODE)
         Partiduo::Modules.active_manifests.flat_map(&.permission_entries).map do |entry|
           PermissionView.new(entry.name, entry.label, entry.module_code)
         end
@@ -118,7 +118,7 @@ module Partiduo
       # en arbre, triées par ordre. Une rubrique sans route ni enfant visible
       # est omise (ADR-005 : seuls les modules actifs apparaissent).
       def self.menu(actor : Actor) : Array(MenuView)
-        Guard.authorize!(actor, nil, module_code: MODULE_CODE)
+        Guard.authorize_account!(actor, module_code: MODULE_CODE)
         menus = Partiduo::Modules.active_menus.select do |entry|
           (permission = entry.permission).nil? || actor.can?(permission)
         end

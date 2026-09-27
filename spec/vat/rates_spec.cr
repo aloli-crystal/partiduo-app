@@ -76,6 +76,11 @@ describe "Partiduo::Api::Vat — taux de TVA (tva_rate)" do
     result = Api.update_rate(writer, rate.id, input("NOR", "20", label: "Ancien"))
     result.error_keys.should eq(["vat.errors.rate.rate.in_use"])
     R.expect_translated(result)
+    # Ni l'exigibilité, ni l'autoliquidation, ni la catégorie (D-REF-009).
+    Api.update_rate(writer, rate.id, input("NOR", "19.6", label: "Ancien", sale_on_payment: true)).error_keys
+      .should eq(["vat.errors.rate.rate.in_use"])
+    Api.update_rate(writer, rate.id, input("NOR", "19.6", label: "Ancien", category: "AE",
+      exemption_code: "VATEX-EU-AE", reverse_charge: true)).error_keys.should eq(["vat.errors.rate.rate.in_use"])
     # Le libellé et l'activation restent modifiables.
     Api.update_rate(writer, rate.id, input("NOR", "19.6", label: "TVA 19,6 %", enabled: false)).value!.enabled.should be_false
     Api.rates(writer).should be_empty

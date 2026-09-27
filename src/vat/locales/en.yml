@@ -36,6 +36,7 @@ en:
         dnor: "VAT 8.5% overseas"
         dr: "VAT 2.1% overseas"
         dprs: "VAT 1.05% overseas (press)"
+        dom1: "VAT 1.75% overseas"
         cor13: "VAT 13% Corsica"
         cor09: "VAT 0.9% Corsica"
         exp: "Export outside the EU"

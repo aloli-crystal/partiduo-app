@@ -72,9 +72,12 @@ est interne et peut changer.
 * *Contrôle d'accès en première ligne* :
   `Guard.authorize!(actor, "<permission>", module_code: "<CODE>")`. Il lève
   `ModuleDisabled` si le module est inactif, `Forbidden` si l'acteur n'est pas
-  authentifié ou n'a pas la permission. `permission: nil` = « tout utilisateur
-  authentifié », à écrire explicitement. Une permission non déclarée dans un
-  manifeste lève `ArgumentError`.
+  authentifié, si sa session n'a pas le niveau exigé (`actor.elevated` faux)
+  ou s'il n'a pas la permission. `permission: nil` = « tout utilisateur
+  authentifié et élevé », à écrire explicitement. Les opérations du compte de
+  l'acteur (sécurité, enrôlement, menu) utilisent
+  `Guard.authorize_account!` (D-AUTH-013). Une permission non déclarée dans
+  un manifeste lève `ArgumentError`.
 * *Entrées* : `record XxxInput` (ou `struct` avec valeurs par défaut),
   montants en `BigDecimal`, références par identifiant (`Int64`) ou par code
   métier (compte, quick code).
@@ -85,8 +88,10 @@ est interne et peut changer.
   `Partiduo::Api::NotFound`.
 * *Commandes* : `def self.xxx(actor, input) : Result(XxxView)` (ou
   `Result(Nil)`), corps dans `Partiduo::Api::Transaction.run { … }` : un échec
-  ou une exception annule tout. Un seul point d'entrée par opération métier ;
-  une commande n'en appelle pas une autre.
+  ou une exception annule tout. Un seul point d'entrée par opération métier.
+  Une commande appelée dans une autre (chargeur de données initiales, abonné
+  d'événement) s'exécute dans un point de sauvegarde et renvoie son
+  `Result` à l'appelant (D-024).
 * *Erreurs de validation* : `Result(T).failure([FieldError…])`, avec
   `FieldError.new("<chemin>", "<clé i18n>", {"param" => "valeur"})`. Chemins :
   `"date"`, `"lines[2].amount"`, `FieldError::BASE` (`"base"`) pour
@@ -379,6 +384,11 @@ Exemple : compteur de clics de la page d'accueil (`opal/demo.rb`), monté par
 Opal partagé dans un fichier séparé (`opal.js` + paquets `--no-opal`) :
 780 Ko par écran aujourd'hui, à reconsidérer quand plusieurs écrans Opal
 cohabiteront sur une même page.
+
+
+*Complément (relecture des lots P, 0 et 1).* Le runtime d'Opal est désormais
+dans un paquet commun `runtime.js`, chargé avant le paquet de l'écran
+(D-UI-023).
 
 === D-014 — Garde-fou de l'interface : `Partiduo::Api` plus la composition (lot P, ui-squelette)
 
@@ -1231,6 +1241,11 @@ d'ordre 20, après la devise de tenue et les catégories de fiches du socle) :
 démonstration et les anomalies passeraient dans chaque instance. Des
 migrations de données : contraire à la convention C6.
 
+*Complément (relecture des lots P, 0 et 1).* Types erronés corrigés par une
+table explicite du script (D-ACC-008) ; `44551` « TVA à décaisser » ajouté au
+plan FR, compte par défaut `vat` (164 comptes) ; journal `F01` rattaché à une
+fiche Banque (D-ACC-010) ; comptes de TVA des taux (D-ACC-009).
+
 === D-ACC-004 — Journaux : champs repris, numérotation des pièces, devise (lot 1, comptabilité-référentiel)
 
 *Contexte.* `jrn_def` porte aussi des réglages de saisie (lignes minimales,
@@ -1257,6 +1272,12 @@ lignes `auth_ledger_access` qui le citent (sans objet, sans clé étrangère).
 *Alternative écartée.* Une séquence par journal : non transactionnelle,
 interdite pour une numérotation continue (convention C3). Une clé étrangère
 vers `core_currency` : lierait les migrations des deux périmètres.
+
+*Complément (relecture des lots P, 0 et 1).* Le « compte par défaut
+obligatoire d'un journal financier, successeur de `jrn_def_bank` » est
+remplacé par la fiche Banque (D-ACC-010) : `jrn_def_bank` est un `f_id`. La
+devise absente de la saisie est la devise de tenue du dossier, résolue par le
+cœur (`LedgerInput#currency_code` devient `String?`).
 
 === D-ACC-005 — Droits par journal côté Comptabilité (lot 1, comptabilité-référentiel)
 
@@ -1480,6 +1501,12 @@ traduits dans la langue du dossier. Exigibilité à l'opération par défaut.
 attend un pourcentage (BT-119), et deux conventions dans le même code
 finissent en erreur d'un facteur 100.
 
+*Complément (relecture des lots P, 0 et 1).* Un taux cité ne change plus non
+plus de catégorie UNCL5305, de motif d'exonération, d'autoliquidation ni
+d'exigibilité (`rate.in_use`) : ces champs requalifieraient les pièces qui le
+citent. Le taux DOM de 1,75 % (`DOM1`, art. 296 CGI) est ajouté au jeu
+français (15 taux).
+
 === D-REF-010 — Exercices et périodes (lot 1, socle-référentiel)
 
 *Contexte.* `parm_periode` porte l'exercice en colonne (`p_exercice`,
@@ -1502,6 +1529,10 @@ Comptabilité, qui lit les périodes par le contrat.
 
 *Alternative écartée.* Garder l'exercice en colonne des périodes : pas de
 clôture d'exercice, libellé dupliqué sur chaque période.
+
+*Complément (relecture des lots P, 0 et 1).* `core_period_guard` refuse aussi
+de déplacer une période, même ouverte, vers un exercice clos ou hors d'un
+exercice clos (migration `core 0003`).
 
 === D-REF-011 — Devises : devise de tenue, cours datés (lot 1, socle-référentiel)
 
@@ -1827,3 +1858,298 @@ trancher avec les specs qui changent de configuration par
 *Alternative écartée.* Appliquer l'amendement maintenant : change le sens de
 D-018 et le comportement de nombreuses specs, hors du périmètre d'une
 vérification.
+
+== Relecture des lots P, 0 et 1 (27 septembre 2026)
+
+=== D-AUTH-012 — Réservation atomique des tentatives (relecture)
+
+*Contexte.* La limitation lisait `failed_attempts` sur l'utilisateur chargé
+en début de requête puis n'enregistrait l'échec qu'après la vérification du
+secret : N requêtes simultanées examinaient N secrets avant qu'un échec soit
+compté (TOTP en rafale derrière un jeton de second facteur, mots de passe en
+parallèle), ce qui ruinait la temporisation qui fonde le palier CNIL à
+50 bits. `change_password` et `disable_totp` ne consultaient même pas la
+temporisation, et le blocage ne coupait pas les sessions (`can_sign_in?`
+ignore `locked_at`).
+
+*Choix.* `Throttle.reserve` : une seule instruction SQL (ligne verrouillée
+par `SELECT … FOR UPDATE` dans une CTE) incrémente `failed_attempts` *avant*
+l'examen du secret, seulement si le compte n'est pas bloqué et si la
+temporisation est écoulée ; sinon refus sans écriture (`locked` ou
+`throttled`, secondes restantes). Secret faux : `confirm_failure` (blocage au
+10ᵉ, audit, toutes les sessions révoquées). Secret juste :
+`record_success` (remise à zéro) ou, pour une étape intermédiaire (mot de
+passe juste, second facteur encore attendu ; compte sans accès ; mot de passe
+actuel de `change_password`), `release` (compteur et date du dernier échec
+rendus). Même garde pour la connexion par mot de passe, le second facteur,
+l'élévation par TOTP, `change_password` et `disable_totp`. Spec : 20
+connexions simultanées n'examinent que 3 mots de passe.
+
+*Sessions.* Un changement de sécurité coupe les autres sessions :
+`change_password`, `disable_totp`, `remove_passkey` gardent la session
+courante (`Actor#session_id`) ; `update_user` coupe tout quand le mot de
+passe, l'adresse, le rôle ou le profil change.
+
+*Alternative écartée.* `SELECT … FOR UPDATE` autour de vérification et
+enregistrement : tient une connexion et un verrou pendant le calcul BCrypt,
+et sérialise même les requêtes légitimes.
+
+=== D-AUTH-013 — Acteur « élevé » et opérations du compte (relecture)
+
+*Contexte.* `Guard.authorize!(actor, nil)` admettait tout acteur authentifié,
+y compris la session d'enrôlement (niveau 0) et une session sous le niveau
+exigé : elles lisaient la configuration de la société (politique
+d'authentification comprise), les exercices, les devises. Contraire à
+ADR-002 D2/D6 et à D-AUTH-003.
+
+*Choix.* `Actor#elevated` (posé par `Sessions.actor` : niveau > 0 et ≥ niveau
+exigé ; vrai par défaut pour `Actor.user`, pour les outils et les specs).
+`Guard.authorize!` le refuse s'il est faux, même sans permission citée.
+`Guard.authorize_account!` (authentifié seulement) sert aux opérations du
+compte (`auth_account.cr`, `ledger_access`) et à `Api::Modules.list/get/
+permissions/menu`, `Api::Core.instance` (non confidentiels, utiles à la
+coquille). La coquille de l'interface tolère alors l'absence de société.
+`Actor#session_id` identifie la session d'où vient l'acteur. Rupture du
+contrat : `API_VERSION` 0.2.0.
+
+*Alternative écartée.* Laisser `nil` ouvert et vérifier le niveau commande par
+commande : un oubli rouvre la faille.
+
+=== D-AUTH-014 — SAML : confirmation du sujet et anti-rejeu (relecture)
+
+*Contexte.* `InResponseTo` n'était contrôlé que sur `Response`, qui peut ne
+pas être signée : une assertion signée interceptée pouvait être remballée
+dans une réponse forgée pour la requête de l'attaquant.
+
+*Choix.* Exiger dans l'assertion signée un `SubjectConfirmation` `bearer`
+dont `SubjectConfirmationData` porte `InResponseTo` = la requête,
+`Recipient` = l'adresse de retour, `NotOnOrAfter` à venir (±60 s). Retenir
+l'`ID` de chaque assertion consommée (défi `saml.assertion`, empreinte de
+« fournisseur:ID », jusqu'à `NotOnOrAfter`) et refuser un second usage.
+
+*Alternative écartée.* Table dédiée aux assertions : `auth_challenge` a déjà
+l'unicité, l'échéance et la purge.
+
+=== D-AUTH-015 — TOTP, jetons et défis : compléments de sécurité (relecture)
+
+*Choix.*
+
+* Anti-rejeu TOTP : `last_otp_counter` enregistré par une mise à jour
+  conditionnelle (`NULL` ou inférieur) ; le code n'est accepté que si la ligne
+  est touchée. Plus aucun `save!` de toute la ligne utilisateur dans les
+  chemins de vérification (compteur d'échecs préservé).
+* Enrôlement TOTP : remplacer un TOTP actif exige le niveau 2
+  (`begin_`/`confirm_totp_enrollment`) ; nouvelle requête
+  `pending_totp_enrollment` ; l'interface crée le secret par un POST
+  (D-UI-021).
+* Défis et jetons : purge des lignes échues depuis plus d'un jour tirée au
+  sort une fois sur 50 émissions (`Challenges::PURGE_ONE_IN`) — pas de tâche
+  planifiée à tenir dans le parc ; limitation par adresse IP des points
+  d'entrée anonymes dans l'interface (D-UI-022).
+* Remise à zéro et déblocage : `TokenView` porte l'adresse *enregistrée*, la
+  langue, le domaine configuré et le pays ; une nouvelle demande est ignorée
+  si un jeton valable de même usage a moins de deux minutes
+  (`Tokens::REQUEST_INTERVAL`).
+* Message `auth.errors.login.throttled` au pluriel (`count`) ;
+  `FieldError#message` passe un paramètre `count` entier à la règle de
+  pluriel.
+
+*Alternative écartée.* Tâche planifiée de purge : un élément de plus à
+déployer par instance (`partiduo-fleet`), pour un volume faible.
+
+=== D-024 — Commandes imbriquées : points de sauvegarde (relecture)
+
+*Contexte.* Marten rejoint la transaction ouverte : le `Rollback` d'une
+commande appelée dans une autre remontait jusqu'à la transaction extérieure,
+et l'appelant recevait « transaction interrompue sans résultat » au lieu du
+`Result` en échec (chargeurs de données initiales, futurs abonnés comme
+`invoice.issued` → écriture).
+
+*Choix.* `Transaction.run` dans une transaction ouverte pose
+`SAVEPOINT partiduo_cmd_N` : échec → `ROLLBACK TO SAVEPOINT` et le `Result`
+est renvoyé ; exception → retour au point de sauvegarde puis propagation ;
+succès → `RELEASE`. Les effets extérieurs (`Events.after_commit`) enregistrés
+dans un point de sauvegarde annulé sont abandonnés, ceux d'un point libéré
+remontent à l'appelant. Specs dans `spec/partiduo/api/transaction_spec.cr`.
+
+*Alternative écartée.* Interdire l'imbrication : contraire à ADR-006 D3
+(abonnés qui appellent le contrat d'un autre module).
+
+=== D-ACC-008 — Plans initiaux : corrections des types de compte (relecture)
+
+*Contexte.* Les types de `mod2` et `mod1` étaient recopiés tels quels :
+400 « Fournisseurs » à l'actif alors que `parm_poste` déclare `40` PAS,
+TVA collectée à l'actif et déductible au passif, 486/487 inversés,
+amortissements et dépréciations à l'actif ; un compte créé pour une fiche
+hérite du type de son compte de base (tous les fournisseurs FR à l'actif).
+
+*Choix.* Table de corrections explicite dans `scripts/chart_from_noalyss.cr`.
+FR : 400 et 419 au passif ; 409, 410 à l'actif ; 4456, 445661, 445662, 445663
+à l'actif sous 4456 ; 4457, 44571, 44572, 44573 au passif sous 4457 ; 481 et
+486 à l'actif, 487 au passif ; 491, 496, 590 et tous les 28x, 29x, 39x en
+déduction d'actif (`asset_contra`). BE : « Réduction(s) de valeur(s)
+acté(e)s » des classes 2 à 5 (2809…2919, 309…379, 409, 419, 519, 529, 539,
+5509, 5519…5599) en déduction d'actif. Spec après `load_initial_data`.
+
+*Alternative écartée.* Corriger à la main les YAML générés : perdu à la
+prochaine génération.
+
+=== D-ACC-009 — Comptes de TVA des taux (relecture)
+
+*Contexte.* `tva_rate.tva_poste` (« déductible,collectée ») n'était repris
+nulle part : la saisie achats/ventes du lot 2 n'aurait pas pu ventiler la
+TVA.
+
+*Choix.* `accounting_vat_rate_account` (`vat_rate_id` unique, clé étrangère
+vers `vat_rate` en cascade posée côté Comptabilité ; comptes déductible et
+collecté vers `accounting_account`) ; section `vat_accounts` des YAML,
+alimentée par le script depuis `tva_poste` par le code NOALYSS du taux
+(`21G` 4111/4511, `12A`←`120A`, `6A`←`60A`, `INTA`←`INT` ; FR `NOR`
+445661/44571, `TR55`, `TP021`, `DNOR`, `DR`, `DPRS`, `DOM1`, `COR13`←`COR1`,
+`COR09`←`COR4`, `EXP`, `INTL`, `INTS`, `FRANC`←`0G`, `AUTOL`←`AUT`) ; sans
+équivalent ou erroné dans le modèle : FR `INT` (10 %) sur les comptes du taux
+normal, BE `EXP` 41141/45141 (le modèle cite 45144, « cocontractants »),
+`INTL` 4114/4514, `COC` 41144/45144. Contrat : `vat_rate_accounts`,
+`vat_rate_account`, `set_vat_rate_accounts` (deux comptes obligatoires pour
+un taux autoliquidé). Chargé après `VAT.rates`. Une ligne de ce paramétrage
+n'empêche pas d'effacer un taux (cascade) : ce n'est pas un usage.
+
+*Alternative écartée.* Colonnes de comptes dans `vat_rate` : ferait
+dépendre le socle de la Comptabilité (ADR-006 D3).
+
+=== D-ACC-010 — Journal financier : fiche Banque (relecture)
+
+*Contexte.* `jrn_def_bank` est un `f_id` : NOALYSS retrouve la fiche Banque
+par quick code (`Acc_Ledger::verify_ledger`). Citer directement un compte
+perdait l'IBAN et le BIC de la fiche (rapprochement, import d'extraits) et le
+quick code de la banque en saisie.
+
+*Choix.* `accounting_ledger.bank_card_id` (clé étrangère vers `cards_card`,
+sans cascade : une fiche citée ne s'efface pas), obligatoire pour un journal
+financier (contrôle en base `NOT VALID` : les journaux d'avant restent
+lisibles). La fiche est de nature `bank` et rattachée à un compte
+utilisable directement ; le compte du journal en est *déduit*
+(`accounting_card_account`), plus stocké ; `default_account` reste pour les
+autres types. Au provisionnement : fiche « Banque » (langue du dossier) de la
+catégorie `BANK`, rattachée à 510001 (FR) ou 550 (BE), citée par `F01` ; le
+compte que l'abonné de `card.saved` avait calculé est retiré. Saisie :
+`LedgerInput#bank_card` (quick code).
+
+*Alternative écartée.* Garder le compte et le motiver : perdrait le lien avec
+les coordonnées bancaires, nécessaire aux lots 2 et 3.
+
+=== D-SKEL-005 — SKEL dépend de la Comptabilité (relecture)
+
+*Choix.* `depends_on "ACCOUNTING"` : seule la Comptabilité publie
+`entry.posted` ; activation refusée sans elle, et elle ne se désactive pas
+tant que SKEL est active (specs). L'extension de référence montre ainsi le
+bon modèle (ADR-006 D2).
+
+=== D-UI-021 — Transport : proxy HTTPS, cookies, liens des courriels (relecture)
+
+*Contexte.* Marten ne termine pas TLS : `request.secure?` était faux derrière
+le proxy, les cookies de session et de second facteur partaient sans
+`Secure`, les liens des courriels étaient bâtis en `http://` sur l'en-tête
+`Host` (choisi par le demandeur avec un `allowed_hosts` générique) et envoyés
+à l'adresse *saisie*.
+
+*Choix.* Production : `use_x_forwarded_proto = true` (le proxy nginx du parc
+pose `X-Forwarded-Proto` ; il doit être de confiance), cookies `Secure`
+toujours en production (`Current.secure_cookies?`), en-tête
+`Strict-Transport-Security` (deux ans, sous-domaines) par
+`PartiduoUi::StrictTransportSecurity` sur les réponses HTTPS. Courriels :
+destinataire = adresse enregistrée (`TokenView#email`), langue de
+l'utilisateur, lien `https://<domaine configuré>` (`TokenView#domain`), `http`
+et port du serveur seulement pour un domaine en `.localhost` ; date
+d'expiration par `Format#datetime`, fuseau nommé par la clé i18n. Enrôlement
+TOTP démarré par un POST (`/account/totp/start`), le GET n'affiche que le
+secret en attente. Route `/ext/<CODE>` sans barre finale ajoutée devant les
+autres : une route d'extension de chemin vide passe aussi par le contrôle
+d'accès.
+
+*Alternative écartée.* Terminer TLS dans Marten : le parc le fait déjà dans
+nginx (D-SET-007).
+
+=== D-UI-022 — Limitation par adresse IP des points d'entrée anonymes (relecture)
+
+*Choix.* `PartiduoUi::RateLimit` : fenêtre glissante en mémoire, par
+processus — défis de passkey 30 par 5 min, demandes de lien (remise à zéro,
+déblocage) 10 par 15 min. Au-delà : 429 JSON pour la passkey ; même page
+« Vérifiez votre messagerie » sans rien demander au cœur pour les liens.
+Adresse : `X-Real-IP` derrière le proxy de confiance, sinon celle de la
+connexion.
+
+*Alternative écartée.* Table en base : écriture à chaque requête anonyme,
+précisément ce qu'on veut borner ; un processus par instance suffit.
+
+=== D-UI-023 — Opal : paquet commun `runtime.js` (relecture)
+
+*Contexte.* Chaque paquet embarquait toute la bibliothèque d'Opal (784 Ko
+pour un compteur).
+
+*Choix.* `scripts/opal-build` produit `runtime.js` (bibliothèque de base
+d'Opal, `native`, `partiduo_ui/boot`, 781 Ko, mis en cache par le
+navigateur) et des paquets d'écran sans ces fichiers (`prerequired` du
+constructeur d'Opal) : `demo.js` 3,4 Ko. Le gabarit charge `runtime.js` puis
+le paquet de l'écran. Plafonds vérifiés par `spec/opal/build_spec.cr`
+(écran < 50 Ko, runtime < 900 Ko).
+
+*Alternative écartée.* `opal/mini` : `native` et la bibliothèque de base
+complète restent nécessaires aux futurs écrans (saisie, lettrage) ; le gain
+viendra d'une minification, sans outil Node (à reprendre si besoin).
+
+=== D-UI-024 — Accessibilité : corrections de la relecture
+
+*Choix.*
+
+* Plus d'envoi de formulaire au changement d'une liste (WCAG 3.2.2) :
+  langue, période de travail et catégorie ont un bouton « Appliquer » /
+  « Choisir » visible.
+* Raccourci de recherche Ctrl+K (⌘K) au lieu de « / » seul (WCAG 2.1.4).
+* Menu sur téléphone masqué seulement quand JavaScript est actif (`pd-js`) ;
+  sans lui, menu affiché et bouton de menu masqué.
+* Texte sur fond primaire : jeton `--pd-on-primary` (#fff clair, #0f1719
+  sombre, 7:1) ; focus sur le menu latéral : `--pd-focus-on-dark` (#7fd0e2).
+* Tableaux : liens de tri et de page à identifiant stable (focus rendu par
+  HTMX), page courante focalisable, remplacement sans défilement
+  (`show:none`) ; région d'état persistante hors de la zone remplacée ;
+  champ de tri des filtres, onglets et région d'état mis à jour hors bande
+  (`hx-select-oob`).
+* Plan comptable : étiquette « hors saisie » (pas seulement la couleur),
+  niveau de l'arbre lu par les technologies d'assistance, retrait et niveau
+  omis quand la liste est triée sur une autre colonne.
+* Secret TOTP : libellé en texte masqué (plus d'`aria-label` sur un `<p>`).
+
+=== D-UI-025 — Nombres saisis selon la langue (relecture)
+
+*Contexte.* `Format.parse_decimal` retenait le dernier séparateur comme
+décimal quelle que soit la langue : « 1,234 » en anglais valait 1,234, et un
+attribut numérique réaffiché « 1.234 » (nl) était relu 1,234.
+
+*Choix.* `Format#parse_decimal` (méthode d'instance) : seul le séparateur
+décimal de la langue est admis ; le séparateur de milliers (ou une espace)
+seulement entre des groupes de trois chiffres ; tout autre mélange est refusé
+(« Indiquez un nombre »). Les champs de saisie sont préremplis sans
+séparateur de milliers (`input_number`, prix) ; les valeurs enregistrées se
+relisent par `Format.canonical_decimal`. Spec d'aller-retour fr, nl-BE, en.
+
+=== D-UI-026 — Dates des messages, noms de fichiers, horodatages (relecture)
+
+*Choix.* `Format#message` présente les paramètres de date ISO des messages du
+cœur selon la langue et le pays (`Form#add_errors`, `errors_of`) ;
+`Format#datetime` (date de la langue, `HH:MM`, zone locale) pour les
+horodatages (SKEL, courriels) ; dates des clés d'accès par `Format#date` ;
+noms des fichiers CSV et du fichier des codes de récupération traduits
+(`ui.<écran>.csv_name`, `ui.codes.filename`).
+
+*Amendement proposé.* `FieldError#params` typés (dates en `Time`, montants
+en `BigDecimal`) plutôt que des chaînes ISO à reconnaître : rupture du
+contrat, à trancher avec le lot 2 (erreurs de saisie d'écritures).
+
+=== D-025 — Remarques de relecture reportées
+
+* Minification du runtime Opal : sans Node ni outil Ruby supplémentaire,
+  reportée (D-UI-023).
+* Limitation par adresse IP en mémoire (D-UI-022) : à remplacer par une
+  limitation au proxy (nginx `limit_req`) si plusieurs processus servent une
+  instance.

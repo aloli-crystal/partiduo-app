@@ -15,20 +15,33 @@ module Partiduo
     module Guard
       # Vérifie, dans cet ordre : module actif, acteur authentifié, permission.
       #
-      # `permission: nil` signifie « tout utilisateur authentifié » : c'est un
-      # choix explicite, pas un oubli. Une permission citée doit être déclarée
-      # dans un manifeste (`Partiduo::Modules`), sinon `ArgumentError` : une
-      # faute de frappe dans un nom de permission ne doit pas ouvrir ni fermer
-      # un accès en silence.
+      # `permission: nil` signifie « tout utilisateur authentifié *dont la
+      # session a atteint le niveau exigé* » (`actor.elevated`) : c'est un
+      # choix explicite, pas un oubli. Une session d'enrôlement ou sous le
+      # niveau exigé n'a aucun droit (ADR-002 D2, D6) ; les opérations de son
+      # propre compte passent par `authorize_account!`. Une permission citée
+      # doit être déclarée dans un manifeste (`Partiduo::Modules`), sinon
+      # `ArgumentError` : une faute de frappe dans un nom de permission ne doit
+      # pas ouvrir ni fermer un accès en silence.
       def self.authorize!(actor : Actor, permission : String?, module_code : String = "CORE") : Nil
         require_module!(module_code)
         raise Forbidden.new unless actor.authenticated?
+        raise Forbidden.new(permission) unless actor.system || actor.elevated
         return if permission.nil?
 
         unless Partiduo::Modules.permission_declared?(permission)
           raise ArgumentError.new("permission non déclarée dans un manifeste : #{permission}")
         end
         raise Forbidden.new(permission) unless actor.can?(permission)
+      end
+
+      # Opérations du compte de l'acteur (sécurité du compte, enrôlement,
+      # menu de la coquille) : tout utilisateur authentifié, même dans une
+      # session d'enrôlement ou sous le niveau exigé — c'est par là qu'il
+      # s'élève.
+      def self.authorize_account!(actor : Actor, module_code : String = "CORE") : Nil
+        require_module!(module_code)
+        raise Forbidden.new unless actor.authenticated?
       end
 
       def self.require_module!(module_code : String) : Nil

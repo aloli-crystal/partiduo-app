@@ -9,8 +9,14 @@ module Partiduo
     module Challenges
       record Issued, challenge : Challenge, handle : String
 
+      # Purge des défis et jetons échus : tirée au sort une fois sur
+      # `PURGE_ONE_IN` émissions (pas de tâche planifiée à tenir), pour que des
+      # demandes anonymes répétées ne fassent pas grossir la table sans fin.
+      PURGE_ONE_IN = 50
+
       def self.issue(purpose : String, user : User? = nil, value : String = "", data : String = "",
                      ttl : Time::Span = Config::CHALLENGE_TIMEOUT, now : Time = Time.utc) : Issued
+        purge_expired(now) if Random.rand(PURGE_ONE_IN).zero?
         handle = Secrets.token
         challenge = Challenge.create!(
           purpose: purpose,
@@ -42,15 +48,31 @@ module Partiduo
           used_at__isnull: true, expires_at__gt: now).first
       end
 
+      # Défis et jetons échus depuis plus d'un jour (le délai garde une trace
+      # récente pour le diagnostic).
       def self.purge_expired(now : Time = Time.utc) : Nil
         Challenge.filter(expires_at__lt: now - 1.day).delete
+        Token.filter(expires_at__lt: now - 1.day).delete
       end
     end
 
     # Jetons remis hors bande : invitation, remise à zéro, déblocage.
     module Tokens
+      # Délai minimum entre deux jetons de même usage demandés *par
+      # l'utilisateur* (remise à zéro, déblocage) : la boîte aux lettres ne
+      # peut pas être inondée.
+      REQUEST_INTERVAL = 2.minutes
+
+      # Un jeton de cet usage, encore valable, a-t-il été émis il y a moins de
+      # `REQUEST_INTERVAL` ?
+      def self.recently_issued?(user : User, purpose : String, now : Time = Time.utc) : Bool
+        Token.filter(user_id: user.pk, purpose: purpose, used_at__isnull: true, expires_at__gt: now,
+          created_at__gt: now - REQUEST_INTERVAL).exists?
+      end
+
       def self.issue(user : User, purpose : String, ttl : Time::Span, now : Time = Time.utc) : {Token, String}
         raise ArgumentError.new("jeton inconnu : #{purpose}") unless Token::PURPOSES.includes?(purpose)
+        Challenges.purge_expired(now) if Random.rand(Challenges::PURGE_ONE_IN).zero?
         # Un nouveau jeton annule les précédents de même usage.
         Token.filter(user_id: user.pk, purpose: purpose, used_at__isnull: true).update(used_at: now)
         raw = Secrets.token

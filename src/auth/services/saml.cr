@@ -30,12 +30,17 @@ module Partiduo
     # « enveloped-signature », et n'exige ni l'audience ni `InResponseTo`
     # (voir BLOCAGES B-AUTH-001). Contrôles : pas de DTD, statut `Success`,
     # émetteur, `InResponseTo` (connexions à l'initiative du fournisseur
-    # refusées), destination, période de validité (±60 s), audience, et
-    # signature couvrant l'unique assertion (`SamlSignature`).
+    # refusées), destination, période de validité (±60 s), audience,
+    # signature couvrant l'unique assertion (`SamlSignature`), confirmation
+    # `bearer` de l'assertion signée (requête, destinataire, échéance) et
+    # identifiant d'assertion à usage unique (D-AUTH-014).
     class SamlAdapter < Federation::Adapter
       REQUIRED = %w[idp_entity_id idp_sso_service_url idp_cert sp_entity_id assertion_consumer_service_url]
       SKEW     = 60.seconds
       SUCCESS  = "urn:oasis:names:tc:SAML:2.0:status:Success"
+      BEARER   = "urn:oasis:names:tc:SAML:2.0:cm:bearer"
+      # Défi retenant une assertion consommée (anti-rejeu).
+      ASSERTION_PURPOSE = "saml.assertion"
       # Déclaration de type de document ou d'entité (DOCTYPE, ENTITY).
       DTD = /<!\s*(DOCTYPE|ENTITY)/i
 
@@ -66,6 +71,8 @@ module Partiduo
         check_envelope(xml, request_id, settings)
         subject, assertion = SamlSignature.signed_subject(xml, settings["idp_cert"]? || "")
         check_assertion(assertion, settings, now)
+        check_confirmation(assertion, request_id, settings, now)
+        remember_assertion!(provider, assertion, now)
         attributes = attributes_of(assertion)
         email = attributes["email"]?.try(&.first?) || (subject.includes?('@') ? subject : nil)
         Federation::Identity.new(subject: subject, email: email, attributes: attributes)
@@ -115,6 +122,45 @@ module Partiduo
         invalid("réponse expirée") if now - SKEW >= not_after
         audiences = SamlSignature.all(conditions, "Audience").map(&.content.strip)
         invalid("audience absente ou différente") unless audiences.includes?(settings["sp_entity_id"]?)
+      end
+
+      # Confirmation du sujet (profil Web Browser SSO, §4.1.4.2), *dans
+      # l'assertion signée* — l'enveloppe `Response` peut ne pas l'être :
+      # méthode `bearer`, `InResponseTo` égal à la requête de cette
+      # connexion, `Recipient` égal à l'adresse de retour, `NotOnOrAfter` à
+      # venir. Une assertion interceptée ne peut donc pas être remballée dans
+      # une réponse forgée pour une autre requête.
+      private def check_confirmation(assertion : XML::Node, request_id : String,
+                                     settings : Hash(String, String), now : Time) : Nil
+        subject = SamlSignature.child(assertion, "Subject") || invalid("Subject absent")
+        confirmed = subject.children.any? do |confirmation|
+          next false unless confirmation.element? && SamlSignature.local_name(confirmation) == "SubjectConfirmation"
+          next false unless confirmation["Method"]? == BEARER
+          data = SamlSignature.child(confirmation, "SubjectConfirmationData")
+          next false if data.nil?
+          not_after = timestamp(data["NotOnOrAfter"]?)
+          data["InResponseTo"]? == request_id &&
+            data["Recipient"]? == settings["assertion_consumer_service_url"]? &&
+            !not_after.nil? && now - SKEW < not_after
+        end
+        invalid("SubjectConfirmation bearer absente ou différente") unless confirmed
+      end
+
+      # Anti-rejeu : l'identifiant de chaque assertion consommée est retenu
+      # (défi `saml.assertion`, empreinte de « fournisseur:ID ») jusqu'à la
+      # fin de sa validité ; un second usage est refusé.
+      private def remember_assertion!(provider : IdentityProvider, assertion : XML::Node, now : Time) : Nil
+        id = assertion["ID"]?.presence || invalid("assertion sans ID")
+        conditions = SamlSignature.child(assertion, "Conditions")
+        expires = timestamp(conditions.try(&.["NotOnOrAfter"]?)) || now + Config::CHALLENGE_TIMEOUT
+        digest = Secrets.digest("#{provider.code}:#{id}")
+        invalid("assertion déjà utilisée") if Challenge.filter(handle_digest: digest).exists?
+        begin
+          Challenge.create!(purpose: ASSERTION_PURPOSE, handle_digest: digest, value: "", data: provider.code.to_s,
+            expires_at: expires + SKEW, used_at: now)
+        rescue Marten::DB::Errors::InvalidRecord | PQ::PQError
+          invalid("assertion déjà utilisée") # usage simultané
+        end
       end
 
       private def attributes_of(assertion : XML::Node) : Hash(String, Array(String))

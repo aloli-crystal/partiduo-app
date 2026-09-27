@@ -229,6 +229,15 @@ describe "Partiduo::Api::Core — exercices et périodes" do
       end
     end
 
+    it "refuse de déplacer une période ouverte vers un exercice clos, ou d'en sortir une" do
+      open_year = R.fiscal_year(2026, months: 1)
+      closed_year = R.fiscal_year(2025, months: 1)
+      Api.close_fiscal_year(writer, closed_year.id).success?.should be_true
+      expect_raises(Exception, /exercice clos/) do
+        db_exec("UPDATE core_period SET fiscal_year_id = $1 WHERE id = $2", closed_year.id, open_year.periods.first.id)
+      end
+    end
+
     it "trouve la période d'une date en SQL (core_period_for)" do
       year = R.fiscal_year(2026, months: 1)
       id = Marten::DB::Connection.default.open { |db| db.scalar("SELECT core_period_for('2026-01-10')") }

@@ -69,6 +69,7 @@ nl:
       vat_deductible_tax: "Btw aftrekbaar via de belastingen"
       private_expense: "Kosten ten laste van de zaakvoerder"
     initial_data:
+      bank_card: "Bank"
       ledgers:
         purchase:
           name: "Aankopen"
@@ -116,7 +117,12 @@ nl:
         default_account:
           not_found: "Rekening %{number} bestaat niet."
           not_direct_use: "Rekening %{number} kan niet rechtstreeks gebruikt worden."
-          required: "Een financieel dagboek heeft een bank- of kasrekening."
+        bank_card:
+          required: "Een financieel dagboek verwijst naar de fiche van zijn bank of kas."
+          not_found: "Geen enkele fiche heeft de code %{code}."
+          not_bank: "Fiche %{code} is geen bankfiche."
+          no_account: "Fiche %{code} is aan geen enkele rekening gekoppeld."
+          not_direct_use: "Rekening %{number} van fiche %{code} kan niet rechtstreeks worden gebruikt."
         receipt_prefix:
           too_long: "Het voorvoegsel telt hoogstens %{max} tekens."
         receipt_padding:
@@ -131,6 +137,13 @@ nl:
           invalid: "Onbekend gebruik van standaardrekening."
         account:
           not_found: "Rekening %{number} bestaat niet."
+      vat_rate_account:
+        vat_rate_id:
+          not_found: "Dit btw-tarief bestaat niet."
+        account:
+          not_found: "Rekening %{number} bestaat niet."
+          not_direct_use: "Rekening %{number} kan niet rechtstreeks worden gebruikt."
+          required: "Een tarief met verlegging heeft een rekening aftrekbare btw en een rekening verschuldigde btw."
       card_account:
         card_id:
           not_found: "Deze fiche bestaat niet."

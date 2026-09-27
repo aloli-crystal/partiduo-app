@@ -49,16 +49,22 @@ module Partiduo
         user = current_user(actor)
         return Result(Nil).failure(FieldError.base("auth.errors.login.method_disabled")) unless Partiduo::Auth::Policy.current.allows?("password")
         if user.usable_password? && actor.level > Partiduo::Auth::Levels::ENROLLMENT
-          current = input.current_password || ""
-          unless Partiduo::Auth::Passwords.verify(user, current)
-            Partiduo::Auth::Throttle.record_failure(user)
-            return Result(Nil).failure(FieldError.new("current_password", "auth.errors.password.current_invalid"))
+          # Même limitation que la connexion (D-AUTH-012) : une session volée
+          # ne doit pas permettre de deviner le mot de passe actuel.
+          reservation, refusal = reserve_attempt(user, "password.change")
+          return Result(Nil).failure(refusal) if refusal
+          unless Partiduo::Auth::Passwords.verify(user, input.current_password || "")
+            locked = confirm_failed_attempt(user, "password.change")
+            return Result(Nil).failure(locked || FieldError.new("current_password", "auth.errors.password.current_invalid"))
           end
+          Partiduo::Auth::Throttle.release(user, reservation)
         end
         errors = Partiduo::Auth::Passwords.errors(input.new_password, "new_password",
           Partiduo::Auth::Passwords.personal_words(user.email.to_s, user.first_name.to_s, user.last_name.to_s))
         return Result(Nil).failure(errors) unless errors.empty?
         store_password(user, input.new_password)
+        # Une session volée ne survit pas au changement de mot de passe.
+        Partiduo::Auth::Sessions.revoke_all(user, except: actor.session_id)
         Partiduo::Auth::Audit.record("password.change", "SUCCESS", user: user)
         Result(Nil).success(nil)
       end
@@ -66,11 +72,27 @@ module Partiduo
       # --- TOTP ----------------------------------------------------------------
 
       # Enrôlement, étape 1 : nouveau secret, en attente de confirmation.
+      # Remplacer un TOTP déjà actif exige une session de niveau 2
+      # (`ElevationRequired`). Commande : l'interface l'appelle sur un POST.
       def self.begin_totp_enrollment(actor : Actor) : TotpEnrollmentView
         user = current_user(actor)
+        require_level!(actor) if user.totp_enabled?
         secret = TOTP.generate_secret_base32
+        Partiduo::Auth::User.filter(id: user.pk).update(totp_pending_secret: secret)
         user.totp_pending_secret = secret
-        user.save!
+        totp_enrollment_view(user, secret)
+      end
+
+      # Secret en cours d'enrôlement, sans en créer : `nil` s'il n'y en a pas.
+      # Requête (l'interface peut l'appeler sur un GET).
+      def self.pending_totp_enrollment(actor : Actor) : TotpEnrollmentView?
+        user = current_user(actor)
+        secret = user.totp_pending_secret
+        return if secret.nil? || secret.empty?
+        totp_enrollment_view(user, secret)
+      end
+
+      private def self.totp_enrollment_view(user : Partiduo::Auth::User, secret : String) : TotpEnrollmentView
         uri = Partiduo::Auth::Totp.provisioning_uri(user, secret)
         qr = Partiduo::Auth::QrCode.encode(uri)
         TotpEnrollmentView.new(
@@ -90,14 +112,15 @@ module Partiduo
       # pas à la connexion). Premiers codes de récupération le cas échéant.
       def self.confirm_totp_enrollment(actor : Actor, code : String) : Result(RecoveryCodesView)
         user = current_user(actor)
+        require_level!(actor) if user.totp_enabled?
         counter = Partiduo::Auth::Totp.verify_pending(user, code)
         return Result(RecoveryCodesView).failure(FieldError.new("code", "auth.errors.login.invalid_code")) if counter.nil?
         Transaction.run do
-          user.totp_secret = user.totp_pending_secret
-          user.totp_pending_secret = nil
-          user.totp_enabled_at = Time.utc
-          user.last_otp_counter = counter.to_i64
-          user.save!
+          # Mise à jour ciblée : ne réécrit pas le compteur d'échecs.
+          now = Time.utc
+          Partiduo::Auth::User.filter(id: user.pk).update(totp_secret: user.totp_pending_secret,
+            totp_pending_secret: nil, totp_enabled_at: now, last_otp_counter: counter.to_i64)
+          user.reload
           codes = Partiduo::Auth::RecoveryCodes.ensure(user)
           Partiduo::Auth::Audit.record("totp.enable", "SUCCESS", user: user)
           Result(RecoveryCodesView).success(RecoveryCodesView.new(codes))
@@ -107,14 +130,15 @@ module Partiduo
       def self.disable_totp(actor : Actor, code : String) : Result(Nil)
         user = current_user(actor)
         require_level!(actor)
+        _reservation, refusal = reserve_attempt(user, "totp.disable")
+        return Result(Nil).failure(refusal) if refusal
         unless Partiduo::Auth::Totp.verify!(user, code)
-          Partiduo::Auth::Throttle.record_failure(user)
-          return Result(Nil).failure(FieldError.new("code", "auth.errors.login.invalid_code"))
+          locked = confirm_failed_attempt(user, "totp.disable")
+          return Result(Nil).failure(locked || FieldError.new("code", "auth.errors.login.invalid_code"))
         end
-        user.totp_secret = nil
-        user.totp_enabled_at = nil
-        user.last_otp_counter = nil
-        user.save!
+        Partiduo::Auth::Throttle.record_success(user)
+        Partiduo::Auth::User.filter(id: user.pk).update(totp_secret: nil, totp_enabled_at: nil, last_otp_counter: nil)
+        Partiduo::Auth::Sessions.revoke_all(user, except: actor.session_id)
         Partiduo::Auth::Audit.record("totp.disable", "SUCCESS", user: user)
         Result(Nil).success(nil)
       end
@@ -185,6 +209,7 @@ module Partiduo
         require_level!(actor)
         passkey = Partiduo::Auth::Passkey.filter(id: passkey_id, user_id: user.pk).first || raise NotFound.new("passkey", passkey_id)
         passkey.delete
+        Partiduo::Auth::Sessions.revoke_all(user, except: actor.session_id)
         Partiduo::Auth::Audit.record("passkey.remove", "SUCCESS", user: user, detail: passkey.name.to_s)
         Result(Nil).success(nil)
       end
@@ -195,7 +220,7 @@ module Partiduo
       # `get_ledger_access` : le module Comptabilité l'appelle avant de lire
       # ou d'écrire dans un journal.
       def self.ledger_access(actor : Actor, ledger_id : Int64) : String
-        Guard.authorize!(actor, nil, module_code: "AUTH")
+        Guard.authorize_account!(actor, module_code: "AUTH")
         return "W" if actor.system
         user = current_user(actor)
         return "X" if actor.level < Partiduo::Auth::Levels.required(user) # session d'un niveau insuffisant
@@ -212,7 +237,7 @@ module Partiduo
       # --- Aides internes -----------------------------------------------------
 
       private def self.current_user(actor : Actor) : Partiduo::Auth::User
-        Guard.authorize!(actor, nil, module_code: "AUTH")
+        Guard.authorize_account!(actor, module_code: "AUTH")
         user_id = actor.user_id || raise Forbidden.new
         user = Partiduo::Auth::User.get(id: user_id) || raise Forbidden.new
         raise Forbidden.new unless user.can_sign_in?

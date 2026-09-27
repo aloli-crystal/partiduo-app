@@ -24,15 +24,22 @@ module Partiduo
 
       # Vérifie un code contre le secret actif ; en cas de succès, enregistre
       # le compteur accepté. Un code déjà utilisé (même compteur ou antérieur)
-      # est refusé.
+      # est refusé. L'enregistrement est une mise à jour *conditionnelle*
+      # (`last_otp_counter` nul ou inférieur) : de deux requêtes simultanées
+      # portant le même code, une seule l'emporte (ADR-002 D2, anti-rejeu) ;
+      # le reste de la ligne (compteur d'échecs, blocage) n'est pas réécrit.
       def self.verify!(user : User, code : String, now : Time = Time.utc) : Bool
         secret = user.totp_secret
         return false if secret.nil? || !user.totp_enabled?
         after = user.last_otp_counter.try(&.to_u64)
         counter = authenticator(secret).verify(code, time: now, after: after)
         return false if counter.nil?
-        user.last_otp_counter = counter.to_i64
-        user.save!
+        value = counter.to_i64
+        claimed = User.filter(id: user.pk, totp_secret: secret)
+          .filter { q(last_otp_counter__isnull: true) | q(last_otp_counter__lt: value) }
+          .update(last_otp_counter: value)
+        return false unless claimed == 1
+        user.last_otp_counter = value
         true
       end
 

@@ -16,10 +16,11 @@ module Partiduo
       }
 
       record AccountRow, number : String, label : String, parent : String?, kind : String, direct_use : Bool
-      record LedgerRow, kind : String, code : String, receipt_prefix : String, receipt_padding : Int32, default_account : String?
+      record LedgerRow, kind : String, code : String, receipt_prefix : String, receipt_padding : Int32, bank_account : String?
       record CategoryRow, code : String, base_account : String, create_account : Bool
+      record VatRow, code : String, deductible : String, collected : String
       record Data, accounts : Array(AccountRow), default_accounts : Hash(String, String),
-        card_categories : Array(CategoryRow), ledgers : Array(LedgerRow)
+        card_categories : Array(CategoryRow), ledgers : Array(LedgerRow), vat_accounts : Array(VatRow)
 
       def self.regimes : Array(String)
         SOURCES.keys
@@ -36,9 +37,12 @@ module Partiduo
         end
         ledgers = yaml["ledgers"].as_a.map do |row|
           LedgerRow.new(row["kind"].as_s, row["code"].as_s, row["receipt_prefix"].as_s,
-            row["receipt_padding"].as_i, row["default_account"].as_s?)
+            row["receipt_padding"].as_i, row["bank_account"].as_s?)
         end
-        Data.new(accounts, defaults, categories, ledgers)
+        vat = yaml["vat_accounts"].as_h.map do |code, pair|
+          VatRow.new(code.as_s, pair[0].as_s, pair[1].as_s)
+        end
+        Data.new(accounts, defaults, categories, ledgers, vat)
       end
 
       # Charge le plan, les comptes par défaut, le compte de base des catégories
@@ -64,20 +68,53 @@ module Partiduo
             create_account: row.create_account)
           categories += 1
         end
+        load_vat_accounts(data, by_number)
         locale = Partiduo::LOCALES.includes?(locale) ? locale : "fr"
         I18n.with_locale(locale) do
           data.ledgers.each do |row|
+            bank_card_id = row.bank_account.try { |number| bank_card(actor, by_number[number]) }
             Ledger.create!(
               code: row.code, kind: row.kind,
               name: I18n.t("accounting.initial_data.ledgers.#{row.kind}.name"),
               description: I18n.t("accounting.initial_data.ledgers.#{row.kind}.description"),
-              default_account: row.default_account.try { |number| by_number[number] },
+              bank_card_id: bank_card_id,
               receipt_prefix: row.receipt_prefix, receipt_padding: row.receipt_padding,
             )
           end
         end
         Partiduo::Api::Accounting::InitialDataView.new(data.accounts.size, data.default_accounts.size, categories,
           data.ledgers.size)
+      end
+
+      # Comptes de TVA des taux du régime déjà chargés par le socle
+      # (`VAT.rates`, ordre 8) ; un taux absent est ignoré.
+      private def self.load_vat_accounts(data : Data, by_number : Hash(String, Account)) : Nil
+        data.vat_accounts.each do |row|
+          rate = Partiduo::Api::Vat.rate_by_code(Partiduo::Api::Actor.system, row.code) || next
+          VatRateAccount.create!(vat_rate_id: rate.id, deductible_account: by_number[row.deductible],
+            collected_account: by_number[row.collected])
+        end
+      end
+
+      # Fiche Banque du journal financier (`jrn_def_bank`, D-ACC-010) :
+      # catégorie `BANK` du socle, rattachée au compte de banque du plan.
+      # Sans catégorie `BANK`, le journal financier n'est pas créable : `nil`
+      # et l'insertion échoue sur la contrainte, ce qui signale l'anomalie.
+      private def self.bank_card(actor : Partiduo::Api::Actor, account : Account) : Int64?
+        category = Partiduo::Api::Cards.category_by_code(actor, "BANK") || return
+        result = Partiduo::Api::Cards.create_card(actor, Partiduo::Api::Cards::CardInput.new(
+          category_id: category.id, name: I18n.t("accounting.initial_data.bank_card")))
+        raise ArgumentError.new("fiche Banque refusée : #{result.error_keys.join(", ")}") if result.failure?
+        card_id = result.value!.id
+        # L'abonné de `card.saved` a pu calculer un compte sous le compte de
+        # base de la catégorie : la fiche prend le compte du plan, et le
+        # compte calculé, neuf et inutilisé, disparaît.
+        computed = CardAccount.filter(card_id: card_id).first.try(&.account)
+        CardAccounts.link(card_id, account)
+        if computed && computed.pk != account.pk && !CardAccount.filter(account_id: computed.pk).exists?
+          computed.delete
+        end
+        card_id
       end
     end
   end

@@ -62,14 +62,18 @@ module Partiduo
 
         Transaction.run do
           rights_changed = user.role != input.role || user.profile_id != input.profile_id
-          user.email = normalize_email(input.email)
+          email = normalize_email(input.email)
+          # Droits, adresse (où partent les liens de remise à zéro) ou mot de
+          # passe changés : toutes les sessions de l'utilisateur sont coupées.
+          security_changed = rights_changed || user.email != email || !input.password.presence.nil?
+          user.email = email
           assign_user(user, input)
           if password = input.password.presence
             user.password = Partiduo::Auth::Passwords.hash(password)
             user.password_changed_at = Time.utc
           end
           user.save!
-          Partiduo::Auth::Sessions.revoke_all(user) if rights_changed
+          Partiduo::Auth::Sessions.revoke_all(user) if security_changed
           Partiduo::Auth::Audit.record_for(actor, "user.update", "ADMIN", detail: user.email.to_s)
           Result(UserView).success(user_view(user))
         end

@@ -88,11 +88,12 @@ module SamlSpec
   end
 
   def self.assertion(id : String, subject : String, issuer : String, audience : String, request_id : String,
-                     not_before : Time, not_after : Time, signature : String = "") : String
+                     not_before : Time, not_after : Time, signature : String = "", recipient : String = ACS_URL,
+                     method : String = "urn:oasis:names:tc:SAML:2.0:cm:bearer") : String
     %(<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="#{id}" Version="2.0" IssueInstant="#{stamp(Time.utc)}">) +
       %(<saml:Issuer>#{issuer}</saml:Issuer>#{signature}) +
       %(<saml:Subject><saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">#{subject}</saml:NameID>) +
-      %(<saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"><saml:SubjectConfirmationData InResponseTo="#{request_id}" NotOnOrAfter="#{stamp(not_after)}" Recipient="#{ACS_URL}"/></saml:SubjectConfirmation></saml:Subject>) +
+      %(<saml:SubjectConfirmation Method="#{method}"><saml:SubjectConfirmationData InResponseTo="#{request_id}" NotOnOrAfter="#{stamp(not_after)}" Recipient="#{recipient}"/></saml:SubjectConfirmation></saml:Subject>) +
       %(<saml:Conditions NotBefore="#{stamp(not_before)}" NotOnOrAfter="#{stamp(not_after)}"><saml:AudienceRestriction><saml:Audience>#{audience}</saml:Audience></saml:AudienceRestriction></saml:Conditions>) +
       %(<saml:AuthnStatement AuthnInstant="#{stamp(Time.utc)}" SessionIndex="_s1"><saml:AuthnContext><saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport</saml:AuthnContextClassRef></saml:AuthnContext></saml:AuthnStatement>) +
       %(<saml:AttributeStatement><saml:Attribute Name="email"><saml:AttributeValue>#{subject}</saml:AttributeValue></saml:Attribute></saml:AttributeStatement>) +
@@ -104,11 +105,12 @@ module SamlSpec
                     signer : Identity = idp, embed : Identity? = nil, issuer : String = IDP_ENTITY,
                     audience : String = SP_ENTITY, status : String = "urn:oasis:names:tc:SAML:2.0:status:Success",
                     not_before : Time = Time.utc - 2.minutes, not_after : Time = Time.utc + 5.minutes,
-                    signed : Bool = true, wrap_subject : String? = nil) : String
+                    signed : Bool = true, wrap_subject : String? = nil, recipient : String = ACS_URL,
+                    method : String = "urn:oasis:names:tc:SAML:2.0:cm:bearer") : String
     id = "_a#{Random::Secure.hex(8)}"
-    unsigned = assertion(id, subject, issuer, audience, request_id, not_before, not_after)
+    unsigned = assertion(id, subject, issuer, audience, request_id, not_before, not_after, recipient: recipient, method: method)
     sig = signed ? signature(id, unsigned, signer, embed) : ""
-    body = assertion(id, subject, issuer, audience, request_id, not_before, not_after, sig)
+    body = assertion(id, subject, issuer, audience, request_id, not_before, not_after, sig, recipient, method)
     # Emballage : une seconde assertion, non signée, pour un autre sujet.
     if other = wrap_subject
       body = assertion("_w#{Random::Secure.hex(8)}", other, issuer, audience, request_id, not_before, not_after) + body

@@ -142,7 +142,8 @@ Cœur, référentiel comptable (D-ACC-001 à D-ACC-007,
 link:doc/api/accounting-reference.adoc[]) :
 
 * Plan comptable : relation parent, numéro normalisé, arbre en SQL récursif ;
-  plans initiaux BE et FR repris de NOALYSS (`scripts/chart_from_noalyss.cr`).
+  plans initiaux BE et FR repris de NOALYSS (`scripts/chart_from_noalyss.cr`,
+  types corrigés à la relecture, D-ACC-008).
 * Journaux : champs repris de NOALYSS, numérotation des pièces, devise,
   droits par journal ; rattachement fiche → compte ; comptes par défaut.
 * Pas encore de schéma d'écritures (lot 2, D-ACC-007).
@@ -277,8 +278,94 @@ DATABASE_URL='postgres:///partiduo_j1_fr?host=/tmp' \
 dropdb partiduo_j1_fr; dropdb partiduo_j1_be; rm -rf tmp/instances/demo-*
 ----
 
+== Relecture de couverture des lots P, 0 et 1 (testeur, 27 septembre 2026)
+
+Specs ajoutées, écrites contre `Partiduo::Api` (C5), sans changement du code :
+
+* `spec/auth/lockout_spec.cr` : temporisation (tentative refusée non comptée,
+  délai doublé, plafond, remise à zéro, incrément atomique, second facteur et
+  élévation), blocage au 10ᵉ échec par TOTP et par cumul mot de passe / TOTP /
+  code de récupération, audit, passkey admise sur compte bloqué sans lever le
+  blocage (D-AUTH-005) ; déblocage par l'administrateur (permission, audit,
+  compteur) et par jeton (expiré, remplacé, d'un autre usage).
+* `spec/auth/second_factor_spec.cr` : rejeu TOTP (code d'enrôlement, code
+  antérieur, dérive, compteur partagé connexion / élévation / désactivation,
+  jeton de second facteur à usage unique, réenrôlement non confirmé) ; codes
+  de récupération (empreintes seules, saisie normalisée, code d'autrui,
+  régénération, épuisement, `passkey_required`, audit).
+* `spec/auth/passkey_lifecycle_spec.cr` : exclusion des clés connues,
+  doublon, défi lié à l'utilisateur et à usage unique, réponse illisible,
+  liste d'origines exacte, compteur et date d'usage, défi expiré, compte
+  révoqué, gestion des clés d'autrui, politique sans passkey.
+* `spec/auth/accountant_level_spec.cr` : niveau 3 du comptable quel que soit
+  le chemin (TOTP, élévation TOTP, code de récupération), permissions
+  administratives retirées même cochées, droits par journal, date de fin,
+  retour au rôle membre ; niveau minimum de l'instance (2 et 3).
+* `spec/auth/permissions_spec.cr` : matrice permission → requête, lectures
+  ouvertes, profil `ACCOUNTANT` (D-REF-013) et menu du comptable.
+* `spec/modules/activation_spec.cr` : activation enregistrée (pièce sans
+  ligne, idempotence, auteur), dépendances alternatives et de version par le
+  contrat, données conservées, permissions d'un module désactivé (D-020),
+  cohérence des trois configurations de la CI.
+* `spec/core/provision_regimes_spec.cr` : instances FR et BE complètes,
+  refus propres au régime, annulation totale, commande `--vat`, plan du
+  régime.
+
+Résultat (base `partiduo_test_r_specs`) : 455 exemples (Comptabilité seule),
+420 + 6 en attente (Facturation seule), 455 (les deux) ; format et Ameba sans
+remarque. Aucun défaut du code mis au jour.
+
+== Relecture des lots P, 0 et 1 — corrections (27 septembre 2026)
+
+Remarques de la relecture corrigées (décisions D-AUTH-012 à D-AUTH-015,
+D-024, D-ACC-008 à D-ACC-010, D-SKEL-005, D-UI-021 à D-UI-026, D-025 pour
+les reports ; compléments de D-REF-009, D-REF-010, D-ACC-003, D-ACC-004,
+D-013) :
+
+* Authentification : tentatives réservées de façon atomique avant l'examen du
+  secret (connexion, second facteur, élévation, mot de passe actuel,
+  désactivation du TOTP), sessions coupées au blocage et par les changements
+  de sécurité, anti-rejeu TOTP conditionnel, remplacement du TOTP au niveau 2,
+  acteur « élevé » exigé par `Guard.authorize!` (`authorize_account!` pour le
+  compte), SAML : confirmation `bearer` et anti-rejeu des assertions, purge des
+  défis et jetons, jetons envoyés à l'adresse enregistrée et bâtis sur le
+  domaine configuré ; contrat `API_VERSION` 0.2.0.
+* `Transaction.run` imbriqué : points de sauvegarde, le `Result` en échec
+  revient à l'appelant.
+* Référentiel comptable : types de compte corrigés (FR et BE), `44551` et
+  compte par défaut `vat` en FR (164 comptes), comptes de TVA des taux
+  (`accounting_vat_rate_account`, contrat `vat_rate_accounts`), journal
+  financier rattaché à une fiche Banque (`bank_card_id`), devise d'un journal
+  par défaut = devise de tenue (résolue par le cœur) ; migrations
+  `accounting 0002` et `core 0003` (période déplacée vers un exercice clos).
+* TVA : taux `DOM1` (1,75 %), champs qualifiants d'un taux cité figés.
+* `bin/partiduo-provision` : `createdb` sur le socket de `--pg-socket`.
+* Interface : cookies `Secure` et HSTS derrière le proxy, limitation par
+  adresse IP des points d'entrée anonymes, route `/ext/<CODE>` contrôlée,
+  nombres lus selon la langue, dates des messages et horodatages selon la
+  langue, noms de fichiers traduits, accessibilité (pas d'envoi au changement
+  d'une liste, Ctrl+K, menu sans JavaScript, contrastes, focus des tableaux,
+  région d'état, arbre du plan comptable), runtime Opal commun
+  (`runtime.js`, écran `demo.js` 3,4 Ko).
+* SKEL : `depends_on "ACCOUNTING"`, horodatage par `Format#datetime`.
+
+Vérifications : format sans changement ; Ameba sans remarque dans les trois
+dépôts ; garde-fous ADR-005 D3 verts ; `opal-build --check` vert ;
+`partiduo-app` 482 exemples (Comptabilité seule), 439 + 6 en attente
+(Facturation seule), 482 (les deux), base `partiduo_test_r_final` ;
+`partiduo-ui-bulma` 118 ; `partiduo-skel` 24 ; `marten migrate` sur base
+vierge (`partiduo_migrate_r`) : 10 migrations du cœur, rien en attente depuis
+l'interface, `skel_0001` depuis l'extension ; `genmigrations` : aucun
+changement.
+
 == Prochaines étapes
 
+. *Préalable du lot 2* : doubler en base la règle d'équilibre
+  (`EntryBalance`) par un déclencheur différé (`CONSTRAINT TRIGGER …
+  DEFERRABLE INITIALLY DEFERRED`) qui vérifie sum(débit) = sum(crédit) par
+  écriture, testé par une écriture déséquilibrée refusée par PostgreSQL ;
+  ventiler la TVA par `vat_rate_accounts` ; saisie financière par la fiche
+  Banque du journal.
 . Lot 2 : écritures (schéma, saisie, validation, numérotation), consultation,
   lettrage ; puis lot F (Facturation) en parallèle.
 . Soldes du plan comptable dans l'interface une fois les écritures en place

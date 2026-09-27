@@ -15,6 +15,8 @@ module Partiduo
         Partiduo::Api::Vat::RateInput.new(code: "DNOR", label: "vat.initial.fr.dnor", rate: BigDecimal.new("8.5")),
         Partiduo::Api::Vat::RateInput.new(code: "DR", label: "vat.initial.fr.dr", rate: BigDecimal.new("2.1")),
         Partiduo::Api::Vat::RateInput.new(code: "DPRS", label: "vat.initial.fr.dprs", rate: BigDecimal.new("1.05")),
+        # Guadeloupe, Martinique, La Réunion (art. 296 CGI) : `DOM1` de mod2.
+        Partiduo::Api::Vat::RateInput.new(code: "DOM1", label: "vat.initial.fr.dom1", rate: BigDecimal.new("1.75")),
         Partiduo::Api::Vat::RateInput.new(code: "COR13", label: "vat.initial.fr.cor13", rate: BigDecimal.new("13")),
         Partiduo::Api::Vat::RateInput.new(code: "COR09", label: "vat.initial.fr.cor09", rate: BigDecimal.new("0.9")),
         Partiduo::Api::Vat::RateInput.new(code: "EXP", label: "vat.initial.fr.exp", rate: BigDecimal.new("0"),

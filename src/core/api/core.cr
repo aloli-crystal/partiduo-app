@@ -13,7 +13,7 @@ module Partiduo
       # Description de l'instance : versions et pièces enregistrées.
       # Tout utilisateur authentifié peut la lire.
       def self.instance(actor : Actor) : InstanceView
-        Guard.authorize!(actor, nil)
+        Guard.authorize_account!(actor)
 
         modules = Partiduo::Modules.manifests.values.map do |manifest|
           ModuleView.new(

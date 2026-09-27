@@ -3,8 +3,10 @@
 module Partiduo
   module Accounting
     # Compte d'une fiche du socle (attribut 5 « poste comptable » de
-    # `fiche_detail`). `card_id` : identifiant de la fiche, sans clé étrangère
-    # (ADR-006 D3, D-ACC-001).
+    # `fiche_detail`). `card_id` : identifiant de la fiche. La clé étrangère
+    # vers `cards_card`, en cascade, est posée par la migration accounting 0001,
+    # côté Comptabilité seulement (D-ACC-001) : effacer la fiche efface ce
+    # rattachement ; le socle ne connaît pas cette table (ADR-006 D3).
     class CardAccount < Marten::Model
       field :id, :big_int, primary_key: true, auto: true
       field :card_id, :big_int, unique: true
@@ -13,7 +15,9 @@ module Partiduo
 
     # Compte de base d'une catégorie de fiches (`fiche_def.fd_class_base`) et
     # création automatique d'un compte par fiche (`fd_create_account`).
-    # `category_id` : identifiant de la catégorie du socle, sans clé étrangère.
+    # `category_id` : identifiant de la catégorie du socle ; clé étrangère vers
+    # `cards_category`, en cascade, posée par la migration accounting 0001,
+    # côté Comptabilité seulement (D-ACC-001).
     class CardCategoryAccount < Marten::Model
       field :id, :big_int, primary_key: true, auto: true
       field :category_id, :big_int, unique: true

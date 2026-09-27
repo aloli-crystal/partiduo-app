@@ -69,6 +69,7 @@ en:
       vat_deductible_tax: "VAT deductible from income tax"
       private_expense: "Expenses charged to the manager"
     initial_data:
+      bank_card: "Bank"
       ledgers:
         purchase:
           name: "Purchases"
@@ -116,7 +117,12 @@ en:
         default_account:
           not_found: "Account %{number} does not exist."
           not_direct_use: "Account %{number} cannot be used directly."
-          required: "A financial journal has a bank or cash account."
+        bank_card:
+          required: "A financial journal cites the card of its bank or cash desk."
+          not_found: "No card has the code %{code}."
+          not_bank: "Card %{code} is not a bank card."
+          no_account: "Card %{code} is not linked to any account."
+          not_direct_use: "Account %{number} of card %{code} cannot be used directly."
         receipt_prefix:
           too_long: "The prefix has at most %{max} characters."
         receipt_padding:
@@ -131,6 +137,13 @@ en:
           invalid: "Unknown default account usage."
         account:
           not_found: "Account %{number} does not exist."
+      vat_rate_account:
+        vat_rate_id:
+          not_found: "This VAT rate does not exist."
+        account:
+          not_found: "Account %{number} does not exist."
+          not_direct_use: "Account %{number} cannot be used directly."
+          required: "A reverse-charge rate has both a deductible and a collected VAT account."
       card_account:
         card_id:
           not_found: "This card does not exist."

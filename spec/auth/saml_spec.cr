@@ -123,6 +123,42 @@ describe "SAML intégré (ADR-002 D3 : authentification fédérée, autorisation
     federated_login(failed, start).error_keys.should eq(["auth.errors.federated.invalid"])
   end
 
+  it "refuse une assertion signée remballée dans une réponse forgée pour une autre requête" do
+    SamlSpec.configure
+    accountant_with_identity
+    start = Partiduo::Api::Auth.begin_federated_login(anonymous, "idp")
+    intercepted = String.new(Base64.decode(SamlSpec.response(SamlSpec.request_id(start))))
+
+    attack = Partiduo::Api::Auth.begin_federated_login(anonymous, "idp")
+    forged = intercepted.sub(/InResponseTo="[^"]+"/, %(InResponseTo="#{SamlSpec.request_id(attack)}"))
+    federated_login(Base64.strict_encode(forged), attack).error_keys.should eq(["auth.errors.federated.invalid"])
+  end
+
+  it "exige la confirmation bearer : destinataire et méthode" do
+    SamlSpec.configure
+    accountant_with_identity
+    start = Partiduo::Api::Auth.begin_federated_login(anonymous, "idp")
+    wrong = SamlSpec.response(SamlSpec.request_id(start), recipient: "https://ailleurs.example/acs")
+    federated_login(wrong, start).error_keys.should eq(["auth.errors.federated.invalid"])
+
+    start = Partiduo::Api::Auth.begin_federated_login(anonymous, "idp")
+    holder = SamlSpec.response(SamlSpec.request_id(start), method: "urn:oasis:names:tc:SAML:2.0:cm:holder-of-key")
+    federated_login(holder, start).error_keys.should eq(["auth.errors.federated.invalid"])
+  end
+
+  it "n'accepte qu'une fois la même assertion" do
+    SamlSpec.configure
+    accountant_with_identity
+    provider = Partiduo::Auth::IdentityProvider.filter(code: "idp").first!
+    adapter = Partiduo::Auth::SamlAdapter.new
+    request_id = "_requete_rejouee"
+    payload = {"SAMLResponse" => SamlSpec.response(request_id)}
+    adapter.complete_login(provider, SamlSpec.settings, payload, request_id).subject.should eq("expert@cabinet.example")
+    expect_raises(Partiduo::Auth::Federation::Error) do
+      adapter.complete_login(provider, SamlSpec.settings, payload, request_id)
+    end
+  end
+
   it "refuse une DTD (entités externes)" do
     SamlSpec.configure
     start = Partiduo::Api::Auth.begin_federated_login(anonymous, "idp")
