@@ -189,6 +189,40 @@ dates et montants selon la langue du document. Codes :
   (ou `PARTIDUO_SMTP_URL`), `MemoryTransport` (specs, développement) ; sans
   configuration, envoi refusé (`invoicing.errors.mail.not_configured`).
 
+== Canal d'émission et marquage B2C (ADR-004 D9)
+
+Chaque facture, facture d'acompte et avoir porte un *canal d'émission* —
+`platform` (plateforme agréée), `email`, `paper` (`ISSUE_CHANNELS`) — et un
+marquage `b2c` pour l'e-reporting. Ils appartiennent au cœur et existent sans
+aucune extension de facturation électronique (D-INV-016).
+
+* `propose_channel(actor, customer_card_id) : ChannelProposalView`
+  (lecture) : professionnel (SIREN ou numéro de TVA) établi dans le pays du
+  dossier → `platform` ; sinon `email` si la fiche a une adresse
+  électronique, `paper` à défaut ; `b2c` pour un client sans SIREN ni numéro
+  de TVA ; `international` pour un client établi hors du pays du dossier ;
+  `reason` (`domestic_business`, `foreign_business`, `private_customer`,
+  libellé `invoicing.channel_reasons.<reason>`).
+* Brouillon : `DocumentInput#issue_channel` et `#b2c` ; `nil` garde la
+  valeur du brouillon pour le même client, sinon reprend la proposition.
+  Refusé sur un devis, une commande ou un bon de livraison
+  (`document.issue_channel.fiscal_only`) ; valeur inconnue :
+  `document.issue_channel.invalid`. Un avoir tiré d'une facture en reprend le
+  canal et le marquage.
+* `set_issue_channel(actor, id, ChannelInput)` (`invoicing.invoice.write`) :
+  brouillon ou document émis, *tant qu'il n'est pas envoyé*
+  (`channel.already_sent`) ; tracé `channel_changed`. Le canal n'entre pas
+  dans l'empreinte du document.
+* `mark_sent(actor, id)` (`invoicing.invoice.send`) : document émis remis hors
+  du courriel de la Facturation (papier imprimé, transmission par une
+  extension de plateforme) ; pose `sent_at`, facture → `sent`, trace
+  `marked_sent` ; sans effet s'il est déjà envoyé. L'envoi par courriel
+  (`send_document`) fige aussi le canal.
+* PostgreSQL (migration invoicing 0002) : canal limité aux trois valeurs ;
+  sur un document émis, canal et marquage modifiables tant que `sent_at` est
+  nul, figés ensuite.
+* `DocumentView#issue_channel`, `#b2c`, `#channel_editable?`, `#channel_key`.
+
 == Transmission au comptable (Facturation seule)
 
 * `sales_journal_csv(actor, from, to)` : journal des ventes et des
@@ -230,7 +264,10 @@ attente et périmés, brouillons, cinq dernières factures
 `total_vat`, `total_gross`, `prepaid`, `sales` (JSON : `item_card_id`,
 `vat_rate_id`, `amount` — parts du HT, remise globale déduite, somme = HT),
 `vat` (JSON : `vat_rate_id`, `amount` — somme = TVA), `deposit_sources`
-(facture finale : `invoice:<id>` des factures d'acompte déduites, D-INT-004)
+(facture finale : `invoice:<id>` des factures d'acompte déduites, D-INT-004),
+`issue_channel`, `b2c` (`true`/`false`) et `customer_country` à l'émission
+(ADR-004 D9 ; le canal restant modifiable jusqu'à l'envoi, une extension de
+transmission le relit par `document` avant d'envoyer)
 
 |`credit_note.issued`
 |les mêmes clés, `credit_note_id`, `source` (`credit_note:<id>`),

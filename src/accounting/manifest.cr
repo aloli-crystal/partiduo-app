@@ -24,6 +24,8 @@ Partiduo::Modules.register do
   permission "accounting.period.close"
 
   menu "ACC_ENTRY_PURCHASE", parent: "ENTRY", order: 10, route: "accounting:entry_purchase", permission: "accounting.entry.post"
+  # Facture d'achat papier ou PDF simple, avec sa pièce jointe (ADR-004 D9).
+  menu "ACC_ENTRY_RECEIVED", parent: "ENTRY", order: 15, route: "accounting:entry_received", permission: "accounting.entry.post"
   menu "ACC_ENTRY_SALE", parent: "ENTRY", order: 20, route: "accounting:entry_sale", permission: "accounting.entry.post"
   menu "ACC_ENTRY_FINANCIAL", parent: "ENTRY", order: 30, route: "accounting:entry_financial", permission: "accounting.entry.post"
   menu "ACC_ENTRY_MISC", parent: "ENTRY", order: 40, route: "accounting:entry_misc", permission: "accounting.entry.post"

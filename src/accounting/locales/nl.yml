@@ -27,6 +27,7 @@ nl:
       acc_entry_sale: "Verkopen"
       acc_entry_financial: "Financieel"
       acc_entry_misc: "Diverse verrichtingen"
+      acc_entry_received: "Facturen ontvangen buiten het platform"
       acc_invoicing_history: "Te boeken (Facturatie)"
       acc_accounts: "Rekeningen en relaties"
       acc_entries: "Boekingen"
@@ -103,7 +104,22 @@ nl:
       opening_label: "Openingsbalans van het boekjaar %{year}"
     reconciliation:
       statement_label: "Uittreksel %{reference}"
+    received_invoice:
+      origins:
+        off_platform: "Ontvangen buiten het platform"
+        platform: "Ontvangen via het erkende platform"
     errors:
+      received_invoice:
+        number:
+          blank: "Vul het factuurnummer van de leverancier in"
+          too_long: "Hoogstens %{max} tekens"
+        platform_reference:
+          too_long: "Hoogstens %{max} tekens"
+        attachment:
+          required: "Voeg de factuur toe (pdf of afbeelding)"
+        supplier:
+          unknown: "Geen leveranciersfiche voor “%{value}”: kies een derde met een fiche"
+        duplicate: "Factuur %{number} al geboekt voor deze leverancier en dit bedrag (stuk %{receipt}, factuur van %{date})"
       closing:
         already_posted: "Deze eindejaarsboeking is al geboekt; tegenboek ze om ze opnieuw te boeken."
         nothing: "Geen saldo over te dragen: er is niets te boeken."

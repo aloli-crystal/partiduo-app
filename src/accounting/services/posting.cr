@@ -55,6 +55,9 @@ module Partiduo
         property reversal_of_id : Int64? = nil
         property excluding_vat : BigDecimal = BigDecimal.new(0)
         property vat : BigDecimal = BigDecimal.new(0)
+        # Facture d'achat ou de vente : toutes taxes comprises dans la devise
+        # de l'écriture, signé côté article (négatif pour un avoir).
+        property document_total : BigDecimal? = nil
 
         def initialize(@header : Header, @label : String, @lines : Array(DraftLine))
         end

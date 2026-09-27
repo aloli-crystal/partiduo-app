@@ -1,0 +1,72 @@
+= Comptabilité : factures d'achat reçues
+:toc: left
+:toc-title: Table des matières
+:icons: font
+:source-language: crystal
+
+Factures d'achat non électroniques (papier, PDF simple) saisies à la main
+dans le journal d'achats avec leur pièce jointe, marquées « reçues hors
+plateforme », et contrôle de doublon commun avec les factures reçues par la
+plateforme agréée (ADR-004 D9). NOALYSS ne garde du fournisseur que la pièce
+jointe et le libellé de l'écriture (`Acc_Ledger_Purchase::insert`). Contrat :
+`Partiduo::Api::Accounting` (`src/accounting/api/received_invoices.cr`),
+migration accounting 0009. Décision : `DECISIONS.adoc`, D-ACC-018.
+
+== Données
+
+* `accounting_received_invoice` : écriture (une facture au plus par
+  écriture), fiche du fournisseur, numéro saisi et numéro normalisé
+  (majuscules, sans espace ni `-`, `_`, `.`, `/`), date de la facture,
+  montant toutes taxes comprises dans la devise de la facture (négatif pour
+  un avoir), devise, origine (`off_platform`, `platform`), référence de la
+  plateforme.
+* La ligne ne se modifie ni ne se supprime (déclencheur). La pièce jointe est
+  celle de l'écriture (`accounting_entry.attachment_id`).
+
+== Commandes et requêtes
+
+[source]
+----
+Api::Accounting.post_received_invoice(actor, ReceivedInvoiceInput) : Result(ReceivedInvoiceView)
+Api::Accounting.check_received_invoice(actor, ReceivedInvoiceInput) : Result(EntryDraftView)
+Api::Accounting.received_invoice_duplicates(actor, DuplicateQuery) : Array(ReceivedInvoiceView)
+Api::Accounting.received_invoice(actor, id) : ReceivedInvoiceView
+Api::Accounting.received_invoice_for_entry(actor, entry_id) : ReceivedInvoiceView?
+----
+
+* `ReceivedInvoiceInput` : `document` (`DocumentInput` d'achat, *pièce
+  jointe obligatoire*), `number`, `invoice_date` (`nil` = date de
+  l'écriture), `origin` (`ReceptionOrigin::OffPlatform` par défaut ;
+  `Platform` pour une extension de réception), `platform_reference`.
+* `post_received_invoice` (`accounting.entry.post`, journal d'achats où
+  l'acteur écrit) : l'écriture suit les règles de `post_purchase` (et publie
+  `entry.posted`), la facture est rattachée dans la même transaction. Les
+  saisies d'un même fournisseur sont sérialisées (verrou consultatif) pour
+  que le contrôle de doublon tienne sous concurrence.
+* `check_received_invoice` : mêmes règles, sans écrire (retour instantané).
+* `received_invoice_duplicates` (`accounting.entry.post`) : factures déjà
+  enregistrées du même fournisseur, de même numéro normalisé et de même
+  montant au centime (dans la devise donnée, toutes sinon), écritures
+  annulées par extourne exclues. C'est la requête qu'une extension de
+  réception (`partiduo-einvoicing`) appelle avant de pré-comptabiliser.
+  Une facture dont l'écriture est dans un journal que l'acteur ne lit pas
+  ne garde que le signal de doublon : `restricted = true`, numéro, date et
+  origine seuls (écriture, journal, pièce, fournisseur et montant vidés,
+  DECISIONS D-ACC-020).
+* `received_invoice`, `received_invoice_for_entry`
+  (`accounting.entry.read`, journal visible).
+
+== Refus
+
+[cols="1,2",options="header"]
+|===
+|Champ |Clé
+
+|`number` |`accounting.errors.received_invoice.number.blank`, `.too_long`
+|`number` |`accounting.errors.received_invoice.duplicate` (`number`, `receipt`, `date`)
+|`attachment_id` |`accounting.errors.received_invoice.attachment.required`
+|`third_party` |`accounting.errors.received_invoice.supplier.unknown` (tiers sans fiche, `value`)
+|`platform_reference` |`accounting.errors.received_invoice.platform_reference.too_long`
+|`ledger_id` |`accounting.errors.entry.ledger.not_purchase`
+|autres |ceux de `post_purchase`, sur les chemins de `DocumentInput`
+|===

@@ -308,6 +308,39 @@ module Partiduo
         end
       end
 
+      # --- Canal d'émission (ADR-004 D9) --------------------------------------------
+
+      # Canal proposé pour un client : plateforme agréée pour un professionnel
+      # établi dans le pays du dossier, courriel ou papier sinon ; marquage
+      # B2C d'un particulier. Ne dépend d'aucune extension.
+      def self.propose_channel(actor : Actor, customer_card_id : Int64) : ChannelProposalView
+        authorize!(actor, READ)
+        card = Partiduo::Invoicing::Configuration.card(customer_card_id) ||
+               raise NotFound.new("card", customer_card_id)
+        Partiduo::Invoicing::Channels.propose(card)
+      end
+
+      # Change le canal d'émission (et, si donné, le marquage B2C) d'une
+      # facture, d'une facture d'acompte ou d'un avoir, brouillon ou émis,
+      # tant qu'il n'est pas envoyé (`channel.already_sent`). Tracé.
+      def self.set_issue_channel(actor : Actor, id : Int64, input : ChannelInput) : Result(DocumentView)
+        authorize!(actor, WRITE)
+        Transaction.run do
+          Partiduo::Invoicing::Channels.change!(Documents.find(id, lock: true), input, actor)
+        end
+      end
+
+      # Marque envoyé un document émis remis hors du courriel de la
+      # Facturation (papier imprimé, transmission par une extension de
+      # plateforme) : date d'envoi posée, facture à l'état « envoyée », canal
+      # figé. Sans effet sur un document déjà envoyé. Tracé.
+      def self.mark_sent(actor : Actor, id : Int64) : Result(DocumentView)
+        authorize!(actor, SEND)
+        Transaction.run do
+          Partiduo::Invoicing::Channels.mark_sent!(Documents.find(id, lock: true), actor)
+        end
+      end
+
       # --- Règlements ------------------------------------------------------------
 
       # Enregistre un règlement (total ou partiel) et publie

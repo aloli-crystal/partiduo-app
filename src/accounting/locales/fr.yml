@@ -27,6 +27,7 @@ fr:
       acc_entry_sale: "Ventes"
       acc_entry_financial: "Financier"
       acc_entry_misc: "Opérations diverses"
+      acc_entry_received: "Factures reçues hors plateforme"
       acc_invoicing_history: "À comptabiliser (Facturation)"
       acc_accounts: "Comptes et tiers"
       acc_entries: "Écritures"
@@ -103,7 +104,22 @@ fr:
       opening_label: "À-nouveaux de l'exercice %{year}"
     reconciliation:
       statement_label: "Relevé %{reference}"
+    received_invoice:
+      origins:
+        off_platform: "Reçue hors plateforme"
+        platform: "Reçue par la plateforme agréée"
     errors:
+      received_invoice:
+        number:
+          blank: "Indiquez le numéro de la facture du fournisseur"
+          too_long: "%{max} caractères au plus"
+        platform_reference:
+          too_long: "%{max} caractères au plus"
+        attachment:
+          required: "Joignez la facture (PDF ou image)"
+        supplier:
+          unknown: "Aucune fiche fournisseur pour « %{value} » : choisissez un tiers qui a une fiche"
+        duplicate: "Facture %{number} déjà enregistrée pour ce fournisseur et ce montant (pièce %{receipt}, facture du %{date})"
       closing:
         already_posted: "Cette écriture de fin d'exercice est déjà passée ; extournez-la pour la refaire."
         nothing: "Aucun solde à reporter : il n'y a rien à passer."

@@ -27,6 +27,7 @@ en:
       acc_entry_sale: "Sales"
       acc_entry_financial: "Financial"
       acc_entry_misc: "Miscellaneous operations"
+      acc_entry_received: "Invoices received outside the platform"
       acc_invoicing_history: "To post (Invoicing)"
       acc_accounts: "Accounts and parties"
       acc_entries: "Entries"
@@ -103,7 +104,22 @@ en:
       opening_label: "Opening balances for financial year %{year}"
     reconciliation:
       statement_label: "Statement %{reference}"
+    received_invoice:
+      origins:
+        off_platform: "Received outside the platform"
+        platform: "Received through the approved platform"
     errors:
+      received_invoice:
+        number:
+          blank: "Enter the supplier's invoice number"
+          too_long: "%{max} characters at most"
+        platform_reference:
+          too_long: "%{max} characters at most"
+        attachment:
+          required: "Attach the invoice (PDF or image)"
+        supplier:
+          unknown: "No supplier card for “%{value}”: choose a third party that has a card"
+        duplicate: "Invoice %{number} already recorded for this supplier and amount (document %{receipt}, invoice dated %{date})"
       closing:
         already_posted: "This year-end entry has already been posted; reverse it to post it again."
         nothing: "No balance to carry: there is nothing to post."

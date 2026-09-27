@@ -60,6 +60,7 @@ module Partiduo
         errors.concat(discount_errors("global_discount", input.global_discount_kind, input.global_discount_value))
         errors.concat(credit_errors(input, current))
         errors.concat(deposit_errors(input, current))
+        errors.concat(Channels.input_errors(input))
         lines = resolve_lines(input, errors)
         if errors.empty?
           totals = Calculator.compute(lines.map(&.data), input.global_discount_kind, input.global_discount_value)
@@ -339,7 +340,9 @@ module Partiduo
         customer = Configuration.card(input.customer_card_id) || raise Partiduo::Api::NotFound.new("card", input.customer_card_id)
         document ||= Document.new(kind: input.kind, series: Numbering.series_for(input.kind),
           created_by_id: actor.user_id, source_id: source_id)
+        previous_customer_id = document.customer_id.try { |value| id_of(value) }
         document.customer_id = input.customer_card_id
+        Channels.apply(document, input, customer, previous_customer_id)
         document.currency_code = input.currency_code || Configuration.base_currency
         document.locale = input.locale || Configuration.company.default_locale
         document.layout_id = input.layout_id
@@ -561,6 +564,7 @@ module Partiduo
           issued_by_id: document.issued_by_id.try(&.to_i64), fingerprint: document.fingerprint.to_s,
           pdf_attachment_id: document.pdf_id.try { |pdf_id| id_of(pdf_id) }, sent_at: document.sent_at,
           created_at: document.created_at!, updated_at: document.updated_at!,
+          issue_channel: document.issue_channel.to_s, b2c: document.b2c!,
         )
       end
 
@@ -594,7 +598,7 @@ module Partiduo
           locale: source.locale, layout_id: source.layout_id.try { |layout_id| id_of(layout_id) },
           deposit_ids: input.kind == "invoice" ? open_deposits(source) : [] of Int64,
           credited_document_id: input.kind == "credit_note" ? source_id : nil,
-        )
+        ).copy_with(**Channels.inherited(source, input.kind))
         {document_input, errors}
       end
 

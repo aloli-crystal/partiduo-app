@@ -47,6 +47,15 @@ en:
       partially_paid: "Partially paid"
       paid: "Paid"
       overdue: "Overdue"
+    channels:
+      none: "Not chosen"
+      platform: "Approved platform"
+      email: "Email"
+      paper: "Paper"
+    channel_reasons:
+      domestic_business: "Business customer established in the company's country: e-invoice through the approved platform"
+      foreign_business: "Foreign business customer: outside the platform, international sales e-reporting"
+      private_customer: "Private customer: outside the platform, B2C e-reporting"
     links:
       from_quote: "From quote %{number}"
       from_order: "From order %{number}"
@@ -228,6 +237,9 @@ en:
           exceed_total: "Deducted deposits exceed the invoice total"
         lines:
           too_many: "%{max} lines at most"
+        issue_channel:
+          invalid: "Unknown issue channel: %{value}"
+          fiscal_only: "Only an invoice, a deposit invoice or a credit note has an issue channel"
         global_discount:
           exceeds: "The overall discount exceeds the lines total"
         issued: "Issued document: it can be neither changed nor deleted; correct it with a credit note"
@@ -270,6 +282,10 @@ en:
         credit_exceeds: "The credit note exceeds the invoice's remaining amount (%{remaining})"
         credit_before_invoice: "A credit note cannot predate the invoice it corrects"
         future: "The issue date cannot be later than today (%{date}): the allocated number is final"
+      channel:
+        not_fiscal: "Only an invoice, a deposit invoice or a credit note has an issue channel"
+        already_sent: "Document already sent: its issue channel can no longer change"
+        draft: "Issue the document first"
       transform:
         source_draft: "Issue the source document first"
         not_allowed: "Cannot turn %{from} into %{to}"

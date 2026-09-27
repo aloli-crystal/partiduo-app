@@ -5583,3 +5583,1127 @@ modification d'un brouillon. Le cœur calcule le sous-total.
 
 *Choix.* Le tableau de bord ajoute les rappels du jour et en retard du Suivi
 (`Api::Followup.reminders`), trois premiers cités, lien vers les rappels.
+
+== Factures non électroniques (ADR-004 D9, cœur et interface, 27 septembre 2026)
+
+Contrats : link:doc/api/invoicing.adoc[] (§ Canal d'émission et marquage
+B2C), link:doc/api/accounting-received-invoices.adoc[]. Rien ici ne dépend
+de `partiduo-einvoicing`.
+
+=== D-INV-016 — Canal d'émission et marquage B2C portés par le document fiscal (ADR-004 D9)
+
+*Contexte.* ADR-004 D9 : chaque facture de vente porte un canal
+(plateforme agréée, courriel, papier), proposé selon le client, modifiable
+jusqu'à l'envoi, avec un marquage pour l'e-reporting ; le canal appartient
+au cœur. NOALYSS n'a rien d'équivalent.
+
+*Choix.*
+
+* Colonnes `issue_channel` (`platform`, `email`, `paper`, vide hors
+  documents fiscaux) et `b2c` sur `invoicing_document` (migration invoicing
+  0002), pour la facture, la facture d'acompte et l'avoir ; un devis, une
+  commande ou un bon de livraison n'en ont pas (`fiscal_only`).
+* Proposition (`propose_channel`) : professionnel — SIREN ou numéro de TVA,
+  la règle de D-INV-005 — établi dans le *pays du dossier* → `platform` ;
+  sinon `email` si la fiche a une adresse électronique, `paper` à défaut.
+  `b2c` = client sans SIREN ni numéro de TVA ; `international` = client
+  établi hors du pays du dossier (signal pour l'e-reporting des ventes
+  internationales, non stocké).
+* Saisie : `DocumentInput#issue_channel` / `#b2c` à `nil` gardent la valeur
+  du brouillon pour le même client, sinon reprennent la proposition ; un
+  avoir tiré d'une facture en reprend le canal et le marquage.
+* Jusqu'à l'envoi : `set_issue_channel` sur un brouillon ou un document
+  émis ; PostgreSQL ajoute les deux colonnes aux colonnes modifiables d'un
+  document émis et les fige dès que `sent_at` est posé. `mark_sent` pose
+  `sent_at` pour un envoi hors courriel (papier, plateforme par une
+  extension) ; l'envoi par courriel les fige aussi. Le canal n'entre pas dans
+  l'empreinte : ce n'est pas une mention imprimée.
+* `invoice.issued` et `credit_note.issued` portent en plus `issue_channel`,
+  `b2c` et `customer_country`. `Partiduo::Events::SCHEMA` n'est pas modifié
+  (clés facultatives, comme `deposit_sources`) : un publicateur plus ancien
+  reste valide ; une extension relit le canal par le contrat avant de
+  transmettre, puisqu'il peut changer après l'émission.
+
+*Alternatives écartées.* Canal porté par la fiche client (il se choisit par
+facture, ADR-004 D9) ; canal figé à l'émission (contraire à « modifiable
+jusqu'à l'envoi ») ; nouvel événement `invoice.channel_changed` (liste
+fermée, aucun abonné n'en a besoin).
+
+*Amendement proposé à ADR-004 D9.* Lire « professionnel assujetti établi dans
+le pays du dossier » au lieu de « professionnel français assujetti » : un
+dossier belge (régime `be`) propose ainsi la plateforme à un client belge
+identifié à la TVA (obligation belge du 1^er^ janvier 2026). Réversible : une
+seule condition dans `Invoicing::Channels.propose`.
+
+=== D-ACC-018 — Factures d'achat reçues : table rattachée à l'écriture, doublon commun (ADR-004 D9)
+
+*Contexte.* ADR-004 D9 : une facture d'achat non électronique se saisit dans
+le journal d'achats avec sa pièce jointe, marquée « reçue hors plateforme »,
+et entre dans la même détection de doublons que les factures reçues par la
+PA (ADR-004 D3). NOALYSS ne garde ni le numéro de la facture du fournisseur
+(au mieux dans le libellé) ni de contrôle de doublon.
+
+*Choix.*
+
+* Table `accounting_received_invoice` (migration accounting 0009) : une
+  ligne au plus par écriture — fournisseur, numéro saisi et normalisé, date,
+  montant TTC dans la devise de la facture (négatif pour un avoir), devise,
+  origine `off_platform` / `platform`, référence de la plateforme. Ni
+  modification ni suppression (déclencheur) ; l'écriture s'annule par
+  extourne comme toute autre.
+* `post_received_invoice` passe l'écriture par les règles de
+  `post_purchase` (même service, `entry.posted` publié) et rattache la
+  facture dans la même transaction ; pièce jointe *obligatoire*, journal
+  d'achats seulement. Une extension de réception l'appelle avec l'origine
+  `Platform`.
+* Doublon : même fiche fournisseur, même numéro normalisé (majuscules, sans
+  espace ni `-`, `_`, `.`, `/`), même montant TTC au centime, même devise ;
+  les factures dont l'écriture est extournée ne comptent plus. Contrôlé par
+  `received_invoice_duplicates` (exposé pour `partiduo-einvoicing`),
+  `check_received_invoice` et à l'enregistrement, sous un verrou
+  consultatif par fournisseur (deux saisies simultanées ne passent pas
+  toutes deux). Le doublon est cherché même si la pièce manque encore
+  (retour instantané de la saisie).
+* Le refus cite la pièce de l'écriture existante, même si elle est dans un
+  journal que l'acteur ne lit pas : empêcher le double paiement prime.
+
+*Alternatives écartées.* Index unique en base : il faudrait exclure les
+écritures extournées (colonne d'une autre table) et le refus doit rester une
+erreur par champ du contrat. Numéro porté par `accounting_entry` : une
+colonne vide pour toutes les autres écritures, et rien pour l'origine.
+Recherche des doublons dans les écritures d'achat saisies sans facture
+reçue (lot 2, reprises) : elles n'ont pas de numéro de fournisseur fiable.
+
+=== D-UI-057 — Saisie d'une facture d'achat papier, la pièce jointe à côté (ADR-004 D9, interface)
+
+*Choix.* Écran `/accounting/entries/received-invoice` (menu
+`ACC_ENTRY_RECEIVED` sous « Saisie ») : l'écriture d'achat à gauche (mêmes
+champs et lignes que la saisie d'achat), le panneau « Facture reçue » de la
+maquette à droite — numéro, date, fichier, aperçu (PDF dans un cadre, image
+sinon). Le fichier se dépose dès qu'il est choisi (HTMX, multipart) et son
+identifiant est gardé dans le formulaire (attribut `form`) ; sans
+JavaScript, il part avec le formulaire, et n'est jamais redéposé s'il l'a
+déjà été. Pièce servie par `/attachments/<id>` (`core.attachment.read`,
+`inline`, `X-Frame-Options: SAMEORIGIN` pour l'aperçu). Le type déclaré
+vient de l'extension du fichier (`Marten::HTTP::UploadedFile` n'expose pas
+celui de la partie) ; le socle vérifie la signature du contenu. Le contrôle
+instantané (`check_received_invoice`) signale le doublon mais tait la pièce
+manquante, signalée à l'enregistrement. Pas de ventilation analytique dans
+cet écran : l'écriture se ventile depuis sa consultation (avertissement si
+le mode obligatoire est actif). La consultation d'une écriture montre la
+facture reçue (origine, numéro, date, montant, lien vers la pièce).
+
+Lève en partie B-CRIT-002 (dépôt d'une pièce jointe depuis l'interface,
+pour cette saisie).
+
+=== D-UI-058 — Canal d'émission dans l'édition et la consultation des factures (ADR-004 D9, interface)
+
+*Choix.* Édition d'un document fiscal : liste « Canal d'émission » dont le
+premier choix, vide, laisse le cœur proposer, et liste B2C à trois états
+(selon le client, oui, non), la proposition du cœur rappelée sous les
+champs. Consultation : panneau « Canal d'émission » (canal, B2C, date
+d'envoi), changement tant que le document n'est pas envoyé, bouton
+« Marquer comme envoyé » ; une note rappelle que la transmission à la
+plateforme revient à l'extension.
+
+== Extension DOCUMENT — justificatifs à traiter (`partiduo-document`)
+
+=== D-DOC-001 — Dépôt `partiduo-document`, espace `Document`, menu sous « Saisie » (extension, document)
+
+*Contexte.* ADR-003 (sort des extensions amont) et ADR-005 D8 : successeur de
+`noalyss_document` (NDER, NDC), boîte unique « Justificatifs à traiter ».
+
+*Choix.* Dépôt `prod-crystal/partiduo/partiduo-document` bâti sur le plan de
+`partiduo-skel` (D-SKEL-002) : code `DOCUMENT`, espace `Document`
+(`Document::Api`, `Document::Ui`), applications Marten `document` (table
+`document_receipt`) et `document_ui`. Un seul modèle, `Receipt`, remplace
+`document`, `acc_operation`, `acc_operation_detail` et `document_supp` : la
+préparation ligne à ligne de NDER est remplacée par la saisie de l'écriture
+avec l'image à côté (maquette), les compléments restent facultatifs. Menu
+`DOCUMENT_INBOX` sous `ENTRY` (« Saisie »), comme la maquette, et non sous
+`EXTENSION`.
+
+*Alternative écartée.* Deux entrées (saisie et chargement) comme NDER et NDC :
+la maquette et ADR-005 D8 n'en veulent qu'une, la même sur téléphone et sur
+ordinateur.
+
+=== D-DOC-002 — DOCUMENT sans dépendance ; contrats de la Comptabilité et de la Facturation lus sous garde (extension, document)
+
+*Contexte.* `partiduo-einvoicing` dépend de DOCUMENT et sa réception
+fonctionne « socle seul » (ADR-003) ; « Saisir l'écriture » exige la
+Comptabilité, « Rattacher » une facture la Facturation. La convention C3
+n'autorise un module à citer le contrat d'un autre que s'il le déclare en
+`depends_on`.
+
+*Choix.* Aucun `depends_on` ni `depends_on_any` : la boîte fonctionne sur le
+socle seul. Les appels à `Partiduo::Api::Accounting` et
+`Partiduo::Api::Invoicing` sont précédés de `Partiduo::Modules.active?` (ou
+laissent le contrat lever `ModuleDisabled`, rendu 404 par l'interface) ;
+`entry_id` et `invoice_id` sont des identifiants sans clé étrangère.
+
+*Amendement proposé (ADR-006 D3, convention C3).* Une *extension* peut citer
+le contrat d'un module qu'elle ne déclare pas, à condition de vérifier son
+activation avant chaque appel ; la dépendance déclarée reste exigée quand
+l'extension ne fonctionne pas sans le module.
+
+*Alternative écartée.* `depends_on_any "ACCOUNTING", "INVOICING"` : interdirait
+la réception des factures électroniques sur une instance réduite au socle.
+
+=== D-DOC-003 — Passage en « Rattaché » par la source `document:<id>` de l'écriture (extension, document)
+
+*Contexte.* ADR-005 D8 : « une fois l'écriture enregistrée, le justificatif
+passe en Rattaché » ; une extension ne modifie pas les tables du cœur.
+
+*Choix.* `Document::Api.post_purchase` appelle
+`Partiduo::Api::Accounting.post_purchase` avec `attachment_id` = l'original
+du justificatif et `source` = `document:<id>` ; l'abonnement à
+`entry.posted` (clé `source` de la charge utile) passe le justificatif en
+« Rattaché » dans la transaction de l'écriture, que l'écriture vienne de
+l'écran de l'extension ou d'ailleurs. Une extourne (`reversal_of`) n'est pas
+un rattachement ; `entry.cancelled` remet « À traiter » les justificatifs de
+l'écriture annulée. « Rattacher » à une écriture existante n'en modifie pas
+la pièce jointe (le cœur n'expose pas de commande pour la changer) : le lien
+est porté par le justificatif.
+
+*Alternative écartée.* Rechercher l'écriture par `attachment_id` : exige de
+relire l'écriture par le contrat de la Comptabilité dans l'abonné.
+
+=== D-DOC-004 — Permissions : `document.receipt.read`/`write` plus celles des pièces jointes du socle (extension, document)
+
+*Contexte.* Le stockage appartient au socle (`core.attachment.read`,
+`core.attachment.write`) ; `Actor.system` est interdit dans une requête HTTP.
+
+*Choix.* Déposer exige `document.receipt.write` *et* `core.attachment.write` ;
+lire un fichier exige `document.receipt.read` *et* `core.attachment.read`.
+La liste, les compteurs et les compléments ne demandent que les permissions
+de l'extension (nom, type et taille de l'original sont recopiés dans
+`document_receipt`). Le profil ADMIN a tout ; un profil « saisie terrain »
+coche les deux paires.
+
+*Alternative écartée.* Stocker avec `Actor.system` derrière la seule
+permission de l'extension : contraire à la convention de l'acteur.
+
+=== D-DOC-005 — Vignette et version réduite par un outil du système (extension, document)
+
+*Contexte.* ADR-005 D8 : original conservé tel quel, vignette et version
+réduite produites par le serveur, HEIC converti. Aucun décodeur d'image
+(JPEG, HEIC, PDF) n'existe en Crystal.
+
+*Choix.* `Document::Imaging` confie le rendu à `vipsthumbnail` (libvips,
+orientation EXIF, HEIC par libheif, PDF par poppler), sinon à `magick`
+(ImageMagick 7, format d'entrée imposé, première page) ; délai maximal de
+30 s ; `PARTIDUO_DOCUMENT_RENDERER=vips|magick|none` force le choix. Vignette
+320 px, version réduite 1 600 px (NOALYSS réduisait à 1 200 px de large),
+JPEG qualité 82 sans métadonnées, stockées comme pièces jointes du socle et
+citées par le justificatif (clés étrangères). Le rendu se fait hors
+transaction. Sans outil ou en cas d'échec, le justificatif est conservé sans
+vignette (pictogramme, original téléchargeable). Les specs utilisent un
+outil factice, et l'outil réel quand il est présent.
+
+*Alternative écartée.* Réécrire un décodeur ; rendu dans le navigateur (le
+serveur doit produire les versions, et HEIC n'est pas lisible partout).
+
+=== D-DOC-006 — API publique de réception : `Document::Api.receive`, idempotente (extension, document)
+
+*Contexte.* Les factures reçues par la plateforme agréée entrent dans la même
+boîte (ADR-005 D8, ADR-004 D9) ; `partiduo-einvoicing` les synchronise par
+curseur et peut les recevoir deux fois.
+
+*Choix.* `receive(actor, ReceiveInput)` : fichier lisible (PDF, Factur-X,
+image, ou le XML seul), XML structuré facultatif (`data`), `external_ref`
+obligatoire et unique en base ; un second appel rend le justificatif existant.
+Source `einvoice`, nature `invoice`. L'extension ne lit pas le XML
+(lecture UBL/CII : `partiduo-einvoicing`, ADR-004 D3), qui transmet
+fournisseur, montant, date et numéro dans `DetailsInput`.
+
+*Alternative écartée.* Détection par empreinte seule : deux factures
+distinctes peuvent avoir le même rendu PDF.
+
+=== D-DOC-007 — Compteur du menu et du tableau de bord : `PartiduoUi::Extensions.counter` (extension, document ; amendement de l'interface)
+
+*Contexte.* Le compteur des justificatifs à traiter s'affiche dans le menu et
+dans « À traiter » (maquette) ; l'interface n'avait aucun point d'entrée
+pour qu'une extension y contribue.
+
+*Choix.* Ajout générique dans `partiduo-ui-bulma` :
+`PartiduoUi::Extensions.counter(menu_code, route:, todo:, tone:) { |actor| Int64? }` ;
+la coquille affiche le nombre (`pd-count`) à côté de l'entrée de menu quand
+il est positif, le tableau de bord ajoute en tête de « À traiter » la ligne
+`todo` (clé à pluriel). Un compteur refusé (droit, module inactif) est omis.
+DOCUMENT le déclare dans `ui/bulma/bulma.cr` avec
+`Document::Api.pending_count`. Modification de `partiduo-ui-bulma` laissée
+non validée (tâche limitée au commit de `partiduo-document`) ; ses
+276 exemples passent.
+
+*Alternative écartée.* Rouvrir `PartiduoUi::Shell` depuis l'extension ;
+compteur déclaré par le manifeste du cœur (le cœur ne présente rien).
+
+=== D-DOC-008 — Prise de vue et glisser-déposer : formulaire multipart ordinaire et JavaScript de liaison écrit à la main (extension, document)
+
+*Contexte.* Maquette : bouton « Photographier un justificatif »
+(`<input type="file" accept="image/*,application/pdf" capture="environment">`),
+dépôt par glisser-déposer sur ordinateur, compléments après la prise de vue.
+
+*Choix.* Un formulaire `multipart/form-data` utilisable sans JavaScript
+(champ de fichier visible, compléments affichés) ; `document/js/receipts.js`,
+écrit à la main comme `ui/js/shell.js` (D-UI-005, aucune règle), masque les
+compléments jusqu'au choix du fichier, montre un aperçu local (sauf HEIC et
+PDF) et transfère le fichier déposé dans le champ. Le type est reconnu par le
+serveur à la signature du contenu, pas au nom ni au type annoncé. Téléphone
+d'abord : bouton pleine largeur de 56 px, champs de 16 px (pas de zoom
+iOS), une colonne ; zone de dépôt affichée à partir de 768 px.
+
+*Alternative écartée.* Paquet Opal : 780 Ko de runtime pour de la liaison au
+navigateur (D-013, D-UI-005).
+
+=== D-DOC-009 — « Saisir l'écriture » : reprise de l'écran de saisie de l'interface, écriture préremplie par le contrat (extension, document)
+
+*Contexte.* ADR-005 D8 : saisie avec l'image à côté et une écriture
+préremplie ; aucune règle métier dans l'interface.
+
+*Choix.* `Document::Api.purchase_prefill` : premier journal d'achats où
+l'acteur écrit, date du justificatif, fiche du fournisseur, libellé
+« fournisseur · numéro », une ligne dont le hors taxe est déduit du TTC au
+taux demandé (par défaut le taux normal du dossier : catégorie `S` la plus
+élevée hors autoliquidation ; `vat_rate=""` : sans TVA), arrondi au centime.
+L'écran hérite de `PartiduoUi::EntryScreen` (lignes, retour instantané,
+touches Opal) ; le retour instantané passe par `check_purchase` et signale
+l'écart avec le montant du justificatif. Pas de ventilation analytique dans
+cet écran (depuis la consultation de l'écriture, comme la saisie d'une
+facture reçue). L'écran « Répartir au taux » recalcule par un GET, sans
+JavaScript.
+
+*Suite.* Un agent parallèle ajoute au cœur `post_received_invoice`
+(« reçue hors plateforme », doublons, ADR-004 D9), non validé à l'écriture
+de cette décision : DOCUMENT devra l'utiliser dans `post_purchase` une fois
+le contrat stabilisé, pour marquer l'écriture « reçue hors plateforme ».
+
+=== D-DOC-010 — Doublons signalés, jamais bloquants (extension, document)
+
+*Contexte.* `warning_duplicate` de NOALYSS (même fichier ; opération déjà
+transférée de même fournisseur, date et montant) ; ADR-004 D9.
+
+*Choix.* `Document::Api.duplicates` : autres justificatifs non écartés de
+même empreinte SHA-256, ou de même fournisseur (fiche, sinon nom sans
+casse), même date et même montant ; écritures d'achat en vigueur de la même
+fiche, même date, même montant TTC (Comptabilité active et lisible).
+Affichés en avertissement ; l'utilisateur écarte le doublon.
+
+*Alternative écartée.* Refuser le dépôt : une même photo peut être reprise
+volontairement (ticket abîmé).
+
+== Extension EINV — facturation électronique (`partiduo-einvoicing`)
+
+=== D-EINV-001 — Dépôt `partiduo-einvoicing`, espace `Einvoicing`, routes `einv:*` (extension, einvoicing)
+
+*Contexte.* ADR-004 D1 : une extension `partiduo-einvoicing`, code `EINV`
+(ADR-003 D2) ; ADR-005 D4 : `src/<ext>/` et `ui/bulma/`.
+
+*Choix.* Dépôt `prod-crystal/partiduo/partiduo-einvoicing` bâti sur le plan
+de `partiduo-document` : espace `Einvoicing` (`Einvoicing::Api`,
+`Einvoicing::Ui`), applications Marten `einvoicing` (tables `einvoicing_*`)
+et `einvoicing_ui`. L'interface monte les routes sous `/ext/EINV/` avec le
+préfixe `einv:` (code en minuscules, `PartiduoUi::Extensions`) ; les menus
+citent donc `einv:outgoing`, etc., avec des libellés explicites
+(`einvoicing.menu.*`). Menus : factures émises sous « Facturation »,
+factures reçues sous « Saisie » (à côté des justificatifs), annuaire sous
+« Référentiel », raccordement sous « Paramètres ».
+
+*Alternative écartée.* Tout sous la rubrique `EXTENSION` : les écrans vivent
+mieux près des factures et de la saisie, comme DOCUMENT (D-DOC-001).
+
+=== D-EINV-002 — `depends_on "DOCUMENT"` seul ; Facturation et Comptabilité vérifiées à l'appel (extension, einvoicing ; amendement ADR-003 D2)
+
+*Contexte.* La tâche demande `depends_on "DOCUMENT"` et `depends_on
+"INVOICING"` pour l'émission, *et* une réception qui fonctionne sur le socle
+seul ; ADR-003 (sort des extensions amont) : « Réception : socle seul ;
+émission : requiert le module Facturation ; pré-comptabilisation : requiert
+la Comptabilité ». Le registre ne connaît que des dépendances obligatoires
+(`depends_on`, `depends_on_any`) ; l'exemple de manifeste d'ADR-003 D2
+(`depends_on_any "INVOICING", "ACCOUNTING"`) interdirait aussi une instance
+réduite au socle.
+
+*Choix.* `depends_on "DOCUMENT"` (la boîte « Justificatifs à traiter » reçoit
+les factures) et rien d'autre. Les appels à `Partiduo::Api::Invoicing` et
+`Partiduo::Api::Accounting` sont gardés comme dans DOCUMENT (D-DOC-002) :
+`Partiduo::Modules.require_active!("INVOICING")` pour relever ou transmettre,
+`Guard.authorize!(…, module_code: "ACCOUNTING")` pour pré-comptabiliser
+(`ModuleDisabled` sinon, rendu 404 par l'interface) ; les abonnements à
+`invoice.issued` n'arrivent que si la Facturation publie.
+
+*Amendement proposé (ADR-003 D2).* Remplacer l'exemple par `depends_on
+"DOCUMENT"` et ajouter au registre une déclaration *facultative*
+(`enhances "INVOICING", "ACCOUNTING"`) documentant les modules dont
+l'extension se sert quand ils sont actifs, sans en faire des dépendances.
+
+*Alternative écartée.* `depends_on "INVOICING"` : la réception exigerait la
+Facturation, contrairement à ADR-003 et ADR-004 D9.
+
+=== D-EINV-003 — Connecteur : les cinq méthodes d'ADR-004 D2, pages à curseur, transport remplaçable (extension, einvoicing)
+
+*Contexte.* ADR-004 D2 fixe `submit`, `fetch_incoming`, `send_status`,
+`fetch_statuses`, `send_ereporting` et la synchronisation par curseur ; D6 :
+tests contre une plateforme simulée.
+
+*Choix.* `abstract class Einvoicing::Connector` avec ces cinq méthodes, plus
+`check` (essai du raccordement), `mode` (bac à sable ou production),
+`acknowledge` (confirmation de réception, point d'accès NOALYSS),
+`lookup` (annuaire, `Unsupported` par défaut) et `preferred_syntax`. Les
+types échangés sont des `record` imbriqués (`Connector::OutgoingInvoice`,
+`Page(T)` = éléments + curseur + `has_more`…). Les adaptateurs
+s'enregistrent (`Einvoicing::Connections.register`) avec leurs paramètres
+déclarés (secret, obligatoire, URL, choix) : une extension `partiduo-<pa>`
+(SuperPDP, ADR-004 D8) ajoute le sien sans toucher à EINV. Tout échange HTTP
+passe par `Einvoicing::Http.transport` : réseau réel (`NetTransport`, HTTPS
+exigé, contexte TLS client de Crystal qui vérifie certificat et nom d'hôte)
+ou double de test. Chaque page lue est enregistrée *avec* son curseur dans
+une même transaction.
+
+*Alternative écartée.* Un serveur HTTP simulé lancé par les specs : plus
+lent, et il faudrait désactiver la vérification TLS ou fabriquer une
+autorité de certification de test.
+
+=== D-EINV-004 — Secrets et jetons chiffrés par l'extension : AES-256-CBC puis HMAC-SHA-256 (extension, einvoicing ; amendement ADR-003 D6)
+
+*Contexte.* ADR-004 D2 : secrets, jetons d'accès et de rafraîchissement
+chiffrés en base ; ADR-003 D6 cite « paramètres propres de l'extension,
+secrets chiffrés » dans la surface du cœur, qui n'expose pourtant aucun
+service de secrets. `OpenSSL::Cipher` de Crystal 1.19 ne donne pas accès à
+l'étiquette d'authentification GCM.
+
+*Choix.* `Einvoicing::Secrets` : AES-256-CBC à vecteur aléatoire, puis
+HMAC-SHA-256 de l'ensemble (chiffrer puis authentifier), comparaison en
+temps constant ; format `v1:<base64>`. Clé : `PARTIDUO_EINVOICING_KEY` (64
+caractères hexadécimaux) si elle est définie, sinon dérivée de
+`MARTEN_SECRET_KEY` ; sous-clés distinctes de chiffrement et
+d'authentification. Paramètres non secrets en JSON clair ; un secret n'est
+jamais réaffiché (seulement « enregistré »).
+
+*Amendement proposé (ADR-003 D6).* Un service `Partiduo::Api::Core.secrets`
+(chiffrer, déchiffrer, rotation de clé) partagé par les extensions ; EINV y
+passera sans changer son format de stockage (préfixe de version).
+
+*Alternative écartée.* Le shard maison `secrets` : hors des shards que la
+tâche autorise ; AES-GCM par `LibCrypto` directement : code non sûr à
+maintenir.
+
+=== D-EINV-005 — Curseur de l'API Flux XP Z12-013 : `nextCursor`, puis dernier `updatedAt` relu avec recouvrement (extension, einvoicing)
+
+*Contexte.* ADR-004 D2 : synchronisation par curseur, jamais par date.
+L'API Flux 1.3.0 pagine par curseur opaque (`nextCursor`) mais ne le rend
+plus à la dernière page : il n'existe aucun marque-page durable entre deux
+synchronisations.
+
+*Choix.* Le curseur conservé est un JSON opaque pour le reste de
+l'extension : `c` = `nextCursor` tant que la plateforme annonce une suite,
+`t` = l'`updatedAt` le plus récent lu. Une synchronisation reprend au
+curseur `c` s'il existe, sinon filtre `updatedAfter = t − 10 minutes` ;
+l'enregistrement est idempotent (référence de la plateforme unique en base)
+et écarte ce qui a déjà été vu. Le recouvrement couvre les flux créés dans
+une transaction encore ouverte côté plateforme, la cause de perte que
+l'ADR veut éviter. Les factures sont `SupplierInvoice` entrantes ; les
+statuts sont l'accusé de dépôt de nos flux `CustomerInvoice` (`Ok` → 200,
+`Error` → 213 avec motif) et les messages CDAR entrants
+(`CustomerInvoiceLC`, `SupplierInvoiceLC`).
+
+*Alternative écartée.* Synchroniser par date seule : contraire à ADR-004 D2.
+
+=== D-EINV-006 — Variantes CII tirées du XML Factur-X de la Facturation (extension, einvoicing)
+
+*Contexte.* ADR-004 D3 : la facture PDF/A-3 Factur-X est produite par la
+Facturation ; l'extension produit à la demande CII D22B, UBL 2.1 EN 16931 et
+EXTENDED-CTC-FR, depuis `Partiduo::Api` seulement.
+
+*Choix.* Le CII (EN 16931 et EXTENDED-CTC-FR) est le XML embarqué dans le
+PDF/A-3 (`Partiduo::Api::Invoicing.facturx_xml`), dont seul l'identifiant de
+spécification (BT-24) change, et où la note `BAR` = `B2C` s'ajoute pour une
+vente à un particulier : une seule production des montants et des mentions,
+identique au PDF. Les espaces de noms CII sont les mêmes de D16B à D22B ; les
+éléments EN 16931 sont un sous-ensemble admis d'EXTENDED-CTC-FR. L'UBL 2.1
+(et PEPPOL BIS 3) est construit depuis `DocumentView` : SIREN en schéma
+`0002` (NOALYSS écrivait `0009`), adresse électronique `0225`
+(`SIREN[_SIRET[_CODEROUTAGE]]`) ou `0208` en Belgique. Transmission : le PDF
+Factur-X (adaptateur XP Z12-013), le CII pour le B2C, l'UBL PEPPOL pour
+NOALYSS-PEPPOL.
+
+*Alternative écartée.* Un second générateur CII dans l'extension : deux
+sources de vérité pour les mêmes montants.
+
+=== D-EINV-007 — Statuts émis en CDAR réduit (extension, einvoicing)
+
+*Contexte.* L'API Flux échange les statuts sous forme de messages CDAR
+(syntaxe `CDAR`) ; le schéma détaillé des spécifications externes v3.2 n'a
+pas été consulté (B-EINV-002).
+
+*Choix.* `Einvoicing::Formats::Cdar` écrit et lit une structure réduite aux
+données du statut : facture visée (`IssuerAssignedID`, type, date),
+`ProcessConditionCode` (code AFNOR), motif (`ReasonCode`, `Reason`), montant
+encaissé (`MEN`), émetteur et destinataire (SIREN `0002`, rôle `SE`/`BY`).
+
+*Alternative écartée.* Attendre le schéma : Refusée et Encaissée sont
+obligatoires dès l'activation de l'extension.
+
+=== D-EINV-008 — E-reporting : B2C par la facture (note `BAR`) et « Encaissée » ; international par lots mensuels (extension, einvoicing)
+
+*Contexte.* ADR-004 D8 : B2C par note `BAR` = `B2C` et statut 212 à
+l'encaissement ; ventes et achats internationaux par l'API dédiée.
+
+*Choix.* Une vente B2C (dossier `fr`, marquage B2C de la Facturation) est
+transmise en CII avec la note `BAR` (règle `B2C`), puis « Encaissée » au
+paiement. Une vente à un professionnel étranger est déclarée en e-reporting
+(`international_sales`, table `einvoicing_report`), par lots nature × mois,
+en flux `FRR` (règle `B2BInt`) dont la représentation est réduite aux
+données de la transaction (B-EINV-002). Les achats internationaux ne sont
+pas encore déclarés : les factures d'achat étrangères arrivent hors
+plateforme (ADR-004 D9) et leur déclaration demande le schéma détaillé.
+
+*Alternative écartée.* E-reporting B2C agrégé calculé par l'extension : la
+plateforme le fait à partir des factures marquées `BAR`.
+
+=== D-EINV-009 — Voie de chaque facture émise ; signalement jamais bloquant (extension, einvoicing)
+
+*Contexte.* ADR-004 D9 : rien ne bloque une facture non électronique ;
+l'extension signale seulement les cas où la réforme impose la plateforme.
+
+*Choix.* À `invoice.issued` / `credit_note.issued`, la facture est relevée
+avec sa voie : `platform` (canal plateforme), `b2c` (dossier `fr`,
+particulier), `international` (client étranger), sinon `off_platform`, avec
+`platform_required` quand le client est un professionnel français (bandeau
+rouge à l'écran). Une facture remise par la plateforme passe « envoyée »
+dans la Facturation (`mark_sent`) ; une vente B2C garde son canal (courriel
+ou papier). Une facture émise avant l'activation se relève à la demande
+(`Api.track`).
+
+*Alternative écartée.* Refuser l'émission hors plateforme : contraire à
+ADR-004 D9.
+
+=== D-EINV-010 — Pré-comptabilisation : compte de charge du journal d'achats, une ligne par taux, source `document:<id>` (extension, einvoicing)
+
+*Contexte.* ADR-004 D3 : pré-comptabilisation dans le journal d'achats par
+le service d'écriture ; ADR-004 D9 : même détection de doublons que les
+factures reçues hors plateforme. Une facture reçue ne dit pas à quel compte
+de charge l'imputer.
+
+*Choix.* `post_received_invoice` du cœur (origine `Platform`, référence de
+la plateforme, numéro et date de la facture) avec : premier journal
+d'achats où l'acteur écrit, *compte par défaut du journal* (erreur
+`reception.account_missing` s'il n'en a pas), fiche du fournisseur reconnue
+par SIREN ou numéro de TVA (erreur si aucune), une ligne par taux du
+récapitulatif de TVA (hors taxe et TVA de la facture, taux du dossier de
+même catégorie et pourcentage), montants signés négativement pour un avoir,
+pièce jointe = fichier reçu (pièce du socle rangée par DOCUMENT), source
+`document:<id>` pour que DOCUMENT rattache le justificatif (D-DOC-003). Le
+doublon avec une facture saisie « reçue hors plateforme » est refusé par le
+cœur. `Api.duplicates` le montre avant.
+
+*Alternative écartée.* Deviner un compte de charge (dernier achat du
+fournisseur, classe 6 par défaut) : imputation silencieuse, à corriger
+ensuite.
+
+=== D-EINV-011 — « Encaissée » (212) au lettrage et à l'encaissement saisi, envoi après validation (extension, einvoicing)
+
+*Contexte.* ADR-004 D4 : Encaissée est émis automatiquement au lettrage du
+paiement dans le cœur (`payment.matched`). Sans Comptabilité, la Facturation
+publie `payment.recorded`.
+
+*Choix.* Les deux abonnements créent un événement 212 à émettre (montant
+réglé par facture de `amounts`, date `matched_on`) sur une facture
+transmise (voies `platform` et `b2c`, hors avoir), une seule fois par
+lettrage ou encaissement (colonne `origin` unique). L'envoi est tenté par
+`Partiduo::Events.after_commit`, sans jamais faire échouer l'opération
+d'origine ; un échec laisse l'événement `failed`, repris à la
+synchronisation. Une plateforme sans cycle de vie (NOALYSS-PEPPOL) le passe
+`not_applicable`. Le délettrage n'émet rien (aucun statut d'annulation
+d'encaissement n'est défini).
+
+*Alternative écartée.* Envoyer dans l'abonné : un appel réseau dans la
+transaction du lettrage.
+
+=== D-EINV-012 — Tables préfixées `einvoicing_` ; `einvoicing_lifecycle_event` (extension, einvoicing)
+
+*Contexte.* ADR-004 D4 nomme la table `invoice_lifecycle_events` ; ADR-003
+D5 impose le préfixe de l'application.
+
+*Choix.* `einvoicing_lifecycle_event` (code, date, motif, émetteur, montant,
+état d'émission), plus `einvoicing_connection`, `einvoicing_transmission`,
+`einvoicing_reception`, `einvoicing_report`. Contraintes en base : un seul
+raccordement actif (index unique partiel), états contrôlés, un événement vise
+une facture émise *ou* reçue, facture pré-comptabilisée ⇔ écriture citée,
+justificatif DOCUMENT en clé étrangère. Les identifiants du module
+Facturation et de la Comptabilité restent sans clé étrangère (D-DOC-002).
+
+=== D-EINV-013 — Complexité cyclomatique admise jusqu'à 20 (extension, einvoicing)
+
+*Contexte.* Ameba limite la complexité à 12 ; lecture et production des
+formats (UBL, CII) et contrôle des paramètres d'un adaptateur font un
+branchement par élément facultatif de la norme.
+
+*Choix.* `.ameba.yml` : `Metrics/CyclomaticComplexity` à 20 pour ce dépôt,
+toutes les autres règles par défaut, zéro remarque.
+
+*Alternative écartée.* Découper chaque correspondance en petites fonctions :
+un saut de plus sans gain de lisibilité.
+
+=== D-EINV-014 — Lignes présentées aux gabarits : `Einvoicing::Ui::Row` plutôt qu'un `Hash` (extension, einvoicing)
+
+*Contexte.* Un `Hash` de plus de quelques clés passé à un gabarit Marten
+n'est plus lu (B-EINV-001).
+
+*Choix.* `Einvoicing::Ui::Row` (`Marten::Template::Object`) enveloppe les
+valeurs déjà mises en forme ; `AdapterCard` (`Object::Auto`) pour l'écran de
+raccordement ; les adresses d'action sont calculées par le présentateur
+(une route `<id:int>` refuse l'identifiant en chaîne).
+
+=== D-EINV-015 — NOALYSS-PEPPOL : reprise du code amont, TLS vérifié, session chiffrée (extension, einvoicing)
+
+*Contexte.* ADR-004 D2 : reprise de `peppol-connect` pour les dossiers
+belges, TLS vérifié. Le code amont (`class/peppol_synchro.class.php`) et son
+OpenAPI divergent (`/cnx2` contre `/cnx`).
+
+*Choix.* Le code fait foi : `/cnx2` (formulaire `participantId`, `userId`,
+en-tête `Noalyss-Authz: <jeton>`), puis `Noalyss-Authz: Bearer <session>
+<utilisateur>` (deux espaces), `/1/documents/outgoing` (fichier + `param`
+JSON `uuid`, `email`, `peppol_to`), `/1/documents/incoming?format=full`,
+`/1/acknowledge` après l'enregistrement de la page. Jeton permanent et
+session chiffrés en base (la session PHP disparaît), réouverture sur 401 ;
+HTTPS exigé. Régime `be` seulement ; statuts et e-reporting `Unsupported`.
+
+=== D-EINV-016 — Dépôt manuel d'une facture électronique reçue hors synchronisation (extension, einvoicing)
+
+*Contexte.* ADR-004 D9 : des factures électroniques arrivent aussi hors
+plateforme (fournisseur étranger qui envoie un UBL par courriel, reprise).
+
+*Choix.* `Api.import` et l'écran « Déposer une facture électronique
+reçue » : même lecture, même boîte à traiter, même pré-comptabilisation ;
+référence `import:<sha256>` (idempotente), adaptateur `import`.
+
+=== D-EINV-017 — Motifs de refus proposés (extension, einvoicing)
+
+*Choix.* Liste fermée d'après les codes des spécifications externes
+(`DOUBLON`, `DEST_ERR`, `MONTANTTOTAL_ERR`, `TX_TVA_ERR`, `CMD_ERR`,
+`LIVR_INCOMP`, `NON_CONFORME`, `AUTRE` avec texte obligatoire), à compléter
+quand le schéma détaillé sera consulté (B-EINV-002).
+
+=== D-EINV-018 — Plateforme simulée : double du transport HTTP (extension, einvoicing)
+
+*Contexte.* ADR-004 D6 : tests contre une PA simulée.
+
+*Choix.* `spec/support/platform.cr` reproduit les réponses documentées de
+l'API XP Z12-013 1.3.0 (OAuth 2 client credentials, dépôt multipart,
+recherche paginée par curseur, téléchargement, annuaire) — lues dans les
+OpenAPI publiées par SuperPDP le 27/09/2026 — et de l'API NOALYSS-PEPPOL. Les
+specs y déposent factures et statuts et lisent ce que l'extension envoie.
+Aucune spec n'appelle le réseau.
+
+=== D-SPDP-001 — Dépôt `partiduo-superpdp`, espace `Superpdp`, routes `superpdp:*` (extension, superpdp)
+
+*Contexte.* ADR-004 D8 : un dépôt `partiduo-superpdp`, extension au sens
+de l'ADR-003, `depends_on "EINV"`, qui n'apporte qu'une implémentation
+d'`Einvoicing::Connector`, son paramétrage et ses écrans ; ADR-005 D4 :
+`src/<ext>/` et `ui/bulma/`.
+
+*Choix.* Dépôt `prod-crystal/partiduo/partiduo-superpdp` (branche
+`development`, AGPL v3) bâti sur le plan de `partiduo-einvoicing` : code
+`SUPERPDP`, espace `Superpdp` (`Superpdp::Api`, `Superpdp::Ui`),
+applications Marten `superpdp` (tables `superpdp_*`) et `superpdp_ui`,
+écran monté sous `/ext/SUPERPDP/` (routes `superpdp:*`), menu « SUPER PDP »
+sous « Paramètres », à côté du raccordement d'EINV. Aucun abonnement :
+EINV conduit émission, réception, statuts et e-reporting et appelle
+l'adaptateur.
+
+*Alternative écartée.* Un adaptateur de plus dans `partiduo-einvoicing` :
+contraire à ADR-004 D6 et D8 (EINV ne dépend d'aucune PA).
+
+=== D-SPDP-002 — Adaptateur `SUPERPDP` enregistré auprès d'EINV ; identifiants facultatifs (extension, superpdp ; amendement proposé à EINV)
+
+*Contexte.* EINV enregistre ses adaptateurs par
+`Einvoicing::Connections.register` et les paramètre par des champs
+déclarés (écran générique de raccordement) ; SUPER PDP a deux modes
+OAuth 2.1, dont un sans identifiant saisi par la société.
+
+*Choix.* L'adaptateur déclare deux champs *facultatifs* : `client_id` et
+`client_secret` (secret). Renseignés : mode _client credentials_ ; vides :
+mode _authorization code_ (application OAuth de l'opérateur, jeton de
+rafraîchissement de la société). Le raccordement est enregistré par
+`Einvoicing::Api.configure` (secrets chiffrés, un seul adaptateur actif),
+après essai des identifiants par l'écran de SUPERPDP ; l'écran générique
+d'EINV peut aussi saisir le mode _client credentials_. L'extension ne cite
+d'EINV que sa surface d'adaptateur, vérifiée par une spec :
+`Connector` et ses types, `ConnectorError`, `Unsupported`, `Connections`
+(dont `settings_of`), le modèle `Connection` *filtré sur son propre
+adaptateur*, `Http` (transport, TLS vérifié), `Secrets` (vérificateur
+PKCE chiffré), `Formats` (montants, schémas), `Api`.
+
+*Amendement proposé (EINV).* Exposer `Connections.settings_for(adapter)`
+pour qu'un adaptateur n'ait pas à lire `Einvoicing::Connection`.
+
+*Alternative écartée.* Un champ « mode » à choix : l'écran générique d'EINV
+libelle les choix par `einvoicing.modes.<choix>` et ne connaît pas ceux de
+SUPER PDP.
+
+=== D-SPDP-003 — Permission `superpdp.connection.manage`, plus celle d'EINV pour enregistrer (extension, superpdp)
+
+*Contexte.* L'interface ne donne accès à une route d'extension que par une
+permission *déclarée par le manifeste de l'extension*
+(`PartiduoUi::Extensions.authorize`) ; enregistrer le raccordement passe
+par `Einvoicing::Api.configure`, qui exige `einvoicing.settings.manage`.
+
+*Choix.* SUPERPDP déclare `superpdp.connection.manage` (écran, état,
+raccordement, vérification, régime de TVA, déconnexion) ; enregistrer ou
+débrancher exige en plus `einvoicing.settings.manage`, contrôlée par EINV.
+
+*Alternative écartée.* Réutiliser `einvoicing.settings.manage` seule :
+refusée par l'interface (permission non déclarée par SUPERPDP).
+
+=== D-SPDP-004 — Mode bac à sable ou production déduit par `GET /companies/me` (extension, superpdp)
+
+*Contexte.* ADR-004 D8 : le mode est déterminé par les identifiants et
+affiché en permanence ; SUPER PDP : « la clé API utilisée détermine » le
+mode ; `company.env` vaut `sandbox` ou `production`.
+
+*Choix.* L'essai des identifiants (et chaque vérification) lit
+`GET /oauth2_sessions/me` (vérification KYB) et `GET /companies/me`, et
+conserve l'entreprise et `env` dans `superpdp_account` (ligne unique).
+`Connector#mode` rend cette valeur sans appel réseau (EINV l'appelle à
+chaque écran) ; tant qu'elle est inconnue, « bac à sable » est affiché avec
+« à confirmer par une vérification ». Aucun champ « environnement » n'est
+saisi : une erreur de saisie ne peut pas faire croire au bac à sable.
+
+*Alternative écartée.* Deviner le mode au format du `client_id` : non
+documenté.
+
+=== D-SPDP-005 — Mode _authorization code_ : application de l'opérateur, `state` haché à usage unique, PKCE (extension, superpdp)
+
+*Contexte.* ADR-004 D8 : application OAuth de l'opérateur, parcours
+d'inscription SUPER PDP pré-rempli (`login_hint`, `superpdp_company_number`,
+`superpdp_company_number_scheme` `fr_siren` ou `be_numero_entreprise`),
+retour sur l'instance ; la tâche demande `state` anti-CSRF et PKCE.
+
+*Choix.* Identifiants de l'application de l'opérateur dans l'environnement
+(`PARTIDUO_SUPERPDP_OAUTH_CLIENT_ID`, `PARTIDUO_SUPERPDP_OAUTH_CLIENT_SECRET`) ;
+sans eux, le mode n'est pas proposé. Adresse de retour : celle de la
+requête (`<schéma>://<hôte>/ext/SUPERPDP/oauth/callback`, HTTPS, HTTP admis
+sur `localhost` et `*.localhost`), ou `PARTIDUO_SUPERPDP_REDIRECT_URI`. Chaque
+demande (`superpdp_authorization`) garde l'empreinte SHA-256 du `state`
+(32 octets aléatoires), le vérificateur PKCE chiffré (défi `S256`),
+l'adresse de retour et l'utilisateur ; elle vaut dix minutes, une seule
+fois, pour ce seul utilisateur. Le code est échangé et la session vérifiée
+*avant* l'enregistrement ; l'autorisation précédente est révoquée. Numéro
+proposé : SIREN du dossier, ou numéro d'entreprise tiré du numéro de TVA
+belge.
+
+*Alternative écartée.* `state` en session du navigateur : le contrat ne
+voit pas la session ; la base garde aussi l'usage unique.
+
+=== D-SPDP-006 — Rotation du jeton de rafraîchissement sous verrou PostgreSQL (extension, superpdp)
+
+*Contexte.* SUPER PDP (OAuth 2.1) refuse un jeton de rafraîchissement déjà
+servi ; deux synchronisations simultanées perdraient l'autorisation.
+
+*Choix.* Le renouvellement se fait dans une transaction qui prend
+`pg_advisory_xact_lock` ; le jeton d'accès est relu après l'attente (un
+autre processus a pu renouveler). Le nouveau jeton de rafraîchissement
+remplace l'ancien, chiffré par EINV. Un jeton refusé (`invalid_grant`) est
+oublié *hors* de cette transaction (sinon annulé avec elle) et le dossier
+est invité à se raccorder de nouveau. Limite : un appel fait à l'intérieur
+d'une transaction plus large qui échouerait annulerait la rotation ; EINV
+n'appelle pas ses adaptateurs dans une transaction.
+
+=== D-SPDP-007 — Curseurs : dernier identifiant ; statuts retenus ; sens des factures (extension, superpdp)
+
+*Contexte.* ADR-004 D2 et page « Synchronisation » de SUPER PDP :
+identifiants strictement croissants, `starting_after_id`, `has_after`.
+`GET /invoice_events` ne cite que l'identifiant de la facture.
+
+*Choix.* Curseur de réception : dernier identifiant de `GET /invoices?direction=in` ;
+curseur des statuts : dernier identifiant de `GET /invoice_events` ; page
+de 100 ; le fichier reçu est l'original (`format=original`). Statuts :
+`fr:NNN` → NNN (`fr:501` Irrecevable → 213 avec motif `501`), `api:invalid`
+et `api:rejected` → 213, les autres `api:*` et `ppf:*` sont des étapes
+techniques ignorées ; émetteur : acheteur pour 204 à 211, vendeur pour 212,
+plateforme sinon ; motif = `details.reason`, texte = notes. Le sens (émise,
+reçue) est noté au dépôt et à la réception (`superpdp_invoice_ref`), sinon
+lu une fois (`GET /invoices/{id}`). Les statuts émis par le dossier, qui
+réapparaissent dans la liste, sont reconnus à leur identifiant et ignorés.
+
+=== D-SPDP-008 — Reprises idempotentes : notées avant l'envoi, vérifiées chez la plateforme (extension, superpdp)
+
+*Contexte.* Tâche : reprises idempotentes ; SUPER PDP ne dédoublonne pas
+les données d'e-reporting et ne filtre pas les factures par `external_id`.
+
+*Choix.* Dépôt : `external_id` = l'UUID du `tracking_id` d'EINV (36
+caractères), noté `pending` avant l'envoi ; une reprise cherche d'abord la
+facture parmi les 500 dernières émises ; « Fichier déjà chargé » (400)
+déclenche la même recherche, sinon le refus devient « Rejetée » (213) avec
+une référence `superpdp:refused:…` (EINV exige une référence unique). Une
+retransmission rend l'état tiré des statuts de la facture. Statuts émis et
+lignes d'e-reporting : clé stable (empreinte des données) notée avant
+l'envoi (`superpdp_sent_message`), vérification chez la plateforme en cas de
+reprise, jamais de second envoi d'un message `sent`. Rejeu automatique :
+429 et 503 (requête non traitée), coupure réseau pour une lecture
+seulement ; une écriture incertaine attend la synchronisation suivante.
+
+=== D-SPDP-009 — « Encaissée » (212) ventilée par taux au prorata du TTC (extension, superpdp)
+
+*Contexte.* Le bac à sable refuse un `fr:212` sans taux :
+BR-FR-CDV-14 (au moins un bloc `MEN`, chacun avec montant et taux) ;
+EINV ne transmet que le montant encaissé.
+
+*Choix.* Le récapitulatif de TVA de la facture est lu chez SUPER PDP
+(`GET /invoices/{id}`, `vat_break_down`) ; chaque taux reçoit son TTC, ou,
+pour un encaissement partiel, sa part au prorata arrondie au centime, l'écart
+sur le dernier taux. Vérifié contre le bac à sable (suite d'intégration).
+
+=== D-SPDP-010 — Belgique par Peppol : UBL PEPPOL BIS pour un client étranger (extension, superpdp)
+
+*Contexte.* ADR-004 D8 : SUPER PDP couvre la Belgique par Peppol ; EINV
+transmet le PDF/A-3 Factur-X (format français).
+
+*Choix.* Pour un client hors de France (hors B2C), l'adaptateur transmet
+l'UBL PEPPOL BIS 3 produit par EINV (`Einvoicing::Api.export(…, "peppol")`,
+adresse `0208`). Le B2C reste en CII avec la note `BAR`.
+
+=== D-SPDP-011 — E-reporting : correspondances vers `b2bint_invoices`, `b2c_transactions`, `b2c_payments` (extension, superpdp)
+
+*Contexte.* EINV déclare les ventes internationales par lots mensuels ;
+l'OpenAPI SUPER PDP décrit les champs sans en donner toutes les valeurs.
+
+*Choix.* Vente ou achat international → `b2bint_invoice` : parties par pays,
+SIREN (`0002`) et TVA (`VA`), cadre `S1`/`B1`/`M1` (`type_id`
+`urn.cpro.gouv.fr:1p0:ereporting`), exigibilité `72` (services) ou `5`
+(biens), catégorie `K` (UE) ou `G` (hors UE) sans TVA, sinon `S` au taux
+déduit des montants, montants positifs (avoir par le type 381) ; B2C sans
+facture → catégories `TLB1` / `TPS1`, rôle `SE`. Accepté par le bac à
+sable (essai manuel du 27/09/2026) ; le régime de TVA de l'entreprise se
+règle à l'écran (`PATCH /companies`), sans lui SUPER PDP refuse.
+
+=== D-SPDP-012 — SUPER PDP simulée et suite d'intégration (extension, superpdp)
+
+*Contexte.* ADR-004 D6 et D8 : tests contre une PA simulée reproduisant les
+réponses documentées ; suite d'intégration facultative contre le bac à
+sable.
+
+*Choix.* `spec/support/superpdp_platform.cr` double le transport d'EINV et
+reproduit l'OpenAPI 1.35.0.beta et les pages Authentification, Erreurs,
+Annuaire, Synchronisation et E-reporting, *vérifiées contre le bac à sable*
+le 27/09/2026 (formes `http_ko`, `Fichier déjà chargé`, BR-FR-CDV-14,
+statuts `fr:200`/`201`/`202`, recopie des statuts chez l'autre partie,
+révocation). `spec/integration/sandbox_spec.cr` tourne contre le vrai bac à
+sable si les quatre identifiants existent (environnement, sinon
+`~/.config/partiduo/superpdp-sandbox.env` lu comme le shell) : envoi d'une
+facture de test SUPER PDP du vendeur à l'acheteur, réception par curseur,
+205, 212 ventilée, 210 avec motif, annuaire, validation d'un Factur-X de
+Partiduo. Jetons en mémoire, aucun secret affiché.
+
+*Alternative écartée.* Envoyer au bac à sable une facture émise par la
+Facturation : les SIREN fictifs du bac à sable échouent à la clé de Luhn du
+cœur (B-SPDP-002).
+
+=== D-DOC-011 — Préremplissage d'un achat en autoliquidation ; source contrôlée dès le contrôle instantané (testeur lot E, document)
+
+*Contexte.* Les specs du lot E (`partiduo-document/spec/document/rules_spec.cr`)
+ont montré deux écarts. `Document::Api.purchase_prefill` déduisait la TVA
+du montant TTC pour tout taux non nul, y compris un taux d'autoliquidation
+(`INTS`, `INTA`) : la facture du fournisseur est alors hors taxe et la
+ligne proposée était fausse de 20 %. `check_capture` acceptait une source
+que `capture` refuse.
+
+*Choix.* Taux d'autoliquidation : la ligne reprend le montant du
+justificatif, sans TVA déduite (le cœur calcule l'autoliquidation).
+`check_capture` contrôle la source comme `capture`.
+
+*Alternative écartée.* Refuser un taux d'autoliquidation au préremplissage :
+l'achat intracommunautaire de services est un cas courant.
+
+=== D-EINV-019 — Pré-comptabilisation : origine, pièce jointe et référence imposées même sans écriture proposée (testeur lot E, einvoicing)
+
+*Contexte.* `Einvoicing::Api.post` n'imposait l'origine `Platform`, la
+pièce jointe et la source `document:<id>` que lorsque l'écriture proposée
+existait. Quand elle manquait (fiche du fournisseur inconnue à la
+réception, choisie à l'écran), l'écriture saisie partait telle quelle :
+facture de la plateforme marquée « reçue hors plateforme », sans pièce
+jointe, justificatif non rattaché.
+
+*Choix.* Ces trois valeurs sont toujours tirées de la facture reçue et de
+son justificatif ; sans justificatif, `einvoicing.errors.reception.no_file`.
+
+*Alternative écartée.* Refuser toute écriture saisie quand la proposition
+échoue : l'écran permet justement de choisir le fournisseur.
+
+=== D-SPDP-013 — Permission d'EINV vérifiée avant tout appel à SUPER PDP (testeur lot E, superpdp)
+
+*Contexte.* D-SPDP-003 : enregistrer ou débrancher exige aussi
+`einvoicing.settings.manage`, vérifiée par `Einvoicing::Api`. Mais
+`Linking` révoquait d'abord les jetons chez SUPER PDP : un titulaire de la
+seule permission `superpdp.connection.manage` laissait un raccordement
+actif aux jetons révoqués (déconnexion ou nouveau raccordement refusés).
+
+*Choix.* `connect_credentials`, `start_authorization`,
+`complete_authorization` et `disconnect` vérifient les deux permissions en
+première ligne ; `status`, `check`, `directory_lines`, `update_vat_regime`
+n'exigent que celle de SUPERPDP.
+
+*Alternative écartée.* Révoquer après l'enregistrement : un échec de
+révocation laisserait un jeton valide non suivi.
+
+=== D-ACC-019 — Montant du contrôle de doublon arrondi au centime par l'arrondi commercial (testeur lot E, comptabilité)
+
+*Contexte.* `ReceivedInvoices.amount_key` utilisait `BigDecimal#round(2)`,
+dont le mode par défaut est l'arrondi bancaire (`ties_even`), contraire au
+commentaire et à la convention des montants (demie éloignée de zéro) :
+119,985 valait 119,98 et ne rapprochait pas une facture de 119,99.
+
+*Choix.* `round(2, mode: :ties_away)`.
+
+*Alternative écartée.* Comparer au dix-millième : le doublon vise la même
+facture, dont le montant est en centimes.
+
+=== D-INV-017 — La date d'envoi d'un document émis ne s'efface pas (testeur lot E, facturation)
+
+*Contexte.* Le déclencheur d'intangibilité de la migration
+`0002_issue_channel` fige le canal quand `sent_at` n'est pas nul, mais
+`sent_at` étant modifiable, le remettre à nul puis changer le canal
+contournait la règle.
+
+*Choix.* Le déclencheur refuse de remettre `sent_at` à nul sur un document
+émis (« date d'envoi figée »). Aucun code ne le fait. La migration n'étant
+pas commitée, elle est corrigée en place.
+
+*Alternative écartée.* Une migration `0003` : inutile tant que `0002`
+n'est pas publiée.
+
+=== D-UI-059 — Pièce jointe servie en ligne : PDF et images seulement, `nosniff` (testeur lot E, interface)
+
+*Contexte.* La route `/attachments/<id>` (D-UI-058) servait en ligne, sur
+l'origine de l'instance, toute pièce du socle. Un XML (admis par le socle,
+déposé par une facture électronique reçue) peut porter du XHTML et un
+script, exécuté dans la session de l'utilisateur.
+
+*Choix.* En ligne : PDF, PNG, JPEG, WebP ; les autres types sont
+téléchargés (`Content-Disposition: attachment`). Toujours
+`X-Content-Type-Options: nosniff` ; nom de fichier de l'en-tête sans
+guillemet, barre oblique inverse ni caractère de contrôle.
+
+*Alternative écartée.* `Content-Security-Policy: sandbox` : bloque la
+visionneuse PDF intégrée de Chromium dans le cadre d'aperçu.
+
+== Clôture du lot E — remarques de relecture (27 septembre 2026)
+
+=== D-EINV-020 — « Encaissée » (212) attend le dépôt de la facture (relecture lot E, einvoicing)
+
+*Contexte.* `Lifecycle.cash!` (abonné de `payment.matched` et
+`payment.recorded`) passait la transmission à « paid » quel que soit son
+état. Une facture réglée et lettrée avant la synchronisation, ou après un
+rejet 213, n'était alors plus jamais déposée (`Sync` ne transmet que
+`pending`), sans aucun signal, et un 212 partait vers une plateforme qui ne
+la connaissait pas.
+
+*Choix.* L'événement 212 est toujours créé (`to_send`, une fois par
+lettrage), mais le statut de la transmission ne passe « paid » que si la
+plateforme connaît la facture : `platform_ref` présent et statut
+`submitted`, `deposited`, `approved`, `refused` ou `paid`
+(`Lifecycle.deposited?`). Sinon la facture reste « à transmettre » ou
+« rejetée » (et comptée comme telle) ; `Lifecycle.send!` laisse le 212
+`to_send`, sans erreur, jusqu'au dépôt, puis l'émet et passe la facture
+« paid » (sauf « refused »). Une facture passée hors plateforme entre-temps
+rend le 212 `not_applicable`.
+
+*Alternative écartée.* Retarder la création du 212 au dépôt : il faudrait
+rejouer le lettrage ; l'événement en attente garde la date et le montant.
+
+=== D-EINV-021 — Canal relu avant chaque transmission ; pas d'envoi figé après un rejet (relecture lot E, einvoicing)
+
+*Contexte.* La voie (`route`) et le statut d'une transmission étaient figés
+à `invoice.issued`, alors que le cœur laisse changer le canal jusqu'à
+l'envoi (D-INV-016). Une facture émise « courriel » puis passée
+« plateforme » n'était jamais transmise, l'inverse l'était quand même ; une
+facture déjà envoyée par courriel pouvait être déposée en plus.
+`Outgoing.transmit!` appelait `Inv.mark_sent` même après un rejet immédiat
+(213), ce qui figeait le canal.
+
+*Choix.* `Outgoing.refresh!` relit le document par le contrat avant de
+transmettre (`Sync.run`, pour toutes les transmissions non définitives, et
+`Api.transmit`) et recalcule voie, statut, signalement, canal et
+marquage B2C ; en passant à « international », la déclaration
+d'e-reporting est créée, en le quittant la déclaration non envoyée est
+supprimée. Une facture de canal « plateforme » déjà envoyée sans dépôt
+(courriel de la Facturation, papier marqué envoyé) suit la voie de son
+client hors plateforme : elle n'est pas déposée. Colonne
+`einvoicing_transmission.channel_final` (migration einvoicing `0002`) :
+vraie dès que le canal ne peut plus changer (document envoyé, dépôt
+accepté, e-reporting envoyé), pour ne plus relire le document.
+`mark_sent` n'est appelé que si le dépôt n'est pas rejeté (`ok` ou
+`pending`).
+
+*Alternative écartée.* Un événement du cœur au changement de canal
+(`invoice.channel_changed`) : c'est un amendement à ADR-003 D7 (liste fermée
+des événements), proposé ici pour plus tard ; la relecture couvre le besoin
+sans lui. Marquer « envoyée » seulement au statut 200 : la facture
+resterait « émise » pendant tout le contrôle de la plateforme.
+
+=== D-EINV-022 — Une seule synchronisation ou transmission à la fois (relecture lot E, einvoicing)
+
+*Contexte.* Rien n'empêchait deux synchronisations (tâche planifiée et
+bouton), ni une synchronisation et « Transmettre », de relire les mêmes
+factures `pending` : avec les adaptateurs XP Z12-013 et NOALYSS-PEPPOL, sans
+reprise idempotente, une facture pouvait être déposée deux fois ; deux
+réceptions simultanées finissaient en violation d'unicité.
+
+*Choix.* `Sync.exclusive` : verrou consultatif de session
+`pg_try_advisory_lock(hashtext('einvoicing:sync'))`, tenu par une connexion
+réservée pendant tout le bloc et libéré à la fin (ou à la fermeture de la
+connexion si le processus meurt). `Sync.run` et `Api.transmit` le prennent ;
+s'il est pris, `einvoicing.errors.sync.running` (« synchronisation en
+cours »). En plus, `Outgoing.transmit!` verrouille la ligne
+(`SELECT … FOR UPDATE`) et revérifie son statut avant le dépôt.
+
+*Alternative écartée.* `pg_advisory_lock` bloquant : le bouton de l'écran
+attendrait la fin d'une longue synchronisation planifiée. Un bail en base
+(`sync_started_at`) : il faut une expiration arbitraire si le processus
+meurt.
+
+=== D-EINV-023 — Factures émises lues aussi avec `invoicing.invoice.read` (relecture lot E, einvoicing)
+
+*Contexte.* `transmissions`, `transmission`, `transmission_for_invoice` et
+`transmission_events` rendaient client, montants et numéros des factures de
+vente avec la seule permission `einvoicing.invoice.read`.
+
+*Choix.* Ces quatre lectures exigent en plus `invoicing.invoice.read`
+(`Forbidden` sinon ; l'acteur système passe). Les compteurs restent
+ouverts à `einvoicing.invoice.read` (des nombres, pas des données). Le menu
+« Factures électroniques émises » garde sa seule permission : un
+utilisateur sans lecture de la Facturation y reçoit un refus.
+
+=== D-EINV-024 — Erreurs de transport traduites à la lecture (relecture lot E, einvoicing)
+
+*Contexte.* Les messages de `ConnectorError` (« adresse non HTTPS
+refusée », « injoignable », « réponse JSON illisible »…) et la ligne
+« numéro : erreur » de la synchronisation étaient en français en dur et
+arrivaient à l'écran (paramètre `detail`, `last_error`).
+
+*Choix.* `ConnectorError` porte une clé i18n et ses paramètres
+(`einvoicing.errors.transport.*`, `superpdp.errors.transport.*`) ; le texte
+brut de la plateforme n'y est qu'un paramètre `detail`. Ce qui est
+enregistré en base (`last_error`, erreur d'une transmission, d'un statut,
+d'un lot d'e-reporting) est la clé et ses paramètres encodés
+(`Einvoicing::ErrorText`, préfixe `i18n:`), traduits à la lecture par les
+vues du contrat dans la langue de l'utilisateur ; un paramètre lui-même
+encodé est traduit aussi. Un texte sans clé (motif de rejet de la
+plateforme, erreurs antérieures) est rendu tel quel. `message` reste en
+français pour les journaux.
+
+*Reste.* Les erreurs de lecture d'une facture reçue (`Formats::ReadError`,
+« XML illisible ») sont encore en français dans `read_errors` : elles
+décrivent le fichier et sont rarement vues ; à traduire avec le lecteur.
+
+=== D-EINV-025 — Pré-comptabilisation : TVA sans taux du dossier refusée, total contrôlé (relecture lot E, einvoicing)
+
+*Contexte.* `Incoming.prefill` laissait passer une ligne `vat_rate: nil`,
+`vat_amount: nil` quand aucun taux du dossier ne correspondait (ou que
+l'acteur ne lisait pas les taux) : l'écriture proposée perdait la TVA
+déductible et partait en silence par `post(actor, id)`.
+
+*Choix.* TVA non nulle sans taux correspondant :
+`einvoicing.errors.reception.vat_rate_unknown` (champ `vat`) ; taux
+illisibles : `vat_rates_unreadable`. L'écriture proposée doit totaliser le
+TTC de la facture (au centime), sinon `total_mismatch` (champ `total`).
+Dans ces cas, pas d'écriture proposée ni de pré-comptabilisation silencieuse
+(`post(actor, id)`). Le contrat accepte toujours une écriture saisie
+(`post(actor, id, input)`), mais l'écran d'EINV n'a pas encore de saisie
+libre : pour un taux absent, le message invite à créer le taux ; pour un
+total incohérent, à vérifier la facture.
+
+*Reste.* Un écran de saisie de l'écriture dans EINV (reprise de
+`PartiduoUi::EntryScreen`, comme « Saisir l'écriture » de DOCUMENT) pour
+comptabiliser à la main une facture reçue que la proposition ne couvre pas.
+
+=== D-EINV-026 — Statut sans référence : numéro et SIREN du vendeur, ou date et nature (relecture lot E, einvoicing)
+
+*Contexte.* `find_reception` et `find_transmission` retombaient sur le seul
+numéro de facture ; pour une facture reçue, il n'est unique que chez un
+même fournisseur.
+
+*Choix.* Facture reçue : numéro *et* SIREN du vendeur (lu dans le CDAR,
+`IssuerTradeParty/GlobalID`) ; sans SIREN, le statut est abandonné avec
+une trace dans le journal. Facture émise : numéro, puis date d'émission et
+type de document pour départager ; ambiguïté : abandonné avec une trace.
+Le lecteur CDAR rend désormais aussi le type, la date et le SIREN du
+vendeur de la facture visée.
+
+=== D-EINV-027 — Une erreur imprévue sur une facture n'interrompt pas la synchronisation (relecture lot E, einvoicing)
+
+*Contexte.* `transmit!` ne rattrapait que `ConnectorError` et
+`Formats::Cii::Error` : un `NotFound` sur le PDF ou une erreur de base
+interrompait `Sync.run` après des dépôts partiels, sans `last_sync_at` ni
+`last_error`.
+
+*Choix.* Toute autre exception est rattrapée par facture : la transaction
+de la facture est annulée, l'erreur est tracée dans le journal et notée sur
+la ligne (`einvoicing.errors.transmission.internal`), la boucle continue.
+Une exception levée après un dépôt accepté (très improbable : seul
+`mark_sent` suit le dépôt) ferait perdre la référence : la plateforme
+SUPER PDP reprend de façon idempotente, les autres pourraient recevoir un
+doublon, signalé par leur contrôle.
+
+=== D-DOC-012 — « Saisir l'écriture » enregistre une facture reçue hors plateforme ; facture de la plateforme renvoyée vers EINV (relecture lot E, document)
+
+*Contexte.* Suite de D-DOC-009 : `Document::Api.post_purchase` appelait
+`Acc.post_purchase`. Une facture papier saisie depuis la boîte n'était pas
+marquée « reçue hors plateforme » et échappait au contrôle de doublon
+commun (ADR-004 D9) ; un justificatif de source `einvoice` pouvait être
+comptabilisé ou rattaché ici, la réception d'EINV restant « reçue » et
+comptabilisable une seconde fois.
+
+*Choix.* `post_purchase(actor, id, Accounting::ReceivedInvoiceInput) :
+Result(ReceivedInvoiceView)` et `check_purchase(actor, id,
+ReceivedInvoiceInput)` passent par `post_received_invoice` et
+`check_received_invoice` ; origine `OffPlatform`, pièce jointe et source du
+justificatif imposées. Le numéro de la facture du fournisseur est
+obligatoire ; l'écran le propose (`PrefillView.number`, la référence du
+justificatif) avec la date du justificatif comme date de facture.
+`post_purchase`, `check_purchase`, `link_entry` et `link_invoice` refusent un
+justificatif de source `einvoice` (`document.errors.receipt.einvoice`) ;
+l'interface masque « Saisir l'écriture » et « Rattacher » pour ces
+justificatifs.
+
+*Alternative écartée.* Faire suivre à EINV un rattachement par un
+événement : il faudrait un événement nouveau (amendement à ADR-003 D7) et
+EINV devrait deviner la facture reçue ; l'écran d'EINV fait déjà tout
+(doublons, refus 210, pré-comptabilisation).
+
+=== D-ACC-020 — Doublons de factures reçues : signal seul hors des journaux lus ; tiers sans fiche signalé (relecture lot E, comptabilité)
+
+*Contexte.* `received_invoice_duplicates` rendait fournisseur, montant et
+pièce d'écritures de journaux que l'acteur ne lit pas (D-ACC-018 ne
+l'assumait que pour le refus). `post_received_invoice` échouait sans erreur
+par champ quand le tiers n'avait pas de fiche lisible par le compte
+système ; `duplicates` lisait une écriture par facture.
+
+*Choix.* Une facture dont l'écriture est hors de `readable_ledger_ids`
+garde son identifiant, son numéro, sa date et son origine, avec
+`restricted = true` ; écriture, journal, pièce, fournisseur, montant,
+référence et pièce jointe sont vidés (champ nouveau `restricted` de
+`ReceivedInvoiceView`, défaut `false`). Tiers sans fiche :
+`accounting.errors.received_invoice.supplier.unknown` sous `third_party`
+(défensif : `Posting.card` lit la même fiche). Écritures des doublons lues
+en une requête.
+
+=== D-SPDP-014 — Régime de TVA chez SUPER PDP : même contrôle que le raccordement ; erreurs traduites (relecture lot E, superpdp)
+
+*Contexte.* `update_vat_regime` modifie le paramétrage de l'entreprise chez
+SUPER PDP avec la seule permission `superpdp.connection.manage`.
+
+*Choix.* `authorize_linking!` (les deux permissions, D-SPDP-013). Les
+erreurs de l'adaptateur portent une clé i18n (`superpdp.errors.transport.*`,
+D-EINV-024) et les messages du contrat reprennent le texte traduit
+(`ConnectorError#localized`).
+
+=== D-UI-060 — Taille d'une pièce jointe traduite ; pièces déposées puis abandonnées (relecture lot E, interface)
+
+*Contexte.* L'aperçu de la facture reçue écrivait « Ko » en dur. Une pièce
+déposée par HTMX puis abandonnée (saisie jamais enregistrée) reste dans les
+pièces jointes du socle, sans écriture.
+
+*Choix.* `ui.units.kilobytes` (Ko, KB, kB). Les pièces orphelines ne sont pas
+nettoyées dans ce lot : le socle n'a pas de notion de pièce « en attente ».
+Voir B-UI-008.

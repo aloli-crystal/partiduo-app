@@ -184,6 +184,7 @@ module Partiduo
         draft = Posting::Draft.new(header, label, lines)
         draft.excluding_vat = excluding
         draft.vat = vat_total
+        draft.document_total = total_currency
         draft
       end
 

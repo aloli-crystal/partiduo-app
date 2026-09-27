@@ -47,6 +47,15 @@ fr:
       partially_paid: "Partiellement payé"
       paid: "Payé"
       overdue: "En retard"
+    channels:
+      none: "Non choisi"
+      platform: "Plateforme agréée"
+      email: "Courriel"
+      paper: "Papier"
+    channel_reasons:
+      domestic_business: "Client professionnel établi dans le pays du dossier : facture électronique par la plateforme agréée"
+      foreign_business: "Client professionnel étranger : hors plateforme, e-reporting des ventes internationales"
+      private_customer: "Client particulier : hors plateforme, e-reporting B2C"
     links:
       from_quote: "Issu du devis %{number}"
       from_order: "Issu de la commande %{number}"
@@ -228,6 +237,9 @@ fr:
           exceed_total: "Les acomptes déduits dépassent le total de la facture"
         lines:
           too_many: "%{max} lignes au plus"
+        issue_channel:
+          invalid: "Canal d'émission inconnu : %{value}"
+          fiscal_only: "Seuls une facture, une facture d'acompte ou un avoir ont un canal d'émission"
         global_discount:
           exceeds: "La remise globale dépasse le total des lignes"
         issued: "Document émis : il ne se modifie ni ne se supprime ; corrigez-le par un avoir"
@@ -270,6 +282,10 @@ fr:
         credit_exceeds: "L'avoir dépasse le montant restant de la facture (%{remaining})"
         credit_before_invoice: "Un avoir ne précède pas la facture qu'il corrige"
         future: "La date d'émission ne peut dépasser la date du jour (%{date}) : le numéro attribué est définitif"
+      channel:
+        not_fiscal: "Seuls une facture, une facture d'acompte ou un avoir ont un canal d'émission"
+        already_sent: "Document déjà envoyé : son canal d'émission ne change plus"
+        draft: "Émettez d'abord le document"
       transform:
         source_draft: "Émettez d'abord le document d'origine"
         not_allowed: "Transformation impossible de %{from} en %{to}"

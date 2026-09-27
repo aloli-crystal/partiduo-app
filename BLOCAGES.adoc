@@ -424,3 +424,147 @@ réel jusqu'à la page de connexion (B-JF-001) ; aucun parcours connecté n'a
 
 *Levée.* Parcours au clavier par l'utilisateur, captures comparées à
 `partiduo-docs/maquette/index.html` aux trois tailles.
+
+== B-D9-001 — Écart préexistant entre modèles et migrations de la Comptabilité (factures non électroniques)
+
+*Constat.* `crystal run manage.cr -- genmigrations` propose une migration
+« Change event_id on accounting_billing_dismissal table », sans rapport avec
+ADR-004 D9 (colonne `event_id` du modèle `BillingDismissal`, `unique: true`,
+face à la migration 0004). Les migrations invoicing 0002 et accounting 0009
+n'en produisent aucune.
+
+*Contournement.* Fichier généré supprimé ; rien de modifié.
+
+*Levée.* Aligner le modèle ou ajouter la migration lors d'une relecture de
+la Comptabilité.
+
+== B-EINV-001 — Gabarits Marten : clés d'un grand `Hash` introuvables (extension EINV)
+
+*Constat.* `Marten::Template::Value` redéfinit `==` sans redéfinir `hash` :
+une recherche par clé (`{{ ligne.numero }}`) dans un `Hash` passé au gabarit
+échoue dès que le `Hash` dépasse la taille où Crystal compare sans index
+(les petits `Hash` fonctionnent, ce qui masque le défaut). Constaté avec
+`Hash(String, String?)` de dix clés et plus.
+
+*Contournement.* `Einvoicing::Ui::Row` (`Marten::Template::Object`) et des
+objets `Object::Auto` (D-EINV-014). Marten n'est pas modifié (seuls
+`webauthn` et `totp` peuvent l'être).
+
+*Levée.* Signaler à l'amont (`aloli-crystal/marten`) : ajouter
+`def hash(hasher) = @raw.hash(hasher)` à `Marten::Template::Value`.
+
+== B-EINV-002 — Schémas CDAR et e-reporting (flux 10) non consultés (extension EINV)
+
+*Constat.* Les OpenAPI XP Z12-013 1.3.0 (Flux, Annuaire) et la
+documentation SuperPDP étaient accessibles et ont servi ; le détail des
+messages CDAR et des flux d'e-reporting (`FRR`) relève des spécifications
+externes DGFiP v3.2 (annexes), non consultées ici.
+
+*Contournement.* Structures réduites aux données du statut et de la
+transaction (D-EINV-007, D-EINV-008), testées contre la plateforme simulée.
+
+*Levée.* Valider CDAR et `FRR` contre les XSD des spécifications externes et
+contre le bac à sable d'une plateforme (SuperPDP) ; ajuster
+`Einvoicing::Formats::Cdar` et `EReport`.
+
+== B-EINV-003 — Pas d'essai contre une plateforme réelle ; achats internationaux non déclarés (extension EINV)
+
+*Constat.* Aucun identifiant de bac à sable n'est disponible : les
+adaptateurs XP Z12-013 et NOALYSS-PEPPOL ne sont éprouvés que contre la
+plateforme simulée. L'e-reporting des achats internationaux n'est pas
+produit (D-EINV-008). Le statut de la facture n'est pas affiché sur l'écran
+de la facture de la Facturation (dépôt `partiduo-ui-bulma`, hors de ce
+dépôt).
+
+*Levée.* Suite d'intégration facultative (variables d'environnement du bac à
+sable, ADR-004 D8), à écrire avec `partiduo-superpdp` ; déclaration des
+achats internationaux avec le schéma de B-EINV-002 ; point d'extension de
+l'écran de facture dans l'interface.
+
+== B-SPDP-001 — Le transport d'EINV ne passe pas par un mandataire HTTP (extension SUPERPDP)
+
+*Constat.* `Einvoicing::Http::NetTransport` ouvre la connexion directement
+et ignore `HTTPS_PROXY` ; dans le bac à sable de développement, le réseau
+n'est joignable que par un mandataire (et `localhost` s'y résout d'abord en
+`::1`, où il n'écoute pas).
+
+*Contournement.* La suite d'intégration de `partiduo-superpdp` utilise un
+transport de spec (`spec/support/proxy_transport.cr`) : tunnel `CONNECT`
+par `HTTPS_PROXY`, puis TLS vérifié jusqu'à SUPER PDP. Le code de
+l'extension n'est pas modifié.
+
+*Levée.* Faire suivre `HTTPS_PROXY` / `NO_PROXY` à `NetTransport` dans
+`partiduo-einvoicing` si une instance doit sortir par un mandataire.
+
+== B-SPDP-002 — SIREN fictifs du bac à sable SUPER PDP refusés par le cœur (extension SUPERPDP)
+
+*Constat.* Les entreprises fictives du bac à sable portent des numéros
+`000000001`, `000000002` et des adresses `315143296_<id>` qui ne passent pas
+la clé de Luhn que le cœur impose au SIREN des fiches et de la société : une
+facture émise par la Facturation ne peut pas être adressée à l'acheteur
+fictif.
+
+*Contournement.* La suite d'intégration envoie des factures de test
+produites par SUPER PDP (`generate_test_invoice`) à travers le connecteur
+réel, et fait *valider* un Factur-X de Partiduo par SUPER PDP
+(`validation_reports`) ; l'envoi d'une facture de Partiduo est couvert par
+la plateforme simulée.
+
+*Levée.* Essai avec une entreprise réelle en production, ou adresse
+électronique saisissable sans contrôle de SIREN en bac à sable.
+
+== B-SPDP-003 — Factur-X de Partiduo : cadre de facturation (BT-23) et adresse électronique du vendeur (BT-34) absents (extension SUPERPDP, cœur)
+
+*Constat.* Le validateur SUPER PDP (27/09/2026) rend `is_valid = false`
+pour le PDF/A-3 Factur-X de la Facturation, par deux règles françaises
+(`BR-FR-Flux2`, en avertissement) : BR-FR-08/BT-23 (cadre de facturation
+`B1`, `S1`, `M1`… absent de `BusinessProcessSpecifiedDocumentContextParameter`)
+et BR-FR-13/BT-34 (adresse électronique du vendeur obligatoire ; la
+Facturation n'écrit qu'un courriel, et seulement s'il existe). Le bac à sable
+accepte pourtant le dépôt de factures qui ne portent pas ces avertissements ;
+une facture de Partiduo risque d'être rejetée.
+
+*Contournement.* Aucun dans `partiduo-superpdp` (la facture est produite par
+le module Facturation, ADR-006 D5).
+
+*Levée.* Dans `partiduo-app` (`src/invoicing/services/facturx_xml.cr`) :
+écrire BT-23 d'après la catégorie d'opération (biens `B1`, services `S1`,
+mixte `M1`) et BT-34 en schéma `0225` avec le SIREN du vendeur ; relancer la
+suite d'intégration, qui affiche le rapport de validation.
+
+== B-SPDP-004 — Mode _authorization code_ non essayé contre SUPER PDP (extension SUPERPDP)
+
+*Constat.* Le parcours exige une application OAuth de l'opérateur et une
+vérification d'identité interactive (KYC) : il n'est éprouvé que contre la
+plateforme simulée (state, PKCE, rotation, révocation).
+
+*Levée.* Déclarer l'application OAuth de l'opérateur chez SUPER PDP, puis
+faire le parcours une fois en bac à sable depuis une instance.
+
+== B-SPDP-005 — E-reporting : valeurs de cadre et dates tardives (extension SUPERPDP)
+
+*Constat.* `b2bint_invoices` refuse une date dont la période est déjà
+déclarée (« cannot add invoice at date … ») ; les valeurs de cadre
+(`type_id`) et d'exigibilité retenues (D-SPDP-011) sont acceptées par le bac
+à sable mais non confrontées aux spécifications externes v3.2 (B-EINV-002).
+EINV ne produit pas encore de transactions ni d'encaissements B2C sans
+facture.
+
+*Levée.* Confronter aux spécifications externes ; synchroniser au moins
+chaque jour (tâche planifiée) pour déclarer dans les délais du régime de
+TVA, une ligne refusée pour date tardive restant en échec à reprendre à la
+main.
+
+== B-UI-008 — Pièces jointes déposées puis abandonnées (interface, socle)
+
+*Constat.* L'écran « Factures reçues hors plateforme » dépose le fichier dès
+qu'il est choisi (HTMX) ; si la saisie n'est jamais enregistrée, la pièce
+reste dans `core_attachment` sans écriture ni facture (relecture du lot E,
+D-UI-060). Le socle n'a pas de notion de pièce « en attente » ni de tâche
+de nettoyage.
+
+*Levée.* Au socle : marquer une pièce « non rattachée » à son dépôt et la
+rattacher à l'enregistrement de l'écriture, puis une tâche planifiée qui
+supprime les pièces non rattachées de plus de 24 heures ; ou un dépôt
+temporaire côté interface. À décider avec la conservation des pièces
+(ADR-005).

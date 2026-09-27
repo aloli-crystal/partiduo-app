@@ -47,6 +47,15 @@ nl:
       partially_paid: "Gedeeltelijk betaald"
       paid: "Betaald"
       overdue: "Achterstallig"
+    channels:
+      none: "Niet gekozen"
+      platform: "Erkend platform"
+      email: "E-mail"
+      paper: "Papier"
+    channel_reasons:
+      domestic_business: "Zakelijke klant gevestigd in het land van het dossier: e-factuur via het erkende platform"
+      foreign_business: "Buitenlandse zakelijke klant: buiten het platform, e-reporting van internationale verkopen"
+      private_customer: "Particuliere klant: buiten het platform, B2C e-reporting"
     links:
       from_quote: "Op basis van offerte %{number}"
       from_order: "Op basis van bestelling %{number}"
@@ -228,6 +237,9 @@ nl:
           exceed_total: "De afgetrokken voorschotten overschrijden het factuurtotaal"
         lines:
           too_many: "Hoogstens %{max} lijnen"
+        issue_channel:
+          invalid: "Onbekend verzendkanaal: %{value}"
+          fiscal_only: "Alleen een factuur, een voorschotfactuur of een creditnota heeft een verzendkanaal"
         global_discount:
           exceeds: "De globale korting overschrijdt het totaal van de lijnen"
         issued: "Uitgereikt document: het kan niet gewijzigd of verwijderd worden; verbeter het met een creditnota"
@@ -270,6 +282,10 @@ nl:
         credit_exceeds: "De creditnota overschrijdt het resterende bedrag van de factuur (%{remaining})"
         credit_before_invoice: "Een creditnota gaat de verbeterde factuur niet vooraf"
         future: "De uitgiftedatum mag niet na vandaag (%{date}) liggen: het toegekende nummer is definitief"
+      channel:
+        not_fiscal: "Alleen een factuur, een voorschotfactuur of een creditnota heeft een verzendkanaal"
+        already_sent: "Document al verzonden: het verzendkanaal wijzigt niet meer"
+        draft: "Geef het document eerst uit"
       transform:
         source_draft: "Reik eerst het brondocument uit"
         not_allowed: "Omzetting van %{from} naar %{to} onmogelijk"

@@ -50,6 +50,7 @@ module Partiduo
         end
         seller = Configuration.seller_party
         customer = Configuration.customer_party(card)
+        Channels.complete(document, card)
         assign(document, allocation, issue_date, totals, deductions, seller, customer)
         context = Documents.mentions_context(document, seller, customer, Documents.vat_breakdown(totals), deductions,
           document.operation_category.to_s, document.due_date, document.delivery_date, issue_date,
@@ -252,6 +253,12 @@ module Partiduo
           "prepaid"          => document.prepaid_amount!.to_s,
           "sales"            => sales_json(totals),
           "vat"              => vat_by_rate.map { |rate_id, amount| {"vat_rate_id" => rate_id, "amount" => amount.to_s} }.to_json,
+          # Canal d'émission et marquage B2C (ADR-004 D9) à l'émission ; une
+          # extension de transmission relit le canal par le contrat avant
+          # d'envoyer, il reste modifiable jusqu'à l'envoi.
+          "issue_channel"    => document.issue_channel.to_s,
+          "b2c"              => document.b2c!.to_s,
+          "customer_country" => document.customer_snapshot.try { |json| json["country_code"]?.try(&.as_s?) } || "",
         }
       end
     end

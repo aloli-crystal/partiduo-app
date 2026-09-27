@@ -23,6 +23,9 @@ module Partiduo
         "invoice"         => %w[credit_note],
         "deposit_invoice" => %w[credit_note],
       }
+      # Canaux d'émission d'un document fiscal (ADR-004 D9) : plateforme agréée
+      # (transmise par une extension, `partiduo-einvoicing`), courriel, papier.
+      ISSUE_CHANNELS = %w[platform email paper]
       # Code UNTDID 1001 du document Factur-X (BT-3).
       TYPE_CODES = {"invoice" => "380", "credit_note" => "381", "deposit_invoice" => "386"}
 
@@ -66,7 +69,12 @@ module Partiduo
       # * `global_discount_kind`, `global_discount_value` : remise globale
       #   (BT-107), en pourcentage ou en montant HT ;
       # * `deposit_ids` : factures d'acompte émises à déduire (facture) ;
-      # * `credited_document_id` : facture corrigée (avoir, obligatoire).
+      # * `credited_document_id` : facture corrigée (avoir, obligatoire) ;
+      # * `issue_channel` : canal d'émission d'un document fiscal
+      #   (`ISSUE_CHANNELS`) ; `nil` garde celui du brouillon pour le même
+      #   client, sinon reprend la proposition (`propose_channel`) ; refusé
+      #   pour un devis, une commande ou un bon de livraison ;
+      # * `b2c` : marquage B2C pour l'e-reporting ; `nil` : même règle.
       record DocumentInput,
         kind : String,
         customer_card_id : Int64,
@@ -86,12 +94,18 @@ module Partiduo
         locale : String? = nil,
         layout_id : Int64? = nil,
         deposit_ids : Array(Int64) = [] of Int64,
-        credited_document_id : Int64? = nil
+        credited_document_id : Int64? = nil,
+        issue_channel : String? = nil,
+        b2c : Bool? = nil
 
       # Transformation d'un document émis en document suivant (lignes
       # recopiées, lien conservé). `deposit_percent` : pourcentage de la
       # facture d'acompte (obligatoire pour `deposit_invoice`).
       record TransformInput, kind : String, deposit_percent : BigDecimal? = nil
+
+      # Changement du canal d'émission (ADR-004 D9), jusqu'à l'envoi ;
+      # `b2c` à `nil` garde le marquage en place.
+      record ChannelInput, channel : String, b2c : Bool? = nil
 
       # Émission : `issue_date` remplace la date prévue du brouillon.
       record IssueInput, issue_date : Time? = nil
@@ -308,9 +322,21 @@ module Partiduo
         pdf_attachment_id : Int64?,
         sent_at : Time?,
         created_at : Time,
-        updated_at : Time do
+        updated_at : Time,
+        issue_channel : String = "",
+        b2c : Bool = false do
         def draft? : Bool
           number.nil?
+        end
+
+        # Canal d'émission et marquage B2C modifiables : document fiscal pas
+        # encore envoyé (ADR-004 D9).
+        def channel_editable? : Bool
+          fiscal? && sent_at.nil?
+        end
+
+        def channel_key : String
+          "invoicing.channels.#{issue_channel.presence || "none"}"
         end
 
         def fiscal? : Bool
@@ -498,6 +524,20 @@ module Partiduo
         quotes_expired : Int32,
         drafts : Int32,
         recent_invoices : Array(DocumentSummaryView)
+
+      # Canal proposé pour un client (ADR-004 D9) : `platform` pour un
+      # professionnel établi dans le pays du dossier (SIREN ou numéro de TVA),
+      # sinon `email` si la fiche a une adresse électronique, `paper` à
+      # défaut ; `b2c` pour un client sans SIREN ni numéro de TVA. `reason` :
+      # `domestic_business`, `foreign_business` ou `private_customer`
+      # (libellé `invoicing.channel_reasons.<reason>`) ; `international` :
+      # client établi hors du pays du dossier (e-reporting des ventes
+      # internationales).
+      record ChannelProposalView, channel : String, b2c : Bool, reason : String, international : Bool do
+        def reason_key : String
+          "invoicing.channel_reasons.#{reason}"
+        end
+      end
 
       # Fichier produit (PDF, XML, CSV, FEC, ZIP).
       record FileView, filename : String, content_type : String, content : Bytes

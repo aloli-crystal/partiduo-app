@@ -69,6 +69,11 @@ module Partiduo
       field :pdf, :many_to_one, to: Partiduo::Core::Attachment, null: true, blank: true
       field :sent_at, :date_time, null: true, blank: true
       field :created_by_id, :big_int, null: true, blank: true
+      # Canal d'émission d'un document fiscal (`platform`, `email`, `paper`)
+      # et marquage B2C pour l'e-reporting (ADR-004 D9, migration `0002`) :
+      # modifiables jusqu'à l'envoi (`sent_at`), même après l'émission.
+      field :issue_channel, :string, max_size: 16, blank: true, default: ""
+      field :b2c, :bool, default: false
 
       with_timestamp_fields
 

@@ -26,17 +26,20 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |4 |TVA : déclarations BE (grilles, listing, relevé intracommunautaire, Intervat) et FR (CA3, CA12), liquidation |*Terminé* (clôture « Clôture du lot 4 »)
 |5 |Analytique : plans, postes, groupes, clés de répartition, ventilation des écritures, opérations diverses, balances et historiques |*Terminé* (cœur et interface ; clôture « Clôture du lot 5 ») ; reprise analytique par `partiduo-migrate` reportée (B-MIG-001)
 |6 |Stock, prévisions budgétaires, suivi (GED : extension `partiduo-document`) |*Terminé* (cœur et interface ; clôture « Clôture du lot 6 ») ; reprise par `partiduo-migrate` reportée
+|E |Justificatifs (`partiduo-document`), facturation électronique (`partiduo-einvoicing`, adaptateurs XP Z12-013 et NOALYSS-PEPPOL), SUPER PDP (`partiduo-superpdp`), factures non électroniques (cœur et interface) |*Terminé* (clôture « Clôture du lot E »)
 |===
 
-*État définitif (27 septembre 2026).* Lot en cours : aucun. Les lots P à 6
-du plan sont terminés, les trois jalons vérifiés, et la critique de
-complétude (section du même nom) a comblé les écarts faisables au prompt,
-aux ADR et à la maquette. Ce qui reste est listé dans « Prochaines étapes »
-et dans BLOCAGES.adoc (B-CRIT-001 à B-CRIT-004 pour la critique). Specs :
-`partiduo-app` 994 exemples (tous modules), 948 + 14 en attente
-(Comptabilité seule), 689 + 43 en attente (Facturation seule) ;
-`partiduo-ui-bulma` 270 ; `partiduo-skel` 24 ; `partiduo-migrate` 93 ;
-tous verts.
+*État (27 septembre 2026, clôture du lot E).* Lot en cours : aucun. Les
+lots P à 6 du plan et le lot E (justificatifs, facturation électronique,
+SUPER PDP, factures non électroniques) sont terminés, les trois jalons
+vérifiés, et la critique de complétude (section du même nom) a comblé les
+écarts faisables au prompt, aux ADR et à la maquette. Ce qui reste est
+listé dans « Prochaines étapes » et dans BLOCAGES.adoc. Specs :
+`partiduo-app` 1028 exemples (tous modules), 966 + 16 en attente
+(Comptabilité seule), 709 + 45 en attente (Facturation seule) ;
+`partiduo-ui-bulma` 282 ; `partiduo-document` 69 ; `partiduo-einvoicing`
+92 ; `partiduo-superpdp` 71 (dont 5 contre le bac à sable SUPER PDP) ;
+`partiduo-skel` 24 ; `partiduo-migrate` 93 ; tous verts.
 
 == Lot P — ce qui existe (26 septembre 2026)
 
@@ -1333,10 +1336,200 @@ reprises du lot 6 et de l'analytique (B-CRIT-003), vérification visuelle
 (B-CRIT-004) ; justificatifs photographiés, facturation électronique et
 virements SEPA sont des extensions hors périmètre (prompt, arbitrages 2 et 6).
 
+== Factures non électroniques — ADR-004 D9 (cœur et interface, 27 septembre 2026)
+
+Sans aucune dépendance à `partiduo-einvoicing` (DECISIONS D-INV-016,
+D-ACC-018, D-UI-057, D-UI-058) :
+
+* Facturation : canal d'émission (`platform`, `email`, `paper`) et marquage
+  B2C sur les factures, acomptes et avoirs ; proposition selon le client
+  (`propose_channel`), modifiable jusqu'à l'envoi (`set_issue_channel`,
+  `mark_sent`, figé par PostgreSQL, migration invoicing 0002) ;
+  `issue_channel`, `b2c`, `customer_country` dans `invoice.issued` et
+  `credit_note.issued` (link:doc/api/invoicing.adoc[]).
+* Comptabilité : facture d'achat reçue (`post_received_invoice`,
+  `check_received_invoice`), pièce jointe obligatoire, marquée « reçue hors
+  plateforme » ; contrôle de doublon (même fournisseur, même numéro, même
+  montant) exposé par `received_invoice_duplicates` pour une extension de
+  réception (migration accounting 0009,
+  link:doc/api/accounting-received-invoices.adoc[]).
+* Interface : canal dans l'édition et la consultation des factures ; écran
+  « Factures reçues hors plateforme » (saisie d'achat, panneau « Facture
+  reçue » avec dépôt et aperçu de la pièce), facture reçue sur la
+  consultation de l'écriture.
+* Specs : `spec/invoicing/channels_spec.cr` (11),
+  `spec/accounting/received_invoices_spec.cr` (7),
+  `partiduo-ui-bulma/spec/ui/received_invoice_spec.cr` (6).
+
+== Extension DOCUMENT — justificatifs à traiter (`partiduo-document`, 27 septembre 2026)
+
+Nouveau dépôt `prod-crystal/partiduo/partiduo-document` (branche
+`development`, AGPL v3), successeur de `noalyss_document` (NDER, NDC),
+décisions D-DOC-001 à D-DOC-010, contrat `doc/api/document.adoc` du dépôt :
+
+* Boîte unique « Justificatifs à traiter » (ADR-005 D8) : photos, fichiers
+  déposés (PDF, JPEG, PNG, HEIC reconnus au contenu) et factures reçues par
+  la plateforme agréée par l'API publique `Document::Api.receive`
+  (idempotente sur `external_ref`, XML structuré facultatif).
+* Stockage par les pièces jointes du socle : original tel quel, vignette et
+  version réduite JPEG produites par libvips ou ImageMagick (HEIC converti,
+  première page d'un PDF), clés étrangères vers `core_attachment`.
+* Compléments facultatifs, statuts (à traiter, rattaché, écarté), doublons
+  signalés, « Saisir l'écriture » (écriture d'achat préremplie, image à
+  côté, `post_purchase` avec l'original en pièce jointe), « Rattacher » à une
+  écriture ou à une facture émise, passage en « Rattaché » par
+  `entry.posted` et retour « À traiter » par `entry.cancelled`.
+* Interface `ui/bulma/` sous `/ext/DOCUMENT/`, version téléphone (bouton
+  « Photographier un justificatif » avec `capture="environment"`),
+  glisser-déposer sur ordinateur ; compteur du menu et du tableau de bord
+  par `PartiduoUi::Extensions.counter`, ajouté à `partiduo-ui-bulma`
+  (D-DOC-007, non validé dans ce dépôt).
+* Specs (base `partiduo_test_e_document`) : `partiduo-document` 51 exemples,
+  `partiduo-ui-bulma` 276, verts ; format et Ameba sans remarque.
+
+Reste : passer `post_purchase` sur `post_received_invoice` une fois ce
+contrat du cœur stabilisé (D-DOC-009) ; valider le changement de
+`partiduo-ui-bulma` ; essai réel sur téléphone (B-UI-001).
+
+== Extension EINV — facturation électronique (`partiduo-einvoicing`, 27 septembre 2026)
+
+Nouveau dépôt `prod-crystal/partiduo/partiduo-einvoicing` (branche
+`development`, AGPL v3), successeur de `peppol-connect` (ADR-004),
+décisions D-EINV-001 à D-EINV-018, blocages B-EINV-001 à B-EINV-003, contrat
+`doc/api/einvoicing.adoc` du dépôt :
+
+* Manifeste `EINV`, `depends_on "DOCUMENT"` seul ; réception sur le socle et
+  DOCUMENT, émission avec la Facturation, pré-comptabilisation avec la
+  Comptabilité, vérifiées à l'appel (D-EINV-002).
+* `Einvoicing::Connector` abstrait (ADR-004 D2) : pages à curseur, un seul
+  adaptateur actif, secrets et jetons chiffrés (AES-256-CBC + HMAC), TLS
+  vérifié ; adaptateurs XP Z12-013 (API Flux et Annuaire, OAuth 2) et
+  NOALYSS-PEPPOL (dossiers belges) ; registre ouvert à `partiduo-<pa>`.
+* Émission : relevé à `invoice.issued` / `credit_note.issued`, voie
+  (plateforme, B2C, international, hors plateforme signalée), transmission
+  du PDF/A-3 Factur-X de la Facturation ; CII EN 16931, EXTENDED-CTC-FR, UBL
+  2.1, UBL PEPPOL à la demande ; SIREN `0002`, adresse `0225`.
+* Réception : UBL, CII, Factur-X (XML extrait du PDF/A-3), boîte
+  « Justificatifs à traiter » (`Document::Api.receive`), fiche reconnue par
+  SIREN, doublons (hors plateforme compris), accepter, refuser (210),
+  pré-comptabiliser (`post_received_invoice`, origine plateforme, justificatif
+  rattaché).
+* Cycle de vie `einvoicing_lifecycle_event` : 200 et 213 remontés, statuts
+  CDAR du destinataire, 210 émis, 212 émis au lettrage et à l'encaissement ;
+  e-reporting B2C (note `BAR`) et ventes internationales (lots mensuels).
+* Interface `ui/bulma/` sous `/ext/EINV/` : factures émises, factures reçues,
+  raccordement (mode toujours affiché), annuaire ; compteurs de menu.
+* Plateforme agréée simulée (`spec/support/platform.cr`, double du transport
+  HTTP).
+* Specs (base `partiduo_test_e_einvoicing`) : 68 exemples verts (ordre
+  aléatoire) ; `crystal tool format` et Ameba sans remarque ;
+  `genmigrations einvoicing` : aucun écart.
+
+Reste : essai contre un bac à sable réel et schémas CDAR / e-reporting
+détaillés (B-EINV-002, B-EINV-003 ; bac à sable SUPER PDP éprouvé par
+`partiduo-superpdp`) ; statut de plateforme sur l'écran de facture de l'interface ;
+signaler B-EINV-001 à Marten.
+
+== Extension SUPERPDP — plateforme agréée SUPER PDP (`partiduo-superpdp`, 27 septembre 2026)
+
+Nouveau dépôt `prod-crystal/partiduo/partiduo-superpdp` (branche
+`development`, AGPL v3), premier adaptateur de plateforme agréée
+(ADR-004 D8), décisions D-SPDP-001 à D-SPDP-012, blocages B-SPDP-001 à
+B-SPDP-005, contrat `doc/api/superpdp.adoc` du dépôt :
+
+* Manifeste `SUPERPDP`, `depends_on "EINV"`, permission
+  `superpdp.connection.manage` ; adaptateur `SUPERPDP` enregistré auprès
+  d'EINV (`Superpdp::Connector`), API JSON `https://api.superpdp.tech/v1.beta/`.
+* OAuth 2.1 : _client credentials_ (identifiants de la société essayés puis
+  chiffrés) et _authorization code_ (application de l'opérateur, parcours
+  pré-rempli, `state` à usage unique, PKCE `S256`, route de rappel) ; jeton
+  d'accès renouvelé, jeton de rafraîchissement renouvelé à chaque usage sous
+  verrou, révocation RFC 7009 à la déconnexion ; mode bac à sable ou
+  production déduit des identifiants et toujours affiché.
+* Émission (`POST /invoices`, Factur-X, CII B2C, UBL PEPPOL pour un client
+  étranger), réception et statuts par `starting_after_id` jusqu'à
+  `has_after = false`, statuts émis (210 motivé, 212 ventilé par taux),
+  annuaire (`SIREN`, `SIREN_SIRET`, `SIREN_SUFFIXE`,
+  `SIREN_SIRET_CODEROUTAGE`, `0225`, `0208`), e-reporting international et
+  B2C, erreurs `http_ko`, reprises idempotentes.
+* Interface `ui/bulma/` sous `/ext/SUPERPDP/` : raccordement (deux modes),
+  état de la connexion, lignes d'annuaire, régime de TVA, déconnexion.
+* Specs (base `partiduo_test_e_superpdp`) : 61 exemples verts (ordre
+  aléatoire), dont 5 contre le *vrai* bac à sable SUPER PDP (envoi du
+  vendeur à l'acheteur, réception, 205, 212, 210, annuaire, validation d'un
+  Factur-X de Partiduo) ; `crystal tool format` et Ameba sans remarque ;
+  `genmigrations superpdp` : aucun écart.
+
+Reste : Factur-X de la Facturation à compléter (BT-23, BT-34, B-SPDP-003) ;
+mode _authorization code_ à essayer avec une vraie application d'opérateur
+(B-SPDP-004) ; mandataire HTTP dans le transport d'EINV (B-SPDP-001).
+
+== Tests du lot E — justificatifs, facturation électronique, factures non électroniques (27 septembre 2026)
+
+Specs de règles, cas limites, permissions, modules inactifs et contraintes
+en base, sur la base `partiduo_test_E_specs` :
+
+* `partiduo-document/spec/document/rules_spec.cr` (16 exemples) ;
+* `partiduo-einvoicing/spec/einvoicing/rules_spec.cr` (12) ;
+* `partiduo-superpdp/spec/superpdp/rules_spec.cr` (10) ;
+* `spec/accounting/received_invoices_rules_spec.cr` (8) et
+  `spec/invoicing/channels_rules_spec.cr` (7) ;
+* `partiduo-ui-bulma/spec/ui/non_electronic_rules_spec.cr` (6).
+
+Bogues corrigés : D-DOC-011, D-EINV-019, D-SPDP-013, D-ACC-019, D-INV-017,
+D-UI-059.
+
+== Clôture du lot E — relecture et vérifications (27 septembre 2026)
+
+Remarques de relecture corrigées (une bloquante, cinq majeures, sept
+mineures), décisions D-EINV-020 à D-EINV-027, D-DOC-012, D-ACC-020,
+D-SPDP-014, D-UI-060, blocage B-UI-008 :
+
+* « Encaissée » (212) attend le dépôt de la facture ; une facture payée
+  avant la synchronisation ou après un rejet reste à transmettre (D-EINV-020).
+* Canal relu avant chaque transmission (voie, statut, e-reporting
+  recalculés ; facture déjà envoyée par un autre moyen non déposée) ;
+  `mark_sent` seulement si le dépôt n'est pas rejeté ; colonne
+  `channel_final`, migration einvoicing `0002` (D-EINV-021).
+* Une seule synchronisation ou transmission à la fois (verrou consultatif
+  de session, `sync.running`), ligne verrouillée et revérifiée avant le
+  dépôt (D-EINV-022).
+* Pré-comptabilisation : TVA sans taux du dossier refusée, total contrôlé
+  (D-EINV-025) ; statuts sans référence rattachés par numéro et SIREN
+  (D-EINV-026) ; erreur imprévue notée par facture (D-EINV-027).
+* Erreurs de transport portées par des clés i18n, traduites à la lecture
+  (D-EINV-024, D-SPDP-014) ; factures émises lues avec
+  `invoicing.invoice.read` (D-EINV-023).
+* DOCUMENT : « Saisir l'écriture » enregistre une facture reçue hors
+  plateforme (`post_received_invoice`, numéro obligatoire, doublon
+  commun) ; un justificatif de la plateforme est renvoyé vers EINV
+  (D-DOC-012).
+* Cœur : doublons réduits au signal hors des journaux lus, tiers sans fiche
+  signalé, requête unique (D-ACC-020) ; SUPERPDP : régime de TVA sous les
+  deux permissions ; interface : unité « Ko » traduite.
+
+Vérifications : `crystal tool format` et Ameba sans remarque dans les
+cinq dépôts ; specs vertes (base `partiduo_test_E_final` et variantes
+`_app`, `_doc`, `_ui`) aux nombres de l'état ci-dessus ;
+`marten migrate` sur base vierge (`partiduo_migrate_E`, depuis
+`partiduo-superpdp` : cœur, DOCUMENT, EINV, SUPERPDP), second passage sans
+migration en attente ; `genmigrations einvoicing` : aucun écart. Commit
+`development` dans `partiduo-app`, `partiduo-ui-bulma`, `partiduo-document`,
+`partiduo-einvoicing`, `partiduo-superpdp`.
+
 == Prochaines étapes
 
-Liste définitive à l'issue de la critique de complétude ; chaque point
+Liste à l'issue de la critique de complétude et du lot E ; chaque point
 renvoie à sa décision ou à son blocage.
+
+. *Facturation électronique* : écran de saisie libre de l'écriture d'une
+  facture reçue dans EINV (D-EINV-025) ; statut de plateforme sur l'écran de
+  facture de l'interface ; événement du cœur au changement de canal
+  (amendement ADR-003 D7, D-EINV-021) ; erreurs de lecture traduites
+  (D-EINV-024) ; bac à sable XP Z12-013 réel et schémas CDAR / e-reporting
+  (B-EINV-002, B-EINV-003) ; Factur-X BT-23 et BT-34 (B-SPDP-003) ; mode
+  _authorization code_ réel (B-SPDP-004) ; pièces jointes orphelines
+  (B-UI-008) ; essai de la capture photo sur téléphone (B-UI-001).
 
 . *Reprises par `partiduo-migrate`* : analytique (B-MIG-001 : ventiler avant
   de clore les périodes reprises), stock, prévisions, suivi, numéros de
@@ -1404,6 +1597,19 @@ cd prod-crystal/partiduo/partiduo-skel
 SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install
 crystal run manage.cr -- migrate                   # cœur + extension
 DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' crystal spec
+----
+
+Extensions du lot E (`partiduo-document`, `partiduo-einvoicing`,
+`partiduo-superpdp`), chacune composée avec le cœur et l'interface :
+
+[source,sh]
+----
+cd prod-crystal/partiduo/partiduo-einvoicing       # ou partiduo-document, partiduo-superpdp
+SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install
+DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' crystal spec
+MARTEN_ENV=test DATABASE_URL='postgres:///partiduo_<base>?host=/tmp' crystal run manage.cr -- migrate
+crystal run manage.cr -- genmigrations einvoicing  # aucun écart attendu
+# Plusieurs `crystal spec` en parallèle : un CRYSTAL_CACHE_DIR par exécution
 ----
 
 Reprise (`partiduo-migrate`) :
