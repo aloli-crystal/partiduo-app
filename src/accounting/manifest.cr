@@ -25,6 +25,8 @@ Partiduo::Modules.register do
   menu "ACC_ENTRY_SALE", parent: "ENTRY", order: 20, route: "accounting:entry_sale", permission: "accounting.entry.post"
   menu "ACC_ENTRY_FINANCIAL", parent: "ENTRY", order: 30, route: "accounting:entry_financial", permission: "accounting.entry.post"
   menu "ACC_ENTRY_MISC", parent: "ENTRY", order: 40, route: "accounting:entry_misc", permission: "accounting.entry.post"
+  # Factures, avoirs et règlements de la Facturation sans écriture (ADR-006 D2).
+  menu "ACC_INVOICING_HISTORY", parent: "ENTRY", order: 50, route: "accounting:invoicing_history", permission: "accounting.entry.post"
 
   menu "ACC_ACCOUNTS", parent: "CONSULT", order: 10, route: "accounting:accounts", permission: "accounting.entry.read"
   menu "ACC_ENTRIES", parent: "CONSULT", order: 20, route: "accounting:entries", permission: "accounting.entry.read"
@@ -43,4 +45,11 @@ Partiduo::Modules.register do
 
   # Une fiche neuve reçoit le compte que prévoit sa catégorie (D-ACC-006).
   on("card.saved") { |event| Partiduo::Accounting::CardAccounts.on_card_saved(event["card_id"].to_i64) }
+
+  # Écritures issues de la Facturation (ADR-006 D3, D-INT-001) : vente,
+  # avoir lettré avec sa facture, encaissement. Un échec ne bloque pas la
+  # Facturation : l'événement reste dans l'historique à comptabiliser.
+  on("invoice.issued") { |event| Partiduo::Accounting::Billing.on_event(event) }
+  on("credit_note.issued") { |event| Partiduo::Accounting::Billing.on_event(event) }
+  on("payment.recorded") { |event| Partiduo::Accounting::Billing.on_event(event) }
 end

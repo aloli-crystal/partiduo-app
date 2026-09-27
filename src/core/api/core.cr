@@ -10,6 +10,12 @@ module Partiduo
 
       record InstanceView, version : String, api_version : String, domain : String, modules : Array(ModuleView)
 
+      # Date du jour dans le fuseau de l'instance (`PARTIDUO_TIME_ZONE`), à
+      # minuit UTC : date par défaut des écrans (émission, règlement, relevé).
+      def self.today : Time
+        Partiduo::Config.today
+      end
+
       # Description de l'instance : versions et pièces enregistrées.
       # Tout utilisateur authentifié peut la lire.
       def self.instance(actor : Actor) : InstanceView

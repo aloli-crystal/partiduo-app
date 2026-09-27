@@ -11,10 +11,12 @@ Partiduo::Modules.register do
   permission "invoicing.invoice.read"
   permission "invoicing.invoice.write"
   permission "invoicing.invoice.issue"
+  permission "invoicing.invoice.send"
   permission "invoicing.credit_note.issue"
   permission "invoicing.payment.record"
   permission "invoicing.reminder.send"
   permission "invoicing.template.manage"
+  permission "invoicing.settings.manage"
   # Transmission au comptable (ADR-006 D4).
   permission "invoicing.export.read"
 
@@ -23,5 +25,13 @@ Partiduo::Modules.register do
   menu "INV_PAYMENTS", parent: "BILLING", order: 30, route: "invoicing:payments", permission: "invoicing.payment.record"
   menu "INV_REMINDERS", parent: "BILLING", order: 40, route: "invoicing:reminders", permission: "invoicing.reminder.send"
   menu "INV_EXPORT", parent: "BILLING", order: 50, route: "invoicing:export", permission: "invoicing.export.read"
+  # Lettrage d'un encaissement par la Comptabilité (ADR-006 D3) : facture
+  # payée ou partiellement payée (`Partiduo::Invoicing::Payments.on_matched`).
+  on("payment.matched") { |event| Partiduo::Invoicing::Payments.on_matched(event) }
+  # Délettrage, ou extourne d'une écriture lettrée : règlements retirés
+  # (`Partiduo::Invoicing::Payments.on_unmatched`, D-2F-003).
+  on("payment.unmatched") { |event| Partiduo::Invoicing::Payments.on_unmatched(event) }
+
   menu "INV_TEMPLATES", parent: "SETTINGS", order: 60, route: "invoicing:templates", permission: "invoicing.template.manage"
+  menu "INV_SETTINGS", parent: "SETTINGS", order: 61, route: "invoicing:settings", permission: "invoicing.settings.manage"
 end

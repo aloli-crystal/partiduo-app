@@ -26,6 +26,7 @@ en:
       acc_entry_sale: "Sales"
       acc_entry_financial: "Financial"
       acc_entry_misc: "Miscellaneous operations"
+      acc_invoicing_history: "To post (Invoicing)"
       acc_accounts: "Accounts and parties"
       acc_entries: "Entries"
       acc_matching: "Matching"
@@ -46,6 +47,9 @@ en:
       expense: "Expense"
       expense_contra: "Expense, contra account"
       context: "Context"
+    sides:
+      debit: "Debit"
+      credit: "Credit"
     ledger_kinds:
       purchase: "Purchases"
       sale: "Sales"
@@ -90,12 +94,70 @@ en:
         too_many_decimals: "The amount has at most %{max} decimal places."
         too_few_lines: "An entry has at least %{min} lines."
         unbalanced: "The entry is not balanced: difference of %{difference}."
+        amount_zero: "The amount cannot be zero."
+        no_items: "Enter at least one line."
+        counterpart_missing: "Enter a counterpart card or account."
+        ledger:
+          disabled: "This ledger is disabled."
+          not_document: "Ledger %{code} is neither a purchase nor a sales ledger."
+          not_purchase: "Ledger %{code} is not a purchase ledger."
+          not_sale: "Ledger %{code} is not a sales ledger."
+          not_financial: "Ledger %{code} is not a financial ledger."
+        date:
+          no_period: "No period contains %{date}: create the fiscal year."
+          period_closed: "The period of %{date} is closed."
+        receipt:
+          too_long: "The receipt number has at most %{max} characters."
+          taken: "Receipt %{receipt} already exists in this ledger."
+        source:
+          too_long: "The reference has at most %{max} characters."
+        attachment:
+          not_found: "This attachment does not exist."
+        currency_rate:
+          missing: "No known rate for currency %{code} on this date: enter it."
+        account:
+          not_found: "Account %{number} does not exist."
+          not_direct_use: "Account %{number} cannot be used directly."
+        card:
+          not_found: "No card has code %{code}."
+          disabled: "Card %{code} is no longer in use."
+          no_account: "Card %{code} is not linked to an account."
+        third_party:
+          required: "Enter the third party."
+        vat_rate:
+          not_found: "VAT rate %{code} does not exist."
+          disabled: "VAT rate %{code} is disabled."
+          required: "Enter the VAT rate of the VAT amount entered."
+          no_account: "VAT rate %{code} has no account for this ledger."
+        cancel:
+          is_reversal: "A reversal cannot be cancelled."
+          already_cancelled: "This entry is already cancelled."
+      billing:
+        no_sale_ledger: "No active sales ledger: create one to post invoices."
+        no_financial_ledger: "No active financial ledger: create one to post payments."
+        no_sales_account: "No sales account: link the item to an account or give the sales ledger a default account."
+        customer_not_found: "Customer card %{id} does not exist."
+        vat_rate_not_found: "VAT rate %{id} does not exist."
+        date_missing: "The document date is missing."
+        deposit_not_posted: "Deposit invoice %{source} is not posted yet."
+        failed: "The entry for %{source} could not be posted."
+        dry_run: "Dry run: nothing is saved."
+        already_dismissed: "This event is already dismissed."
+        already_posted: "This event is already posted."
+        not_dismissed: "This event is not dismissed."
+        reason_too_long: "%{max} characters at most."
+      matching:
+        too_few_lines: "Select at least two lines to match."
+        line_not_found: "Line %{id} does not exist."
+        different_accounts: "Lines to match belong to a single account."
+        one_side: "Match debit and credit lines."
       account:
         number:
           blank: "Enter the account number."
           too_long: "The number has at most %{max} characters."
           invalid: "The number contains only letters and digits."
           taken: "Account %{number} already exists."
+          in_use: "This account has entries: its number can no longer change."
         label:
           blank: "Enter the account label."
           too_long: "The label has at most %{max} characters."
@@ -107,6 +169,9 @@ en:
         has_children: "This account has sub-accounts: it cannot be deleted."
         in_use: "This account is in use: it cannot be deleted."
       ledger:
+        in_use: "This ledger contains entries: it cannot be deleted."
+        kind:
+          in_use: "This ledger contains entries: its type can no longer change."
         name:
           blank: "Enter the journal name."
           too_long: "The name has at most %{max} characters."
@@ -132,6 +197,7 @@ en:
         currency_code:
           invalid: "Enter an ISO 4217 currency code (three letters)."
           unknown: "Currency %{code} is not declared."
+          in_use: "This ledger contains entries: its currency can no longer change."
       default_account:
         code:
           invalid: "Unknown default account usage."

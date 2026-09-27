@@ -10,6 +10,7 @@ module Partiduo
   # |`PARTIDUO_MODULES` |modules et extensions actifs, séparés par des virgules (`accounting,invoicing`)
   # |`PARTIDUO_DOMAIN`  |domaine des instances (`partiduo.localhost` en développement)
   # |`PARTIDUO_MEDIA_ROOT` |dossier des pièces jointes de l'instance (`media` par défaut)
+  # |`PARTIDUO_TIME_ZONE` |fuseau de l'instance, pour la date du jour (`Europe/Paris` par défaut)
   # |===
   module Config
     # Modules activables officiels, dans l'ordre de l'ADR-006 D1 (sans le Stock, lot 6).
@@ -51,6 +52,47 @@ module Partiduo
     # qui sert aussi d'identifiant de la partie de confiance WebAuthn (ADR-002 D5).
     def self.domain : String
       ENV["PARTIDUO_DOMAIN"]?.presence || DEFAULT_DOMAIN
+    end
+
+    DEFAULT_TIME_ZONE = "Europe/Paris"
+
+    @@time_zone : Time::Location? = nil
+
+    # Fuseau de l'instance (`PARTIDUO_TIME_ZONE`) : la date du jour d'une
+    # facture, d'une échéance ou d'une relance est celle de ce fuseau, pas
+    # celle de UTC (DECISIONS D-2F-012). Fuseau inconnu : UTC.
+    def self.time_zone : Time::Location
+      @@time_zone ||= begin
+        Time::Location.load(ENV["PARTIDUO_TIME_ZONE"]?.presence || DEFAULT_TIME_ZONE)
+      rescue Time::Error | IO::Error
+        Time::Location::UTC
+      end
+    end
+
+    # Horloge : l'instant présent, remplaçable dans les specs (`clock=`,
+    # `travel_to`) ; `nil` : l'heure du système.
+    class_property clock : Proc(Time)? = nil
+
+    def self.now : Time
+      @@clock.try(&.call) || Time.utc
+    end
+
+    # Date du jour dans le fuseau de l'instance, à minuit UTC (forme des
+    # colonnes `date` relues par Marten).
+    def self.today : Time
+      local = now.in(time_zone)
+      Time.utc(local.year, local.month, local.day)
+    end
+
+    # Fige l'horloge à `instant` pendant le bloc (specs).
+    def self.travel_to(instant : Time, &)
+      previous = @@clock
+      @@clock = -> { instant }
+      begin
+        yield
+      ensure
+        @@clock = previous
+      end
     end
   end
 end

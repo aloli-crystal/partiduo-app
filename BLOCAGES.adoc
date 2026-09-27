@@ -238,3 +238,69 @@ provisionnées ; compilations des trois dépôts lancées l'une après l'autre.
 
 *Levée.* `sandbox.network.allowLocalBinding: true`, puis le parcours de
 `ETAT-PORTAGE.adoc` § « Démonstration du jalon 1 » dans un navigateur.
+
+== B-ACC-002 — crystal-db : connexion restée « en transaction » après un `COMMIT` en échec (lot 2, écritures)
+
+*Constat.* Quand un déclencheur de contrainte différé refuse le `COMMIT`
+(écriture déséquilibrée), `DB::TopLevelTransaction#commit` lève avant de
+libérer la connexion : elle retourne au pool marquée « en transaction », et
+la transaction suivante échoue (« There is an existing transaction in this
+connection »).
+
+*Contournement.* `Posting.create!` joue les contrôles différés de
+l'équilibre dans la commande (`SET CONSTRAINTS … IMMEDIATE` puis
+`DEFERRED`) : un refus lève une exception ordinaire, qui annule la
+transaction proprement. Les specs SQL qui vérifient le refus au `COMMIT`
+ouvrent une connexion dédiée hors du pool (`EntrySpec.sql_transaction`). Le
+shard `db` n'est pas modifié (hors des shards autorisés).
+
+*Levée.* Signaler à l'amont (crystal-lang/crystal-db) : libérer la connexion
+dans un `ensure` de `commit`.
+
+== B-INV-001 — `pdf-validate` : règle PDF/A-3 qui exige `pdfaid:part = 2` (lot F, facturation)
+
+*Constat.* Dans `pdf-validate` 0.47.0, `rules/pdf-a-3b.yml` contient la règle
+`pdfa3-6.6.4-pdfaid-part-2` (« Declared PDF/A part is 2 »,
+`xmp_property_equals pdfaid:part 2`) : tout PDF/A-3 conforme échoue, puisque
+sa partie déclarée est 3. Modifier `prod-crystal/pdf-validate` est interdit.
+
+*Contournement.* `Partiduo::Invoicing::Output::IGNORED_RULES` écarte cette
+seule règle ; les 64 autres règles fatales s'appliquent à chaque émission,
+et les specs vérifient `<pdfaid:part>3</pdfaid:part>` dans le XMP.
+
+*Levée.* Corriger la règle (`args: ["pdfaid:part", "3"]`) dans
+`pdf-validate`, puis vider `IGNORED_RULES`.
+
+== B-INV-002 — Arbre de travail partagé avec le lot 2 pendant l'écriture (lot F, facturation)
+
+*Constat.* Le lot 2 (écritures) est écrit en même temps dans le même dépôt :
+au début du lot F, l'arbre ne compilait pas
+(`src/accounting/services/posting.cr`, état intermédiaire), et des fichiers
+étaient reformatés pendant l'écriture.
+
+*Contournement.* Développement et specs sur un instantané (`HEAD` + fichiers
+du lot F liés), comme B-ACC-001 : suites complètes vertes dans les trois
+configurations (504 + 8 en attente / 488 + 6 en attente / 531). Puis, l'arbre
+redevenu compilable, `scripts/specs-modules.sh` rejoué sur l'arbre intégré
+(lot 2 en cours compris) : 561 + 8 en attente, 496 + 13 en attente, 588,
+tous verts.
+
+*Levée.* À la clôture commune des lots 2 et F : `scripts/specs-modules.sh`
+sur l'arbre intégré (dont l'abonné `invoice.issued` de la Comptabilité, à
+écrire avec la charge utile de D-INV-010).
+
+== B-UI-007 — Saisie au clavier non essayée dans un navigateur réel (lots 2 et F, interface)
+
+*Constat.* Le serveur ne peut pas écouter (B-UI-001) et le panneau de
+navigation refuse d'ouvrir une page locale (`file://`) : les touches de la
+saisie (Entrée, Alt+↓, Ctrl+Entrée), la complétion par `<datalist>` et le
+contrôle instantané HTMX n'ont pas été essayés dans un navigateur.
+
+*Contournement.* Paquet Opal exécuté sous JavaScriptCore : règle des touches
+et montage sur un DOM simulé (focus, ajout de ligne, envoi, retrait) ;
+réponses HTMX (contrôle, ligne ajoutée, options de complétion) vérifiées par
+le client de test de Marten.
+
+*Levée.* Écoute locale permise, puis essai de `/accounting/entries/misc` et
+`/invoicing/invoices/new` au clavier dans Firefox, Chrome et Safari, et avec
+un lecteur d'écran (annonce de l'équilibre par la région `aria-live`).

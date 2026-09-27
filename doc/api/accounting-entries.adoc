@@ -1,0 +1,320 @@
+= Comptabilité : écritures, consultation, lettrage
+:toc: left
+:toc-title: Table des matières
+:toclevels: 3
+:icons: font
+:source-language: crystal
+
+Référence du lot 2 du module Comptabilité (ADR-001, ADR-005 D9, ADR-004 D5) :
+écritures (héritières de `jrn` et `jrnx`), saisie des achats, ventes,
+extraits financiers et opérations diverses avec TVA, numérotation des pièces,
+annulation par extourne, recherche, relevé d'un compte ou d'un tiers,
+lettrage. Le contrat est `Partiduo::Api::Accounting` ; toutes ses fonctions
+lèvent `ModuleDisabled` si la Comptabilité est inactive. Décisions :
+`DECISIONS.adoc`, D-ACC-011 à D-ACC-017.
+
+== Principe : un seul chemin d'écriture
+
+Une écriture ne s'enregistre que par les commandes ci-dessous ; toutes
+passent par le même service interne (`Partiduo::Accounting::Posting.create!`),
+qui réserve la pièce, calcule le code interne et publie `entry.posted`. Les
+requêtes de contrôle (`check_*`) appliquent les mêmes règles sans écrire, pour
+le retour instantané de l'interface.
+
+PostgreSQL double les règles essentielles (migration accounting 0003) :
+
+[cols="2,3",options="header"]
+|===
+|Objet en base |Règle (successeur NOALYSS)
+
+|`accounting_entry_balance`, `accounting_entry_line_balance` (`CONSTRAINT
+TRIGGER … DEFERRABLE INITIALLY DEFERRED`)
+|Au `COMMIT` : débit = crédit par écriture, et montant d'en-tête = débit
+(`check_balance`, `proc_check_balance`). Une écriture sans ligne est refusée.
+
+|`accounting_entry_period_guard` (`BEFORE INSERT OR UPDATE OR DELETE`)
+|La période est *calculée* à partir de la date (`find_periode`) ; date hors
+exercice, période close ou exercice clos : refus (`jrn_check_periode`,
+`is_closed`). Libellé, pièce, échéance : modifiables même en période close.
+
+|`accounting_entry_line_guard`
+|Aucune ligne ajoutée, modifiée (compte, fiche, sens, montant) ni retirée dans
+une période close ; le lettrage reste permis.
+
+|Contraintes
+|Montant d'en-tête > 0, montant de ligne ≥ 0, sens `debit`/`credit`, pièce
+unique par journal, une seule extourne par écriture, clés étrangères vers
+journal, compte, période, fiche, taux de TVA, pièce jointe (qui protègent ces
+lignes de l'effacement).
+|===
+
+== Saisie
+
+[cols="3,1,3",options="header"]
+|===
+|Appel |Droit |Rôle
+
+|`post_entry(actor, EntryInput) : Result(EntryView)`
+|`accounting.entry.post` + `W` sur le journal
+|Écriture ligne à ligne dans tout journal (opérations diverses, reprise,
+écritures d'autres modules) : `Acc_Ledger::save`.
+
+|`post_purchase(actor, DocumentInput)`, `post_sale(actor, DocumentInput)` :
+`Result(EntryView)`
+|idem
+|Facture ou avoir d'achat, de vente : articles hors taxe, TVA ventilée par
+taux sur les comptes du taux (D-ACC-009), tiers toutes taxes comprises ; TVA
+autoliquidée au débit et au crédit.
+
+|`post_financial(actor, FinancialInput) : Result(Array(EntryView))`
+|idem
+|Extrait financier : une écriture par ligne (banque du journal contre
+contrepartie), lettrage des lignes `match_line_ids`.
+
+|`cancel_entry(actor, CancelEntryInput) : Result(EntryView)`
+|`accounting.entry.cancel` + `W`
+|Extourne (`Acc_Ledger::reverse`) : écriture inverse, nouvelle pièce, lignes
+lettrées deux à deux.
+
+|`check_entry(actor, CheckEntryInput) : Result(EntryCheckView)`
+|`accounting.entry.post`
+|Équilibre seul des lignes saisies.
+
+|`check_entry(actor, EntryInput)`, `check_document(actor, DocumentInput)` :
+`Result(EntryDraftView)` ; `check_financial(actor, FinancialInput) :
+Result(Array(EntryDraftView))`
+|`accounting.entry.post` + `W`
+|Mêmes règles que la commande, sans écrire ni réserver de pièce : lignes
+calculées, totaux hors taxe, TVA, toutes taxes, prochaine pièce.
+|===
+
+Sans droit d'écriture sur le journal (`LedgerAccess::Write`), les commandes
+lèvent `Forbidden` ; un journal inconnu lève `NotFound`.
+
+=== Entrées
+
+[source]
+----
+# Opérations diverses : compte (numéro) ou fiche (quick code) par ligne.
+input = Api::EntryInput.new(
+  ledger_id: od.id, date: Time.utc(2026, 3, 31), label: "Dotation",
+  lines: [
+    Api::EntryLineInput.new("681", Api::Side::Debit, BigDecimal.new("1250.00")),
+    Api::EntryLineInput.new("2815", Api::Side::Credit, BigDecimal.new("1250.00")),
+  ])
+
+# Facture d'achat : fournisseur, articles, taux de TVA par code.
+purchase = Api::DocumentInput.new(
+  ledger_id: achats.id, date: Time.utc(2026, 3, 15), third_party: "FOURNISSEUR1",
+  due_date: Time.utc(2026, 4, 14), label: "Facture 118",
+  lines: [
+    Api::DocumentLineInput.new(amount: BigDecimal.new("100"), item: "PAPIER", vat_rate: "NOR"),
+    Api::DocumentLineInput.new(unit_price: BigDecimal.new("12.50"), quantity: BigDecimal.new("4"),
+      account: "603", vat_rate: "TR55"),
+  ])
+
+# Extrait financier : montant signé (+ entrée en banque), lettrage de la facture.
+payment = Api::FinancialInput.new(
+  ledger_id: banque.id, date: Time.utc(2026, 3, 20),
+  lines: [Api::PaymentLineInput.new(BigDecimal.new("1200"), card: "CLIENT1", match_line_ids: [line_id])])
+----
+
+* *Pièce* : `receipt` absent = numéro suivant du journal, réservé dans la
+  transaction (`Receipts.take!`, compteur verrouillé) ; une écriture annulée
+  ne consomme pas de numéro. Pièce saisie : unique dans le journal, compteur
+  inchangé. Extrait de plusieurs lignes avec pièce saisie : pièce suffixée
+  du rang sur trois chiffres.
+* *Code interne* : initiale du code du journal et identifiant hexadécimal sur
+  six chiffres (`O00002A`), comme `compute_internal_code`.
+* *Devise* : celle du journal par défaut ; cours saisi ou cours du socle à la
+  date ; montants saisis dans la devise, convertis (÷ cours, arrondi aux
+  décimales de la devise de tenue), montant d'origine gardé par ligne
+  (`currency_amount`) ; écart d'arrondi reporté sur la plus grande ligne du
+  côté le plus faible (D-ACC-013).
+* *Montants* : `BigDecimal`, quatre décimales au plus (refus, jamais
+  d'arrondi silencieux) ; TVA calculée arrondie au centime, demi au-dessus ;
+  montant négatif d'une facture (avoir) : sens inversé.
+* *Source* : `source` libre (`invoice:42`, `fec:VT-12`), portée par
+  `entry.posted` et recherchable.
+
+== Consultation
+
+[cols="3,1,3",options="header"]
+|===
+|Appel |Droit |Rôle
+
+|`entry(actor, id) : EntryView`
+|`accounting.entry.read`
+|Écriture d'un journal lisible (`R` ou `W`), lignes comprises ; `NotFound`
+sinon.
+
+|`entries(actor, EntryQuery) : Array(EntryView)`, `count_entries(actor,
+EntryQuery) : Int64`
+|`accounting.entry.read`
+|Recherche (`Acc_Ledger_Search`) : journal ou type, dates, période, compte
+(exact ou préfixe), fiche, pièce, texte (libellé, code interne, pièce),
+montant, source, annulées ou non ; par date ; `offset`/`limit` (500 au plus).
+
+|`account_statement(actor, StatementQuery) : AccountStatementView`
+|`accounting.entry.read`
+|ADR-005 D9 : compte (numéro) ou tiers (quick code) ; solde d'ouverture,
+totaux, solde, reste dû, échu, balance âgée (non échu, 1–30, 31–60, > 60
+jours) des éléments ouverts, mouvements avec solde progressif, échéance
+dépassée, lettre.
+
+|`party_balances(actor, kind, as_of = aujourd'hui) : PartyBalancesView`
+|`accounting.entry.read`
+|Reste dû et échu cumulés de toutes les fiches `customer` ou `supplier`,
+une requête agrégée de PostgreSQL avec les règles du relevé ; fiche la plus
+en retard (`worst_card_code`, `worst_card_name`, `worst_overdue`) ; tableau
+de bord (D-2F-005).
+|===
+
+`EntryView` porte `cancelled?` (annulée par une extourne, `reversed_by_id`),
+`reversal?` (`reversal_of_id`), `total_debit`, `total_credit` ; chaque ligne,
+son compte, sa fiche, son taux et son rôle de TVA (`base` ou `tax`), son
+lettrage (`matching_id`, `matching_code`).
+
+Montants du relevé signés débit − crédit : positif = solde débiteur (un
+client doit), négatif = créditeur (on doit au fournisseur). Élément ouvert :
+ligne non lettrée, ou lettrage partiel (compté pour son reliquat, daté de sa
+plus ancienne échéance). Date de référence : `as_of`, aujourd'hui par défaut ;
+échéance absente = date de l'écriture.
+
+== Lettrage
+
+[cols="3,1,3",options="header"]
+|===
+|Appel |Droit |Rôle
+
+|`match_lines(actor, line_ids) : Result(MatchingView)`
+|`accounting.matching.write`
+|Lettre des lignes d'un même compte, au débit et au crédit ; un lettrage
+partiel est admis ; une ligne déjà lettrée y amène tout son lettrage.
+
+|`check_matching(actor, line_ids) : Result(Nil)`
+|`accounting.matching.write`
+|Même règle, sans écrire.
+
+|`unmatch(actor, matching_id) : Result(Nil)`
+|`accounting.matching.write`
+|Délettre ; publie `payment.unmatched` si le lettrage rapprochait un
+paiement d'une facture.
+
+|`matching(actor, id) : MatchingView`
+|`accounting.entry.read`
+|Lettrage : code (`A`, `B`… `AA`), compte, lignes, écart (`balanced?`).
+|===
+
+Erreurs sous `line_ids` : `too_few_lines`, `line_not_found`,
+`different_accounts`, `one_side` (clés `accounting.errors.matching.*`).
+
+== Événements
+
+[cols="1,2,3",options="header"]
+|===
+|Événement |Charge utile |Publié par
+
+|`entry.posted`
+|`entry_id`, `ledger_code` ; `source` si donnée ; `reversal_of` pour une
+extourne
+|Toute écriture enregistrée (y compris une extourne).
+
+|`entry.cancelled`
+|`entry_id` (écriture annulée), `reversal_entry_id`
+|`cancel_entry`.
+
+|`payment.matched`
+|`matching_id`, `entry_ids` (triés, séparés par des virgules), `sources` ;
+`amounts` (`<source>=<montant>;…`, montant que ce lettrage règle sur chaque
+facture, en plus des lettrages qu'il remplace, D-INT-005) ; `matched_on`
+(`AAAA-MM-JJ`, date du dernier paiement lettré)
+|Lettrage (`match_lines`, `post_financial`) réunissant une ligne d'un
+journal financier et une ligne d'un journal d'achats ou de ventes (ADR-004
+D5 : « Encaissée » au lettrage du paiement).
+
+|`payment.unmatched`
+|`matching_id` (lettrage défait), `entry_ids`, `sources` (références des
+écritures d'achats ou de ventes du lettrage)
+|Délettrage (`unmatch`) ou extourne d'une écriture lettrée (`cancel_entry`)
+d'un lettrage réunissant paiement et facture (D-2F-003).
+|===
+
+Les abonnés relisent l'écriture ou le lettrage par `entry`, `entries`
+(`EntryQuery.new(source: …)`) ou `matching`, avec `Actor.system`.
+
+== Écritures issues de la Facturation (ADR-006 D2, D3)
+
+La Comptabilité s'abonne aux événements de la Facturation sans citer ce
+module (D-INT-001) ; tout vient de la charge utile (D-INV-010) et du socle.
+
+[cols="1,3",options="header"]
+|===
+|Événement |Écriture
+
+|`invoice.issued`
+|Vente au premier journal de ventes actif, pièce = numéro de la facture,
+référence `invoice:<id>` : chaque part du HT au compte de la fiche article
+(rattachée au besoin, D-ACC-006), sinon au compte par défaut du journal,
+sinon au compte par défaut `sales` ; TVA par taux sur le compte collecté du
+taux ; client au compte de sa fiche. Facture finale : les lignes de vente
+et de TVA des factures d'acompte déduites (`deposit_sources`) sont
+extournées, le client ne porte que le solde (D-INT-004).
+
+|`credit_note.issued`
+|Même écriture en négatif (`credit_note:<id>`), lettrée avec la ligne client
+de la facture créditée.
+
+|`payment.recorded`
+|Encaissement au journal financier (`payment:<id>`) — caisse (compte sous le
+compte par défaut `cash`) pour un règlement en espèces, banque sinon —,
+lettré avec la ligne client de la facture. Ces paiements, déjà connus de la
+Facturation, ne comptent pas dans `amounts` de `payment.matched`.
+|===
+
+Un échec (exercice absent, compte manquant…) ne bloque *jamais* la
+Facturation : l'événement reste consigné au journal du socle
+(`Partiduo::Events.journal`) et figure dans l'historique à comptabiliser
+(D-INT-003).
+
+Une référence n'a qu'une écriture *en vigueur* (ni extourne, ni
+extournée) : index unique `accounting_entry_source` (migration 0004), une
+comptabilisation concurrente arrêtée par l'index est un succès vide. Une
+écriture extournée (`reversed`, posé par la base) libère sa référence :
+l'événement revient dans l'historique et se recomptabilise sous la pièce
+`<numéro>-2` (D-2F-006, D-2F-010).
+
+[cols="2,3",options="header"]
+|===
+|Appel |Rôle
+
+|`invoicing_history(actor) : Array(BillingEventView)`
+|Événements de la Facturation sans écriture, dans l'ordre de publication :
+`event_id`, `event`, `source`, `number`, `date`, `amount` (TTC ou montant
+réglé), `customer_card_id`, `published_at`, `errors` (vide : prêt,
+`postable?`) calculées par un essai à blanc de tout l'historique. C'est la
+proposition faite à l'activation tardive de la Comptabilité. Permission
+`accounting.entry.post`.
+
+|`post_invoicing_history(actor, event_ids = nil) : Result(BillingHistoryView)`
+|Comptabilise tout l'historique, ou les événements cités, avec l'acteur pour
+auteur ; chaque événement dans son point de sauvegarde : `posted`
+(`BillingPostedView` : `event_id`, `source`, `entry_ids`) et `remaining`
+(ce qui reste proposé, avec ses erreurs). Une source déjà comptabilisée ne
+l'est pas deux fois.
+
+|`invoicing_history_count(actor) : Int32`
+|Nombre d'événements proposés, sans essai à blanc (tableau de bord).
+
+|`dismiss_invoicing_event(actor, event_id, reason = "") : Result(Nil)`,
+`restore_invoicing_event(actor, event_id) : Result(Nil)`,
+`dismissed_invoicing_events(actor) : Array(BillingEventView)`
+|Écarte un événement de la proposition (pièce déjà saisie à la main,
+écriture passée autrement), le rend à la liste, liste les écartés
+(`already_dismissed`, `already_posted`, `not_dismissed`, D-2F-010).
+|===
+
+Clés d'erreur propres : `accounting.errors.billing.no_sale_ledger`,
+`no_financial_ledger`, `no_sales_account`, `customer_not_found`,
+`vat_rate_not_found`, `date_missing`, `deposit_not_posted`, `failed` ; les
+autres viennent de `post_sale` et `post_financial`.

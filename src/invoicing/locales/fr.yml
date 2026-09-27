@@ -7,6 +7,7 @@ fr:
         read: "Consulter les devis et factures"
         write: "Créer et modifier les brouillons"
         issue: "Valider les factures"
+        send: "Envoyer les documents par courriel"
       credit_note:
         issue: "Valider les avoirs"
       payment:
@@ -15,6 +16,8 @@ fr:
         send: "Envoyer les relances"
       template:
         manage: "Gérer les modèles de documents"
+      settings:
+        manage: "Gérer les paramètres de facturation"
       export:
         read: "Transmettre au comptable"
     menu:
@@ -24,3 +27,290 @@ fr:
       inv_reminders: "Relances"
       inv_export: "Transmission au comptable"
       inv_templates: "Modèles de documents"
+      inv_settings: "Paramètres de facturation"
+    kinds:
+      quote: "Devis"
+      order: "Bon de commande"
+      delivery_note: "Bon de livraison"
+      invoice: "Facture"
+      deposit_invoice: "Facture d'acompte"
+      credit_note: "Avoir"
+    statuses:
+      draft: "Brouillon"
+      sent: "Envoyé"
+      accepted: "Accepté"
+      refused: "Refusé"
+      expired: "Expiré"
+      confirmed: "Confirmé"
+      cancelled: "Annulé par avoir"
+      issued: "Émis"
+      partially_paid: "Partiellement payé"
+      paid: "Payé"
+      overdue: "En retard"
+    links:
+      from_quote: "Issu du devis %{number}"
+      from_order: "Issu de la commande %{number}"
+      from_delivery_note: "Issu du bon de livraison %{number}"
+      from_invoice: "Issu de la facture %{number}"
+      from_deposit_invoice: "Issu de la facture d'acompte %{number}"
+      from_credit_note: "Issu de l'avoir %{number}"
+    deposit:
+      line: "Acompte de %{percent} % sur %{number}"
+    mentions:
+      seller:
+        legal_form_capital: "%{legal_form} au capital de %{capital} %{currency}"
+        legal_form: "%{legal_form}"
+        rcs:
+          fr: "%{rcs}"
+          be: "%{rcs}"
+        siren: "SIREN : %{siren}"
+        enterprise_number: "Numéro d'entreprise : %{number}"
+        vat_number: "N° de TVA intracommunautaire : %{vat_number}"
+      customer:
+        siren: "SIREN du client : %{siren}"
+        vat_number: "N° de TVA du client : %{vat_number}"
+      dates:
+        issue: "Date d'émission : %{date}"
+        delivery: "Date de livraison ou d'exécution de la prestation : %{date}"
+        due: "Date d'échéance : %{date}"
+      quote:
+        validity: "Devis valable jusqu'au %{date}"
+      delivery_address: "Adresse de livraison : %{address}"
+      operation_category:
+        goods: "Catégorie de l'opération : livraison de biens"
+        services: "Catégorie de l'opération : prestation de services"
+        mixed: "Catégorie de l'opération : livraison de biens et prestation de services"
+      vat_on_debits: "Option pour le paiement de la taxe d'après les débits"
+      special:
+        franchise:
+          fr: "TVA non applicable, art. 293 B du CGI"
+          be: "Régime particulier de franchise des petites entreprises, TVA non applicable"
+        reverse_charge:
+          fr: "Autoliquidation : TVA due par le preneur (art. 283-2 du CGI)"
+          be: "Autoliquidation : taxe due par le cocontractant (art. 51, § 2, du Code de la TVA)"
+        intra_community:
+          fr: "Exonération de TVA, article 262 ter I du CGI (livraison intracommunautaire)"
+          be: "Livraison intracommunautaire exemptée de TVA (art. 39bis du Code de la TVA)"
+        export:
+          fr: "Exonération de TVA, article 262 I du CGI (exportation)"
+          be: "Exportation exemptée de TVA (art. 39 du Code de la TVA)"
+        exempt:
+          fr: "Opération exonérée de TVA. %{reason}"
+          be: "Opération exemptée de TVA. %{reason}"
+        not_subject:
+          fr: "Opération non soumise à la TVA. %{reason}"
+          be: "Opération non soumise à la TVA. %{reason}"
+        zero_rated:
+          fr: "TVA au taux zéro. %{reason}"
+          be: "TVA au taux zéro. %{reason}"
+      credit_note:
+        reference: "Avoir se rapportant à la facture %{number} du %{date}"
+      deposit:
+        invoice: "Facture d'acompte"
+        deducted: "Acompte %{number} déduit : %{amount} %{currency}"
+      payment:
+        structured_reference: "Communication structurée : %{reference}"
+        bank: "Règlement par virement : IBAN %{iban} — BIC %{bic}"
+        early_discount: "Escompte pour paiement anticipé : %{rate} % pour un règlement sous %{days} jours"
+        no_early_discount: "Pas d'escompte pour paiement anticipé"
+        late_penalties: "Pénalités de retard : %{rate} % par an"
+        late_penalties_legal:
+          fr: "En cas de retard de paiement, pénalités au taux appliqué par la Banque centrale européenne à son opération de refinancement la plus récente, majoré de 10 points (art. L441-10 du Code de commerce)"
+          be: "En cas de retard de paiement, intérêts de retard au taux prévu par la loi du 2 août 2002 concernant la lutte contre le retard de paiement dans les transactions commerciales"
+        indemnity: "Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : %{amount} %{currency}"
+    pdf:
+      draft: "Brouillon"
+      number: "N°"
+      issue_date: "Date"
+      due_date: "Échéance"
+      validity_date: "Valable jusqu'au"
+      customer: "CLIENT"
+      customer_code: "Code client"
+      delivery_address: "ADRESSE DE LIVRAISON"
+      buyer_reference: "Votre référence"
+      order_reference: "Commande"
+      columns:
+        description: "Désignation"
+        quantity: "Qté"
+        unit: "Unité"
+        unit_price: "PU HT"
+        discount: "Remise"
+        vat: "TVA"
+        total: "Total HT"
+      subtotal: "Sous-total"
+      lines_total: "Total des lignes HT"
+      global_discount: "Remise globale"
+      discount: "Remise"
+      total_net: "Total HT"
+      total_vat: "TVA"
+      total_gross: "Total TTC"
+      prepaid: "Acomptes déduits"
+      payable: "Net à payer"
+      vat_summary:
+        rate: "TAUX"
+        base: "BASE HT"
+        vat: "TVA"
+      mentions: "MENTIONS"
+      page: "Page %{page}/%{pages}"
+    reminders:
+      subject:
+        level1: "Rappel : facture %{number} échue"
+        level2: "Deuxième rappel : facture %{number} impayée"
+        level3: "Mise en demeure : facture %{number}"
+      body:
+        level1: "Bonjour,\n\nSauf erreur de notre part, la facture %{number} échue le %{due_date} reste impayée pour %{balance}. Nous vous remercions de bien vouloir procéder à son règlement.\n\nCordialement,\n%{seller}"
+        level2: "Bonjour,\n\nMalgré notre premier rappel, la facture %{number} échue le %{due_date} reste impayée pour %{balance} (%{days} jours de retard). Merci de la régler sans délai.\n\nCordialement,\n%{seller}"
+        level3: "Madame, Monsieur,\n\nLa facture %{number} échue le %{due_date} reste impayée pour %{balance} malgré nos rappels. Nous vous mettons en demeure de la régler, soit %{total} au total.\n\n%{seller}"
+      penalties: "Pénalités de retard : %{interest} ; indemnité forfaitaire pour frais de recouvrement : %{indemnity} ; total dû : %{total}."
+    mail:
+      subject: "%{kind} %{number} — %{seller}"
+      body: "Bonjour,\n\nVeuillez trouver ci-joint notre document %{number} d'un montant de %{amount}.\n\nCordialement,\n%{seller}"
+    exports:
+      accounts:
+        customer: "Clients"
+        sales: "Ventes"
+        vat: "TVA collectée"
+        bank: "Banque"
+      payment: "Règlement"
+      deposit_deducted: "Acompte déduit"
+      sales_journal: "Journal des ventes"
+      csv_name: "journal-ventes-encaissements"
+      archive_name: "factures"
+    errors:
+      settings:
+        days: "Indiquez un nombre de jours entre 0 et %{max}"
+        rate: "Indiquez un taux entre 0 et 100 (quatre décimales au plus)"
+        operation_category: "Catégorie d'opération inconnue"
+        iban: "IBAN invalide"
+        bic: "BIC invalide"
+        email: "Adresse électronique invalide"
+        reminder_days: "Les délais des trois relances doivent être croissants, entre 1 et 365 jours"
+        penalty_level: "Niveau de relance entre 0 et 3"
+        journal_code: "Code de journal : lettres majuscules et chiffres, huit au plus"
+        account: "Numéro de compte : chiffres et lettres majuscules, vingt au plus"
+      document:
+        kind:
+          immutable: "La nature d'un document ne change pas"
+          invalid: "Nature de document inconnue"
+        customer:
+          not_found: "Client introuvable"
+          not_customer: "Cette fiche n'est pas un client"
+          disabled: "Ce client est désactivé"
+        currency:
+          unknown: "Devise inconnue : %{value}"
+          decimals: "La devise %{value} doit compter deux décimales"
+        operation_category:
+          invalid: "Catégorie d'opération inconnue"
+        locale:
+          invalid: "Langue non prise en charge"
+        layout:
+          not_found: "Modèle de mise en page introuvable"
+        due_date:
+          before_issue: "L'échéance précède la date d'émission"
+        validity_date:
+          quote_only: "Seul un devis a une date de validité"
+        reference:
+          too_long: "%{max} caractères au plus"
+        credited:
+          credit_note_only: "Seul un avoir référence une facture corrigée"
+          required: "Un avoir référence la facture qu'il corrige"
+          invalid: "La facture corrigée doit être une facture émise"
+          other_customer: "La facture corrigée est celle d'un autre client"
+          deposit_deducted: "Cet acompte est déduit d'une facture émise : corrigez la facture finale par un avoir"
+        deposits:
+          invoice_only: "Seule une facture déduit des acomptes"
+          duplicate: "Acompte cité deux fois"
+          invalid: "Cet acompte n'est pas une facture d'acompte émise"
+          other_customer: "Cet acompte est celui d'un autre client"
+          cancelled: "Cet acompte a été annulé par avoir"
+          already_deducted: "Cet acompte est déjà déduit d'une autre facture"
+          credited: "Cet acompte porte un avoir : il ne se déduit plus"
+          exceed_total: "Les acomptes déduits dépassent le total de la facture"
+        lines:
+          too_many: "%{max} lignes au plus"
+        global_discount:
+          exceeds: "La remise globale dépasse le total des lignes"
+        issued: "Document émis : il ne se modifie ni ne se supprime ; corrigez-le par un avoir"
+        in_use: "Ce brouillon est cité par un autre document"
+      discount:
+        kind: "Type de remise inconnu"
+        negative: "La remise ne peut être négative"
+        percent: "Pourcentage entre 0 et 100 (quatre décimales au plus)"
+        amount_scale: "Montant au centime près (deux décimales au plus)"
+      line:
+        kind: "Type de ligne inconnu"
+        description:
+          blank: "Indiquez une désignation"
+          too_long: "%{max} caractères au plus"
+        item:
+          invalid: "Cette fiche n'est pas un article"
+          disabled: "Cet article est désactivé"
+          required: "Choisissez un article"
+          free_line: "Une ligne libre ne cite pas d'article"
+        quantity:
+          zero: "La quantité ne peut être nulle"
+          scale: "Quatre décimales au plus"
+        unit_code: "Unité inconnue (codes UN/ECE)"
+        unit_price:
+          required: "Indiquez un prix unitaire"
+          negative: "Le prix unitaire ne peut être négatif"
+          scale: "Quatre décimales au plus"
+        vat_rate:
+          not_found: "Taux de TVA introuvable"
+          disabled: "Ce taux de TVA est désactivé"
+          required: "Choisissez un taux de TVA"
+        discount:
+          exceeds: "La remise dépasse le montant de la ligne"
+      issue:
+        already_issued: "Ce document est déjà émis"
+        no_line: "Ajoutez au moins une ligne chiffrée"
+        total_not_positive: "Le total TTC doit être positif"
+        company_incomplete: "Complétez l'identité de la société avant d'émettre"
+        before_last: "Date antérieure au dernier document de la série (%{date})"
+        credit_exceeds: "L'avoir dépasse le montant restant de la facture (%{remaining})"
+        credit_before_invoice: "Un avoir ne précède pas la facture qu'il corrige"
+        future: "La date d'émission ne peut dépasser la date du jour (%{date}) : le numéro attribué est définitif"
+      transform:
+        source_draft: "Émettez d'abord le document d'origine"
+        not_allowed: "Transformation impossible de %{from} en %{to}"
+        source_status: "Le document d'origine est %{status}"
+        deposit_percent: "Pourcentage d'acompte entre 0 et 100 (deux décimales au plus)"
+      quote:
+        not_sent: "Seul un devis envoyé reçoit une décision"
+        decision: "Décision inconnue"
+      payment:
+        accounting_active: "La Comptabilité est active : enregistrez l'encaissement en banque puis lettrez-le"
+        document:
+          invalid: "Seule une facture émise reçoit un règlement"
+          cancelled: "Cette facture est annulée par avoir"
+        amount:
+          not_positive: "Le montant doit être positif"
+          scale: "Montant au centime près"
+          exceeds: "Le montant dépasse le solde de la facture (%{balance})"
+        method: "Mode de règlement inconnu"
+        reference:
+          too_long: "%{max} caractères au plus"
+      reminder:
+        not_proposed: "Cette relance n'est plus à traiter"
+        in_progress: "Cette relance est en cours d'envoi"
+      export:
+        currency_rate: "Aucun cours de %{code} au %{date} : le document %{number} ne peut être converti pour le FEC"
+      mail:
+        draft: "Un brouillon ne s'envoie pas"
+        no_recipient: "Indiquez un destinataire"
+        invalid_address: "Adresse électronique invalide"
+        no_sender: "Indiquez l'adresse d'expédition dans les paramètres"
+        not_configured: "L'envoi de courriels n'est pas configuré"
+        delivery_failed: "Échec de l'envoi : %{error}"
+      layout:
+        name:
+          blank: "Indiquez un nom"
+          too_long: "%{max} caractères au plus"
+          taken: "Ce nom est déjà pris"
+        color: "Couleur au format #rrggbb"
+        text:
+          too_long: "%{max} caractères au plus"
+        logo:
+          type: "Le logo doit être une image PNG ou JPEG"
+          not_found: "Logo introuvable"
+        in_use: "Ce modèle est utilisé par des documents"

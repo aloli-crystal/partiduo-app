@@ -26,6 +26,7 @@ fr:
       acc_entry_sale: "Ventes"
       acc_entry_financial: "Financier"
       acc_entry_misc: "Opérations diverses"
+      acc_invoicing_history: "À comptabiliser (Facturation)"
       acc_accounts: "Comptes et tiers"
       acc_entries: "Écritures"
       acc_matching: "Lettrage"
@@ -46,6 +47,9 @@ fr:
       expense: "Charge"
       expense_contra: "Charge, compte inversé"
       context: "Contexte"
+    sides:
+      debit: "Débit"
+      credit: "Crédit"
     ledger_kinds:
       purchase: "Achats"
       sale: "Ventes"
@@ -90,12 +94,70 @@ fr:
         too_many_decimals: "Le montant compte au plus %{max} décimales."
         too_few_lines: "Une écriture compte au moins %{min} lignes."
         unbalanced: "L'écriture n'est pas équilibrée : écart de %{difference}."
+        amount_zero: "Le montant ne peut pas être nul."
+        no_items: "Saisissez au moins une ligne."
+        counterpart_missing: "Indiquez une fiche ou un compte de contrepartie."
+        ledger:
+          disabled: "Ce journal est désactivé."
+          not_document: "Le journal %{code} n'est ni un journal d'achats ni un journal de ventes."
+          not_purchase: "Le journal %{code} n'est pas un journal d'achats."
+          not_sale: "Le journal %{code} n'est pas un journal de ventes."
+          not_financial: "Le journal %{code} n'est pas un journal financier."
+        date:
+          no_period: "Aucune période ne contient la date du %{date} : créez l'exercice."
+          period_closed: "La période du %{date} est close."
+        receipt:
+          too_long: "La pièce compte au plus %{max} caractères."
+          taken: "La pièce %{receipt} existe déjà dans ce journal."
+        source:
+          too_long: "La référence compte au plus %{max} caractères."
+        attachment:
+          not_found: "Cette pièce jointe n'existe pas."
+        currency_rate:
+          missing: "Aucun cours connu pour la devise %{code} à cette date : indiquez-le."
+        account:
+          not_found: "Le compte %{number} n'existe pas."
+          not_direct_use: "Le compte %{number} ne peut pas être utilisé directement."
+        card:
+          not_found: "Aucune fiche ne porte le code %{code}."
+          disabled: "La fiche %{code} n'est plus utilisée."
+          no_account: "La fiche %{code} n'est rattachée à aucun compte."
+        third_party:
+          required: "Indiquez le tiers."
+        vat_rate:
+          not_found: "Le taux de TVA %{code} n'existe pas."
+          disabled: "Le taux de TVA %{code} est désactivé."
+          required: "Indiquez le taux de TVA du montant de TVA saisi."
+          no_account: "Le taux de TVA %{code} n'a pas de compte pour ce journal."
+        cancel:
+          is_reversal: "Une extourne ne s'annule pas."
+          already_cancelled: "Cette écriture est déjà annulée."
+      billing:
+        no_sale_ledger: "Aucun journal de ventes actif : créez-en un pour comptabiliser les factures."
+        no_financial_ledger: "Aucun journal financier actif : créez-en un pour comptabiliser les règlements."
+        no_sales_account: "Aucun compte de vente : rattachez l'article à un compte ou donnez un compte par défaut au journal de ventes."
+        customer_not_found: "La fiche client %{id} n'existe pas."
+        vat_rate_not_found: "Le taux de TVA %{id} n'existe pas."
+        date_missing: "La date du document est absente."
+        deposit_not_posted: "La facture d'acompte %{source} n'est pas encore comptabilisée."
+        failed: "L'écriture de %{source} n'a pas pu être passée."
+        dry_run: "Essai à blanc : rien n'est enregistré."
+        already_dismissed: "Cet événement est déjà écarté."
+        already_posted: "Cet événement est déjà comptabilisé."
+        not_dismissed: "Cet événement n'est pas écarté."
+        reason_too_long: "%{max} caractères au plus."
+      matching:
+        too_few_lines: "Choisissez au moins deux lignes à lettrer."
+        line_not_found: "La ligne %{id} n'existe pas."
+        different_accounts: "Les lignes à lettrer sont d'un même compte."
+        one_side: "Lettrez des lignes au débit et au crédit."
       account:
         number:
           blank: "Indiquez le numéro du compte."
           too_long: "Le numéro compte au plus %{max} caractères."
           invalid: "Le numéro ne contient que des lettres et des chiffres."
           taken: "Le compte %{number} existe déjà."
+          in_use: "Ce compte est mouvementé : son numéro ne change plus."
         label:
           blank: "Indiquez le libellé du compte."
           too_long: "Le libellé compte au plus %{max} caractères."
@@ -107,6 +169,9 @@ fr:
         has_children: "Ce compte a des sous-comptes : effacement interdit."
         in_use: "Ce compte est utilisé : effacement interdit."
       ledger:
+        in_use: "Ce journal contient des écritures : effacement interdit."
+        kind:
+          in_use: "Ce journal contient des écritures : son type ne change plus."
         name:
           blank: "Indiquez le nom du journal."
           too_long: "Le nom compte au plus %{max} caractères."
@@ -132,6 +197,7 @@ fr:
         currency_code:
           invalid: "Indiquez un code de devise ISO 4217 (trois lettres)."
           unknown: "La devise %{code} n'est pas déclarée."
+          in_use: "Ce journal contient des écritures : sa devise ne change plus."
       default_account:
         code:
           invalid: "Usage de compte par défaut inconnu."

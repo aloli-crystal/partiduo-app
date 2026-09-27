@@ -12,6 +12,7 @@ require "../auth/migrations/**"
 require "../core/migrations/**"
 require "../vat/migrations/**"
 require "../cards/migrations/**"
+require "../invoicing/migrations/**"
 require "../modules/migrations/**"
 
 # Commandes de gestion du cœur (`provision`).

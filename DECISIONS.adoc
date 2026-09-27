@@ -167,6 +167,9 @@ est interne et peut changer.
    l'opération ; un abonné agit avec `Actor.system` ; un effet extérieur
    (courriel, réseau) passe par `Partiduo::Events.after_commit { … }` ;
 ** ajouter un événement = compléter `SCHEMA` et le noter ici.
+** événements rejouables (`Partiduo::Events::JOURNALED`) consignés au
+   journal du socle à chaque publication, relus par
+   `Partiduo::Events.journal` (D-INT-002).
 
 === C5 — Specs
 
@@ -2153,3 +2156,1003 @@ contrat, à trancher avec le lot 2 (erreurs de saisie d'écritures).
 * Limitation par adresse IP en mémoire (D-UI-022) : à remplacer par une
   limitation au proxy (nginx `limit_req`) si plusieurs processus servent une
   instance.
+
+== Lot 2 — écritures, consultation, lettrage (27 septembre 2026)
+
+=== D-ACC-011 — Schéma des écritures et intégrité en base (lot 2, écritures)
+
+*Contexte.* `jrn` (en-tête) et `jrnx` (lignes) portent l'équilibre
+(`check_balance`, `proc_check_balance`), la période (`jrn_check_periode`,
+`find_periode`, `is_closed`) et le lettrage (`jnt_letter`, `letter_deb`,
+`letter_cred`). ADR-001 § PL/pgSQL et PROMPT-PORTAGE : écriture déséquilibrée
+refusée *par PostgreSQL*.
+
+*Choix.* Migration accounting 0003 : `accounting_entry` (journal, période,
+date, échéance, libellé, pièce, code interne, montant = total du débit,
+devise et cours, extourne `reversal_of_id`, pièce jointe, `source`, auteur),
+`accounting_entry_line` (compte, fiche, sens `debit`/`credit`, montant
+`numeric(20,4)`, montant en devise, libellé, taux et rôle de TVA `base`/`tax`,
+quantité, `matching_id`), `accounting_matching` (compte). En base :
+déclencheurs de contrainte *différés* `accounting_entry_balance` et
+`accounting_entry_line_balance` (fonction `accounting_entry_check_balance`,
+mêmes codes de retour que `check_balance`) ; `accounting_entry_period_guard`
+calcule la période à partir de la date (`core_period_for`) et refuse date hors
+exercice, période close ou exercice clos (`accounting_period_closed`) ; une
+modification qui ne touche ni date, ni journal, ni montant, ni devise reste
+permise en période close, comme dans `jrn_check_periode` ;
+`accounting_entry_line_guard` refuse lignes ajoutées, modifiées ou retirées en
+période close, le lettrage restant permis. Pièce unique par journal, extourne
+unique, clés étrangères vers période, fiche, taux, pièce jointe (qui protègent
+ces lignes). Specs en SQL direct : `spec/accounting/entry_integrity_spec.cr`.
+La clôture par journal (`jrn_periode`) n'est pas reprise : clôture par
+période et exercice du socle seulement (lot de clôture).
+
+*Alternative écartée.* Une période saisie par l'appelant (`check_periode`) :
+source d'incohérence date/période ; la base la calcule. Une table de lettrage
+à deux côtés (`letter_deb`, `letter_cred`) : le sens est déjà sur la ligne.
+
+=== D-ACC-012 — Saisie : un service, quatre formes, périmètre repris (lot 2, écritures)
+
+*Contexte.* NOALYSS a une classe de saisie par type de journal, avec
+beaucoup d'options (non déductible, part privée, autres taxes, paiement
+immédiat, stock, analytique, mode strict, opérations prédéfinies).
+
+*Choix.* `Partiduo::Accounting::Posting.create!` est le seul chemin
+d'écriture ; `post_entry` (lignes libres, tout journal : OD, reprise,
+écritures d'autres modules), `post_purchase` / `post_sale` (articles, TVA par
+taux, tiers), `post_financial` (une écriture par ligne, comme
+`Acc_Ledger_Fin::insert`), `cancel_entry`. Chaque commande a sa requête de
+contrôle (`check_entry`, `check_document`, `check_financial`,
+`check_matching`) qui renvoie les lignes calculées. Compte d'une ligne
+d'article : saisi, sinon celui de la fiche, sinon le compte par défaut du
+journal. Droit `W` sur le journal exigé (`Forbidden` sinon). Non repris
+(réversible, faute d'usage dans les lots en cours) : dépenses et TVA non
+déductibles, part privée, autres taxes, paiement immédiat, stock, analytique,
+mode strict, filtres de fiches et de comptes par journal (`belong_ledger`),
+réglages de saisie du journal (D-ACC-004), double compte d'une fiche.
+
+*Alternative écartée.* Un seul `post_entry` recevant des lignes déjà
+ventilées : la TVA serait calculée par chaque appelant (interface,
+Facturation, reprise).
+
+=== D-ACC-013 — Devises : conversion par ligne, écart reporté (lot 2, écritures)
+
+*Contexte.* NOALYSS convertit chaque ligne (montant ÷ cours, arrondi à deux
+décimales) et passe l'écart sur les comptes `MY_DEFAULT_ROUND_ERROR_DEB/CRED`.
+
+*Choix.* Même conversion, aux décimales de la devise de tenue ; montant
+d'origine gardé par ligne (`currency_amount`). Achats, ventes et financier :
+le tiers ou la banque est la somme des lignes converties, donc sans écart.
+Écriture libre : l'écart est ajouté à la plus grande ligne du côté le plus
+faible. Cours : saisi, sinon celui du socle à la date ; sans cours, refus.
+
+*Alternative écartée.* Des comptes d'écart d'arrondi : deux comptes par
+défaut de plus (`DEFAULT_ACCOUNT_CODES`), pour des écarts d'un centime.
+
+=== D-ACC-014 — Pièce, code interne, source (lot 2, écritures)
+
+*Choix.* Pièce absente : `Receipts.take!` dans la transaction (aucun trou si
+la saisie échoue). Pièce saisie : unique dans le journal (refus
+`receipt.taken`, là où `update_receipt` prenait silencieusement un autre
+numéro), compteur inchangé. Extourne : nouvelle pièce du journal. Extrait à
+pièce saisie et plusieurs lignes : pièce suffixée du rang sur trois
+chiffres. Code interne : initiale du code du journal et identifiant en
+hexadécimal sur six chiffres (`compute_internal_code` sans la séquence
+`s_internal`). `source` : référence libre (`invoice:42`), dans `entry.posted`
+et la recherche, pour qu'un module abonné retrouve son écriture sans citer le
+contrat de la Comptabilité.
+
+*Alternative écartée.* Renuméroter en silence une pièce saisie déjà prise :
+surprend l'utilisateur et casse une reprise.
+
+=== D-ACC-015 — Extourne (lot 2, écritures)
+
+*Contexte.* `Acc_Ledger::reverse` : écriture inverse à une date d'une période
+ouverte, lignes lettrées deux à deux (`insert_couple`), lien `jrn_rapt`.
+
+*Choix.* `cancel_entry` : même journal, lignes et montants, sens opposés, date
+de l'écriture par défaut, libellé de l'écriture par défaut ; une extourne ne
+s'annule pas, une écriture ne s'annule qu'une fois. Une ligne déjà lettrée
+quitte son lettrage (défait en entier : le paiement d'une facture annulée
+redevient ouvert), puis chaque paire est lettrée. Publie `entry.posted`
+(l'extourne, clé `reversal_of`) puis `entry.cancelled` (clé
+`reversal_entry_id`).
+
+*Alternative écartée.* Rattacher la ligne d'extourne au lettrage existant
+(`insert_couple`) : déséquilibre un lettrage jusque-là soldé.
+
+=== D-ACC-016 — Lettrage et `payment.matched` (lot 2, écritures)
+
+*Choix.* Lignes d'un même compte, au débit et au crédit ; lettrage partiel
+admis (« lettrage avec différence ») ; une ligne déjà lettrée y amène son
+lettrage entier (paiement en plusieurs fois). Lettrage permis en période
+close (colonne `matching_id` hors du contrôle de période). Code affiché tiré
+de l'identifiant (`A`… `Z`, `AA`). `payment.matched` est publié quand un
+lettrage réunit une ligne d'un journal financier et une ligne d'un journal
+d'achats ou de ventes, avec les clés supplémentaires `entry_ids` et
+`sources` (ADR-004 D5, D4 : « Encaissée »).
+
+*Alternative écartée.* Publier `payment.matched` pour tout lettrage :
+l'extension de facturation électronique émettrait « Encaissée » pour une
+compensation entre factures.
+
+=== D-ACC-017 — Relevé d'un compte ou d'un tiers (lot 2, écritures)
+
+*Contexte.* ADR-005 D9 : solde, reste dû, échu, balance âgée, mouvements.
+`Lettering::get_balance_ageing` se limite aux journaux d'achats et de ventes
+et ignore les lettrages partiels.
+
+*Choix.* `account_statement` : par compte ou par fiche (toutes ses lignes),
+journaux lisibles de l'acteur. Montants signés débit − crédit. Élément
+ouvert : ligne non lettrée, ou lettrage partiel (son reliquat, daté de sa
+plus ancienne échéance). Reste dû = somme des éléments ouverts ; échu = part
+dont l'échéance (à défaut la date) est dépassée à `as_of` ; balance âgée
+0 / 1–30 / 31–60 / > 60 jours. Tous les journaux comptent (un paiement non
+lettré diminue le reste dû). Paramètres d'erreur en chaînes (dates ISO),
+comme au lot 1 : l'amendement de D-UI-026 (paramètres typés) reste ouvert.
+
+*Alternative écartée.* Limiter l'âge aux factures : un acompte non lettré
+laisserait un reste dû faux.
+
+== Lot F — Facturation (27 septembre 2026)
+
+Contrat : link:doc/api/invoicing.adoc[]. Préfixe des décisions : `D-INV-`.
+
+=== D-INV-001 — Un modèle `Document` pour les six natures, identités figées (lot F, facturation)
+
+*Contexte.* ADR-006 D5 : devis, commandes, bons de livraison, factures,
+factures d'acompte, avoirs, transformables l'un en l'autre avec lien
+conservé. NOALYSS n'a ni chaîne documentaire ni document de facturation
+distinct de l'écriture.
+
+*Choix.* Table `invoicing_document` (nature `kind`, série, numéro, liens
+`source_id` et `credited_id`), lignes `invoicing_line` (article, texte libre,
+note, titre, sous-total), acomptes déduits `invoicing_deposit_deduction`
+(unique par acompte). À l'émission, identités du vendeur et du client,
+adresse de livraison et mentions sont figées en JSON sur le document ; les
+totaux sont stockés et recalculables depuis les lignes. Transformations
+admises : devis → commande, bon de livraison, facture, acompte ; commande →
+bon de livraison, facture, acompte ; bon de livraison → facture ; facture
+et acompte → avoir. Un devis envoyé transformé devient accepté ; une facture
+issue d'une chaîne déduit d'office ses acomptes émis non encore déduits.
+
+*Alternative écartée.* Une table par nature : six schémas presque
+identiques, transformations en copies de colonnes.
+
+=== D-INV-002 — Numérotation : compteurs par série et par année, préfixes fixes (lot F, facturation)
+
+*Contexte.* ADR-006 D5 impose la table de compteurs verrouillée par
+`SELECT … FOR UPDATE` ; le format n'est pas fixé.
+
+*Choix.* `invoicing_counter (series, year, last_number, last_date)`, ligne
+créée par `INSERT … ON CONFLICT DO NOTHING` puis verrouillée
+(`QuerySet#lock`) et incrémentée dans la transaction d'émission. Une série
+par nature : `D` (devis), `C` (commande), `BL`, `F`, `FA` (acompte), `AV`
+(avoir) ; format `F-2026-0001` ; année = année de la date d'émission. En
+base : le compteur n'avance que d'une unité, sa date ne recule pas, il ne se
+supprime pas (déclencheur) ; index uniques `(series, number)` et `(series,
+year, sequence)`. Chronologie : une émission datée avant le dernier document
+de la série est refusée (`issue.before_last`). Specs : aucun trou après une
+émission annulée (abonné qui lève, commande englobante en échec), aucun
+doublon sur huit émissions concurrentes (fibres, connexions distinctes).
+
+*Alternative écartée.* Préfixes paramétrables dès maintenant : un
+changement en cours d'année rompt la lecture de la continuité ; réversible
+(colonne à ajouter aux paramètres).
+
+=== D-INV-003 — Intangibilité tenue par PostgreSQL (lot F, facturation)
+
+*Choix.* Déclencheur `invoicing_document_guard` : un document numéroté ne se
+supprime pas et ne change que par `status`, `paid_amount`,
+`credited_amount`, `sent_at`, `updated_at` et `pdf_id` (posé une fois) —
+comparaison `to_jsonb(NEW) - colonnes` / `to_jsonb(OLD) - colonnes`.
+`invoicing_child_guard` fige lignes et acomptes d'un document numéroté ;
+`invoicing_document_event` est en ajout seul, sauf les traces d'un
+brouillon supprimé avec lui. Contrainte `CHECK` : numéro, séquence, date
+d'émission, horodatage et empreinte vont ensemble. Correction : avoir 381
+qui référence la facture ; la facture entièrement créditée passe à
+`cancelled`.
+
+*Alternative écartée.* Contrôle applicatif seul : NOALYSS montre qu'une
+correction « à la main » finit toujours par passer.
+
+=== D-INV-004 — Calculs et arrondis (lot F, facturation)
+
+*Choix.* `Calculator` en `BigDecimal` : brut de ligne = arrondi(quantité ×
+prix) ; remise de ligne en pourcentage (arrondie) ou en montant (deux
+décimales, refusé au-delà) ; remise globale ventilée au prorata des groupes
+de TVA, reste d'arrondi sur le groupe de plus forte base ; TVA par groupe
+sur la base arrondie (BR-CO-17) ; arrondi au demi supérieur en valeur
+absolue (`ties_away`). Groupe = catégorie UNCL5305 + taux + motif (deux
+taux du socle à 2,1 % forment un seul groupe, sinon BR-S-08 échoue). Prix et
+quantités : quatre décimales au plus ; devises à deux décimales seulement.
+Sous-total = somme des lignes depuis le dernier titre ou sous-total, hors
+totaux.
+
+*Alternative écartée.* TVA ligne à ligne : écarts d'un centime rejetés par
+les contrôles EN 16931.
+
+=== D-INV-005 — Champs de facturation française portés par le document (lot F, facturation)
+
+*Contexte.* ADR-004 D5 met catégorie d'opération, option TVA sur les débits
+et adresse de livraison au cœur ; le lot 1 n'a posé au socle que SIREN,
+SIRET, identifiant de routage et adresses de livraison des fiches.
+
+*Choix.* Catégorie d'opération (`goods`, `services`, `mixed`) sur le
+document, défaut dans les paramètres de la Facturation ; option pour les
+débits dans les paramètres, figée sur chaque document émis ; adresse de
+livraison copiée sur le document (celle saisie, sinon la première adresse de
+livraison du client). Client *professionnel* (indemnité de 40 €) : fiche
+avec SIREN ou numéro de TVA.
+
+*Amendement proposé.* ADR-004 D5 : lire « portés par le document de
+facturation, par défaut depuis les paramètres » ; ajouter au socle un
+indicateur « particulier / professionnel » sur la fiche si la déduction par
+identifiant ne suffit pas.
+
+=== D-INV-006 — Mentions obligatoires : codes générés et figés (lot F, facturation)
+
+*Choix.* `Mentions.build` produit des `MentionView (code, clé, paramètres)`
+depuis le document, la société, le client, les taux et les paramètres :
+identité du vendeur (forme, capital, RCS/RPM, SIREN ou numéro d'entreprise,
+TVA), SIREN et TVA du client, dates (émission, livraison, échéance,
+validité), adresse de livraison si elle diffère, catégorie d'opération,
+option pour les débits (FR), mentions particulières par motif VATEX ou
+catégorie (franchise 293 B, autoliquidation, livraison intracommunautaire,
+export, exonération), avoir → facture d'origine, acomptes déduits,
+communication structurée (BE), coordonnées bancaires, escompte ou son
+absence, pénalités (taux paramétré, sinon rappel du taux légal du régime),
+indemnité forfaitaire. Mentions figées à l'émission (JSON), traduites en
+fr/en/nl, jamais fournies par le modèle de mise en page.
+
+*Alternative écartée.* Mentions dans un gabarit modifiable : c'est ce que
+l'ADR-006 D5 interdit.
+
+=== D-INV-007 — PDF/A-3 Factur-X : sous-classe XMP, polices embarquées (lot F, facturation)
+
+*Contexte.* `pdf-a` configure PDF/A-3b et `pdf` sait joindre un fichier
+associé (`/AF`), mais le générateur XMP de `pdf` n'accepte pas de propriétés
+propres : Factur-X exige `fx:DocumentType`, `fx:DocumentFileName`,
+`fx:Version`, `fx:ConformanceLevel` et la déclaration du schéma d'extension
+(ISO 19005-3 § 6.6.2.3).
+
+*Choix.* `Partiduo::Invoicing::FacturxDocument < PDF::A::Document` complète
+le flux XMP produit par la bibliothèque au moment où le catalogue est
+construit (aucun shard modifié). XML CII D16B profil EN 16931 construit
+par `XML.build` dans l'ordre du schéma ; `TypeCode` 380, 381 (avec
+`InvoiceReferencedDocument`), 386 pour la facture d'acompte ; exigibilité
+BT-8 (codes 5 / 72) en France ; remises de document par groupe de TVA ;
+mentions reprises en `IncludedNote` (`PMD`, `PMT`, `AAB`, `REG`, `TXD`).
+Polices DejaVu Sans et DejaVu Sans Bold (licence libre, `data/fonts/`, hors
+`src/` pour le garde-fou ADR-005 D3) lues à la compilation
+(`read_file`) : l'exécutable est autonome. Devis, commandes et bons de
+livraison : PDF/A-3 sans XML.
+
+*Alternative écartée.* Réécrire le PDF par mise à jour incrémentale pour
+remplacer le XMP : plus lourd, et le résultat dépendrait du lecteur de
+`pdf`.
+
+=== D-INV-008 — Contrôle `pdf-validate` à chaque émission (lot F, facturation)
+
+*Choix.* Le PDF est validé (profil `pdf-a-3b`) avant d'être conservé ; une
+non-conformité lève `Output::ConformanceError` et annule l'émission (pas de
+numéro consommé). La règle `pdfa3-6.6.4-pdfaid-part-2` est écartée
+(défaut du jeu de règles, B-INV-001) ; la partie 3 est vérifiée par les
+specs. Coût mesuré : environ 40 ms par émission.
+
+*Alternative écartée.* Valider seulement dans les specs : une régression de
+`pdf` produirait des factures non conformes en silence.
+
+=== D-INV-009 — Règlements : une seule source de vérité (lot F, facturation)
+
+*Choix.* Comptabilité inactive : `record_payment` (partiel ou total, pas
+au-delà du solde) publie `payment.recorded`. Comptabilité active :
+`record_payment` refusé (`payment.accounting_active`) ; l'abonné de
+`payment.matched` crée le règlement (`source` = `matching`), idempotent par
+`(document, matching_id)`. Clés lues : `matching_id`, `sources`
+(`invoice:<id>`, la `source` de l'écriture de vente, D-ACC-014), et,
+facultatives, `amounts` (`invoice:<id>=<montant>;…`) et `matched_on`. Sans
+montant, le lettrage solde la facture. Solde = TTC − acomptes − règlements −
+avoirs ; statuts `partially_paid`, `paid`.
+
+*Amendement proposé (lot 2).* Publier `amounts` (montant lettré par
+source) et `matched_on` dans `payment.matched` : un lettrage partiel
+(D-ACC-016) serait sinon compté comme un solde.
+
+=== D-INV-010 — Événements : charge utile de quoi passer l'écriture (lot F, facturation)
+
+*Choix.* `invoice.issued` (facture et facture d'acompte) et
+`credit_note.issued` portent, outre l'identifiant, `source`
+(`invoice:<id>` / `credit_note:<id>`), numéro, dates, client, devise, totaux,
+acomptes déduits, `sales` (JSON : parts du HT par article et taux du socle,
+remise globale déduite, somme = HT) et `vat` (JSON : TVA par taux du socle,
+somme = TVA). La Comptabilité passe ainsi l'écriture sans citer
+`Partiduo::Api::Invoicing` (ADR-006 D3, `module_isolation_spec`).
+
+*Alternative écartée.* Laisser la Comptabilité relire la facture par le
+contrat : il faudrait `depends_on "INVOICING"`, contraire à la Comptabilité
+seule.
+
+=== D-INV-011 — Relances proposées, jamais envoyées d'office (lot F, facturation)
+
+*Choix.* Trois niveaux, délais après échéance dans les paramètres (7, 30,
+60 jours par défaut), textes par défaut traduits ou saisis
+(`%{number}`, `%{balance}`…). `propose_reminders(on)` crée, pour chaque
+facture échue non soldée, la relance du plus haut niveau atteint et non
+encore proposé (une par niveau, index unique) ; `send_reminder` envoie après
+validation, `dismiss_reminder` écarte. Pénalités à partir du niveau
+`penalty_from_level` (2) : intérêts = solde × taux × jours / 365 (arrondis),
+seulement si un taux est paramétré ; indemnité de 40 € pour un
+professionnel.
+
+*Alternative écartée.* Calculer les intérêts au taux légal : il change
+chaque semestre et n'est pas dans le socle ; la mention rappelle la règle.
+
+=== D-INV-012 — Courriel : transport propre à la Facturation (lot F, facturation)
+
+*Contexte.* Marten n'offre qu'un moteur d'envoi de développement ; aucun
+client SMTP dans le cœur.
+
+*Choix.* `Mail::Transport` abstrait : `SmtpTransport` (EHLO, STARTTLS ou TLS
+direct, AUTH PLAIN, MAIL, RCPT, DATA avec doublement des points, QUIT ;
+`PARTIDUO_SMTP_URL` ou `Api::Invoicing.mail_transport=`), `MemoryTransport`,
+`DisabledTransport` (défaut : envoi refusé). Message MIME UTF-8, PDF en base64.
+Chaque envoi est tracé (`invoicing_email_log`, empreinte de la pièce jointe),
+un échec aussi ; un envoi réussi passe la facture à `sent`. Dialogue SMTP
+testé contre un faux serveur sur des tubes (`IO::Stapled.pipe`), l'écoute
+locale étant refusée dans le bac à sable (B-UI-001).
+
+*Alternative écartée.* Dépendre d'un shard SMTP externe : aucun dans
+`prod-crystal`, et une dépendance `github:` de plus.
+
+=== D-INV-013 — Transmission au comptable : CSV, FEC partiel, ZIP (lot F, facturation)
+
+*Choix.* CSV du journal des ventes et des encaissements (`;`, UTF-8,
+point décimal ; client au débit, ventes et TVA au crédit par groupe, sens
+inverse pour un avoir ; banque / client pour un règlement) ; FEC des seules
+ventes (18 colonnes, `|`, virgule décimale, `<SIREN>FEC<AAAAMMJJ>.txt`,
+`EcritureNum` = numéro de la pièce) ; ZIP des PDF de la période +
+`index.csv` (SHA-256). Comptes et journaux dans les paramètres, à défaut
+ceux du plan du régime (FR 411000/706000/445710/512000, BE
+400000/700000/451000/550000) : la Facturation ne lit pas le plan comptable.
+
+*Alternative écartée.* Un compte de vente par article (`accounting_card_account`)
+: donnée du module Comptabilité, illisible en Facturation seule.
+
+=== D-INV-014 — Permissions ajoutées (lot F, facturation)
+
+*Choix.* `invoicing.invoice.send` (envoi par courriel) et
+`invoicing.settings.manage` (paramètres) s'ajoutent aux permissions du
+squelette ; un avoir exige `invoicing.credit_note.issue`, les autres
+émissions `invoicing.invoice.issue`.
+
+=== D-INV-015 — Contrat additif, `API_VERSION` inchangée pendant le lot (lot F, facturation)
+
+*Choix.* `Partiduo::Api::Invoicing` est un ajout sans rupture ; la version
+mineure du contrat (0.2.0 → 0.3.0) est à relever à la clôture commune des
+lots 2 et F, pour ne pas croiser l'écriture parallèle de `version.cr`.
+
+*Alternative écartée.* Relever la version dans ce lot : conflit d'écriture
+avec le lot 2 en cours.
+
+== Intégration Facturation ↔ Comptabilité (lots 2 et F, 27 septembre 2026)
+
+Préfixe : `D-INT-`. Contrat : link:doc/api/accounting-entries.adoc[] (§ Écritures
+issues de la Facturation), link:doc/api/modules.adoc[] (§ Événements).
+
+=== D-INT-001 — Abonnés de la Comptabilité : écritures par le contrat, sans citer la Facturation (intégration)
+
+*Contexte.* ADR-006 D3 : `invoice.issued` → vente, `credit_note.issued` →
+avoir lettrable avec la facture, `payment.recorded` → banque ou caisse ;
+aucun module n'appelle l'autre.
+
+*Choix.* `Partiduo::Accounting::Billing` construit des `DocumentInput` et
+`FinancialInput` depuis la charge utile (D-INV-010) et passe par
+`post_sale` / `post_financial` (un seul chemin d'écriture, D-ACC-012), avec
+`Actor.system`. Journal : premier journal de ventes actif (par
+identifiant) ; journal financier : caisse (compte de sa fiche sous le compte
+par défaut `cash`) pour `method = cash`, sinon le premier qui n'est pas une
+caisse, sinon le premier. Pièce = numéro de la facture ou de l'avoir ;
+libellé = numéro et nom du client ; référence `invoice:<id>`,
+`credit_note:<id>`, `payment:<id>` (D-ACC-014), qui rend l'abonné
+idempotent. Compte d'une part : celui de la fiche article (rattachée par
+`CardAccounts.on_card_saved` si elle ne l'est pas — fiche créée en
+Facturation seule), sinon compte par défaut du journal, sinon `sales`. TVA :
+montant de la charge utile par taux, porté par la première ligne du taux
+(zéro sur les autres), donc identique à la facture. Avoir : montants
+négatifs, puis lettrage de la ligne client avec celle de la facture (même
+compte) ; règlement : lettré avec la ligne client de la facture.
+
+*Alternative écartée.* Écrire les lignes directement (`Posting.create!`) :
+contournerait les contrôles de `post_sale` (période, comptes de TVA,
+devise). Un journal de ventes choisi dans des paramètres : aucun paramétrage
+comptable n'existe encore ; réversible (ajouter un compte par défaut
+d'usage « journal des ventes » le jour où il en faut plusieurs).
+
+=== D-INT-002 — Journal des événements rejouables au socle (intégration)
+
+*Contexte.* ADR-006 D2 : activer la Comptabilité après des mois de
+facturation seule *propose* de comptabiliser l'historique. La Comptabilité
+ne peut pas relire les factures (pas de `depends_on "INVOICING"`, D-INV-010),
+et un événement publié quand elle est inactive n'a pas d'abonné.
+
+*Choix.* Le socle consigne chaque publication de `invoice.issued`,
+`credit_note.issued`, `payment.recorded` (`Partiduo::Events::JOURNALED`)
+dans `modules_event_log` (migration modules 0002, déclencheur : une entrée
+ne se modifie pas), dans la transaction de l'opération ; lecture par
+`Partiduo::Events.journal`. L'historique à comptabiliser = entrées du
+journal dont la référence n'a pas d'écriture.
+
+*Alternative écartée.* Un événement « module activé » auquel la Facturation
+répondrait en republiant ses factures : deux événements de plus, et la
+proposition (liste, erreurs) ne serait pas consultable avant d'agir. Un
+accès de la Comptabilité aux tables de la Facturation : contraire à
+ADR-006 D3.
+
+=== D-INT-003 — Un échec de la Comptabilité ne bloque jamais la Facturation (intégration)
+
+*Contexte.* C4 : un abonné qui lève annule l'opération. Une facture émise est
+un acte fiscal (numéro, PDF) ; l'écriture peut échouer pour des raisons
+comptables (exercice non créé, période close, compte manquant).
+
+*Choix.* L'abonné passe l'écriture dans un point de sauvegarde (D-024) ; un
+échec ou une exception est consigné (`Log`) et l'événement reste dans
+l'historique à comptabiliser. `invoicing_history` le propose avec ses
+erreurs (essai à blanc de tout l'historique dans l'ordre, puis annulation) ;
+`post_invoicing_history` comptabilise tout ou partie, chaque événement dans
+son point de sauvegarde (un échec n'empêche pas les suivants, `remaining`
+les rend). La même paire sert à l'activation tardive. Rien ne permet encore
+d'« écarter » un événement de la proposition (réversible : table
+d'événements écartés).
+
+*Alternative écartée.* Laisser l'abonné lever : la facture ne pourrait pas
+être émise tant que l'exercice n'existe pas, et l'échec d'une écriture
+annulerait une numérotation fiscale.
+
+=== D-INT-004 — Facture finale : extourne des acomptes déduits (intégration)
+
+*Contexte.* La facture finale porte le TTC complet et déduit ses acomptes
+(D-INV-001, solde = TTC − acomptes) ; chaque facture d'acompte a déjà son
+écriture de vente. Sans correction, ventes, TVA et créance client seraient
+comptées deux fois.
+
+*Choix.* `invoice.issued` porte `deposit_sources` (`invoice:<id>` des
+acomptes déduits, clé ajoutée à la charge utile par la Facturation) ;
+l'écriture finale reprend en négatif les lignes de vente et de TVA de
+l'écriture de chaque acompte (hors ligne client) : le client ne porte que le
+solde. Acompte non comptabilisé : échec `deposit_not_posted`, la facture
+reste proposée (l'historique rejoue l'acompte avant elle). L'acompte
+reste en produit à son émission (pas de compte 4191 « avances reçues »).
+
+*Alternative écartée.* Comptabiliser les acomptes en 4191 puis solder ce
+compte à la facture finale : schéma plus fidèle au PCG mais qui demande un
+compte par défaut de plus et une écriture différente selon le régime ;
+réversible dans `Billing`.
+
+=== D-INT-005 — `payment.matched` : `amounts` et `matched_on` (intégration, amendement D-INV-009 adopté)
+
+*Contexte.* D-INV-009 proposait de publier le montant lettré par source ;
+un lettrage partiel était sinon compté comme un solde, et un nouveau
+lettrage *remplace* les lettrages qu'il absorbe (nouvel identifiant,
+D-ACC-016), ce qui ferait compter deux fois un paiement déjà publié.
+
+*Choix.* `amounts` = `<source>=<montant>;…` pour chaque référence d'écriture
+d'achats ou de ventes du lettrage : les paiements (lignes des journaux
+financiers, hors références `payment:` que la Facturation connaît déjà) du
+côté opposé aux factures sont répartis sur elles par date, chacune
+plafonnée à son montant diminué des avoirs du groupe (imputés par date),
+*moins* ce que les lettrages remplacés réglaient déjà. `matched_on` = date
+du dernier paiement lettré. Limite : un avoir d'une facture B lettré dans
+le même groupe qu'une facture A plus ancienne est imputé sur A (la
+Facturation plafonne au solde) ; un délettrage n'est pas signalé à la
+Facturation (pas d'événement) — limite levée par D-2F-003
+(`payment.unmatched`).
+
+*Alternative écartée.* Publier le cumul du lettrage : la Facturation, qui
+compte par identifiant de lettrage, doublerait les paiements en plusieurs
+fois.
+
+=== D-INT-006 — Specs de bout en bout par configuration forcée (intégration)
+
+*Choix.* `spec/integration/invoicing_accounting_spec.cr` fixe chaque
+configuration par `with_active_modules` (comme les specs de règlements de
+la Facturation) : les parcours « les deux », « Facturation seule »,
+« Comptabilité seule » et l'activation tardive s'exécutent dans chacune des
+trois configurations de la CI. Outils : `spec/support/integration.cr`.
+
+*Alternative écartée.* `describe_module` : le parcours complet n'aurait
+tourné que dans la configuration « les deux », et l'activation tardive
+exige de changer de configuration en cours de spec.
+
+== Interface des lots 2 et F — saisie, consultation, lettrage, facturation, tableau de bord (27 septembre 2026)
+
+=== D-UI-027 — Saisie au clavier : formulaire HTML, HTMX pour le contrôle, Opal pour les touches (lots 2 et F, interface)
+
+*Contexte.* ADR-005 D5 : saisie entièrement au clavier (`Tab` et `Entrée`
+avancent, `Alt+↓` ajoute une ligne, `Ctrl+Entrée` enregistre), complétion
+dès le premier caractère, équilibre affiché en permanence ; « HTMX d'abord,
+Opal si l'ergonomie l'exige ». Intercepter `Entrée`, `Alt+↓` et
+`Ctrl+Entrée` et placer le curseur dans la ligne ajoutée est impossible en
+HTMX seul.
+
+*Choix.* Chaque écran de saisie (écritures, devis et factures) est un
+formulaire HTML ordinaire, envoyé et corrigé par le serveur sans
+JavaScript (boutons « Ajouter une ligne » et « × » qui renvoient le
+formulaire). HTMX fait le reste de ce qui passe par le serveur :
+contrôle instantané (`hx-post` sur la requête de contrôle du contrat à
+chaque frappe, zone `aria-live`), ajout d'une ligne (`hx-get`, compteur mis
+à jour hors bande), complétion (`<datalist>` remplie à chaque frappe par
+`/accounting/complete` et `/cards/complete`). *Passage en Opal* pour les
+touches seulement : paquet `entry.js` (`opal/entry.rb`,
+`opal/partiduo_ui/entry/`), monté sur `[data-pd-entry]` — `Entrée` avance
+au champ suivant et ajoute une ligne après le dernier, `Alt+↓` déclenche
+le bouton HTMX d'ajout puis place le curseur dans la nouvelle ligne,
+`Ctrl+Entrée` (⌘+Entrée) envoie le formulaire, `×` retire la ligne sur
+place et relance le contrôle (`pd:lines`). Aucune règle comptable côté
+client : la règle des touches est pure et testée sous JavaScriptCore, le
+montage sur un DOM simulé.
+
+`check_entry(CheckEntryInput)` refuse une saisie déséquilibrée sans en
+rendre les totaux (seul l'écart est dans le paramètre `difference` de
+`accounting.errors.entry.unbalanced`) : l'interface affiche alors les
+sommes des montants saisis et l'écart donné par le refus ; équilibrée,
+les totaux du contrat. Achats, ventes et extraits : totaux, TVA ventilée et
+lignes calculées par `check_document` / `check_financial` (« Écriture
+calculée »), l'équilibre venant de ces mêmes totaux.
+
+*Alternative écartée.* Écran de saisie entièrement en Opal (état des lignes
+côté client, JSON) : double la logique de rendu et de validation, perd
+l'usage sans JavaScript ; `hx-on` / `hyperscript` : un second langage côté
+client, contraire à « une seule compilation, Opal » (ADR-005 D5).
+
+*Amendement proposé.* `check_entry(CheckEntryInput)` renvoyant
+`EntryCheckView` même déséquilibrée (l'écart y est déjà), les erreurs de
+montant restant des refus.
+
+=== D-UI-028 — Specs de l'interface sur un schéma construit par les migrations (lots 2 et F, interface ; révise D-016)
+
+*Contexte.* D-016 synchronisait le schéma depuis les modèles. Les commandes
+du lot 2 (`SET CONSTRAINTS accounting_entry_balance IMMEDIATE`) et la
+numérotation des factures exigent les contraintes et déclencheurs posés en
+SQL par les migrations : sur un schéma synchronisé, toute écriture échoue.
+
+*Choix.* `spec/support/database.cr` reprend le principe de D-009 : schéma
+`public` recréé puis migrations du cœur appliquées au début de la suite
+(`require "partiduo/cli"`, admis par le garde-fou D-014). Aucune citation
+d'un interne du cœur.
+
+*Alternative écartée.* Écritures de test passées en SQL direct : contourne
+le contrat, contraire à C5.
+
+=== D-UI-029 — Écrans de saisie : quatre formes, contrepartie fiche ou compte, dates abrégées (lot 2, interface)
+
+*Choix.* Routes des manifestes : `accounting:entry_purchase`,
+`entry_sale`, `entry_financial`, `entry_misc` (`/accounting/entries/<forme>`).
+Opérations diverses : compte ou fiche, libellé, débit, crédit
+(`post_entry`) ; achats et ventes : tiers, échéance, article ou compte,
+montant HT, taux de TVA (`post_purchase`, `post_sale`) ; extrait : contrepartie,
+entrée, sortie (`post_financial`, montant signé). Un code saisi est une fiche
+s'il en existe une de ce code (`Api::Cards.card_by_code`), sinon un numéro de
+compte, que le contrat accepte ou refuse. Journaux proposés : ceux du type
+où l'acteur a le droit `W`. Après l'enregistrement, message avec la ou les
+pièces et formulaire vierge sur le même journal et la même date (enchaîner
+les saisies). Dates abrégées (`Format#parse_short_date`) relatives au mois de
+la période de travail (D-UI-018) : `12`, `12/3`, `1203`, `12/3/26`,
+`120326` ; date impossible refusée, jamais devinée ; date comprise affichée
+par le contrôle. Refus du contrat rangés sous la ligne (`lines[n]` = n-ième
+ligne remplie) ou le champ d'en-tête. Écritures : liste (bornes par défaut
+de la période de travail), consultation, extourne (`cancel_entry`).
+
+*Alternative écartée.* Une seule grille débit/crédit pour les achats
+(maquette) : obligerait l'interface à ventiler la TVA, règle du cœur
+(D-ACC-012) ; la grille calculée par `check_document` est affichée à la
+place (« Écriture calculée »).
+
+=== D-UI-030 — « Comptes et tiers » et lettrage (lot 2, interface)
+
+*Choix.* `/accounting/accounts?q=` (menu `accounting:accounts`) : sélection
+par code de fiche ou numéro de compte (complétion comptes et tiers), période
+(début de l'exercice de travail par défaut), « non lettrées seulement » ;
+synthèse d'abord (solde, reste à encaisser ou à payer, échu, balance âgée en
+barre *et* en légende chiffrée), mouvements (échéance dépassée en couleur et
+en texte masqué), fiche du tiers ; actions : lettrer (écran de lettrage
+présélectionné), relancer (client dont le reste dû est positif, Facturation
+active, droit `invoicing.reminder.send` : relances de ce client), export CSV.
+Téléphone : colonnes secondaires masquées, colonne « Montant » (débit −
+crédit) affichée à la place de débit et crédit. Accès depuis les écritures,
+la fiche du tiers, le compte du plan comptable et les tuiles du tableau de
+bord. Lettrage `/accounting/matching?q=` : lignes non lettrées à cocher,
+sélection contrôlée à chaque case par `check_matching` (HTMX) avec les
+totaux des lignes choisies, `match_lines` à l'envoi, lettrages existants
+défaits par `unmatch`. HTMX suffit (pas d'Opal) : cocher est déjà une
+interaction au clavier native.
+
+*Alternative écartée.* Lettrage par glisser-déposer : inaccessible au
+clavier, sans gain.
+
+=== D-UI-031 — Tableau de bord : tuiles par module actif, « À traiter » (lots 2 et F, interface)
+
+*Contexte.* ADR-005 D5 : le tableau de bord assemble les tuiles de chaque
+module actif ; le contrat n'expose ni tuiles par manifeste, ni agrégat par
+classe de comptes (clients 41, fournisseurs 40), et chaque fiche client a son
+propre compte (D-ACC-006).
+
+*Choix.* `PartiduoUi::Dashboard` construit les tuiles des pièces actives
+dont l'acteur peut lire les données : Comptabilité — trésorerie (relevé des
+fiches Banque des journaux financiers), clients à encaisser et fournisseurs à
+payer (somme des relevés des fiches de ces natures, 200 fiches au plus,
+lien vers le tiers le plus en retard) ; Facturation — factures à encaisser
+(Facturation seule, comme la maquette), facturé HT du mois (factures moins
+avoirs), devis en attente de réponse. « À traiter » : relances proposées ou
+factures en retard, brouillons à valider, devis expirés, montant échu chez
+les clients, éléments de sécurité du compte manquants. Dernières factures et
+écritures. Tout par le contrat, chaque bloc protégé contre un refus d'accès.
+
+*Alternative écartée.* Tuiles déclarées dans les manifestes : modifie le
+registre du cœur (ADR-003), hors du périmètre de l'interface ; à reprendre si
+une extension doit fournir ses tuiles.
+
+*Amendement proposé.* `Api::Accounting.party_balances(actor, kind)` (reste
+dû et échu par nature de fiche, en une requête) pour lever le plafond de 200
+fiches et le coût d'un relevé par fiche. — *adopté* au lot 2F (D-2F-005), avec
+`Api::Invoicing.summary`.
+
+=== D-UI-032 — Devis et factures : édition, validation, suite de la chaîne (lot F, interface)
+
+*Choix.* Routes des manifestes `invoicing:documents`, `invoice_new`,
+`payments`, `reminders`, `export` ; `/invoicing/documents/<id>` consulte,
+`/edit` modifie un brouillon, `/preview` affiche le document tel qu'imprimé
+(maquette « Aperçu »), `/pdf` télécharge le PDF conservé à l'émission
+(PDF/A-3 Factur-X pour factures, acomptes et avoirs ; aperçu calculé pour un
+brouillon). Lignes : article (code complété), désignation, quantité, unité,
+prix HT, remise %, TVA ; nature déduite (article, sinon désignation chiffrée,
+sinon note) ; titres et sous-totaux affichés mais non saisis dans cette
+version (réversible). Totaux instantanés par `check_document`, mentions
+obligatoires affichées depuis le document (générées à l'émission). Valider =
+`issue` ; suite : transformations admises (`TRANSFORMATIONS`), avoir,
+facture d'acompte (pourcentage), décision sur un devis envoyé. Règlement saisi
+seulement quand la Comptabilité est inactive (D-INV-009), sinon renvoi au
+lettrage. Relances : proposer, envoyer, écarter (rien d'office, D-INV-011).
+Transmission au comptable : CSV, FEC, ZIP de la période. Remise globale en
+pourcentage seulement à l'écran (le contrat admet aussi un montant).
+
+*Alternative écartée.* Édition dans la page de consultation : même raison
+que D-UI-015.
+
+=== D-UI-033 — Libellés dans les fichiers principaux ; opérateurs des conditions Marten (lots 2 et F, interface)
+
+*Constat.* Le chargeur YAML de `crystal-i18n` fusionne les fichiers d'une
+langue *au premier niveau seulement* : un second fichier `fr.yml` dont la
+racine est aussi `ui` remplace la première. Les conditions des gabarits
+Marten n'admettent que `||`, `&&` et `not` (`or` lève `InvalidSyntax`).
+
+*Choix.* Libellés des nouveaux écrans ajoutés aux fichiers
+`src/ui/locales/{fr,en,nl}.yml` (complétude vérifiée par la spec des
+conventions) ; `||` dans les gabarits.
+
+*Alternative écartée.* Un fichier par écran sous une autre racine (`ui_accounting`) :
+clés moins lisibles, pour un gain nul.
+
+=== D-UI-034 — `pdf` en source locale pour l'interface (lots 2 et F, interface)
+
+*Contexte.* Le cœur dépend de `pdf-a` et `pdf-validate` (lot F), qui citent
+`pdf` en `github:`.
+
+*Choix.* `partiduo-ui-bulma/shard.override.yml` force `pdf` en `path:
+../../pdf`, comme le cœur (D-003).
+
+== Relecture de couverture des lots 2 et F — défauts corrigés (testeur, 27 septembre 2026)
+
+=== D-TST-001 — Pièce automatique déjà prise par une pièce saisie : numéro suivant (lot 2)
+
+*Contexte.* Une pièce saisie à la main peut valoir le numéro que le journal
+attribuera ensuite (`O-00001`). L'écriture suivante sans pièce prenait ce
+numéro et échouait sur l'index unique `accounting_entry_ledger_receipt`
+(exception PostgreSQL au lieu d'une écriture). NOALYSS
+(`Acc_Operation::update_receipt`) essaie alors le numéro suivant, jusqu'à 100
+fois.
+
+*Choix.* `Posting.create!` saute les numéros déjà pris (au plus
+`RECEIPT_ATTEMPTS = 100`) ; la pièce annoncée par les requêtes de contrôle
+(`EntryDraftView#receipt`) suit la même règle. Spec :
+`spec/accounting/entries_rules_spec.cr`.
+
+*Alternative écartée.* Refuser la pièce saisie égale à un numéro futur de la
+séquence : NOALYSS l'admet, et le refus dépendrait de la position du compteur.
+
+=== D-TST-002 — Relevé arrêté à `date_to` : les lettrages postérieurs n'y soldent rien (lot 2)
+
+*Contexte.* `account_statement` avec `date_to` calculait le reste dû et la
+balance âgée avec les lettrages *complets*, paiements postérieurs à
+`date_to` compris : une facture réglée en avril apparaissait soldée dans un
+relevé arrêté au 31 mars, dont le solde restait pourtant débiteur (reste dû ≠
+solde).
+
+*Choix.* `EntryQueries.matching_differences` ne compte, avec `date_to`, que
+les lignes d'écritures datées au plus tard ce jour-là. Sans `date_to`, rien
+ne change.
+
+*Alternative écartée.* Ignorer tout lettrage dont une ligne dépasse `date_to` :
+un paiement partiel antérieur n'aurait plus été déduit.
+
+=== D-TST-003 — Acompte annulé par avoir avant l'émission de la facture finale (lot F)
+
+*Contexte.* Le contrôle « acompte annulé » n'était fait qu'à l'enregistrement
+du brouillon. Un acompte annulé par avoir *après* la saisie de la facture
+finale restait déduit à l'émission : le client aurait été facturé du montant
+de l'acompte en moins.
+
+*Choix.* `Issuing.issue_errors` refuse l'émission (`deposit_ids[i]`,
+`invoicing.errors.document.deposits.cancelled`) ; le brouillon se corrige en
+retirant l'acompte. Spec : `spec/invoicing/rules_spec.cr`.
+
+*Alternative écartée.* Retirer l'acompte d'office à l'émission : modification
+silencieuse du document que l'utilisateur a relu.
+
+=== D-TST-004 — Messages de facturation accordés à toutes les natures (interface)
+
+*Contexte.* `ui.invoicing.created`, `transformed` et `issued` accordaient le
+participe au masculin (« Facture créé en brouillon », « Facture F-2026-0001
+validé »).
+
+*Choix.* Tournure neutre en français : « Brouillon enregistré : Devis. »,
+« Brouillon créé : Facture. », « Document validé : Facture F-2026-0001. » ;
+en et nl inchangés. Specs de l'interface mises à jour.
+
+*Alternative écartée.* Une clé par nature : six clés de plus par message pour
+le même résultat.
+
+=== D-TST-005 — Proposition : la saisie des écritures sans `accounting.ledger.read` (remarque, non appliquée)
+
+*Constat.* Le menu de saisie ne demande que `accounting.entry.post`, mais
+l'écran liste les journaux par `Api::Accounting.ledgers`, qui exige
+`accounting.ledger.read` : un profil « saisie seule » voit le menu et reçoit
+403. Les profils par défaut ont les deux permissions.
+
+*Proposition.* Soit une requête du contrat « journaux où je peux écrire »
+sous `accounting.entry.post`, soit la permission `accounting.ledger.read`
+exigée aussi par le menu. Non tranché ici (choix du contrat).
+
+== Clôture du lot 2F — relecture (27 septembre 2026)
+
+Préfixe : `D-2F-`. Remarques de relecture des lots 2 et F (écritures,
+contraintes en base, consultation, lettrage, Facturation, intégration par
+événements, écrans) : toutes les remarques bloquantes et majeures, et les
+mineures, sont traitées ; ce qui reste figure en fin de section.
+
+=== D-2F-001 — Exports de la Facturation seule : acomptes déduits extournés
+
+*Contexte.* Le CSV et le FEC passaient la facture finale à son TTC complet
+après la facture d'acompte : client, ventes et TVA de l'acompte comptés deux
+fois, alors que le socle comptable les extourne (D-INT-004).
+
+*Choix.* `Exports.sales_movements` porte au client `total_gross −
+prepaid_amount` (ligne omise si nulle) et ajoute, pour chaque acompte
+déduit, ses ventes et sa TVA par groupe *au débit*, libellées « Acompte
+déduit <numéro> ». Journal remis au comptable et écritures du socle donnent
+les mêmes soldes. Spec : `spec/invoicing/exports_settings_spec.cr`.
+
+*Alternative écartée.* Porter les acomptes en 4191 (avances reçues) : écarté
+pour la même raison que dans D-INT-004 (compte de plus, schéma selon le
+régime) ; les deux voies doivent rester identiques.
+
+=== D-2F-002 — Date d'émission au plus tard le jour même
+
+*Contexte.* La chronologie par série (`Numbering.allocate!`, déclencheur
+`invoicing_counter_guard`) rend irréversible une date d'émission future
+saisie par erreur : numéro définitif, et toute la série bloquée jusqu'à
+cette date.
+
+*Choix.* `Issuing.issue_errors` refuse une date postérieure à
+`Documents.today` (`invoicing.errors.issue.future`, champ `issue_date`,
+paramètre `date`), avant toute attribution de numéro ; aucune tolérance. La
+date prévue d'un brouillon peut être future : elle est refusée à l'émission
+tant que le jour n'est pas venu. Spec :
+`spec/invoicing/issue_dates_deposits_spec.cr`.
+
+*Alternative écartée.* Une tolérance paramétrable (quelques jours) :
+repousse le risque sans le supprimer ; réversible (paramètre à ajouter à
+`invoicing_settings`) si un besoin réel apparaît.
+
+=== D-2F-003 — Événement `payment.unmatched` (amendement de la liste fermée, ADR-003 D7)
+
+*Contexte.* Délettrage et extourne d'un encaissement lettré laissaient la
+facture « payée » en Facturation alors que la Comptabilité montrait de
+nouveau la créance (limite de D-INT-005) : divergence durable sur la source
+de vérité unique des règlements (ADR-006 D3), qui faussait relances et
+tableau de bord.
+
+*Choix.* Nouvel événement `payment.unmatched` (clé obligatoire
+`matching_id` ; `entry_ids`, `sources`), ajouté à
+`Partiduo::Events::SCHEMA` — *proposition d'amendement de l'ADR-003 D7*, la
+liste fermée s'étend d'un événement nécessaire à la Facturation.
+`Matchings.unmatch!` le publie quand le lettrage défait réunissait une ligne
+d'un journal financier et une ligne d'un journal d'achats ou de ventes ;
+`unmatch` et l'extourne (`Reversals.match_pairs!`) passent par lui. Abonné
+de la Facturation (`Payments.on_unmatched`) : pour chaque `invoice:<id>` de
+`sources`, les règlements `matching` du document sont *supprimés* — ceux de
+ce lettrage et ceux des lettrages qu'il avait absorbés, puisqu'une ligne
+n'appartient qu'à un lettrage à la fois —, `paid_amount` diminué, statut
+recalculé, trace `payment_removed` dans le journal des opérations (en ajout
+seul). Les règlements saisis (`manual`) ne bougent pas. Specs :
+`spec/integration/unmatching_history_spec.cr`,
+`spec/modules/events_spec.cr`.
+
+*Alternative écartée.* Contre-passer par un règlement négatif : contraire à
+`invoicing_payment_amount_check` (montant positif) et au sens de la table ;
+la trace suffit dans `invoicing_document_event`. Supprimer seulement les
+règlements de `matching_id` : ceux d'un lettrage absorbé (paiement en deux
+fois) resteraient.
+
+=== D-2F-004 — Acompte crédité par avoir : ni déduit, ni crédité après déduction
+
+*Contexte.* Une déduction valait toujours le TTC de l'acompte ; seul un
+acompte entièrement annulé était refusé (D-TST-003). Un acompte
+partiellement crédité restait déduit en entier : client sous-facturé,
+`TotalPrepaidAmount` et `DuePayableAmount` faux.
+
+*Choix.* Refus, plutôt que déduction de `total_gross − credited_amount` :
+`deposit_errors` (brouillon) et `issue_errors` (émission, acompte relu *sous
+verrou*) refusent un acompte qui porte un avoir
+(`invoicing.errors.document.deposits.credited`) ; la transformation ne le
+propose plus. Symétriquement, un avoir sur un acompte déjà déduit d'une
+facture *émise* est refusé (`document.credited.deposit_deducted`, au
+brouillon et à l'émission) : on corrige la facture finale. Un acompte
+déduit ne porte donc jamais d'avoir, et l'extourne de ses ventes et de sa
+TVA reste exacte en Comptabilité (D-INT-004) comme dans les exports
+(D-2F-001).
+
+*Alternative écartée.* Déduire le reliquat : il faudrait extourner acompte
+*et* avoirs par groupe de TVA, en Facturation comme en Comptabilité (qui ne
+connaît pas le lien avoir → acompte sans relire le journal) ; réversible si
+le cas se présente.
+
+=== D-2F-005 — Tableau de bord : agrégats du contrat
+
+*Contexte.* Le tableau de bord lisait un relevé par fiche (jusqu'à 200) et
+reconstruisait jusqu'à 500 vues de documents par nature : lent, et faux
+au-delà des plafonds.
+
+*Choix.* Deux requêtes agrégées au contrat, faites par PostgreSQL :
+`Api::Accounting.party_balances(actor, kind, as_of)` (reste dû et échu de
+toutes les fiches d'une nature, règles du relevé : lignes non lettrées et
+reliquats de lettrages partiels) et `Api::Invoicing.summary(actor, on)`
+(factures ouvertes et échues, facturé du mois, devis, brouillons, dernières
+factures), sur les totaux enregistrés à l'émission. `Api::Cards.card_ids`
+(identifiants sans limite) sert l'agrégat de la Comptabilité sans lire les
+tables du socle. Les fiches désactivées comptent (elles peuvent devoir).
+Plus aucun plafond (`CARD_LIMIT` supprimé). Specs :
+`spec/accounting/consultation_spec.cr`, `spec/invoicing/summary_spec.cr`.
+
+*Alternative écartée.* Alléger seulement `Documents.view` : garde un appel
+par document et les plafonds.
+
+=== D-2F-006 — Référence d'écriture unique en vigueur ; écriture extournée marquée par la base
+
+*Contexte.* L'idempotence de `payment.recorded` ne reposait que sur un test
+applicatif (`Entry.filter(source:).exists?`), sans index ; la relecture
+demandait un index unique partiel sur `source` hors extournes. Mais une
+écriture *extournée* garde `reversal_of_id IS NULL` : l'index l'aurait tenue
+pour en vigueur et interdit de recomptabiliser (D-2F-010).
+
+*Choix.* Migration accounting 0004 : colonne `accounting_entry.reversed`,
+posée par la base à l'insertion de l'extourne
+(`accounting_entry_mark_reversed`) et jamais retirée
+(`accounting_entry_reversed_guard`, qui neutralise l'écriture d'un modèle
+relu avant l'extourne) ; index unique `accounting_entry_source (source)
+WHERE source <> '' AND reversal_of_id IS NULL AND NOT reversed`, et index
+de lecture sur toutes les références. `Billing.post` traduit la violation de
+cet index en succès vide (comptabilisation concurrente). Spec :
+`spec/integration/unmatching_history_spec.cr`.
+
+*Alternative écartée.* L'index de la relecture tel quel : incompatible avec
+la recomptabilisation d'une facture dont l'écriture est extournée.
+
+=== D-2F-007 — Migration invoicing 0001 réversible
+
+*Choix.* Chaque `execute` reçoit son SQL inverse (`DROP CONSTRAINT IF
+EXISTS`, `DROP INDEX IF EXISTS`, `DROP TRIGGER IF EXISTS`, `DROP FUNCTION
+IF EXISTS … CASCADE`), comme accounting 0003. La migration n'ayant jamais
+été publiée (lot non commité), elle est corrigée en place plutôt que par une
+migration de plus ; la contrainte de statut des relances admet `sending`
+(D-2F-008).
+
+=== D-2F-008 — Relance réservée avant l'envoi
+
+*Contexte.* `send_reminder` lisait le statut sans verrou puis envoyait :
+deux validations simultanées envoyaient deux courriels ; l'envoi SMTP (jusqu'à
+30 s) avait lieu hors de la convention `after_commit`.
+
+*Choix.* Trois temps : réservation (`SELECT … FOR UPDATE`, statut
+`sending`, transaction validée aussitôt), envoi hors transaction,
+confirmation (`sent`, trace) ou restitution (`proposed`) en cas d'échec ou
+d'exception. Une seconde validation reçoit `invoicing.errors.reminder.in_progress`.
+Une réservation plus vieille que `REMINDER_SENDING_TIMEOUT` (15 min) est
+tenue pour abandonnée et reprise. Spec de concurrence :
+`spec/invoicing/mail_reminders_spec.cr`.
+
+*Alternative écartée.* `Events.after_commit` : l'échec du transport ne
+pourrait plus être rendu à l'utilisateur dans la même requête ni rétablir
+le statut dans la transaction validée.
+
+=== D-2F-009 — FEC en devise de tenue ; CSV sans formule
+
+*Choix.* FEC : `Debit`/`Credit` convertis au cours du socle à la date
+d'émission (`Api::Core.rate_on`, montant ÷ cours, au centime), l'écart
+d'arrondi porté par la ligne du client pour que la pièce reste équilibrée,
+montant d'origine dans `Montantdevise` ; sans cours, `sales_fec` échoue
+(`Result(FileView)`, `invoicing.errors.export.currency_rate`, contrat
+modifié pendant le lot, D-INV-015) et l'écran le signale sous le
+formulaire. CSV (journal et index de l'archive) : cellule texte commençant
+par `=`, `+`, `-`, `@`, tabulation ou retour chariot préfixée d'une
+apostrophe (`Exports.cell`). Le FEC n'est pas préfixé (fichier normé).
+
+*Alternative écartée.* Omettre les documents en devise : fichier silencieusement
+incomplet.
+
+=== D-2F-010 — Écriture extournée recomptabilisable ; événement écarté
+
+*Contexte.* L'extourne garde la référence d'origine ; `pending` tenait la
+référence pour comptabilisée, et `sale_entry` ne trouvait plus d'écriture
+pour lettrer un encaissement. Une pièce déjà saisie à la main laissait
+l'événement proposé indéfiniment (`receipt.taken`).
+
+*Choix.* `Billing.pending`, `posted?` et `sale_entry` ne retiennent que les
+écritures *en vigueur* (D-2F-006) : une facture dont l'écriture est
+extournée revient dans l'historique. Recomptabilisée, sa pièce devient
+`<numéro>-2` (`-3`…) quand le numéro est pris par l'écriture extournée de la
+même référence ; pris par une autre écriture (pièce saisie à la main), il
+reste tel quel et l'événement reste proposé avec `receipt.taken`.
+Commandes `dismiss_invoicing_event` / `restore_invoicing_event` /
+`dismissed_invoicing_events` et table `accounting_billing_dismissal`
+(migration 0004) : écarter un événement le retire de la proposition, de
+façon réversible. `invoicing_history_count` sert le tableau de bord.
+
+*Alternative écartée.* Laisser la pièce vide (numérotation automatique du
+journal) : le numéro de la facture ne serait plus la pièce comptable.
+
+=== D-2F-011 — Écrans ajoutés : historique, envoi, paramètres, modèles
+
+*Choix.* Interface : « À comptabiliser (Facturation) » (menu
+`ACC_INVOICING_HISTORY`, rubrique Saisie ; tout comptabiliser, un
+événement, écarter, rendre), rappelé dans « À traiter » du tableau de bord
+(ADR-006 D2 : l'activation *propose*) ; « Envoyer par courriel » sur un
+document émis ; « Paramètres de facturation » (menu `INV_SETTINGS`, ajouté au
+manifeste) ; « Modèles de documents » (route `invoicing:templates`, que le
+menu `INV_TEMPLATES` citait déjà). Le logo d'un modèle n'a pas encore de
+téléversement à l'écran (le contrat l'accepte par `logo_attachment_id`,
+conservé à la modification). Specs : `spec/ui/invoicing_screens_spec.cr`.
+
+*Alternative écartée.* Retirer les menus sans écran : le lot 2F annonçait
+ces écrans.
+
+=== D-2F-012 — Date du jour dans le fuseau de l'instance ; horloge des specs
+
+*Contexte.* `Documents.today` et les dates par défaut (émission, échéance,
+relance, relevé) étaient calculés en UTC : une facture émise entre minuit et
+2 h, heure de Paris, prenait la date de la veille.
+
+*Choix.* `Partiduo::Config.time_zone` (`PARTIDUO_TIME_ZONE`, défaut
+`Europe/Paris`, UTC si inconnu), `Partiduo::Config.today` et
+`Partiduo::Api::Core.today` pour l'interface ; `Documents.today`, les
+défauts de `propose_reminders`, `summary`, `party_balances` et du relevé
+(`as_of`) en dépendent. Une horloge remplaçable (`Partiduo::Config.clock`,
+`travel_to`) fige, dans les specs du cœur, le jour au 27 septembre 2026 :
+les règles datées restent vraies quel que soit le jour d'exécution. Les
+specs de l'interface ne peuvent citer que `Partiduo::Api` (garde-fou
+ADR-005 D3) : elles gardent l'heure réelle.
+
+*Alternative écartée.* Un fuseau dans les paramètres de la société :
+migration et écran de plus pour une valeur d'instance ; réversible (le
+paramètre remplacerait la variable).
+
+=== D-2F-013 — Reports de la relecture 2F
+
+* Les listes de l'interface (règlements, relances) lisent encore
+  `Inv.documents` (vues complètes, 500 au plus par nature) ; à passer sur
+  `DocumentSummaryView` quand une requête paginée du contrat le permettra.
+* `send_document` envoie encore le courriel dans la transaction de la
+  commande (avant tout verrou) ; même schéma de réservation que les
+  relances si un doublon devient possible (aucun statut à réserver
+  aujourd'hui).
+* Téléversement du logo d'un modèle depuis l'écran (D-2F-011).

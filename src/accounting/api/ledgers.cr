@@ -74,13 +74,16 @@ module Partiduo
         end
       end
 
-      # Efface un journal (`delete_ledger` : refusé au lot 2 s'il contient des
+      # Efface un journal (`delete_ledger` : refusé s'il contient des
       # écritures). Les droits par journal du socle qui le citent deviennent
       # sans objet.
       def self.delete_ledger(actor : Actor, id : Int64) : Result(Nil)
         Guard.authorize!(actor, "accounting.ledger.write", module_code: MODULE_CODE)
         Transaction.run do
           ledger = Partiduo::Accounting::Ledger.filter(id: id).lock.first || raise NotFound.new("ledger", id)
+          if Partiduo::Accounting::Ledgers.used?(ledger)
+            next Result(Nil).failure(FieldError.base("accounting.errors.ledger.in_use"))
+          end
           ledger.delete
           Result(Nil).success(nil)
         end

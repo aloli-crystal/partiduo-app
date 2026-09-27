@@ -38,10 +38,28 @@ module Partiduo
         bank_card_id = input.kind.financial? ? bank_card(input, errors) : nil
         numbering_errors(input, prefix, errors)
         currency_errors(actor, currency, errors)
+        used_errors(input, currency, current, errors) if current
 
         return {nil, errors} unless errors.empty?
         {Values.new(name, input.kind, code, input.description.strip, input.enabled, account, prefix,
           input.receipt_padding, input.next_receipt_number, currency, bank_card_id), errors}
+      end
+
+      # Journal mouvementé : ni son type ni sa devise ne changent (D-ACC-004).
+      private def self.used_errors(input : Partiduo::Api::Accounting::LedgerInput, currency : String, current : Ledger,
+                                   errors : Array(FieldError)) : Nil
+        return unless used?(current)
+        if input.kind.code != current.kind
+          errors << FieldError.new("kind", "accounting.errors.ledger.kind.in_use")
+        end
+        if currency != current.currency_code
+          errors << FieldError.new("currency_code", "accounting.errors.ledger.currency_code.in_use")
+        end
+      end
+
+      # Le journal porte-t-il des écritures ?
+      def self.used?(ledger : Ledger) : Bool
+        Entry.filter(ledger_id: ledger.pk).exists?
       end
 
       # Devise de tenue du dossier (`Partiduo::Api::Core.base_currency`), la

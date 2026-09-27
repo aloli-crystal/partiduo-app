@@ -3,11 +3,10 @@
 module Partiduo
   module Accounting
     # Règle d'équilibre d'une écriture, appliquée à l'identique par la requête
-    # de contrôle (`check_entry`) et, au lot 2, par la commande `post_entry`.
-    # Elle *sera* doublée en base au lot 2, avec le schéma des écritures
-    # (D-ACC-007), par un déclencheur différé (`CONSTRAINT TRIGGER …
-    # DEFERRABLE INITIALLY DEFERRED`) qui vérifie sum(débit) = sum(crédit)
-    # par écriture (ADR-001 § PL/pgSQL) ; aucune contrainte n'existe encore.
+    # de contrôle (`check_entry`) et par la commande `post_entry`. Elle est
+    # doublée en base par le déclencheur différé `accounting_entry_balance`
+    # (`CONSTRAINT TRIGGER … DEFERRABLE INITIALLY DEFERRED`, migration
+    # accounting 0003, D-ACC-011), successeur de `check_balance`.
     #
     # Service interne : il n'est pas dans `Partiduo::Api` et peut changer.
     module EntryBalance

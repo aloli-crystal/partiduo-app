@@ -264,6 +264,8 @@ obligatoires :
 |`credit_note.issued` |`credit_note_id` |Facturation
 |`payment.recorded` |`payment_id` |Facturation, encaissement saisi
 |`payment.matched` |`matching_id` |Comptabilité, lettrage
+|`payment.unmatched` |`matching_id` |Comptabilité, délettrage ou extourne d'une écriture lettrée
+(ajouté au lot 2F, DECISIONS D-2F-003) ; clés `entry_ids`, `sources`
 |`card.saved` |`card_id` |Socle, fiche enregistrée
 |`period.closed` |`period_id` |Socle ou Comptabilité, clôture
 |===
@@ -293,6 +295,13 @@ end
   `Partiduo::Events.after_commit { … }` l'exécute après la validation, jamais
   si l'opération est annulée.
 * `Partiduo::Events.subscribers(name)` : codes des pièces actives abonnées.
+* *Journal* : les événements rejouables (`Partiduo::Events::JOURNALED` :
+  `invoice.issued`, `credit_note.issued`, `payment.recorded`) sont consignés
+  à chaque publication dans `modules_event_log`, qu'un abonné soit actif ou
+  non ; `Partiduo::Events.journal(names, ids = nil)` les relit
+  (`JournalEntry` : `id`, `name`, `payload`, `actor_user_id`, `created_at`).
+  Un module activé plus tard y retrouve ce qu'il a manqué (ADR-006 D2,
+  D-INT-002).
 
 Ajouter un événement : compléter `Partiduo::Events::SCHEMA`, ce document et
 DECISIONS.adoc (convention C4).

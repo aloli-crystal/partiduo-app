@@ -1,0 +1,241 @@
+= Contrat `Partiduo::Api::Invoicing` — module Facturation
+:toc: left
+:toc-title: Table des matières
+:icons: font
+
+Module activable `INVOICING` (ADR-006 D1, D4 à D6). Toutes les commandes et
+requêtes lèvent `ModuleDisabled` quand le module est inactif, `Forbidden`
+sans la permission voulue. Aucun appel au module Comptabilité : les échanges
+passent par les événements (ADR-006 D3). Décisions : `D-INV-001` à
+`D-INV-015` dans `DECISIONS.adoc`.
+
+== Permissions
+
+[cols="2,3",options="header"]
+|===
+|Permission |Ouvre
+
+|`invoicing.invoice.read` |lecture des documents, PDF, XML, règlements, relances, traces, modèles, paramètres
+|`invoicing.invoice.write` |brouillons (création, modification, suppression), transformations, décision sur un devis
+|`invoicing.invoice.issue` |émission (devis, commande, bon de livraison, facture, facture d'acompte)
+|`invoicing.credit_note.issue` |émission d'un avoir
+|`invoicing.invoice.send` |envoi par courriel
+|`invoicing.payment.record` |saisie d'un règlement (Comptabilité inactive)
+|`invoicing.reminder.send` |proposition, envoi, abandon des relances
+|`invoicing.template.manage` |modèles de mise en page
+|`invoicing.settings.manage` |paramètres de facturation
+|`invoicing.export.read` |transmission au comptable (CSV, FEC, ZIP)
+|===
+
+== Documents et enchaînement
+
+Natures (`KINDS`) : `quote`, `order`, `delivery_note`, `invoice`,
+`deposit_invoice`, `credit_note`. Transformations (`TRANSFORMATIONS`) :
+
+[source]
+----
+quote ──► order ──► delivery_note ──► invoice ──► credit_note
+  │         └────► deposit_invoice ──(déduite)──┘      ▲
+  └──► invoice, deposit_invoice      deposit_invoice ──┘
+----
+
+[source,crystal]
+----
+api = Partiduo::Api::Invoicing
+quote = api.create_document(actor, api::DocumentInput.new(kind: "quote", customer_card_id: client.id,
+  lines: [api::LineInput.new(kind: "item", item_card_id: conseil.id, quantity: BigDecimal.new("10"))])).value!
+quote = api.issue(actor, quote.id).value!                       # D-2026-0001, état « sent »
+invoice = api.transform(actor, quote.id, api::TransformInput.new("invoice")).value!
+invoice.origin_mention.try(&.message)                           # « Issu du devis D-2026-0001 »
+invoice = api.issue(actor, invoice.id, api::IssueInput.new(issue_date: Time.utc)).value!
+api.document_pdf(actor, invoice.id)                             # FileView : PDF/A-3 Factur-X
+----
+
+* *Brouillon* : pas de numéro ; `update_document` remplace le document entier,
+  `delete_draft` le supprime. `check_document` applique les mêmes règles et
+  renvoie les totaux (retour instantané de l'interface).
+* *Lignes* (`LineInput`) : `item` (article du socle : désignation, unité,
+  prix et taux repris de la fiche s'ils sont `nil`), `free` (désignation
+  libre chiffrée), `note`, `title`, `subtotal` (calculé). Unités UN/ECE
+  (`Partiduo::Api::Cards::UNITS`). Remise par ligne `percent` ou `amount`.
+* *Remise globale* : `global_discount_kind` / `global_discount_value`,
+  ventilée par groupe de TVA.
+* *Statuts* : devis `draft`, `sent`, `accepted`, `refused`, `expired`
+  (calculé : validité échue) ; commande `confirmed` ; bon de livraison
+  `issued` ; facture et acompte `issued`, `sent`, `partially_paid`, `paid`,
+  `cancelled` (avoirs), `overdue` (calculé). `effective_status` et
+  `status_key` pour l'affichage. `decide_quote(actor, id, "accepted" | "refused")`.
+* *Acomptes* : `TransformInput.new("deposit_invoice", deposit_percent:)`
+  depuis un devis ou une commande ; la facture tirée ensuite de la même
+  chaîne déduit les acomptes émis (`deductions`, `totals.prepaid`,
+  `totals.payable`), ou `DocumentInput#deposit_ids`.
+* *Avoirs* : transformation d'une facture émise ; lignes modifiables avant
+  émission ; plafonné au reste non crédité ; la facture entièrement créditée
+  passe à `cancelled`.
+
+== Calculs
+
+`Partiduo::Invoicing::Calculator` (interne), en `BigDecimal`, arrondis au
+centime explicites (demi supérieur en valeur absolue) : brut de ligne
+arrondi, remise de ligne, net ; remise globale ventilée au prorata des
+groupes de TVA (reste sur le plus gros) ; TVA par groupe = arrondi(base ×
+taux) (BR-CO-17). Groupe de TVA = catégorie UNCL5305 + taux + motif
+d'exonération.
+
+== Émission, numérotation, intangibilité
+
+`issue(actor, id, IssueInput)` :
+
+. contrôles (au moins une ligne chiffrée, total positif pour un document
+  fiscal, acomptes ≤ total, avoir ≤ reste de la facture, échéance ≥ date,
+  date d'émission au plus tard le jour même — `issue.future`, D-2F-002 —,
+  acompte déduit ni annulé ni crédité — `deposits.cancelled`,
+  `deposits.credited`, relus sous verrou —, pas d'avoir sur un acompte déjà
+  déduit d'une facture émise — `credited.deposit_deducted`, D-2F-004) ;
+  date du jour prise dans le fuseau de l'instance (`PARTIDUO_TIME_ZONE`,
+  `Partiduo::Api::Core.today`, D-2F-012) ;
+. numéro par la *table de compteurs* `invoicing_counter` (série, année),
+  verrouillée par `SELECT … FOR UPDATE` : `D-`, `C-`, `BL-`, `F-`, `FA-`,
+  `AV-` + année + numéro sur quatre chiffres ; date antérieure au dernier
+  document de la série refusée ;
+. identités vendeur et client, adresse de livraison, mentions figées ;
+  communication structurée belge ; empreinte SHA-256 du contenu canonique ;
+. PDF/A-3 conservé comme pièce jointe du socle (`pdf_attachment_id`), XML
+  CII pour les documents fiscaux (`facturx_xml`) ;
+. trace `issued` (utilisateur, date, empreinte, SHA-256 du PDF) ;
+. événement `invoice.issued` ou `credit_note.issued`.
+
+En base : index unique `(series, number)` et `(series, year, sequence)` ;
+compteur qui n'avance que d'une unité et ne se supprime pas ; document émis
+non supprimable et non modifiable hors `status`, `paid_amount`,
+`credited_amount`, `sent_at`, `updated_at` et `pdf_id` (posé une fois) ;
+lignes et acomptes d'un document émis figés ; journal des opérations en
+ajout seul. `verify_fingerprint(actor, id)` recalcule l'empreinte ;
+`document_events(actor, id)` rend la trace.
+
+== Mentions obligatoires
+
+`DocumentView#mentions` : `MentionView(code, key, params)`, générées par le
+cœur et figées à l'émission ; `message` les traduit.
+`Partiduo::Invoicing::Output.mention_text` (utilisé pour le PDF) présente
+dates et montants selon la langue du document. Codes :
+
+* vendeur : `seller.legal_form_capital`, `seller.legal_form`,
+  `seller.rcs.<régime>`, `seller.siren` (FR), `seller.enterprise_number`
+  (BE), `seller.vat_number` ;
+* client : `customer.siren`, `customer.vat_number`, `delivery_address` (si
+  elle diffère) ;
+* dates : `dates.issue`, `dates.delivery`, `dates.due`, `quote.validity` ;
+* documents fiscaux : `operation_category.<goods|services|mixed>`,
+  `vat_on_debits` (FR, option des paramètres), `special.<motif>.<régime>`
+  (`franchise`, `reverse_charge`, `intra_community`, `export`, `exempt`,
+  `not_subject`, `zero_rated`), `credit_note.reference`, `deposit.invoice`,
+  `deposit.deducted` ;
+* paiement : `payment.structured_reference` (BE), `payment.bank`,
+  `payment.early_discount` ou `payment.no_early_discount`,
+  `payment.late_penalties` ou `payment.late_penalties_legal.<régime>`,
+  `payment.indemnity` (40 €, client professionnel : SIREN ou numéro de TVA).
+
+== PDF/A-3 Factur-X
+
+* PDF/A-3b par `prod-crystal/pdf-a`, polices DejaVu Sans incorporées ;
+  contrôlé par `prod-crystal/pdf-validate` (profil `pdf-a-3b`) avant
+  conservation (règle écartée : B-INV-001).
+* Documents fiscaux : `factur-x.xml` (CII D16B, profil EN 16931,
+  `urn:cen.eu:en16931:2017`) en fichier associé `/AF` relation `Data`,
+  métadonnées XMP `fx:` avec schéma d'extension. `TypeCode` : 380 facture,
+  381 avoir (avec `InvoiceReferencedDocument`), 386 facture d'acompte.
+* `document_pdf` : PDF conservé ; pour un brouillon, aperçu calculé (non
+  conservé, sans XML). `facturx_xml` : XML d'un document fiscal émis.
+* Modèles (`create_layout`, `update_layout`, `delete_layout`, `layouts`) :
+  logo PNG/JPEG (pièce jointe du socle), couleurs, textes d'en-tête et de
+  pied ; le modèle par défaut s'applique sans `layout_id`. Aucune prise sur
+  les mentions ni les montants.
+
+== Règlements
+
+* Comptabilité *inactive* : `record_payment(actor, PaymentInput)` (partiel
+  ou total, jamais au-delà du solde), publie `payment.recorded`
+  (`payment_id`, `invoice_id`, `number`, `customer_card_id`, `amount`,
+  `paid_on`, `method`).
+* Comptabilité *active* : `record_payment` refusé
+  (`invoicing.errors.payment.accounting_active`) ; l'abonné de
+  `payment.matched` lit `matching_id`, `sources` (`invoice:<id>`, la
+  `source` de l'écriture de vente), et, facultatifs, `amounts`
+  (`invoice:<id>=<montant>;…`) et `matched_on` (`AAAA-MM-JJ`) ; sans montant,
+  le lettrage solde la facture. Idempotent par `(document, matching_id)`.
+  L'abonné de `payment.unmatched` (délettrage, extourne d'une écriture
+  lettrée) retire les règlements `matching` des factures citées dans
+  `sources`, recalcule leur statut et trace `payment_removed` (D-2F-003).
+* Solde = TTC − acomptes déduits − règlements − avoirs
+  (`TotalsView#amount_due`).
+
+== Relances et envoi
+
+* `propose_reminders(actor, on)` : factures échues non soldées, niveau le
+  plus haut atteint (délais des paramètres), une relance par niveau ; rien
+  n'est envoyé. Pénalités chiffrées à partir de `penalty_from_level`
+  (intérêts au taux paramétré, indemnité de 40 € pour un professionnel).
+* `send_reminder(actor, id, input?)` : relance réservée (`sending`, verrou)
+  dans une première transaction, courriel envoyé hors transaction, puis
+  confirmée (`sent`) ou rendue (`proposed`) ; une seconde validation
+  simultanée reçoit `reminder.in_progress` (D-2F-008). `dismiss_reminder`,
+  `reminders`.
+* `send_document(actor, id, SendInput)` : PDF en pièce jointe, destinataire
+  par défaut l'adresse du client ; trace `EmailLogView` (même en échec) ;
+  facture → `sent`. `email_logs(actor, id)`.
+* Transport : `Partiduo::Api::Invoicing.mail_transport=` —
+  `SmtpTransport.from_url("smtp://user:secret@hôte:587?security=starttls")`
+  (ou `PARTIDUO_SMTP_URL`), `MemoryTransport` (specs, développement) ; sans
+  configuration, envoi refusé (`invoicing.errors.mail.not_configured`).
+
+== Transmission au comptable (Facturation seule)
+
+* `sales_journal_csv(actor, from, to)` : journal des ventes et des
+  encaissements, `;`, montants au point décimal, colonnes `journal date
+  piece kind customer_code customer_name account auxiliary label debit
+  credit currency`. Cellules texte commençant par `=`, `+`, `-`, `@`
+  préfixées d'une apostrophe (D-2F-009).
+* Facture finale : le client ne porte que TTC − acomptes ; les ventes et la
+  TVA des acomptes déduits sont extournées (au débit), comme l'écriture de
+  la Comptabilité (D-INT-004, D-2F-001).
+* `sales_fec(actor, from, to) : Result(FileView)` : ventes seules au format
+  FEC (18 colonnes, `|`, virgule décimale), fichier
+  `<SIREN>FEC<AAAAMMJJ>.txt`, montants en devise de tenue (document en devise
+  converti au cours du socle à sa date, montant d'origine dans
+  `Montantdevise`) ; échec `invoicing.errors.export.currency_rate` sans cours.
+* `pdf_archive(actor, from, to)` : ZIP des PDF des factures, acomptes et
+  avoirs émis dans la période + `index.csv` (SHA-256).
+* Comptes : paramètres, sinon plan du régime (FR 411000 / 706000 / 445710 /
+  512000 ; BE 400000 / 700000 / 451000 / 550000).
+
+== Tableau de bord
+
+`summary(actor, on = aujourd'hui) : SummaryView` (lecture) : synthèse
+agrégée par PostgreSQL sur les totaux enregistrés, sans relire aucun
+document (D-2F-005) — factures ouvertes et échues (nombre, montant, trois
+clients), HT facturé du mois (factures − avoirs, hors acomptes), devis en
+attente et périmés, brouillons, cinq dernières factures
+(`DocumentSummaryView`).
+
+== Événements publiés
+
+[cols="1,3",options="header"]
+|===
+|Événement |Charge utile
+
+|`invoice.issued` (facture, facture d'acompte)
+|`invoice_id`, `source` (`invoice:<id>`), `kind`, `number`, `type_code`,
+`issue_date`, `due_date`, `customer_card_id`, `currency`, `total_net`,
+`total_vat`, `total_gross`, `prepaid`, `sales` (JSON : `item_card_id`,
+`vat_rate_id`, `amount` — parts du HT, remise globale déduite, somme = HT),
+`vat` (JSON : `vat_rate_id`, `amount` — somme = TVA), `deposit_sources`
+(facture finale : `invoice:<id>` des factures d'acompte déduites, D-INT-004)
+
+|`credit_note.issued`
+|les mêmes clés, `credit_note_id`, `source` (`credit_note:<id>`),
+`invoice_id`, `invoice_number`
+
+|`payment.recorded`
+|voir « Règlements »
+|===

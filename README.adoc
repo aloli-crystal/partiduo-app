@@ -83,6 +83,10 @@ La configuration d'une instance tient dans son environnement (ADR-001 D2).
 |domaine des instances (`<dossier>.<domaine>`), RP ID WebAuthn
 |`partiduo.localhost`
 
+|`PARTIDUO_TIME_ZONE`
+|fuseau de l'instance : date du jour des factures, échéances, relances, relevés
+|`Europe/Paris`
+
 |`PARTIDUO_RP_ID`
 |identifiant de partie de confiance WebAuthn (à figer avant le premier enrôlement)
 |`PARTIDUO_DOMAIN`

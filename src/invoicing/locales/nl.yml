@@ -7,6 +7,7 @@ nl:
         read: "Offertes en facturen raadplegen"
         write: "Ontwerpen aanmaken en wijzigen"
         issue: "Facturen uitreiken"
+        send: "Documenten per e-mail versturen"
       credit_note:
         issue: "Creditnota's uitreiken"
       payment:
@@ -15,6 +16,8 @@ nl:
         send: "Herinneringen versturen"
       template:
         manage: "Documentsjablonen beheren"
+      settings:
+        manage: "Facturatie-instellingen beheren"
       export:
         read: "Aan de boekhouder bezorgen"
     menu:
@@ -24,3 +27,290 @@ nl:
       inv_reminders: "Herinneringen"
       inv_export: "Bezorging aan de boekhouder"
       inv_templates: "Documentsjablonen"
+      inv_settings: "Facturatie-instellingen"
+    kinds:
+      quote: "Offerte"
+      order: "Bestelbon"
+      delivery_note: "Leveringsbon"
+      invoice: "Factuur"
+      deposit_invoice: "Voorschotfactuur"
+      credit_note: "Creditnota"
+    statuses:
+      draft: "Ontwerp"
+      sent: "Verzonden"
+      accepted: "Aanvaard"
+      refused: "Geweigerd"
+      expired: "Verlopen"
+      confirmed: "Bevestigd"
+      cancelled: "Geannuleerd door creditnota"
+      issued: "Uitgereikt"
+      partially_paid: "Gedeeltelijk betaald"
+      paid: "Betaald"
+      overdue: "Achterstallig"
+    links:
+      from_quote: "Op basis van offerte %{number}"
+      from_order: "Op basis van bestelling %{number}"
+      from_delivery_note: "Op basis van leveringsbon %{number}"
+      from_invoice: "Op basis van factuur %{number}"
+      from_deposit_invoice: "Op basis van voorschotfactuur %{number}"
+      from_credit_note: "Op basis van creditnota %{number}"
+    deposit:
+      line: "Voorschot van %{percent} % op %{number}"
+    mentions:
+      seller:
+        legal_form_capital: "%{legal_form} met een kapitaal van %{capital} %{currency}"
+        legal_form: "%{legal_form}"
+        rcs:
+          fr: "Handelsregister: %{rcs}"
+          be: "Rechtspersonenregister: %{rcs}"
+        siren: "SIREN: %{siren}"
+        enterprise_number: "Ondernemingsnummer: %{number}"
+        vat_number: "Btw-nummer: %{vat_number}"
+      customer:
+        siren: "SIREN van de klant: %{siren}"
+        vat_number: "Btw-nummer van de klant: %{vat_number}"
+      dates:
+        issue: "Uitreikingsdatum: %{date}"
+        delivery: "Datum van levering of dienstverrichting: %{date}"
+        due: "Vervaldatum: %{date}"
+      quote:
+        validity: "Offerte geldig tot %{date}"
+      delivery_address: "Leveringsadres: %{address}"
+      operation_category:
+        goods: "Aard van de handeling: levering van goederen"
+        services: "Aard van de handeling: dienstverrichting"
+        mixed: "Aard van de handeling: levering van goederen en dienstverrichting"
+      vat_on_debits: "Keuze voor betaling van de btw op basis van de debetstelling"
+      special:
+        franchise:
+          fr: "Btw niet van toepassing, art. 293 B van de Franse CGI"
+          be: "Bijzondere vrijstellingsregeling voor kleine ondernemingen, btw niet van toepassing"
+        reverse_charge:
+          fr: "Verlegging van heffing: btw verschuldigd door de afnemer (art. 283-2 van de Franse CGI)"
+          be: "Verlegging van heffing: btw verschuldigd door de medecontractant (art. 51, § 2, van het Btw-wetboek)"
+        intra_community:
+          fr: "Vrijgesteld van btw, artikel 262 ter I van de Franse CGI (intracommunautaire levering)"
+          be: "Vrijgestelde intracommunautaire levering (art. 39bis van het Btw-wetboek)"
+        export:
+          fr: "Vrijgesteld van btw, artikel 262 I van de Franse CGI (uitvoer)"
+          be: "Vrijgestelde uitvoer (art. 39 van het Btw-wetboek)"
+        exempt:
+          fr: "Van btw vrijgestelde handeling. %{reason}"
+          be: "Van btw vrijgestelde handeling. %{reason}"
+        not_subject:
+          fr: "Handeling niet onderworpen aan btw. %{reason}"
+          be: "Handeling niet onderworpen aan btw. %{reason}"
+        zero_rated:
+          fr: "Btw aan nultarief. %{reason}"
+          be: "Btw aan nultarief. %{reason}"
+      credit_note:
+        reference: "Creditnota met betrekking tot factuur %{number} van %{date}"
+      deposit:
+        invoice: "Voorschotfactuur"
+        deducted: "Voorschot %{number} afgetrokken: %{amount} %{currency}"
+      payment:
+        structured_reference: "Gestructureerde mededeling: %{reference}"
+        bank: "Betaling per overschrijving: IBAN %{iban} — BIC %{bic}"
+        early_discount: "Korting voor vroegtijdige betaling: %{rate} % bij betaling binnen %{days} dagen"
+        no_early_discount: "Geen korting voor vroegtijdige betaling"
+        late_penalties: "Verwijlintresten: %{rate} % per jaar"
+        late_penalties_legal:
+          fr: "Verwijlintresten tegen de meest recente herfinancieringsrente van de Europese Centrale Bank, verhoogd met 10 procentpunten (art. L441-10 van het Franse Wetboek van Koophandel)"
+          be: "Verwijlintresten tegen de rentevoet bepaald door de wet van 2 augustus 2002 betreffende de bestrijding van de betalingsachterstand bij handelstransacties"
+        indemnity: "Forfaitaire vergoeding voor invorderingskosten bij laattijdige betaling: %{amount} %{currency}"
+    pdf:
+      draft: "Ontwerp"
+      number: "Nr."
+      issue_date: "Datum"
+      due_date: "Vervaldag"
+      validity_date: "Geldig tot"
+      customer: "KLANT"
+      customer_code: "Klantcode"
+      delivery_address: "LEVERINGSADRES"
+      buyer_reference: "Uw referentie"
+      order_reference: "Bestelling"
+      columns:
+        description: "Omschrijving"
+        quantity: "Aantal"
+        unit: "Eenheid"
+        unit_price: "Eenheidsprijs"
+        discount: "Korting"
+        vat: "Btw"
+        total: "Totaal excl."
+      subtotal: "Subtotaal"
+      lines_total: "Totaal lijnen excl. btw"
+      global_discount: "Globale korting"
+      discount: "Korting"
+      total_net: "Totaal excl. btw"
+      total_vat: "Btw"
+      total_gross: "Totaal incl. btw"
+      prepaid: "Afgetrokken voorschotten"
+      payable: "Te betalen"
+      vat_summary:
+        rate: "TARIEF"
+        base: "MAATSTAF"
+        vat: "BTW"
+      mentions: "WETTELIJKE VERMELDINGEN"
+      page: "Pagina %{page}/%{pages}"
+    reminders:
+      subject:
+        level1: "Herinnering: factuur %{number} vervallen"
+        level2: "Tweede herinnering: factuur %{number} onbetaald"
+        level3: "Ingebrekestelling: factuur %{number}"
+      body:
+        level1: "Goedendag,\n\nBehoudens vergissing blijft factuur %{number}, vervallen op %{due_date}, onbetaald voor %{balance}. Wij danken u om ze te vereffenen.\n\nMet vriendelijke groeten,\n%{seller}"
+        level2: "Goedendag,\n\nOndanks onze eerste herinnering blijft factuur %{number}, vervallen op %{due_date}, onbetaald voor %{balance} (%{days} dagen achterstand). Gelieve ze onverwijld te betalen.\n\nMet vriendelijke groeten,\n%{seller}"
+        level3: "Geachte heer, mevrouw,\n\nFactuur %{number}, vervallen op %{due_date}, blijft ondanks onze herinneringen onbetaald voor %{balance}. Wij stellen u in gebreke om in totaal %{total} te betalen.\n\n%{seller}"
+      penalties: "Verwijlintresten: %{interest}; forfaitaire vergoeding voor invorderingskosten: %{indemnity}; totaal verschuldigd: %{total}."
+    mail:
+      subject: "%{kind} %{number} — %{seller}"
+      body: "Goedendag,\n\nIn bijlage vindt u ons document %{number} voor een bedrag van %{amount}.\n\nMet vriendelijke groeten,\n%{seller}"
+    exports:
+      accounts:
+        customer: "Klanten"
+        sales: "Verkopen"
+        vat: "Verschuldigde btw"
+        bank: "Bank"
+      payment: "Betaling"
+      deposit_deducted: "Afgetrokken voorschot"
+      sales_journal: "Verkoopdagboek"
+      csv_name: "verkopen-en-ontvangsten"
+      archive_name: "facturen"
+    errors:
+      settings:
+        days: "Geef een aantal dagen tussen 0 en %{max}"
+        rate: "Geef een tarief tussen 0 en 100 (hoogstens vier decimalen)"
+        operation_category: "Onbekende aard van de handeling"
+        iban: "Ongeldig IBAN"
+        bic: "Ongeldige BIC"
+        email: "Ongeldig e-mailadres"
+        reminder_days: "De termijnen van de drie herinneringen moeten stijgen, tussen 1 en 365 dagen"
+        penalty_level: "Herinneringsniveau tussen 0 en 3"
+        journal_code: "Dagboekcode: hoofdletters en cijfers, hoogstens acht"
+        account: "Rekeningnummer: cijfers en hoofdletters, hoogstens twintig"
+      document:
+        kind:
+          immutable: "De aard van een document verandert niet"
+          invalid: "Onbekende documentsoort"
+        customer:
+          not_found: "Klant niet gevonden"
+          not_customer: "Deze fiche is geen klant"
+          disabled: "Deze klant is gedeactiveerd"
+        currency:
+          unknown: "Onbekende munt: %{value}"
+          decimals: "Munt %{value} moet twee decimalen hebben"
+        operation_category:
+          invalid: "Onbekende aard van de handeling"
+        locale:
+          invalid: "Niet-ondersteunde taal"
+        layout:
+          not_found: "Opmaaksjabloon niet gevonden"
+        due_date:
+          before_issue: "De vervaldag ligt vóór de uitreikingsdatum"
+        validity_date:
+          quote_only: "Enkel een offerte heeft een geldigheidsdatum"
+        reference:
+          too_long: "Hoogstens %{max} tekens"
+        credited:
+          credit_note_only: "Enkel een creditnota verwijst naar een verbeterde factuur"
+          required: "Een creditnota verwijst naar de factuur die ze verbetert"
+          invalid: "De verbeterde factuur moet een uitgereikte factuur zijn"
+          other_customer: "De verbeterde factuur hoort bij een andere klant"
+          deposit_deducted: "Dit voorschot is afgetrokken van een uitgereikte factuur: verbeter de eindfactuur met een creditnota"
+        deposits:
+          invoice_only: "Enkel een factuur trekt voorschotten af"
+          duplicate: "Voorschot tweemaal vermeld"
+          invalid: "Dit is geen uitgereikte voorschotfactuur"
+          other_customer: "Dit voorschot hoort bij een andere klant"
+          cancelled: "Dit voorschot werd geannuleerd door een creditnota"
+          already_deducted: "Dit voorschot is al afgetrokken van een andere factuur"
+          credited: "Op dit voorschot staat een creditnota: het wordt niet meer afgetrokken"
+          exceed_total: "De afgetrokken voorschotten overschrijden het factuurtotaal"
+        lines:
+          too_many: "Hoogstens %{max} lijnen"
+        global_discount:
+          exceeds: "De globale korting overschrijdt het totaal van de lijnen"
+        issued: "Uitgereikt document: het kan niet gewijzigd of verwijderd worden; verbeter het met een creditnota"
+        in_use: "Dit ontwerp wordt door een ander document vermeld"
+      discount:
+        kind: "Onbekend kortingstype"
+        negative: "De korting kan niet negatief zijn"
+        percent: "Percentage tussen 0 en 100 (hoogstens vier decimalen)"
+        amount_scale: "Bedrag tot op de cent (hoogstens twee decimalen)"
+      line:
+        kind: "Onbekend lijntype"
+        description:
+          blank: "Geef een omschrijving"
+          too_long: "Hoogstens %{max} tekens"
+        item:
+          invalid: "Deze fiche is geen artikel"
+          disabled: "Dit artikel is gedeactiveerd"
+          required: "Kies een artikel"
+          free_line: "Een vrije lijn verwijst niet naar een artikel"
+        quantity:
+          zero: "De hoeveelheid kan niet nul zijn"
+          scale: "Hoogstens vier decimalen"
+        unit_code: "Onbekende eenheid (UN/ECE-codes)"
+        unit_price:
+          required: "Geef een eenheidsprijs"
+          negative: "De eenheidsprijs kan niet negatief zijn"
+          scale: "Hoogstens vier decimalen"
+        vat_rate:
+          not_found: "Btw-tarief niet gevonden"
+          disabled: "Dit btw-tarief is gedeactiveerd"
+          required: "Kies een btw-tarief"
+        discount:
+          exceeds: "De korting overschrijdt het lijnbedrag"
+      issue:
+        already_issued: "Dit document is al uitgereikt"
+        no_line: "Voeg minstens één lijn met bedrag toe"
+        total_not_positive: "Het totaal incl. btw moet positief zijn"
+        company_incomplete: "Vul de bedrijfsgegevens aan vóór het uitreiken"
+        before_last: "Datum vóór het laatste document van de reeks (%{date})"
+        credit_exceeds: "De creditnota overschrijdt het resterende bedrag van de factuur (%{remaining})"
+        credit_before_invoice: "Een creditnota gaat de verbeterde factuur niet vooraf"
+        future: "De uitgiftedatum mag niet na vandaag (%{date}) liggen: het toegekende nummer is definitief"
+      transform:
+        source_draft: "Reik eerst het brondocument uit"
+        not_allowed: "Omzetting van %{from} naar %{to} onmogelijk"
+        source_status: "Het brondocument is %{status}"
+        deposit_percent: "Voorschotpercentage tussen 0 en 100 (hoogstens twee decimalen)"
+      quote:
+        not_sent: "Enkel een verzonden offerte krijgt een beslissing"
+        decision: "Onbekende beslissing"
+      payment:
+        accounting_active: "Boekhouding is actief: boek de ontvangst in een financieel dagboek en letter ze"
+        document:
+          invalid: "Enkel een uitgereikte factuur kan betaald worden"
+          cancelled: "Deze factuur is geannuleerd door een creditnota"
+        amount:
+          not_positive: "Het bedrag moet positief zijn"
+          scale: "Bedrag tot op de cent"
+          exceeds: "Het bedrag overschrijdt het saldo van de factuur (%{balance})"
+        method: "Onbekende betaalwijze"
+        reference:
+          too_long: "Hoogstens %{max} tekens"
+      reminder:
+        not_proposed: "Deze herinnering is niet meer te behandelen"
+        in_progress: "Deze herinnering wordt verzonden"
+      export:
+        currency_rate: "Geen koers voor %{code} op %{date}: document %{number} kan niet worden omgerekend voor de FEC"
+      mail:
+        draft: "Een ontwerp kan niet verzonden worden"
+        no_recipient: "Geef een bestemmeling"
+        invalid_address: "Ongeldig e-mailadres"
+        no_sender: "Geef het afzenderadres in de instellingen"
+        not_configured: "Het verzenden van e-mails is niet geconfigureerd"
+        delivery_failed: "Verzending mislukt: %{error}"
+      layout:
+        name:
+          blank: "Geef een naam"
+          too_long: "Hoogstens %{max} tekens"
+          taken: "Deze naam is al in gebruik"
+        color: "Kleur in #rrggbb-formaat"
+        text:
+          too_long: "Hoogstens %{max} tekens"
+        logo:
+          type: "Het logo moet een PNG- of JPEG-afbeelding zijn"
+          not_found: "Logo niet gevonden"
+        in_use: "Dit sjabloon wordt door documenten gebruikt"

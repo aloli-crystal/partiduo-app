@@ -27,11 +27,22 @@ module Partiduo
       "credit_note.issued" => %w[credit_note_id],
       "payment.recorded"   => %w[payment_id],
       "payment.matched"    => %w[matching_id],
+      "payment.unmatched"  => %w[matching_id],
       "card.saved"         => %w[card_id],
       "period.closed"      => %w[period_id],
     }
 
     NAMES = SCHEMA.keys
+
+    # Événements rejouables, consignés à chaque publication dans le journal
+    # du socle (`modules_event_log`), qu'un abonné soit actif ou non : un
+    # module activé plus tard y retrouve ce qu'il a manqué (ADR-006 D2,
+    # D-INT-002).
+    JOURNALED = %w[invoice.issued credit_note.issued payment.recorded]
+
+    # Événement consigné dans le journal.
+    record JournalEntry, id : Int64, name : String, payload : Hash(String, String), actor_user_id : Int64?,
+      created_at : Time
 
     # Événement publié. `actor_user_id` : utilisateur à l'origine de
     # l'opération (`nil` pour un outil en ligne de commande), pour la
@@ -66,11 +77,31 @@ module Partiduo
 
       event = Event.new(name, payload, actor_user_id)
       Marten::DB::Connection.default.transaction do
+        record_in_journal(event)
         Partiduo::Modules.active_manifests.each do |manifest|
           manifest.subscriptions[name]?.try &.each(&.call(event))
         end
       end
       event
+    end
+
+    # Événements consignés (`JOURNALED`) de noms `names`, dans l'ordre de
+    # publication ; `ids` restreint aux entrées citées.
+    def self.journal(names : Enumerable(String), ids : Enumerable(Int64)? = nil) : Array(JournalEntry)
+      query = Partiduo::Modules::EventLog.filter(name__in: names.to_a)
+      query = query.filter(id__in: ids.to_a) if ids
+      query.order(:id).map do |row|
+        payload = row.payload.try(&.as_h?).try(&.transform_values { |value| value.as_s? || value.to_s }) ||
+                  {} of String => String
+        JournalEntry.new(row.pk!.as(Int64), row.name.to_s, payload, row.actor_user_id.try(&.to_i64),
+          row.created_at || Time.utc)
+      end
+    end
+
+    private def self.record_in_journal(event : Event) : Nil
+      return unless JOURNALED.includes?(event.name)
+      Partiduo::Modules::EventLog.create!(name: event.name, payload: JSON.parse(event.payload.to_json),
+        actor_user_id: event.actor_user_id, created_at: Time.utc)
     end
 
     # Codes des pièces actives abonnées à `name`.

@@ -26,6 +26,7 @@ nl:
       acc_entry_sale: "Verkopen"
       acc_entry_financial: "Financieel"
       acc_entry_misc: "Diverse verrichtingen"
+      acc_invoicing_history: "Te boeken (Facturatie)"
       acc_accounts: "Rekeningen en relaties"
       acc_entries: "Boekingen"
       acc_matching: "Afpunten"
@@ -46,6 +47,9 @@ nl:
       expense: "Kost"
       expense_contra: "Kost, tegenrekening"
       context: "Context"
+    sides:
+      debit: "Debet"
+      credit: "Credit"
     ledger_kinds:
       purchase: "Aankopen"
       sale: "Verkopen"
@@ -90,12 +94,70 @@ nl:
         too_many_decimals: "Het bedrag heeft hoogstens %{max} decimalen."
         too_few_lines: "Een boeking telt minstens %{min} lijnen."
         unbalanced: "De boeking is niet in evenwicht: verschil van %{difference}."
+        amount_zero: "Het bedrag mag niet nul zijn."
+        no_items: "Voer ten minste één regel in."
+        counterpart_missing: "Geef een fiche of rekening als tegenpartij op."
+        ledger:
+          disabled: "Dit dagboek is uitgeschakeld."
+          not_document: "Dagboek %{code} is geen aankoop- of verkoopdagboek."
+          not_purchase: "Dagboek %{code} is geen aankoopdagboek."
+          not_sale: "Dagboek %{code} is geen verkoopdagboek."
+          not_financial: "Dagboek %{code} is geen financieel dagboek."
+        date:
+          no_period: "Geen enkele periode bevat de datum %{date}: maak het boekjaar aan."
+          period_closed: "De periode van %{date} is afgesloten."
+        receipt:
+          too_long: "Het stuknummer telt ten hoogste %{max} tekens."
+          taken: "Stuk %{receipt} bestaat al in dit dagboek."
+        source:
+          too_long: "De referentie telt ten hoogste %{max} tekens."
+        attachment:
+          not_found: "Deze bijlage bestaat niet."
+        currency_rate:
+          missing: "Geen koers bekend voor munt %{code} op deze datum: geef hem op."
+        account:
+          not_found: "Rekening %{number} bestaat niet."
+          not_direct_use: "Rekening %{number} kan niet rechtstreeks gebruikt worden."
+        card:
+          not_found: "Geen enkele fiche heeft code %{code}."
+          disabled: "Fiche %{code} wordt niet meer gebruikt."
+          no_account: "Fiche %{code} is aan geen rekening gekoppeld."
+        third_party:
+          required: "Geef de derde op."
+        vat_rate:
+          not_found: "Btw-tarief %{code} bestaat niet."
+          disabled: "Btw-tarief %{code} is uitgeschakeld."
+          required: "Geef het btw-tarief van het ingevoerde btw-bedrag op."
+          no_account: "Btw-tarief %{code} heeft geen rekening voor dit dagboek."
+        cancel:
+          is_reversal: "Een tegenboeking kan niet geannuleerd worden."
+          already_cancelled: "Deze boeking is al geannuleerd."
+      billing:
+        no_sale_ledger: "Geen actief verkoopdagboek: maak er een aan om facturen te boeken."
+        no_financial_ledger: "Geen actief financieel dagboek: maak er een aan om betalingen te boeken."
+        no_sales_account: "Geen verkooprekening: koppel het artikel aan een rekening of geef het verkoopdagboek een standaardrekening."
+        customer_not_found: "Klantenfiche %{id} bestaat niet."
+        vat_rate_not_found: "Btw-tarief %{id} bestaat niet."
+        date_missing: "De datum van het document ontbreekt."
+        deposit_not_posted: "Voorschotfactuur %{source} is nog niet geboekt."
+        failed: "De boeking voor %{source} kon niet worden uitgevoerd."
+        dry_run: "Proefboeking: er wordt niets opgeslagen."
+        already_dismissed: "Deze gebeurtenis is al terzijde gelegd."
+        already_posted: "Deze gebeurtenis is al geboekt."
+        not_dismissed: "Deze gebeurtenis is niet terzijde gelegd."
+        reason_too_long: "Hoogstens %{max} tekens."
+      matching:
+        too_few_lines: "Kies ten minste twee regels om af te punten."
+        line_not_found: "Regel %{id} bestaat niet."
+        different_accounts: "Af te punten regels horen bij één rekening."
+        one_side: "Punt debet- en creditregels af."
       account:
         number:
           blank: "Vul het rekeningnummer in."
           too_long: "Het nummer telt hoogstens %{max} tekens."
           invalid: "Het nummer bevat enkel letters en cijfers."
           taken: "Rekening %{number} bestaat al."
+          in_use: "Op deze rekening zijn boekingen: het nummer kan niet meer wijzigen."
         label:
           blank: "Vul de omschrijving van de rekening in."
           too_long: "De omschrijving telt hoogstens %{max} tekens."
@@ -107,6 +169,9 @@ nl:
         has_children: "Deze rekening heeft subrekeningen: verwijderen is niet toegestaan."
         in_use: "Deze rekening is in gebruik: verwijderen is niet toegestaan."
       ledger:
+        in_use: "Dit dagboek bevat boekingen: verwijderen is niet toegestaan."
+        kind:
+          in_use: "Dit dagboek bevat boekingen: het type kan niet meer wijzigen."
         name:
           blank: "Vul de naam van het dagboek in."
           too_long: "De naam telt hoogstens %{max} tekens."
@@ -132,6 +197,7 @@ nl:
         currency_code:
           invalid: "Vul een ISO 4217-muntcode in (drie letters)."
           unknown: "Munt %{code} is niet aangegeven."
+          in_use: "Dit dagboek bevat boekingen: de munt kan niet meer wijzigen."
       default_account:
         code:
           invalid: "Onbekend gebruik van standaardrekening."

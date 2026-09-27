@@ -7,6 +7,7 @@ en:
         read: "View quotes and invoices"
         write: "Create and edit drafts"
         issue: "Issue invoices"
+        send: "Send documents by email"
       credit_note:
         issue: "Issue credit notes"
       payment:
@@ -15,6 +16,8 @@ en:
         send: "Send reminders"
       template:
         manage: "Manage document templates"
+      settings:
+        manage: "Manage invoicing settings"
       export:
         read: "Send to the accountant"
     menu:
@@ -24,3 +27,290 @@ en:
       inv_reminders: "Reminders"
       inv_export: "Send to the accountant"
       inv_templates: "Document templates"
+      inv_settings: "Invoicing settings"
+    kinds:
+      quote: "Quote"
+      order: "Purchase order"
+      delivery_note: "Delivery note"
+      invoice: "Invoice"
+      deposit_invoice: "Deposit invoice"
+      credit_note: "Credit note"
+    statuses:
+      draft: "Draft"
+      sent: "Sent"
+      accepted: "Accepted"
+      refused: "Refused"
+      expired: "Expired"
+      confirmed: "Confirmed"
+      cancelled: "Cancelled by credit note"
+      issued: "Issued"
+      partially_paid: "Partially paid"
+      paid: "Paid"
+      overdue: "Overdue"
+    links:
+      from_quote: "From quote %{number}"
+      from_order: "From order %{number}"
+      from_delivery_note: "From delivery note %{number}"
+      from_invoice: "From invoice %{number}"
+      from_deposit_invoice: "From deposit invoice %{number}"
+      from_credit_note: "From credit note %{number}"
+    deposit:
+      line: "Deposit of %{percent}% on %{number}"
+    mentions:
+      seller:
+        legal_form_capital: "%{legal_form} with a share capital of %{capital} %{currency}"
+        legal_form: "%{legal_form}"
+        rcs:
+          fr: "Trade register: %{rcs}"
+          be: "Register of legal entities: %{rcs}"
+        siren: "SIREN: %{siren}"
+        enterprise_number: "Enterprise number: %{number}"
+        vat_number: "VAT number: %{vat_number}"
+      customer:
+        siren: "Customer SIREN: %{siren}"
+        vat_number: "Customer VAT number: %{vat_number}"
+      dates:
+        issue: "Issue date: %{date}"
+        delivery: "Date of supply of goods or services: %{date}"
+        due: "Due date: %{date}"
+      quote:
+        validity: "Quote valid until %{date}"
+      delivery_address: "Delivery address: %{address}"
+      operation_category:
+        goods: "Type of transaction: supply of goods"
+        services: "Type of transaction: supply of services"
+        mixed: "Type of transaction: supply of goods and services"
+      vat_on_debits: "Option for payment of VAT on an accruals basis"
+      special:
+        franchise:
+          fr: "VAT not applicable, art. 293 B of the French General Tax Code"
+          be: "Small business VAT exemption scheme, VAT not applicable"
+        reverse_charge:
+          fr: "Reverse charge: VAT due by the customer (art. 283-2 of the French General Tax Code)"
+          be: "Reverse charge: VAT due by the contracting party (art. 51, § 2, of the Belgian VAT Code)"
+        intra_community:
+          fr: "VAT exempt, article 262 ter I of the French General Tax Code (intra-Community supply)"
+          be: "Intra-Community supply exempt from VAT (art. 39bis of the Belgian VAT Code)"
+        export:
+          fr: "VAT exempt, article 262 I of the French General Tax Code (export)"
+          be: "Export exempt from VAT (art. 39 of the Belgian VAT Code)"
+        exempt:
+          fr: "VAT exempt transaction. %{reason}"
+          be: "VAT exempt transaction. %{reason}"
+        not_subject:
+          fr: "Transaction not subject to VAT. %{reason}"
+          be: "Transaction not subject to VAT. %{reason}"
+        zero_rated:
+          fr: "Zero-rated VAT. %{reason}"
+          be: "Zero-rated VAT. %{reason}"
+      credit_note:
+        reference: "Credit note relating to invoice %{number} of %{date}"
+      deposit:
+        invoice: "Deposit invoice"
+        deducted: "Deposit %{number} deducted: %{amount} %{currency}"
+      payment:
+        structured_reference: "Structured reference: %{reference}"
+        bank: "Payment by bank transfer: IBAN %{iban} — BIC %{bic}"
+        early_discount: "Early payment discount: %{rate}% for payment within %{days} days"
+        no_early_discount: "No discount for early payment"
+        late_penalties: "Late payment interest: %{rate}% per year"
+        late_penalties_legal:
+          fr: "Late payment interest at the European Central Bank's most recent refinancing rate plus 10 percentage points (art. L441-10 of the French Commercial Code)"
+          be: "Late payment interest at the rate set by the Belgian Act of 2 August 2002 on combating late payment in commercial transactions"
+        indemnity: "Fixed compensation for recovery costs in case of late payment: %{amount} %{currency}"
+    pdf:
+      draft: "Draft"
+      number: "No."
+      issue_date: "Date"
+      due_date: "Due date"
+      validity_date: "Valid until"
+      customer: "CUSTOMER"
+      customer_code: "Customer code"
+      delivery_address: "DELIVERY ADDRESS"
+      buyer_reference: "Your reference"
+      order_reference: "Order"
+      columns:
+        description: "Description"
+        quantity: "Qty"
+        unit: "Unit"
+        unit_price: "Unit price"
+        discount: "Discount"
+        vat: "VAT"
+        total: "Net total"
+      subtotal: "Subtotal"
+      lines_total: "Lines total (net)"
+      global_discount: "Overall discount"
+      discount: "Discount"
+      total_net: "Total excl. VAT"
+      total_vat: "VAT"
+      total_gross: "Total incl. VAT"
+      prepaid: "Deposits deducted"
+      payable: "Amount due"
+      vat_summary:
+        rate: "RATE"
+        base: "TAXABLE AMOUNT"
+        vat: "VAT"
+      mentions: "LEGAL NOTICES"
+      page: "Page %{page}/%{pages}"
+    reminders:
+      subject:
+        level1: "Reminder: invoice %{number} is overdue"
+        level2: "Second reminder: invoice %{number} unpaid"
+        level3: "Formal notice: invoice %{number}"
+      body:
+        level1: "Hello,\n\nUnless we are mistaken, invoice %{number}, due on %{due_date}, remains unpaid for %{balance}. Please arrange payment at your earliest convenience.\n\nKind regards,\n%{seller}"
+        level2: "Hello,\n\nDespite our first reminder, invoice %{number}, due on %{due_date}, remains unpaid for %{balance} (%{days} days late). Please settle it without delay.\n\nKind regards,\n%{seller}"
+        level3: "Dear Sir or Madam,\n\nInvoice %{number}, due on %{due_date}, remains unpaid for %{balance} despite our reminders. We hereby give you formal notice to pay %{total} in total.\n\n%{seller}"
+      penalties: "Late payment interest: %{interest}; fixed compensation for recovery costs: %{indemnity}; total due: %{total}."
+    mail:
+      subject: "%{kind} %{number} — %{seller}"
+      body: "Hello,\n\nPlease find attached our document %{number} for %{amount}.\n\nKind regards,\n%{seller}"
+    exports:
+      accounts:
+        customer: "Customers"
+        sales: "Sales"
+        vat: "Output VAT"
+        bank: "Bank"
+      payment: "Payment"
+      deposit_deducted: "Deposit deducted"
+      sales_journal: "Sales journal"
+      csv_name: "sales-and-receipts-journal"
+      archive_name: "invoices"
+    errors:
+      settings:
+        days: "Enter a number of days between 0 and %{max}"
+        rate: "Enter a rate between 0 and 100 (at most four decimals)"
+        operation_category: "Unknown type of transaction"
+        iban: "Invalid IBAN"
+        bic: "Invalid BIC"
+        email: "Invalid email address"
+        reminder_days: "The three reminder delays must increase, between 1 and 365 days"
+        penalty_level: "Reminder level between 0 and 3"
+        journal_code: "Journal code: capital letters and digits, eight at most"
+        account: "Account number: digits and capital letters, twenty at most"
+      document:
+        kind:
+          immutable: "A document's type cannot change"
+          invalid: "Unknown document type"
+        customer:
+          not_found: "Customer not found"
+          not_customer: "This card is not a customer"
+          disabled: "This customer is disabled"
+        currency:
+          unknown: "Unknown currency: %{value}"
+          decimals: "Currency %{value} must have two decimals"
+        operation_category:
+          invalid: "Unknown type of transaction"
+        locale:
+          invalid: "Unsupported language"
+        layout:
+          not_found: "Layout not found"
+        due_date:
+          before_issue: "The due date is before the issue date"
+        validity_date:
+          quote_only: "Only a quote has a validity date"
+        reference:
+          too_long: "%{max} characters at most"
+        credited:
+          credit_note_only: "Only a credit note refers to a corrected invoice"
+          required: "A credit note must refer to the invoice it corrects"
+          invalid: "The corrected invoice must be an issued invoice"
+          other_customer: "The corrected invoice belongs to another customer"
+          deposit_deducted: "This deposit is deducted from an issued invoice: correct the final invoice with a credit note"
+        deposits:
+          invoice_only: "Only an invoice deducts deposits"
+          duplicate: "Deposit listed twice"
+          invalid: "This is not an issued deposit invoice"
+          other_customer: "This deposit belongs to another customer"
+          cancelled: "This deposit was cancelled by a credit note"
+          already_deducted: "This deposit is already deducted from another invoice"
+          credited: "This deposit carries a credit note: it can no longer be deducted"
+          exceed_total: "Deducted deposits exceed the invoice total"
+        lines:
+          too_many: "%{max} lines at most"
+        global_discount:
+          exceeds: "The overall discount exceeds the lines total"
+        issued: "Issued document: it can be neither changed nor deleted; correct it with a credit note"
+        in_use: "This draft is referred to by another document"
+      discount:
+        kind: "Unknown discount type"
+        negative: "The discount cannot be negative"
+        percent: "Percentage between 0 and 100 (at most four decimals)"
+        amount_scale: "Amount to the cent (at most two decimals)"
+      line:
+        kind: "Unknown line type"
+        description:
+          blank: "Enter a description"
+          too_long: "%{max} characters at most"
+        item:
+          invalid: "This card is not an item"
+          disabled: "This item is disabled"
+          required: "Choose an item"
+          free_line: "A free line does not refer to an item"
+        quantity:
+          zero: "The quantity cannot be zero"
+          scale: "At most four decimals"
+        unit_code: "Unknown unit (UN/ECE codes)"
+        unit_price:
+          required: "Enter a unit price"
+          negative: "The unit price cannot be negative"
+          scale: "At most four decimals"
+        vat_rate:
+          not_found: "VAT rate not found"
+          disabled: "This VAT rate is disabled"
+          required: "Choose a VAT rate"
+        discount:
+          exceeds: "The discount exceeds the line amount"
+      issue:
+        already_issued: "This document is already issued"
+        no_line: "Add at least one priced line"
+        total_not_positive: "The total including VAT must be positive"
+        company_incomplete: "Complete the company details before issuing"
+        before_last: "Date earlier than the last document of the series (%{date})"
+        credit_exceeds: "The credit note exceeds the invoice's remaining amount (%{remaining})"
+        credit_before_invoice: "A credit note cannot predate the invoice it corrects"
+        future: "The issue date cannot be later than today (%{date}): the allocated number is final"
+      transform:
+        source_draft: "Issue the source document first"
+        not_allowed: "Cannot turn %{from} into %{to}"
+        source_status: "The source document is %{status}"
+        deposit_percent: "Deposit percentage between 0 and 100 (at most two decimals)"
+      quote:
+        not_sent: "Only a sent quote can be decided"
+        decision: "Unknown decision"
+      payment:
+        accounting_active: "Accounting is active: record the receipt in a bank journal, then match it"
+        document:
+          invalid: "Only an issued invoice can be paid"
+          cancelled: "This invoice is cancelled by a credit note"
+        amount:
+          not_positive: "The amount must be positive"
+          scale: "Amount to the cent"
+          exceeds: "The amount exceeds the invoice balance (%{balance})"
+        method: "Unknown payment method"
+        reference:
+          too_long: "%{max} characters at most"
+      reminder:
+        not_proposed: "This reminder is no longer pending"
+        in_progress: "This reminder is being sent"
+      export:
+        currency_rate: "No %{code} rate on %{date}: document %{number} cannot be converted for the FEC"
+      mail:
+        draft: "A draft cannot be sent"
+        no_recipient: "Enter a recipient"
+        invalid_address: "Invalid email address"
+        no_sender: "Set the sender address in the settings"
+        not_configured: "Email sending is not configured"
+        delivery_failed: "Sending failed: %{error}"
+      layout:
+        name:
+          blank: "Enter a name"
+          too_long: "%{max} characters at most"
+          taken: "This name is already taken"
+        color: "Colour in #rrggbb format"
+        text:
+          too_long: "%{max} characters at most"
+        logo:
+          type: "The logo must be a PNG or JPEG image"
+          not_found: "Logo not found"
+        in_use: "This layout is used by documents"

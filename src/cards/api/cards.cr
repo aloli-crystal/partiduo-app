@@ -307,6 +307,13 @@ module Partiduo
         card_views(records)
       end
 
+      # Identifiants de toutes les fiches qui répondent aux critères, sans
+      # limite ni vue (agrégats : tableau de bord, D-2F-005).
+      def self.card_ids(actor : Actor, query : CardQuery = CardQuery.new) : Array(Int64)
+        Guard.authorize!(actor, "cards.card.read", module_code: "CARDS")
+        card_query(query).order(:id).pluck(:id).map { |row| row.first.as(Int64) }
+      end
+
       def self.count_cards(actor : Actor, query : CardQuery = CardQuery.new) : Int64
         Guard.authorize!(actor, "cards.card.read", module_code: "CARDS")
         card_query(query).count.to_i64

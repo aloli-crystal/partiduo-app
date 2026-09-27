@@ -55,6 +55,9 @@ module Partiduo
           errors << FieldError.new("number", "accounting.errors.account.number.invalid")
         elsif Account.filter(number: number).exclude(id: current.try(&.pk)).exists?
           errors << FieldError.new("number", "accounting.errors.account.number.taken", {"number" => number})
+        elsif current && current.number != number && EntryLine.filter(account_id: current.pk).exists?
+          # `Acc_Plan_MTable::check` : « Poste utilisé », renumérotation refusée.
+          errors << FieldError.new("number", "accounting.errors.account.number.in_use")
         end
       end
 
@@ -121,7 +124,8 @@ module Partiduo
           errors << FieldError.base("accounting.errors.account.has_children")
         end
         if CardAccount.filter(account_id: id).exists? || CardCategoryAccount.filter(base_account_id: id).exists? ||
-           Ledger.filter(default_account_id: id).exists? || DefaultAccount.filter(account_id: id).exists?
+           Ledger.filter(default_account_id: id).exists? || DefaultAccount.filter(account_id: id).exists? ||
+           EntryLine.filter(account_id: id).exists? || Matching.filter(account_id: id).exists?
           errors << FieldError.base("accounting.errors.account.in_use")
         end
         errors

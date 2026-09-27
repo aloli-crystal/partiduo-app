@@ -19,8 +19,8 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |P |`partiduo-skel` (extension de référence) |*Terminé* (au lot 1)
 |0 |Socle : registre étoffé, société, authentification + TOTP + WebAuthn, i18n, `partiduo-provision`, parc, interface de connexion |*Terminé*
 |1 |Référentiel : tiers, articles, TVA, devises, exercices et périodes, pièces jointes ; plan comptable, journaux ; écrans ; `partiduo-skel` |*Terminé*
-|2 |Écritures, consultation, lettrage |*Lot suivant*
-|F |Module Facturation |À faire
+|2 |Écritures, consultation, lettrage |*Terminé* (clôture commune « Clôture du lot 2F »)
+|F |Module Facturation |*Terminé* (clôture commune « Clôture du lot 2F »)
 |M |`partiduo-migrate` |À faire
 |3–6 |Éditions, TVA, analytique, stock |À faire
 |===
@@ -358,18 +358,255 @@ vierge (`partiduo_migrate_r`) : 10 migrations du cœur, rien en attente depuis
 l'interface, `skel_0001` depuis l'extension ; `genmigrations` : aucun
 changement.
 
+== Lot 2 — écritures (cœur, 27 septembre 2026)
+
+Cœur (`partiduo-app`, décisions D-ACC-011 à D-ACC-017, B-ACC-002,
+link:doc/api/accounting-entries.adoc[]) :
+
+* Schéma : `accounting_entry`, `accounting_entry_line`, `accounting_matching`
+  (migration accounting 0003). Intégrité en base : équilibre par
+  déclencheurs de contrainte différés (`accounting_entry_balance`,
+  successeurs de `check_balance` / `proc_check_balance`), période calculée
+  par la base et refus hors exercice ou en période close
+  (`accounting_entry_period_guard`, `accounting_entry_line_guard`,
+  successeurs de `jrn_check_periode` / `is_closed`) ; specs en SQL direct.
+* Saisie par un seul service : `post_entry` (OD, tout journal),
+  `post_purchase` / `post_sale` (TVA par taux sur les comptes du taux,
+  autoliquidation, avoirs), `post_financial` (une écriture par ligne, lettrage
+  des factures payées), `cancel_entry` (extourne, `entry.cancelled`) ;
+  requêtes de contrôle `check_entry`, `check_document`, `check_financial` ;
+  numérotation des pièces, code interne, devises ; `entry.posted`.
+* Consultation : `entry`, `entries` / `count_entries` (recherche),
+  `account_statement` (ADR-005 D9 : solde, reste dû, échu, balance âgée,
+  mouvements avec solde progressif et lettre).
+* Lettrage : `match_lines`, `check_matching`, `unmatch`, `matching` ;
+  `payment.matched` quand un paiement est lettré avec une facture.
+* Référentiel : compte mouvementé ni renuméroté ni effacé, journal mouvementé
+  ni effacé ni changé de type ou de devise.
+* Specs (base `partiduo_test_2_ecritures`, arbre commun avec le lot F en
+  cours d'écriture, d'où des nombres mouvants) : 548 + 1 en attente
+  (Comptabilité seule), 448 + 13 en attente (Facturation seule), 540 (les
+  deux) ; 57 exemples propres aux écritures (`spec/accounting/entr*`,
+  `documents`, `financial`, `cancel`, `matching`, `consultation`).
+
+Reste pour le lot 2 : écrans faits (« Lots 2 et F — interface ») ; `partiduo-skel` peut remplacer son aide `post_entry`
+(D-SKEL-003) par `Partiduo::Api::Accounting.post_entry`.
+
+== Lot F — Facturation (cœur, 27 septembre 2026)
+
+Cœur (`partiduo-app`), module `invoicing` (ADR-006 D4 à D6 ; décisions
+D-INV-001 à D-INV-015 ; contrat link:doc/api/invoicing.adoc[]) :
+
+* Documents : devis, commandes, bons de livraison, factures, factures
+  d'acompte, avoirs ; transformation d'un document émis en suivant (lignes
+  recopiées, lien conservé et affiché), acomptes déduits d'office ; statuts
+  (devis accepté, refusé, expiré ; facture émise, envoyée, partiellement
+  payée, payée, en retard, annulée par avoir).
+* Lignes : article (fiche `item`), désignation libre, note, titre,
+  sous-total ; unités UN/ECE ; remise par ligne (% ou montant) ; remise
+  globale ventilée par groupe de TVA ; calculs `BigDecimal` aux arrondis
+  explicites (`Calculator`).
+* Numérotation à l'émission par table de compteurs verrouillée
+  (`SELECT … FOR UPDATE`), séries `D`, `C`, `BL`, `F`, `FA`, `AV` par année,
+  chronologie ; unicité et avance d'une unité garanties en base ; specs sans
+  trou (émission annulée) et sans doublon (huit émissions concurrentes).
+* Intangibilité en base (déclencheurs) ; correction par avoir 381 ; trace
+  qui / quand / empreinte SHA-256, vérifiable (`verify_fingerprint`).
+* Mentions obligatoires FR et BE générées et figées (SIREN du client,
+  catégorie d'opération, TVA sur les débits, adresse de livraison,
+  pénalités, indemnité de 40 €, mentions particulières, communication
+  structurée modulo 97).
+* PDF/A-3 (`pdf-a`) contrôlé par `pdf-validate` à chaque émission ; XML CII
+  EN 16931 embarqué pour 380, 381, 386, identification Factur-X en XMP ;
+  modèles de mise en page (logo, couleurs, textes) sans prise sur les
+  mentions.
+* Règlements (partiel, total, acompte déduit, avoir) ; `payment.recorded`
+  quand la Comptabilité est inactive ; réaction à `payment.matched`.
+* Relances à trois niveaux proposées, jamais envoyées d'office ; envoi par
+  courriel tracé (SMTP configurable, faux transport et faux serveur SMTP
+  dans les specs).
+* Facturation seule : journal des ventes et encaissements (CSV), FEC
+  partiel (ventes), archive ZIP des PDF d'une période.
+* Événements `invoice.issued`, `credit_note.issued` (charge utile de quoi
+  passer l'écriture) ; aucun appel au module Comptabilité.
+* Specs : 49 exemples dans `spec/invoicing/` (outils :
+  `spec/support/invoicing.cr`) ; sur un instantané `HEAD` + lot F
+  (B-INV-002) : 504 + 8 en attente (Comptabilité seule), 488 + 6 en attente
+  (Facturation seule), 531 (les deux) ; sur l'arbre intégré (lot 2 en
+  cours compris) : 561 + 8 en attente, 496 + 13 en attente, 588, tous
+  verts (base `partiduo_test_f_facturation`). Format et Ameba sans remarque sur le lot F ; garde-fou
+  ADR-005 D3 vert.
+
+Reste pour le jalon F : écrans faits (« Lots 2 et F — interface ») ; accès invité du
+comptable (ADR-006 D4, rôle `comptable` d'ADR-002) ; relever `API_VERSION`
+(D-INV-015). L'abonné de la Comptabilité et `amounts` dans
+`payment.matched` sont faits (« Intégration Facturation ↔ Comptabilité »).
+
+== Intégration Facturation ↔ Comptabilité (cœur, 27 septembre 2026)
+
+Cœur (`partiduo-app`, décisions D-INT-001 à D-INT-006,
+link:doc/api/accounting-entries.adoc[] § Écritures issues de la Facturation) :
+
+* Abonnés de la Comptabilité (`Partiduo::Accounting::Billing`, par
+  `post_sale` / `post_financial`) : `invoice.issued` → vente au journal de
+  ventes (compte de l'article, TVA par taux, client ; pièce = numéro),
+  acomptes déduits extournés sur la facture finale ; `credit_note.issued` →
+  avoir négatif lettré avec la facture ; `payment.recorded` → banque ou
+  caisse, lettré avec la facture. Un échec ne bloque jamais la Facturation.
+* `payment.matched` publie `amounts` (montant réglé par facture, net des
+  lettrages remplacés) et `matched_on` (amendement D-INV-009 adopté).
+* Journal des événements rejouables au socle (`modules_event_log`, migration
+  modules 0002, `Partiduo::Events.journal`).
+* Activation tardive (ADR-006 D2) : `Partiduo::Api::Accounting.invoicing_history`
+  (proposition, erreurs par essai à blanc) et `post_invoicing_history`.
+* Specs de bout en bout (`spec/integration/`, 9 exemples, chaque configuration
+  forcée) : devis → facture → écriture de vente → encaissements lettrés →
+  facture payée ; avoir ; acompte ; échec sans blocage puis reprise ;
+  Facturation seule (facture → règlement → payée) ; Comptabilité seule
+  (`payment.matched` sans abonné) ; activation tardive sans double compte.
+* Specs (base `partiduo_test_2f_integration`) : 597 exemples (les deux),
+  570 + 8 en attente (Comptabilité seule), 505 + 13 en attente (Facturation
+  seule), tous verts ; format et Ameba sans remarque sur les fichiers
+  touchés ; garde-fou ADR-005 D3 vert ; `genmigrations modules` : aucun
+  changement.
+
+Reste : fait à la clôture du lot 2F (écran « À comptabiliser (Facturation) »,
+`payment.unmatched`, événement écarté).
+
+== Lots 2 et F — interface (partiduo-ui-bulma, 27 septembre 2026)
+
+Interface (`partiduo-ui-bulma`, uniquement par `Partiduo::Api`, décisions
+D-UI-027 à D-UI-034 ; routes : README de l'interface) :
+
+* Saisie au clavier (ADR-005 D5) : achats, ventes, extraits financiers,
+  opérations diverses (`/accounting/entries/<forme>`) ; formulaire HTML
+  utilisable sans JavaScript ; HTMX pour l'équilibre débit/crédit et
+  l'écriture calculée en continu (`check_entry`, `check_document`,
+  `check_financial`), l'ajout de ligne et la complétion des comptes et des
+  fiches dès le premier caractère ; *Opal* pour les touches (paquet
+  `entry.js` : Entrée, Alt+↓, Ctrl+Entrée, retrait de ligne, D-UI-027) ;
+  dates abrégées relatives à la période de travail.
+* Consultation : écritures (liste, consultation, extourne) ; « Comptes et
+  tiers » (ADR-005 D9 : synthèse, balance âgée, mouvements, fiche, lettrer,
+  relancer, export CSV, version téléphone) ; lettrage avec contrôle de la
+  sélection (`check_matching`) et délettrage. Navigation transverse depuis les
+  écritures, la fiche du tiers, le compte du plan comptable, le tableau de
+  bord.
+* Devis et factures : liste (onglets, statut, CSV), édition au clavier
+  (client et articles complétés, totaux par `check_document`), consultation,
+  aperçu imprimable, validation, transformation, avoir, acompte, décision sur
+  un devis, règlement (Comptabilité inactive), relances, transmission au
+  comptable, téléchargement du PDF/A-3 Factur-X.
+* Tableau de bord : tuiles par module actif (trésorerie, clients,
+  fournisseurs ; factures à encaisser, facturé du mois, devis en attente),
+  dernières factures et écritures, « À traiter ».
+* Specs de l'interface sur un schéma construit par les migrations du cœur
+  (D-UI-028). 143 exemples verts (base `partiduo_test_2f_ui`), dont 25 pour
+  ces écrans (`spec/ui/entries_spec.cr`, `spec/ui/invoicing_spec.cr`), les
+  dates abrégées et le paquet Opal exécuté sous JavaScriptCore (règle des
+  touches, montage sur un DOM simulé). Format et Ameba sans remarque ;
+  garde-fou `Partiduo::Api` vert ; `opal-build --check` vert.
+
+Reste : titres et sous-totaux dans l'édition des documents ; essai dans un
+navigateur réel (B-UI-001). Envoi par courriel, modèles, paramètres et
+historique à comptabiliser : faits à la clôture du lot 2F.
+
+== Relecture de couverture des lots 2 et F (testeur, 27 septembre 2026)
+
+Specs ajoutées (contrat `Partiduo::Api`, SQL direct pour la base, client de
+test Marten pour l'interface) :
+
+* `spec/accounting/entries_rules_spec.cr` (24) : `ModuleDisabled` sur chaque
+  appel restant, pièces (numéro pris, longueurs), avoirs et lignes mixtes,
+  taux à 0 %, vente en devise, `check_document` = `post_sale`, extraits
+  (autre compte, journal non financier), extourne en période ouverte d'une
+  écriture de période close, lettrage partiel complété, refus de lettrage,
+  balance âgée aux bornes, relevé arrêté à `date_to`, journaux visibles.
+* `spec/accounting/entry_integrity_rules_spec.cr` (10) : ligne déplacée,
+  en-tête seul modifié, suppression complète, date changée (période
+  recalculée, close, hors exercice), période close (journal, cours, sens ;
+  pièce et lettrage admis), contrôles de colonnes et clés étrangères.
+* `spec/invoicing/rules_spec.cr` (14) : `ModuleDisabled` sur chaque appel
+  restant, émission (double, total nul, échéance, remise, acompte annulé),
+  avoirs, transformations, devis, empreinte, règlements refusés.
+* `spec/integration/invoicing_accounting_rules_spec.cr` (6) : paiement sur
+  deux factures, trop-perçu, acompte encaissé, pas d'écriture hors factures,
+  extourne de la vente, lettrage d'achat ignoré.
+* `partiduo-ui-bulma/spec/ui/entries_rules_spec.cr` (10) et
+  `invoicing_rules_spec.cr` (7) : saisie (vente, avoir, nombre et date
+  illisibles, refus sous la bonne ligne, journaux fermés), extourne,
+  lettrage et relevé filtrés, factures (validation refusée, suppression,
+  acompte, devis, règlement, droits, échappement des messages).
+
+Défauts corrigés : D-TST-001 (pièce automatique déjà prise), D-TST-002
+(relevé à `date_to`), D-TST-003 (acompte annulé avant l'émission), D-TST-004
+(messages de l'interface). Proposition non appliquée : D-TST-005.
+
+Résultat (base `partiduo_test_2F_specs`) : 616 + 10 en attente (Comptabilité
+seule), 528 + 15 en attente (Facturation seule), 651 (les deux) ;
+interface 160. Format et Ameba sans remarque sur les fichiers touchés.
+
+== Clôture du lot 2F — relecture et vérifications (27 septembre 2026)
+
+Remarques de relecture des lots 2 et F traitées (décisions D-2F-001 à
+D-2F-013) :
+
+* *Exports de la Facturation seule* : acomptes déduits extournés (ventes et
+  TVA au débit, client au solde), comme l'écriture du socle ; FEC en devise
+  de tenue (cours du socle, `Montantdevise`), refus sans cours
+  (`sales_fec : Result(FileView)`) ; CSV protégé contre les formules.
+* *Émission* : date au plus tard le jour même (`issue.future`) ; date du jour
+  dans le fuseau de l'instance (`PARTIDUO_TIME_ZONE`, défaut
+  `Europe/Paris`, `Partiduo::Api::Core.today`).
+* *Acomptes* : un acompte crédité ne se déduit plus, un acompte déduit ne se
+  crédite plus (contrôlés au brouillon et, sous verrou, à l'émission).
+* *Règlements* : événement `payment.unmatched` (amendement proposé de la
+  liste fermée, ADR-003 D7) publié au délettrage et à l'extourne d'un
+  encaissement lettré ; la Facturation retire les règlements du lettrage et
+  recalcule le statut.
+* *Intégrité* : migration accounting 0004 — écriture extournée marquée par
+  la base (`reversed`), index unique d'une référence en vigueur
+  (`accounting_entry_source`), table des événements écartés ; migration
+  invoicing 0001 entièrement réversible (vérifié : `migrate invoicing zero`,
+  `migrate accounting 0003…`, sans fonction orpheline, puis `migrate`).
+* *Historique à comptabiliser* : écriture extournée recomptabilisable (pièce
+  `<numéro>-2`), événement écarté ou rendu, compteur pour le tableau de bord.
+* *Relances* : réservation (`sending`) avant l'envoi, spec de concurrence.
+* *Tableau de bord* : agrégats du contrat faits par PostgreSQL
+  (`Api::Accounting.party_balances`, `Api::Invoicing.summary`,
+  `Api::Cards.card_ids`) ; plus de plafond.
+* *Interface* : « À comptabiliser (Facturation) » (et rappel dans « À
+  traiter »), envoi d'un document par courriel, paramètres de facturation,
+  modèles de mise en page ; message d'échec du FEC.
+* *Specs du cœur* : jour figé au 27 septembre 2026 (`Partiduo::Config.clock`,
+  `travel_to`) ; nouveaux fichiers `spec/invoicing/issue_dates_deposits_spec.cr`,
+  `spec/invoicing/summary_spec.cr`, `spec/integration/unmatching_history_spec.cr`,
+  compléments dans les specs d'exports, de relances, de consultation et
+  d'événements.
+
+Vérifications (base de test `partiduo_test_2F_final`) :
+
+* `partiduo-app` : 627 exemples + 13 en attente (Comptabilité seule),
+  549 + 15 en attente (Facturation seule), 673 (les deux), tous verts ;
+  `crystal tool format --check` et Ameba sans remarque ; garde-fou ADR-005 D3
+  vert.
+* `partiduo-ui-bulma` : 167 exemples verts ; Ameba sans remarque ; garde-fou
+  `Partiduo::Api` vert.
+* `partiduo-skel` : 24 exemples verts (override `pdf` ajouté pour les
+  dépendances PDF du lot F).
+* `marten migrate` sur base vierge (`partiduo_migrate_2F`) : 14 migrations
+  du cœur appliquées, `migrate --check` sans migration en attente.
+
 == Prochaines étapes
 
-. *Préalable du lot 2* : doubler en base la règle d'équilibre
-  (`EntryBalance`) par un déclencheur différé (`CONSTRAINT TRIGGER …
-  DEFERRABLE INITIALLY DEFERRED`) qui vérifie sum(débit) = sum(crédit) par
-  écriture, testé par une écriture déséquilibrée refusée par PostgreSQL ;
-  ventiler la TVA par `vat_rate_accounts` ; saisie financière par la fiche
-  Banque du journal.
-. Lot 2 : écritures (schéma, saisie, validation, numérotation), consultation,
-  lettrage ; puis lot F (Facturation) en parallèle.
-. Soldes du plan comptable dans l'interface une fois les écritures en place
-  (D-UI-020).
+. Lot M : `partiduo-migrate` (reprise d'un dossier NOALYSS).
+. Relever `API_VERSION` (contrat enrichi pendant les lots 2 et F, D-INV-015)
+  et faire adopter l'amendement ADR-003 D7 (`payment.unmatched`, D-2F-003).
+. Accès invité du comptable (ADR-006 D4, rôle `comptable` d'ADR-002).
+. Reports de la relecture 2F (D-2F-013) : listes de l'interface sur des vues
+  résumées, logo des modèles à l'écran, envoi de document réservé.
+. Soldes du plan comptable dans l'interface (D-UI-020) ; titres et
+  sous-totaux dans l'édition des documents.
 . Signaler à l'amont de Marten le piège `db_unique_constraint` (B-REF-001).
 . Toujours ouverts : amendement ADR-005 D3 (`Partiduo::Api::Distribution`,
   D-014) ; CI GitHub non exécutée (B-002) ; serveur HTTP non démarrable dans
@@ -383,9 +620,10 @@ cd prod-crystal/partiduo/partiduo-app
 SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install
 createdb --encoding=UTF8 partiduo_dev
 crystal run manage.cr -- migrate                   # base de développement
+# PARTIDUO_TIME_ZONE=Europe/Brussels                # fuseau de l'instance (défaut Europe/Paris)
 createdb --encoding=UTF8 partiduo_test             # une fois
 crystal spec                                       # base partiduo_test
-DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' scripts/specs-modules.sh
+DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' scripts/specs-modules.sh   # trois configurations
 crystal tool format src spec && ameba
 crystal run scripts/interface_boundary.cr -- src   # garde-fou ADR-005 D3
 bin/partiduo-provision --help                      # création d'une instance

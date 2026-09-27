@@ -38,6 +38,11 @@ dependencies:
     path: ../../jose
   saml:
     path: ../../saml
+  # Lot F : PDF/A-3 Factur-X (ADR-006 D5) et son contrôle.
+  pdf-a:
+    path: ../../pdf-a
+  pdf-validate:
+    path: ../../pdf-validate
 
 development_dependencies:
   ameba:
