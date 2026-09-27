@@ -6,7 +6,7 @@ describe "Provisionnement : profils et administrateur (D-SET-005)" do
   it "crée les profils par défaut et l'administrateur invité, sans mot de passe" do
     provision_instance(admin_email: "Patron@Societe.example")
     system = Partiduo::Api::Actor.system
-    Partiduo::Api::Auth.profiles(system).map(&.code).sort!.should eq(["ACCOUNTANT", "ADMIN"])
+    Partiduo::Api::Auth.profiles(system).map(&.code).sort!.should eq(["ACCOUNTANT", "ACCOUNTANT_GUEST", "ADMIN"])
 
     admin = Partiduo::Api::Auth.user_by_email(system, "patron@societe.example") || raise "administrateur absent"
     admin.has_password.should be_false
@@ -35,6 +35,6 @@ describe "Provisionnement : profils et administrateur (D-SET-005)" do
     view = provision_instance
     view.invitations.should be_empty
     Partiduo::Api::Auth.users(Partiduo::Api::Actor.system).should be_empty
-    Partiduo::Api::Auth.profiles(Partiduo::Api::Actor.system).size.should eq(2)
+    Partiduo::Api::Auth.profiles(Partiduo::Api::Actor.system).size.should eq(3)
   end
 end

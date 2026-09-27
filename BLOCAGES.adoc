@@ -371,3 +371,56 @@ erreur dans le journal du serveur.
 *Levée.* L'utilisateur se connecte lui-même dans un navigateur (procédure
 dans `ETAT-PORTAGE.adoc` § « Vérification du jalon F ») et refait le
 parcours au clavier (B-UI-007).
+
+== B-CRIT-001 — Export PDF depuis chaque liste (ADR-005 D5) (critique de complétude)
+
+*Constat.* ADR-005 D5 demande « export CSV et PDF depuis chaque liste ».
+Les éditions (lot 3) exportent en PDF/A-2b par le cœur ; les listes du
+référentiel, des écritures, des documents, du stock et du suivi n'exportent
+qu'en CSV. L'interface ne peut pas produire de PDF elle-même sans dépendre
+de `pdf-a` hors du contrat (ADR-005 D3).
+
+*Contournement.* CSV partout ; PDF pour les éditions.
+
+*Levée.* Ajouter au contrat un service neutre « tableau → PDF/A-2b »
+(`Partiduo::Api::Core.table_pdf(titre, colonnes, lignes)`, réutilisant
+`Accounting::ReportOutput`) puis le lien PDF au pied de `ui/_table.html`
+(`Table#pdf`, déjà prévu).
+
+== B-CRIT-002 — Écrans restants : fournisseurs d'identité, connexion fédérée, pièces jointes (critique de complétude)
+
+*Constat.* Le contrat expose `save_identity_provider`,
+`link_federated_identity`, `begin_federated_login` (ADR-002 D3) et
+`store_attachment` (ADR-006 D1) ; l'interface ne les offre pas
+(D-UI-011 pour la fédération). Les pièces jointes d'une écriture ou d'un
+relevé ne se déposent donc que par le contrat (`attachment_id`) ;
+la boîte « Justificatifs à traiter » de la maquette relève de l'extension
+`partiduo-document`, hors périmètre.
+
+*Contournement.* Aucun : fonctions accessibles par le contrat seulement.
+
+*Levée.* Écrans « Fournisseurs d'identité » (paramètres SAML/OIDC, niveau)
+et bouton de connexion fédérée sur `/login` ; champ de dépôt d'une pièce
+jointe sur la saisie et le rapprochement (multipart, contrôle du contenu par
+le socle).
+
+== B-CRIT-003 — Reprises restantes par `partiduo-migrate` (critique de complétude)
+
+*Constat.* `partiduo-migrate` ne reprend ni l'analytique (B-MIG-001), ni le
+stock, les prévisions et le suivi (lot 6), ni les numéros de relevé
+(`jr_pj_number` des journaux financiers, désormais rapprochables,
+D-REC-001), ni les écritures d'ouverture comme telles (elles sont reprises
+comme écritures ordinaires).
+
+*Levée.* Lot de reprise dédié, dans l'ordre de B-MIG-001 (ventiler avant de
+clore les périodes), avec les avertissements de B-SEC-001.
+
+== B-CRIT-004 — Conformité visuelle à la maquette non vérifiée à l'œil (critique de complétude)
+
+*Constat.* La conformité à la maquette est vérifiée par les specs (structure,
+libellés, classes, trois tailles d'écran, accessibilité) et par le serveur
+réel jusqu'à la page de connexion (B-JF-001) ; aucun parcours connecté n'a
+été regardé dans un navigateur (B-UI-006, B-UI-007).
+
+*Levée.* Parcours au clavier par l'utilisateur, captures comparées à
+`partiduo-docs/maquette/index.html` aux trois tailles.

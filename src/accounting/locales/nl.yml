@@ -31,6 +31,7 @@ nl:
       acc_accounts: "Rekeningen en relaties"
       acc_entries: "Boekingen"
       acc_matching: "Afpunten"
+      acc_reconciliation: "Bankafstemming"
       acc_chart: "Rekeningstelsel"
       acc_ledgers: "Dagboeken"
       acc_trial_balance: "Proef- en saldibalans"
@@ -97,7 +98,28 @@ nl:
         misc:
           name: "Diverse verrichtingen"
           description: "Afschrijvingen, btw en andere verrichtingen"
+    closing:
+      closing_label: "Afsluitingsboeking van het boekjaar %{year}"
+      opening_label: "Openingsbalans van het boekjaar %{year}"
+    reconciliation:
+      statement_label: "Uittreksel %{reference}"
     errors:
+      closing:
+        already_posted: "Deze eindejaarsboeking is al geboekt; tegenboek ze om ze opnieuw te boeken."
+        nothing: "Geen saldo over te dragen: er is niets te boeken."
+        ledger_kind: "Dagboek %{code} is geen dagboek voor diverse verrichtingen."
+        fiscal_year_closed: "Het boekjaar is afgesloten: heropen het voordat u deze boeking maakt."
+        no_previous: "Geen enkel boekjaar eindigt de dag vóór de eerste dag van dit boekjaar."
+      reconciliation:
+        ledger_kind: "Dagboek %{code} is geen financieel dagboek."
+        reference:
+          blank: "Vul het nummer van het uittreksel in."
+          too_long: "Het nummer van het uittreksel telt hoogstens %{max} tekens."
+          taken: "Uittreksel %{reference} is in dit dagboek al afgestemd."
+        entries:
+          blank: "Vink minstens één verrichting aan."
+          invalid: "Verrichting %{id} hoort niet bij dit dagboek of is al afgestemd."
+        mismatch: "Volgens het uittreksel moet %{expected} worden afgestemd, maar de selectie bedraagt %{selected} (verschil %{difference})."
       vat_return:
         form:
           invalid: "Het formulier „%{value}” bestaat niet."

@@ -121,6 +121,26 @@ systemd dans `tmp/instances/exemple-sarl/` (sans les installer).
 sauvegardes, retour arrière) : voir link:deploy/README.adoc[] et, pour le
 contrat, link:doc/api/core-settings.adoc[].
 
+== Contrat `Partiduo::Api`
+
+Référence par domaine (AsciiDoc) :
+
+* link:doc/api/accounting-closing.adoc[]
+* link:doc/api/accounting-entries.adoc[]
+* link:doc/api/accounting-forecasts.adoc[]
+* link:doc/api/accounting-reconciliation.adoc[]
+* link:doc/api/accounting-reference.adoc[]
+* link:doc/api/accounting-reports.adoc[]
+* link:doc/api/analytic.adoc[]
+* link:doc/api/auth.adoc[]
+* link:doc/api/core-settings.adoc[]
+* link:doc/api/followup.adoc[]
+* link:doc/api/invoicing.adoc[]
+* link:doc/api/modules.adoc[]
+* link:doc/api/socle-referentiel.adoc[]
+* link:doc/api/stock.adoc[]
+* link:doc/api/vat-returns.adoc[]
+
 == Tests
 
 [source,sh]

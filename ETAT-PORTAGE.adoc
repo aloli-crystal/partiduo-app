@@ -28,10 +28,15 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |6 |Stock, prévisions budgétaires, suivi (GED : extension `partiduo-document`) |*Terminé* (cœur et interface ; clôture « Clôture du lot 6 ») ; reprise par `partiduo-migrate` reportée
 |===
 
-Lot en cours : aucun. Les lots P à 6 du plan sont terminés (lot 6 clos le
-27 septembre 2026) ; restent les reprises, reports et amendements listés dans
-« Prochaines étapes ». Specs : 979 exemples dans `partiduo-app` (tous
-modules), 253 dans `partiduo-ui-bulma`.
+*État définitif (27 septembre 2026).* Lot en cours : aucun. Les lots P à 6
+du plan sont terminés, les trois jalons vérifiés, et la critique de
+complétude (section du même nom) a comblé les écarts faisables au prompt,
+aux ADR et à la maquette. Ce qui reste est listé dans « Prochaines étapes »
+et dans BLOCAGES.adoc (B-CRIT-001 à B-CRIT-004 pour la critique). Specs :
+`partiduo-app` 994 exemples (tous modules), 948 + 14 en attente
+(Comptabilité seule), 689 + 43 en attente (Facturation seule) ;
+`partiduo-ui-bulma` 270 ; `partiduo-skel` 24 ; `partiduo-migrate` 93 ;
+tous verts.
 
 == Lot P — ce qui existe (26 septembre 2026)
 
@@ -1274,33 +1279,92 @@ bin/partiduo-migrate import --fec demo/732829320FEC20241231.txt --report /tmp/ra
 dropdb partiduo_j2_fr; dropdb partiduo_j2_fec; rm -rf tmp/instances/j2-*
 ----
 
+== Critique de complétude (27 septembre 2026)
+
+Comparaison de `partiduo-app`, `partiduo-ui-bulma`, `partiduo-skel` et
+`partiduo-migrate` au prompt (section « Prompt »), aux ADR-001 à 006 et à la
+maquette. Décisions : DECISIONS.adoc, « Critique de complétude » (D-CLO-001
+à D-CLO-003, D-REC-001, D-GUEST-001, D-CRIT-001, D-CRIT-002, D-UI-051 à
+D-UI-056) ; écarts restants : BLOCAGES.adoc, B-CRIT-001 à B-CRIT-004.
+
+Écarts relevés et comblés :
+
+* *Fonctions manquantes du cœur* :
+** fin d'exercice (ADR-006 D1 « clôture ») : écriture de clôture des comptes
+   6 et 7 et à-nouveaux de l'exercice suivant, proposées équilibrées et
+   passées par `post_entry` (link:doc/api/accounting-closing.adoc[]) ; sans
+   elles, le bilan d'un second exercice ignorait les soldes du premier ;
+** rapprochement bancaire (ADR-006 D1) : relevés, opérations rattachées,
+   contrôle de l'écart, soldes rapproché et non rapproché ; migration
+   accounting 0008 (link:doc/api/accounting-reconciliation.adoc[]) ;
+** accès invité en lecture du comptable (ADR-006 D4) : profil par défaut
+   `ACCOUNTANT_GUEST` ;
+** `API_VERSION` 0.3.0 (D-INV-015).
+* *Écrans manquants* (six entrées de menu restaient désactivées) : société,
+  modules (activation par l'administrateur, ADR-006 D2), devises, utilisateurs
+  et profils (invitation, rôle `comptable`, révocation, déblocage, droits par
+  journal), catégories de fiches, fin d'exercice ; plus rapprochement
+  bancaire, journal d'audit, lignes de titre et de sous-total des documents
+  (ADR-006 D5), rappels du Suivi dans « À traiter ».
+* *Garde-fous CI* : CI de `partiduo-skel` et de `partiduo-migrate` créées ;
+  la CI du cœur ne clonait pas `pdf`, `pdf-a`, `pdf-validate`.
+* *Traductions* : clés des nouveaux écrans et messages en fr, en et nl ;
+  contrôle complémentaire fait par script : toute clé littérale citée par le
+  code ou les gabarits des trois dépôts existe (aucune manquante).
+* *Specs ajoutées* : cœur `spec/accounting/year_end_spec.cr` (6),
+  `spec/accounting/reconciliation_spec.cr` (6),
+  `spec/auth/accountant_guest_spec.cr` (3) ; interface
+  `spec/ui/settings_spec.cr` (12), `spec/ui/year_end_reconciliation_spec.cr`
+  (4), compléments dans `invoicing_spec.cr`, `followup_spec.cr`,
+  `shell_spec.cr`.
+
+Vérifications (base de test `partiduo_test_critique`) : `partiduo-app` 948 +
+14 en attente (Comptabilité, Analytique, Stock, Suivi), 689 + 43 en attente
+(Facturation, Stock, Suivi), 994 (tous), verts (`scripts/specs-modules.sh`) ;
+`partiduo-ui-bulma` 270 verts ; `partiduo-skel` 24 ; `partiduo-migrate` 93 ;
+`crystal tool format` et Ameba sans remarque ; garde-fous ADR-005 D3 verts ;
+`marten migrate` sur base vierge puis retour arrière et réapplication
+d'accounting 0008 ; `genmigrations accounting` : seul l'écart antérieur de
+D-ED-006.
+
+Écarts restants (non faisables ici ou hors périmètre) : export PDF de chaque
+liste (B-CRIT-001), fédération et pièces jointes à l'écran (B-CRIT-002),
+reprises du lot 6 et de l'analytique (B-CRIT-003), vérification visuelle
+(B-CRIT-004) ; justificatifs photographiés, facturation électronique et
+virements SEPA sont des extensions hors périmètre (prompt, arbitrages 2 et 6).
+
 == Prochaines étapes
 
-. Reprise du lot 6 par `partiduo-migrate` (stock, prévisions, suivi) avec
-  les avertissements de B-SEC-001 ; puis droits par dépôt et visibilité des
-  actions par groupe avant toute reprise qui s'en sert.
-. Faire adopter les amendements proposés : ADR-006 D3 (D-STK-001), ADR-005
-  (rubrique `FOLLOW_UP`, D-FUP-002).
-. Reprise analytique par `partiduo-migrate` (B-MIG-001 : ventiler avant de
-  clore les périodes reprises) et reports du lot 5 ci-dessus.
-. Contrat : relever `API_VERSION` (contrat enrichi des lots 2, F, 3 et 5,
-  D-INV-015) ; proposer `limit` / `offset` pour `general_ledger` et
-  `journals` (D-UI-036) et les comptes des rubriques d'un état (D-UI-036) ;
-  signaler B-ED-001 à l'amont de Crystal.
-. Reprise : devises des écritures à passer à `post_entry` quand la source
-  n'en a qu'une (D-MIG-019) ; amendement proposé `create_card` avec compte
-  (D-MIG-006).
-. Faire adopter l'amendement ADR-003 D7 (`payment.unmatched`, D-2F-003).
-. Accès invité du comptable (ADR-006 D4, rôle `comptable` d'ADR-002).
-. Reports de la relecture 2F (D-2F-013) : listes de l'interface sur des vues
-  résumées, logo des modèles à l'écran, envoi de document réservé.
-. Soldes du plan comptable dans l'interface (D-UI-020) ; titres et
-  sous-totaux dans l'édition des documents.
-. Signaler à l'amont de Marten le piège `db_unique_constraint` (B-REF-001).
-. Toujours ouverts : amendement ADR-005 D3 (`Partiduo::Api::Distribution`,
-  D-014) ; CI GitHub non exécutée (B-002) ; serveur HTTP non démarrable dans
-  le bac à sable (B-UI-001 : l'écoute est permise depuis la vérification
-  du jalon F ; reste le parcours connecté dans un navigateur, B-JF-001).
+Liste définitive à l'issue de la critique de complétude ; chaque point
+renvoie à sa décision ou à son blocage.
+
+. *Reprises par `partiduo-migrate`* : analytique (B-MIG-001 : ventiler avant
+  de clore les périodes reprises), stock, prévisions, suivi, numéros de
+  relevé des journaux financiers (B-CRIT-003), avec les avertissements de
+  B-SEC-001 ; puis droits par dépôt (D-STK-006) et visibilité des actions
+  par groupe (D-FUP-001).
+. *Interface* : export PDF depuis chaque liste par un service neutre du
+  contrat (B-CRIT-001) ; fournisseurs d'identité, connexion fédérée et dépôt
+  des pièces jointes (B-CRIT-002) ; actions liées sur un document de la
+  Facturation et complétion des fiches dans les actions (D-UI-046) ; logo
+  des modèles à l'écran, listes sur vues résumées (D-2F-013).
+. *Vérifications humaines* : parcours connecté au clavier dans un navigateur
+  et comparaison visuelle à la maquette aux trois tailles (B-CRIT-004,
+  B-JF-001, B-UI-007) ; passkeys sur un appareil réel (B-AUTH-003) ;
+  première exécution de la CI des quatre dépôts une fois publiés (B-002).
+. *Amendements à faire adopter* : ADR-006 D3 (D-STK-001), ADR-005 rubrique
+  `FOLLOW_UP` (D-FUP-002), ADR-003 D7 `payment.unmatched` (D-2F-003),
+  ADR-005 D3 `Partiduo::Api::Distribution` (D-014), `create_card` avec
+  compte (D-MIG-006), comptes 120 / 129 au plan FR initial (D-CLO-003).
+. *Contrat* : `limit` / `offset` pour `general_ledger` et `journals`, comptes
+  des rubriques d'un état (D-UI-036) ; lecture des fiches en bloc (D-STK-013) ;
+  livraison par ligne (D-STK-010).
+. *Reports fonctionnels* : exigibilité de la TVA au prorata des encaissements
+  partiels (D-TVA-004), annexe 3310-A et EDI-TVA (D-TVA-006), correction ligne
+  à ligne des relevés (D-TVA-009) ; export PDF et formules `{{AXE}}` de
+  l'analytique, `post_financial` ventilé (D-ANA-010, reports du lot 5).
+. *Amont* : signaler B-ED-001 (Crystal), B-REF-001 (Marten), B-INV-001
+  (`pdf-validate`).
 
 == Commandes
 

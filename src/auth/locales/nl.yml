@@ -14,6 +14,8 @@ nl:
     profiles:
       admin: "Beheerder"
       accountant: "Boekhouder"
+      accountant_guest: "Externe boekhouder (alleen lezen)"
+      accountant_guest_description: "Alleen-lezen toegang voor de externe boekhouder: raadpleging, rapporten en overdracht van facturen, zonder enige invoer."
     roles:
       member: "Gebruiker van de onderneming"
       accountant: "Boekhouder"

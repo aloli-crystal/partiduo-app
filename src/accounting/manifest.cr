@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # Module Comptabilité (ADR-006 D1) : plan comptable, journaux, écritures,
-# lettrage, éditions, déclarations de TVA, FEC, clôture.
+# lettrage, rapprochement, éditions, déclarations de TVA, FEC, clôture.
 Partiduo::Modules.register do
   code "ACCOUNTING"
   name "accounting.module.name"
@@ -33,6 +33,8 @@ Partiduo::Modules.register do
   menu "ACC_ACCOUNTS", parent: "CONSULT", order: 10, route: "accounting:accounts", permission: "accounting.entry.read"
   menu "ACC_ENTRIES", parent: "CONSULT", order: 20, route: "accounting:entries", permission: "accounting.entry.read"
   menu "ACC_MATCHING", parent: "CONSULT", order: 30, route: "accounting:matching", permission: "accounting.matching.write"
+  # Rapprochement bancaire (`compta_fin_rec.inc.php`, D-REC-001).
+  menu "ACC_RECONCILIATION", parent: "CONSULT", order: 35, route: "accounting:reconciliation", permission: "accounting.matching.write"
 
   menu "ACC_CHART", parent: "REFERENCE", order: 10, route: "accounting:chart", permission: "accounting.account.read"
   menu "ACC_LEDGERS", parent: "REFERENCE", order: 30, route: "accounting:ledgers", permission: "accounting.ledger.read"

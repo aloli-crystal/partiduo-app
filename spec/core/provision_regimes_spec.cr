@@ -36,7 +36,7 @@ describe "Provisionnement : instance française" do
 
     Partiduo::Api::Cards.categories(system).map(&.code).should contain("CUSTOMER")
     Partiduo::Api::Cards.categories(system).map(&.code).should contain("SUPPLIER")
-    Partiduo::Api::Auth.profiles(system).map(&.code).sort!.should eq(["ACCOUNTANT", "ADMIN"])
+    Partiduo::Api::Auth.profiles(system).map(&.code).sort!.should eq(["ACCOUNTANT", "ACCOUNTANT_GUEST", "ADMIN"])
     Partiduo::Api::Auth.user_by_email(system, "patron@exemple.fr").should_not be_nil
     view.invitations.map(&.email).should eq(["patron@exemple.fr"])
   end
@@ -75,7 +75,7 @@ describe "Provisionnement : instance belge" do
     rates.size.should eq(8)
     rates.map(&.code).should contain("21G")
     rates.none? { |rate| rate.code == "NOR" }.should be_true
-    Partiduo::Api::Auth.profiles(system).size.should eq(2)
+    Partiduo::Api::Auth.profiles(system).size.should eq(3)
     view.invitations.map(&.email).should eq(["patron@exemple.be"])
   end
 

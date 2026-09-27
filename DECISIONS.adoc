@@ -5425,3 +5425,161 @@ de démonstration), `partiduo_j2_rt` (FEC réexporté par `partiduo_j2_fr`),
 * L'extourne d'une opération diverse est lettrée avec l'écriture annulée,
   compte par compte (codes `B` et `C` au FEC) ; le FEC réexporté se reprend
   au centime dans une instance neuve.
+
+== Critique de complétude (27 septembre 2026)
+
+Comparaison de ce qui est livré au prompt (section « Prompt »), aux ADR-001
+à 006 et à la maquette. Écarts comblés ci-dessous ; écarts restants dans
+BLOCAGES (B-CRIT-001 à B-CRIT-004).
+
+=== D-CLO-001 — Écritures de fin d'exercice proposées équilibrées (critique ; ADR-006 D1 « clôture »)
+
+*Contexte.* Les éditions partent du premier jour de l'exercice (lot 3) :
+sans écriture d'à-nouveaux, le bilan d'un second exercice ignorait les
+soldes du premier, et le menu `ACC_CLOSING` ne menait à aucun écran.
+NOALYSS (`Operation_Closing`, `Operation_Opening`) prépare un brouillon
+déséquilibré que l'utilisateur complète puis transfère dans un journal.
+
+*Choix.* Le cœur propose (`closing_proposal`, `opening_proposal`) une
+écriture *équilibrée* : clôture = comptes 6 et 7 soldés, résultat au compte
+de bénéfice ou de perte ; réouverture = soldes des autres comptes à la fin
+de l'exercice précédent, par compte et par fiche, résultat non clôturé au
+compte de résultat. Passage par `post_entry` dans un journal d'opérations
+diverses, référence `closing:<id>` / `opening:<id>` (index unique
+`accounting_entry_source` : une écriture en vigueur par exercice et par
+sorte, l'extourne permet de la refaire), verrou consultatif par exercice.
+Une fiche désactivée est omise de sa ligne (le compte reste). Toutes les
+écritures comptent, quel que soit le journal (droits par journal ignorés
+pour le calcul, la commande exige `accounting.period.close`). Contrat :
+link:doc/api/accounting-closing.adoc[].
+
+*Alternative écartée.* Brouillon à compléter comme NOALYSS : une table de
+plus et une étape de transfert, pour un résultat que le cœur sait calculer.
+
+=== D-CLO-002 — Comptes de résultat proposés : 120 / 129 (FR), 140 / 141 (BE)
+
+*Contexte.* Le plan FR de NOALYSS (`mod2`) n'a que `12` (non utilisable
+directement) ; le plan BE a `140` et `141`.
+
+*Choix.* Proposition par régime, modifiable à chaque appel ; un compte
+absent est signalé (`result_account_missing`) et l'interface propose de le
+créer. Les plans initiaux ne sont pas modifiés (les comptes attendus par les
+specs restent les mêmes).
+
+*Alternative écartée.* Ajouter 120 et 129 au plan FR initial : changement du
+jeu de données livré pour un besoin couvert par un lien de création.
+
+=== D-CLO-003 — Amendement proposé au plan FR initial
+
+Proposer l'ajout de `120` et `129` au plan FR initial à la prochaine révision
+du jeu de données (compteur des specs de provisionnement à relever).
+
+=== D-REC-001 — Rapprochement bancaire : relevés en table, écritures qui les citent (critique ; ADR-006 D1)
+
+*Contexte.* ADR-006 D1 range le rapprochement dans la Comptabilité ; rien ne
+l'implémentait. NOALYSS (`compta_fin_rec.inc.php`) écrit le numéro de relevé
+dans `jrn.jr_pj_number` et contrôle que le total coché égale l'écart entre
+les soldes de début et de fin du relevé.
+
+*Choix.* Migration accounting 0008 : `accounting_bank_statement` (journal,
+numéro unique par journal, soldes, pièce jointe) et
+`accounting_entry.statement_id`. Montant d'une opération = sa ligne sur le
+compte de la fiche Banque du journal. Commandes `reconcile` / `unreconcile`
+sous `accounting.matching.write` (permission du lettrage réutilisée : pas
+de profil existant à migrer), requêtes `reconciliation`, `bank_statements`,
+`bank_statement`. Menu `ACC_RECONCILIATION` (Consultation). Permis en
+période close (ni date ni montant ne changent). Contrat :
+link:doc/api/accounting-reconciliation.adoc[].
+
+*Alternative écartée.* Reprendre `receipt` (pièce) comme NOALYSS : la pièce
+de l'opération serait écrasée par le numéro du relevé.
+
+=== D-GUEST-001 — Comptable invité en lecture : profil par défaut `ACCOUNTANT_GUEST` (critique ; ADR-006 D4)
+
+*Contexte.* ADR-006 D4 exige un accès invité en lecture pour le comptable
+d'une instance « Facturation seule » ; seul le profil `ACCOUNTANT` (toutes
+les permissions non administratives) existait, et aucun écran ne permettait
+d'inviter qui que ce soit.
+
+*Choix.* Troisième profil par défaut, créé par `ensure_default_profiles` :
+les permissions `*.read` non administratives (consultation, éditions,
+`invoicing.export.read`). Un comptable externe reçoit le rôle `comptable`
+(niveau 3, ADR-002 D4) et ce profil. Les instances existantes le créent par
+le bouton « Créer les profils par défaut manquants » (écran des profils).
+
+*Alternative écartée.* Un rôle `guest` de plus : ADR-002 D4 définit déjà le
+rôle `comptable` ; les droits relèvent du profil.
+
+=== D-CRIT-001 — `API_VERSION` 0.3.0
+
+Relevée comme prévu par D-INV-015 (contrat enrichi des lots 2, F, 3 à 6 et
+de cette critique, sans rupture). `requires_core` de SKEL (`~> 0.1`) porte
+sur `VERSION`, inchangée.
+
+=== D-CRIT-002 — CI de `partiduo-skel` et `partiduo-migrate` ; dépendances PDF de la CI du cœur
+
+*Contexte.* Seuls le cœur et l'interface avaient une CI ; le script
+`ci-checkout-deps.sh` du cœur ne clonait pas `pdf`, `pdf-a`, `pdf-validate`
+(dépendances `path:` du lot F) : la CI aurait échoué à `shards install`.
+
+*Choix.* Script du cœur complété ; `.github/workflows/ci.yml` et
+`scripts/ci-checkout-deps.sh` dans `partiduo-skel` (format, Ameba, specs sur
+PostgreSQL) et `partiduo-migrate` (idem, plus sources SQL de NOALYSS clonées
+en lecture seule, `NOALYSS_APP`, et base de démonstration par
+`scripts/noalyss-demo`) ; `NOALYSS_DEMO_URL` permet aux specs de la reprise
+de joindre la base de démonstration en TCP. Non exécutées (B-002).
+
+=== D-UI-051 — Utilisateurs, profils, droits par journal, audit (critique, interface)
+
+*Choix.* Écrans `/settings/users` (liste, invitation, consultation,
+modification, révocation, réouverture, déblocage, nouvelle invitation),
+`/settings/users/<id>/ledgers` (droits par journal), `/settings/profiles`
+(cases par pièce active ; permissions d'une pièce inactive conservées à la
+modification), `/settings/audit`. L'invitation part par courriel à
+l'adresse enregistrée (comme les liens de remise à zéro, D-UI-021) *et* le
+lien est affiché à l'administrateur, qui peut le transmettre si le courriel
+n'arrive pas (même logique que `provision`, D-J1-001). Le menu `CORE_USERS`
+(permission `core.users.manage`) mène à l'écran ; les commandes exigent les
+permissions du contrat (`auth.users.manage`, `auth.profiles.manage`).
+
+*Alternative écartée.* Ne pas afficher le lien : un dossier sans courrier
+sortant configuré ne pourrait inviter personne.
+
+=== D-UI-052 — Société, modules, devises, catégories de fiches (critique, interface)
+
+*Choix.* Écrans génériques du référentiel (D-UI-016) pour les menus
+`core:company`, `core:modules`, `core:currencies`, `cards:categories`, qui
+restaient désactivés : société (régime fiscal affiché, jamais modifiable),
+modules (activer, désactiver ; refus du contrat affichés, socle sans bouton),
+devises et cours, catégories et attributs propres (trois lignes vides pour
+de nouveaux attributs ; bornes des attributs existants conservées).
+
+=== D-UI-053 — Fin d'exercice (critique, interface)
+
+*Choix.* `/accounting/closing` : choix de l'exercice, de l'écriture et des
+comptes de résultat (GET), écriture proposée en tableau avec résultat et
+avertissements, formulaire de passage (journal d'opérations diverses,
+libellé). HTMX inutile : un seul aller-retour.
+
+=== D-UI-054 — Rapprochement bancaire en HTMX, sans Opal (critique, interface)
+
+*Contexte.* ADR-001 D4 et ADR-005 D5 citent le rapprochement parmi les
+écrans candidats à Opal.
+
+*Choix.* Formulaire HTML utilisable sans JavaScript ; HTMX recalcule à
+chaque case l'écart du relevé, le montant coché et le reste
+(`/accounting/reconciliation/check`), comme le lettrage. Aucun besoin
+d'ergonomie constaté au-delà : pas de passage en Opal (réversible, le paquet
+`entry.js` montre la voie). Soldes bornés à l'exercice de la période de
+travail.
+
+=== D-UI-055 — Lignes de titre et de sous-total dans l'édition des documents (critique ; ADR-006 D5)
+
+*Choix.* Une liste « Mise en forme » par ligne (ligne, titre, sous-total) :
+un titre garde sa désignation, un sous-total n'a aucun champ ; relues à la
+modification d'un brouillon. Le cœur calcule le sous-total.
+
+=== D-UI-056 — Rappels du Suivi dans « À traiter » (critique, interface)
+
+*Choix.* Le tableau de bord ajoute les rappels du jour et en retard du Suivi
+(`Api::Followup.reminders`), trois premiers cités, lien vers les rappels.

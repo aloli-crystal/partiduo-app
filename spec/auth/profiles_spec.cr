@@ -9,9 +9,9 @@ end
 describe "Profils et droits (héritiers de profile_menu, ADR-003 D4)" do
   it "crée les profils par défaut une seule fois" do
     first = Partiduo::Api::Auth.ensure_default_profiles(AuthSpec.system)
-    first.map(&.code).should eq(["ADMIN", "ACCOUNTANT"])
+    first.map(&.code).should eq(["ADMIN", "ACCOUNTANT", "ACCOUNTANT_GUEST"])
     first.first.admin.should be_true
-    accountant = first.last
+    accountant = first[1]
     accountant.permissions.should_not be_empty
     accountant.permissions.none? { |name| Partiduo::Auth::Permissions.administrative?(name) }.should be_true
     Partiduo::Api::Auth.ensure_default_profiles(AuthSpec.system).map(&.id).should eq(first.map(&.id))

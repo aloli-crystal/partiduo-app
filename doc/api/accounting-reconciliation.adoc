@@ -1,0 +1,48 @@
+= Comptabilité : rapprochement bancaire
+:toc: left
+:toc-title: Table des matières
+:icons: font
+:source-language: crystal
+
+Rapprochement des opérations d'un journal financier avec les relevés de la
+banque, héritier de `compta_fin_rec.inc.php` (NOALYSS inscrivait le numéro du
+relevé dans `jrn.jr_pj_number`). Contrat : `Partiduo::Api::Accounting`
+(`src/accounting/api/reconciliation.cr`), migration accounting 0008.
+Décision : `DECISIONS.adoc`, D-REC-001.
+
+== Données
+
+* `accounting_bank_statement` : journal, numéro (unique dans le journal),
+  soldes de début et de fin (facultatifs), pièce jointe du socle.
+* `accounting_entry.statement_id` : relevé qui porte l'écriture. Rapprocher ne
+  change ni la date ni les montants : c'est permis en période close, comme la
+  pièce.
+
+== Requêtes (`accounting.entry.read`, journal visible)
+
+[source]
+----
+Api::Accounting.reconciliation(actor, ledger_id, date_from = nil, date_to = nil) : ReconciliationView
+Api::Accounting.bank_statements(actor, ledger_id) : Array(BankStatementView)
+Api::Accounting.bank_statement(actor, id) : BankStatementDetailView
+----
+
+Montant d'une opération : sa ligne sur le compte de la fiche Banque du
+journal (`qf_amount`), entrée positive. Soldes : compte de la fiche Banque,
+tous journaux, entre les dates données (l'exercice de travail dans
+l'interface), total, part rapprochée et non rapprochée.
+
+== Commandes (`accounting.matching.write`, journal accessible en écriture)
+
+[source]
+----
+Api::Accounting.reconcile(actor, ReconcileInput) : Result(BankStatementView)
+Api::Accounting.unreconcile(actor, statement_id) : Result(Nil)
+----
+
+Règle de NOALYSS : si les soldes de début et de fin sont donnés et
+différents, le total des opérations cochées doit égaler leur écart
+(`accounting.errors.reconciliation.mismatch`, montants `expected`,
+`selected`, `difference`). Autres erreurs : `.reference.blank`,
+`.reference.too_long`, `.reference.taken`, `.entries.blank`,
+`.entries.invalid` (opération d'un autre journal ou déjà rapprochée).

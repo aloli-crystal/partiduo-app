@@ -47,6 +47,9 @@ module Partiduo
       # jamais retiré (migration accounting 0004).
       field :reversed, :bool, default: false
       field :created_by_id, :big_int, null: true, blank: true
+      # Relevé bancaire rapproché (`accounting_bank_statement`, migration
+      # accounting 0008) ; clé étrangère posée par la migration.
+      field :statement_id, :big_int, null: true, blank: true
 
       with_timestamp_fields
     end

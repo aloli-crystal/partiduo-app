@@ -1,0 +1,60 @@
+= Comptabilité : fin d'exercice (clôture et à-nouveaux)
+:toc: left
+:toc-title: Table des matières
+:icons: font
+:source-language: crystal
+
+Écritures de fin d'exercice du module Comptabilité, héritières
+d'`Operation_Closing` et d'`Operation_Opening` (NOALYSS,
+`operation_exercice.inc.php`). Contrat : `Partiduo::Api::Accounting`
+(`src/accounting/api/closing.cr`) ; toutes les fonctions exigent
+`accounting.period.close` et lèvent `ModuleDisabled` si la Comptabilité est
+inactive. Décisions : `DECISIONS.adoc`, D-CLO-001 à D-CLO-003.
+
+== Pourquoi
+
+Les éditions partent du premier jour de l'exercice (lot 3) : sans écriture
+de réouverture, le bilan d'un second exercice ignore les soldes de fin du
+premier. L'écriture d'à-nouveaux reporte ces soldes.
+
+== Requêtes
+
+[source]
+----
+Api::Accounting.closing_proposal(actor, fiscal_year_id, profit_account = nil, loss_account = nil) : ClosingProposalView
+Api::Accounting.opening_proposal(actor, fiscal_year_id, profit_account = nil, loss_account = nil) : ClosingProposalView
+----
+
+* *Clôture* : chaque compte des classes 6 et 7 dont le solde de l'exercice
+  n'est pas nul reçoit une ligne de sens inverse ; la différence (le résultat)
+  va au compte de bénéfice (crédit) ou de perte (débit). Date : dernier jour
+  de l'exercice.
+* *Réouverture* : les soldes des autres comptes à la fin de l'exercice
+  précédent (celui qui s'achève la veille du premier jour), *par compte et par
+  fiche* comme NOALYSS ; si la clôture n'a pas été passée, le résultat de
+  l'exercice précédent va au compte de résultat. Date : premier jour de
+  l'exercice.
+* Comptes de résultat proposés (D-CLO-002) : régime `fr` 120 / 129, régime
+  `be` 140 / 141. `result_account_missing` signale un compte absent du plan
+  ou non utilisable directement : l'utilisateur le crée ou en choisit un autre.
+* `posted_entry_id` : écriture déjà passée pour cet exercice et cette sorte.
+
+== Commandes
+
+[source]
+----
+Api::Accounting.post_closing_entry(actor, ClosingInput) : Result(EntryView)
+Api::Accounting.post_opening_entry(actor, ClosingInput) : Result(EntryView)
+----
+
+`ClosingInput(fiscal_year_id, ledger_id, profit_account?, loss_account?,
+label?)`. L'écriture proposée est passée par `post_entry` (mêmes contrôles :
+période ouverte, comptes, droits sur le journal ; `entry.posted` publié) dans
+un journal d'opérations diverses, avec la référence `closing:<id>` ou
+`opening:<id>` : l'index unique `accounting_entry_source` n'admet qu'une
+écriture en vigueur par exercice et par sorte ; l'extourner permet de la
+refaire. Une fiche désactivée est omise de sa ligne (le compte reste).
+
+Erreurs : `accounting.errors.closing.already_posted`, `.nothing`,
+`.ledger_kind`, `.fiscal_year_closed`, `.no_previous`, puis celles de
+`post_entry`.

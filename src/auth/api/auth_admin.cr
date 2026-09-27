@@ -262,20 +262,36 @@ module Partiduo
       end
 
       # Profils par défaut, créés s'ils manquent (provisionnement) :
-      # administrateur (toutes les permissions) et comptable (toutes les
-      # permissions non administratives déclarées).
+      # administrateur (toutes les permissions), comptable (toutes les
+      # permissions non administratives déclarées) et comptable invité en
+      # lecture (ADR-006 D4 : consultation et transmission au comptable,
+      # permissions `*.read` non administratives, D-GUEST-001).
       def self.ensure_default_profiles(actor : Actor) : Array(ProfileView)
         Guard.authorize!(actor, "auth.profiles.manage", module_code: "AUTH")
         admin = Partiduo::Auth::Profile.filter(code: "ADMIN").first ||
                 Partiduo::Auth::Profile.create!(code: "ADMIN", name: I18n.t("auth.profiles.admin"), admin: true)
+        names = Partiduo::Modules.manifests.values.flat_map(&.permissions)
+          .reject { |name| Partiduo::Auth::Permissions.administrative?(name) }
         accountant = Partiduo::Auth::Profile.filter(code: "ACCOUNTANT").first
         if accountant.nil?
           accountant = Partiduo::Auth::Profile.create!(code: "ACCOUNTANT", name: I18n.t("auth.profiles.accountant"), admin: false)
-          names = Partiduo::Modules.manifests.values.flat_map(&.permissions)
-            .reject { |name| Partiduo::Auth::Permissions.administrative?(name) }
           store_permissions(accountant, names)
         end
-        [profile_view(admin), profile_view(accountant)]
+        guest = Partiduo::Auth::Profile.filter(code: GUEST_PROFILE).first
+        if guest.nil?
+          guest = Partiduo::Auth::Profile.create!(code: GUEST_PROFILE, name: I18n.t("auth.profiles.accountant_guest"),
+            description: I18n.t("auth.profiles.accountant_guest_description"), admin: false)
+          store_permissions(guest, names.select { |name| read_only_permission?(name) })
+        end
+        [profile_view(admin), profile_view(accountant), profile_view(guest)]
+      end
+
+      # Profil du comptable invité en lecture (ADR-006 D4).
+      GUEST_PROFILE = "ACCOUNTANT_GUEST"
+
+      # Permission de lecture : consultation, éditions, exports.
+      def self.read_only_permission?(name : String) : Bool
+        name.ends_with?(".read")
       end
 
       # --- Fournisseurs d'identité ------------------------------------------------

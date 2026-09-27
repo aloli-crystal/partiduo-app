@@ -31,6 +31,7 @@ fr:
       acc_accounts: "Comptes et tiers"
       acc_entries: "Écritures"
       acc_matching: "Lettrage"
+      acc_reconciliation: "Rapprochement bancaire"
       acc_chart: "Plan comptable"
       acc_ledgers: "Journaux"
       acc_trial_balance: "Balance"
@@ -97,7 +98,28 @@ fr:
         misc:
           name: "Opérations diverses"
           description: "Amortissements, TVA et autres opérations"
+    closing:
+      closing_label: "Écriture de clôture de l'exercice %{year}"
+      opening_label: "À-nouveaux de l'exercice %{year}"
+    reconciliation:
+      statement_label: "Relevé %{reference}"
     errors:
+      closing:
+        already_posted: "Cette écriture de fin d'exercice est déjà passée ; extournez-la pour la refaire."
+        nothing: "Aucun solde à reporter : il n'y a rien à passer."
+        ledger_kind: "Le journal %{code} n'est pas un journal d'opérations diverses."
+        fiscal_year_closed: "L'exercice est clos : rouvrez-le avant de passer cette écriture."
+        no_previous: "Aucun exercice ne s'achève la veille du premier jour de cet exercice."
+      reconciliation:
+        ledger_kind: "Le journal %{code} n'est pas un journal financier."
+        reference:
+          blank: "Indiquez le numéro du relevé."
+          too_long: "Le numéro du relevé compte au plus %{max} caractères."
+          taken: "Le relevé %{reference} est déjà rapproché dans ce journal."
+        entries:
+          blank: "Cochez au moins une opération."
+          invalid: "L'opération %{id} n'appartient pas à ce journal ou est déjà rapprochée."
+        mismatch: "D'après le relevé, %{expected} devraient être rapprochés, alors que la sélection totalise %{selected} (écart %{difference})."
       vat_return:
         form:
           invalid: "Le formulaire « %{value} » n'existe pas."

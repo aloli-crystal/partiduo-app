@@ -31,6 +31,7 @@ en:
       acc_accounts: "Accounts and parties"
       acc_entries: "Entries"
       acc_matching: "Matching"
+      acc_reconciliation: "Bank reconciliation"
       acc_chart: "Chart of accounts"
       acc_ledgers: "Journals"
       acc_trial_balance: "Trial balance"
@@ -97,7 +98,28 @@ en:
         misc:
           name: "Miscellaneous operations"
           description: "Depreciation, VAT and other operations"
+    closing:
+      closing_label: "Closing entry for financial year %{year}"
+      opening_label: "Opening balances for financial year %{year}"
+    reconciliation:
+      statement_label: "Statement %{reference}"
     errors:
+      closing:
+        already_posted: "This year-end entry has already been posted; reverse it to post it again."
+        nothing: "No balance to carry: there is nothing to post."
+        ledger_kind: "Ledger %{code} is not a miscellaneous operations ledger."
+        fiscal_year_closed: "The financial year is closed: reopen it before posting this entry."
+        no_previous: "No financial year ends the day before this financial year starts."
+      reconciliation:
+        ledger_kind: "Ledger %{code} is not a financial ledger."
+        reference:
+          blank: "Enter the statement number."
+          too_long: "The statement number has at most %{max} characters."
+          taken: "Statement %{reference} is already reconciled in this ledger."
+        entries:
+          blank: "Tick at least one operation."
+          invalid: "Operation %{id} does not belong to this ledger or is already reconciled."
+        mismatch: "According to the statement, %{expected} should be reconciled, but the selection totals %{selected} (difference %{difference})."
       vat_return:
         form:
           invalid: "The form “%{value}” does not exist."

@@ -9,7 +9,7 @@ cd "$(dirname "$0")/.."
 target="$(cd ../.. && pwd)"
 base="${PARTIDUO_DEPS_BASE_URL:-https://github.com/aloli-crystal}"
 
-for shard in marten authn password-policy totp webauthn jose saml; do
+for shard in marten authn password-policy totp webauthn jose saml pdf pdf-a pdf-validate; do
   if [ ! -d "$target/$shard" ]; then
     git clone --depth 1 "$base/$shard.git" "$target/$shard"
   fi
