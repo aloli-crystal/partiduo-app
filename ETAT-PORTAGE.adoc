@@ -1098,6 +1098,96 @@ des fiches en bloc par le contrat du socle (D-STK-013) ; livraison par ligne
 (D-STK-010) ; rappels sur le tableau de bord, actions liées sur un document
 de la Facturation (interface).
 
+== Vérification du jalon F (27 septembre 2026)
+
+Parcours de bout en bout sur deux instances neuves provisionnées par
+`bin/partiduo-provision` (distribution cœur + interface + SKEL), régime FR :
+`jf-inv` (`--modules invoicing`, « Facturation seule », base
+`partiduo_j3_inv`) et `jf-both` (`--modules accounting,invoicing`, base
+`partiduo_j3_both`). Script : `partiduo-skel/scripts/demo_jalon_f.cr`
+(D-JF-001), par l'interface, en mémoire puis contre un serveur réellement
+démarré (`scripts/server.cr`, ports 8010 et 8011).
+
+Ce qui marche (vérifié, les deux instances, les deux modes) :
+
+* Enrôlement par l'invitation, connexion ; tableau de bord ; Facturation
+  seule : menus de la Comptabilité absents, `/accounting/entries` en 404.
+* Fiches par l'interface : client (SIREN, TVA, adresse), deux articles
+  (unité, prix, taux normal) ; exercice 2026 (Comptabilité).
+* Devis : totaux instantanés (`/invoicing/documents/check` : 894,80 HT,
+  178,96 TVA, 1 073,76 TTC), brouillon, validation (numéro `D-…`), décision
+  « accepté ».
+* Transformation en facture (lignes recopiées, lien vers le devis dans les
+  deux sens), validation : numéro `F-2026-0001` (puis suivants, sans trou),
+  mentions figées, empreinte vérifiée, modification refusée par la base.
+* PDF téléchargé par l'interface (`Content-Disposition` au numéro),
+  identique au PDF conservé à l'émission ; `pdf-validate` (profil
+  `pdf-a-3b`) : 64 règles sur 65, seule `pdfa3-6.6.4-pdfaid-part-2` en
+  échec (défaut de la règle, B-INV-001 ; XMP `pdfaid:part` = 3,
+  conformance B) ; confirmé par la ligne de commande `pdf-validate`
+  recompilée depuis ses sources ; `factur-x.xml` embarqué
+  (`/AFRelationship /Data`), XMP Factur-X (`INVOICE`, `EN 16931`,
+  version 1.0) ; XML CII : guideline `urn:cen.eu:en16931:2017`, type 380,
+  numéro, `GrandTotalAmount` et `DuePayableAmount` 1073.76.
+* Facturation seule : règlement de 400 € (partiellement payée), solde de
+  673,76 € (payée, action de règlement retirée) ; `invoice.issued` et deux
+  `payment.recorded` consignés au journal des événements ; contrat de la
+  Comptabilité refusé (`ModuleDisabled`) ; facture dans le journal des
+  ventes (CSV).
+* Comptabilité + Facturation : écriture de vente générée à l'émission
+  (V01, pièce = numéro : 706… 800 et 49,80 au crédit par article, 707 45
+  pour la ligne libre, 44571 178,96, client 1 073,76 au débit), consultée
+  à l'écran, absente de « À comptabiliser » ; encaissement saisi en banque
+  (F01, `/accounting/entries/financial`), lettré avec la vente depuis
+  `/accounting/matching` ; `payment.matched` → facture payée, un règlement
+  de 1 073,76 ; lettrage équilibré réunissant exactement les deux lignes
+  (code global, D-JF-003) ; pas de saisie de règlement côté Facturation.
+* Serveur réel : aucune erreur au journal ; page de connexion rendue dans
+  le panneau de navigation (Bulma, polices).
+
+Ce qui ne marchait pas : rien dans le code ; hypothèses du script
+corrigées (montants saisis à la française, taux obligatoire sur une ligne
+libre, code de lettrage global). Remarques non corrigées : D-JF-004.
+
+Limites : parcours dans le navigateur arrêté à la connexion (B-JF-001) ;
+B-INV-001 toujours ouvert.
+
+Specs (base `partiduo_j3_test`), sans changement du code : `partiduo-app`
+933 + 13 en attente (Comptabilité, Analytique, Stock, Suivi), 684 + 41 en
+attente (Facturation, Stock, Suivi), 979 (tous), verts
+(`scripts/specs-modules.sh`) ; `partiduo-ui-bulma` 253 ; `partiduo-skel`
+24. Format du script sans remarque ; `demo_jalon_f.cr` vert sur les deux
+instances, en mémoire et par le serveur (26 étapes pour la Facturation
+seule, 28 avec la Comptabilité ; 31 au premier passage de `jf-both` :
+enrôlement et exercice).
+
+[source,sh]
+----
+cd prod-crystal/partiduo/partiduo-skel
+SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install && shards build partiduo-skel-manage
+MANAGE="$PWD/bin/partiduo-skel-manage"
+cd ../partiduo-app
+bin/partiduo-provision --manage "$MANAGE" --name "Facturation Seule SARL" --regime fr \
+  --siren 732829320 --vat FR44732829320 --admin-email admin@jf-inv.test \
+  --modules invoicing --database partiduo_j3_inv jf-inv
+bin/partiduo-provision --manage "$MANAGE" --name "Compta et Facturation SAS" --regime fr \
+  --siren 552100554 --vat FR96552100554 --admin-email admin@jf-both.test \
+  --modules accounting,invoicing --database partiduo_j3_both jf-both
+cd ../partiduo-skel
+# En mémoire (premier passage : --invitation=<lien affiché par provision>)
+PARTIDUO_MODULES=invoicing DATABASE_URL='postgres:///partiduo_j3_inv?host=/tmp' \
+  crystal run scripts/demo_jalon_f.cr -- --host=jf-inv.partiduo.localhost \
+  --email=admin@jf-inv.test --invitation='<lien>' --pdf-dir=tmp/jalonF
+# Serveur réel, puis le même parcours par HTTP
+PORT=8010 PARTIDUO_MODULES=accounting,invoicing \
+  DATABASE_URL='postgres:///partiduo_j3_both?host=/tmp' crystal run scripts/server.cr &
+PARTIDUO_MODULES=accounting,invoicing DATABASE_URL='postgres:///partiduo_j3_both?host=/tmp' \
+  crystal run scripts/demo_jalon_f.cr -- --host=jf-both.partiduo.localhost \
+  --email=admin@jf-both.test --base-url=http://127.0.0.1:8010
+# Navigateur : http://jf-both.partiduo.localhost:8010/login
+# (mot de passe : --password, défaut Demo-jalonF-Partiduo-2026)
+----
+
 == Vérification du jalon 2 + M (27 septembre 2026)
 
 Parcours de bout en bout sur des instances neuves provisionnées par
@@ -1209,7 +1299,8 @@ dropdb partiduo_j2_fr; dropdb partiduo_j2_fec; rm -rf tmp/instances/j2-*
 . Signaler à l'amont de Marten le piège `db_unique_constraint` (B-REF-001).
 . Toujours ouverts : amendement ADR-005 D3 (`Partiduo::Api::Distribution`,
   D-014) ; CI GitHub non exécutée (B-002) ; serveur HTTP non démarrable dans
-  le bac à sable (B-UI-001).
+  le bac à sable (B-UI-001 : l'écoute est permise depuis la vérification
+  du jalon F ; reste le parcours connecté dans un navigateur, B-JF-001).
 
 == Commandes
 

@@ -5295,6 +5295,79 @@ de zéro que l'utilisateur n'a pas fait, et donc une entrée en stock.
 *Choix.* Le texte indicatif du champ heure passe par
 `ui.followup.hour_placeholder` (fr `hh:mm`, en `HH:MM`, nl `UU:MM`).
 
+== Vérification du jalon F (27 septembre 2026)
+
+=== D-JF-001 — Vérification de bout en bout : `partiduo-skel/scripts/demo_jalon_f.cr` (jalon F)
+
+*Contexte.* Le jalon F se vérifie sur des instances provisionnées
+(« Facturation seule », « Comptabilité + Facturation »), par l'interface,
+alors que les specs vident leur base. L'écoute locale est désormais permise
+dans le bac à sable (B-UI-001 levé pour le serveur).
+
+*Choix.* Un script composé comme la distribution (cœur + interface Bulma +
+SKEL), à côté de `demo_jalon1.cr` (D-J1-003) : enrôlement, fiche client et
+articles, devis saisi (totaux par `check_document`), validé, accepté,
+transformé en facture, facture validée (numéro, mentions, empreinte,
+intangibilité), PDF téléchargé par l'interface, identique au PDF conservé,
+contrôlé par `pdf-validate` (profil `pdf-a-3b`, règle B-INV-001 écartée et
+signalée), XML CII (type 380, numéro, montants) ; puis règlement :
+Facturation seule, deux règlements saisis sur la facture ; Comptabilité +
+Facturation, écriture de vente vérifiée (journal, pièce = numéro, comptes,
+TVA), encaissement saisi en banque et lettré depuis l'écran de lettrage,
+facture payée par `payment.matched`. Deux modes : pile de Marten en mémoire
+(défaut) ou serveur réellement démarré (`--base-url`, `scripts/server.cr`).
+`--pdf-dir` dépose le PDF pour un contrôle indépendant. Code de sortie 1 si
+une étape échoue.
+
+*Alternative écartée.* Spec de bout en bout dans `partiduo-app` : elle
+existe déjà (`spec/integration/`), mais ne passe ni par l'interface ni par
+une instance provisionnée.
+
+=== D-JF-002 — Navigateur du script autonome, sans `scripts/demo/browser.cr` (jalon F)
+
+*Contexte.* Pendant la vérification, un autre travail (jalon 2) extrayait le
+navigateur en mémoire de `demo_jalon1.cr` vers `scripts/demo/browser.cr`,
+non encore commité.
+
+*Choix.* `demo_jalon_f.cr` garde son propre navigateur (`DemoF::Browser`,
+mémoire ou HTTP réel, champs répétés pour le lettrage) : aucune dépendance
+envers un fichier en cours d'écriture par un autre agent. À factoriser avec
+`scripts/demo/browser.cr`, commité depuis (`partiduo-skel` 6f0d0ef) :
+option `--base-url` et `post_pairs` à y reprendre.
+
+*Alternative écartée.* Réutiliser `scripts/demo/browser.cr` : le commit du
+jalon F aurait embarqué ou cassé le travail d'un autre agent.
+
+=== D-JF-003 — Code de lettrage global, lu et non supposé (jalon F)
+
+*Constat.* Le code d'un lettrage est tiré de son identifiant
+(`Matchings.code`, 1 → `A`), global au dossier comme `jnt_letter.jl_id` de
+NOALYSS : le deuxième lettrage du dossier est `B`, quel que soit le compte.
+
+*Choix.* Aucun changement du cœur ; le script lit le code de la ligne
+lettrée et vérifie que le lettrage réunit exactement la vente et
+l'encaissement, équilibré.
+
+*Alternative écartée.* Code par compte (`A` à chaque nouveau tiers) :
+s'écarte de NOALYSS et de la reprise (`partiduo-migrate`).
+
+=== D-JF-004 — Remarques de la vérification, non corrigées (jalon F)
+
+* *Édition d'un brouillon sans JavaScript* : le bloc des totaux
+  (`#pd-doc-totals`) n'est rempli que par HTMX (`hx-trigger="load, …"`) ;
+  sans JavaScript, seuls les montants par ligne s'affichent. Proposition :
+  rendre `_totals.html` côté serveur avec les totaux enregistrés du
+  brouillon. Non fait : les formulaires restent utilisables, rien n'est
+  faux.
+* *Ligne libre sans taux de TVA* : refusée (« Choisissez un taux de TVA ») ;
+  le choix par défaut « Celle de l'article » n'a pas de sens pour une ligne
+  libre. Conforme au contrat ; l'interface pourrait proposer le taux normal.
+* *Binaire `prod-crystal/pdf-validate/bin/pdf-validate`* : ancien, ne
+  connaît pas le profil `pdf-a-3b` ; la vérification indépendante a été
+  faite avec la ligne de commande recompilée depuis les sources
+  (`crystal build src/cli.cr`, hors du dépôt) : 64 règles sur 65, seule
+  `pdfa3-6.6.4-pdfaid-part-2` en échec (B-INV-001, toujours ouvert).
+
 == Vérification du jalon 2 + M (27 septembre 2026)
 
 === D-J2-001 — Démonstration de bout en bout : `partiduo-skel/scripts/demo_jalon2.cr` (jalon 2)

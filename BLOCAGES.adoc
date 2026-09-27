@@ -353,3 +353,21 @@ attendant, la reprise des actions et des dépôts (`partiduo-migrate`, à
 écrire) doit au minimum *avertir* dans son rapport quand `ag_dest` n'est pas
 vide (valeur autre que « tous ») ou quand `profile_sec_repository` contient
 des lignes, en indiquant que le cloisonnement ne sera pas appliqué.
+
+== B-JF-001 — Parcours du jalon F dans le navigateur arrêté à la page de connexion (jalon F)
+
+*Constat.* L'écoute locale est désormais permise : `scripts/server.cr`
+(partiduo-skel) sert les deux instances (`127.0.0.1:8010` et `:8011`) et
+le panneau de navigation affiche `http://jf-both.partiduo.localhost:8010/login`
+avec Bulma et les polices (B-UI-001 levé pour le serveur). La suite du
+parcours demande de saisir un mot de passe dans le navigateur, ce que
+l'agent ne fait pas pour une tâche lancée par un script d'orchestration.
+
+*Contournement.* Parcours complet par requêtes HTTP réelles vers le serveur
+démarré (`demo_jalon_f.cr --base-url=…`) : mêmes pages, formulaires, jetons
+CSRF, cookies de session et téléchargement du PDF qu'un navigateur ; aucune
+erreur dans le journal du serveur.
+
+*Levée.* L'utilisateur se connecte lui-même dans un navigateur (procédure
+dans `ETAT-PORTAGE.adoc` § « Vérification du jalon F ») et refait le
+parcours au clavier (B-UI-007).
