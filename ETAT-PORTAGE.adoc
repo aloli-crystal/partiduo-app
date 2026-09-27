@@ -21,7 +21,7 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |1 |Référentiel : tiers, articles, TVA, devises, exercices et périodes, pièces jointes ; plan comptable, journaux ; écrans ; `partiduo-skel` |*Terminé*
 |2 |Écritures, consultation, lettrage |*Terminé* (clôture commune « Clôture du lot 2F »)
 |F |Module Facturation |*Terminé* (clôture commune « Clôture du lot 2F »)
-|M |`partiduo-migrate` |À faire
+|M |`partiduo-migrate` |*Terminé* (FEC et base NOALYSS ; analytique en annexe jusqu'au lot 5 ; clôture « Clôture du lot M »)
 |3–6 |Éditions, TVA, analytique, stock |À faire
 |===
 
@@ -597,9 +597,112 @@ Vérifications (base de test `partiduo_test_2F_final`) :
 * `marten migrate` sur base vierge (`partiduo_migrate_2F`) : 14 migrations
   du cœur appliquées, `migrate --check` sans migration en attente.
 
+== Lot M — partiduo-migrate (27 septembre 2026)
+
+Dépôt `prod-crystal/partiduo/partiduo-migrate` (ADR-001 D5, décisions
+D-MIG-001 à D-MIG-021, blocage B-MIG-001 ; mode d'emploi : son
+`README.adoc`) :
+
+* Outil en ligne de commande `bin/partiduo-migrate` (`import`, `check`,
+  `export-fec`), dépendant du cœur en `path:`, qui n'écrit que par
+  `Partiduo::Api` (spec d'architecture) dans une instance provisionnée et
+  sans écriture, avec `Actor.system`.
+* Source FEC (article A47 A-1) : tabulation ou barre verticale, UTF-8 (BOM),
+  ISO 8859-15, Windows-1252, `Debit`/`Credit` ou `Montant`/`Sens`, contrôle
+  ligne à ligne ; plan comptable, exercices, journaux, tiers en fiches,
+  écritures (`post_entry`), lettrage (`match_lines`, partiel compris).
+* Source base NOALYSS DBVERSION 208 (lecture seule) : plan complet, journaux
+  et fiche Banque, fiches complètes (colonnes typées, attributs propres
+  `noalyss_<ad_id>`, valeurs refusées conservées), taux de TVA et leurs
+  comptes, exercices et périodes closes, échéances, pièces jointes
+  (`store_attachment`) ; analytique et pièces supplémentaires relevées en
+  annexe ; jamais les utilisateurs ni leurs secrets. FEC complété par sa base
+  (`--fec` et `--noalyss`).
+* Rapport de réconciliation AsciiDoc + CSV : balance générale, balance âgée
+  des tiers, totaux par journal, par période et généraux, avant / après ;
+  tout écart ou toute anomalie bloquante annule la reprise entière (une
+  transaction) et rend le code de sortie 1 ; `--dry-run`, `--strict`.
+* Démonstration : `scripts/noalyss-demo` crée `partiduo_noalyss_demo` (mod2 +
+  correctifs 202 à 207 + exercice 2024 : 133 opérations, 43 lettrages,
+  14 pièces jointes, analytique) ; `demo/732829320FEC20241231.txt` en est
+  l'export FEC (vérifié octet pour octet), repris au centime.
+* Specs (base `partiduo_test_m_migrate`) : 31 exemples verts — lecture et
+  écriture du FEC, reprise du FEC de démonstration (balances, balance âgée,
+  lettrages, fiches), rapport, essai à blanc, instance non neuve ou non
+  provisionnée, lettrage impossible (annulation), pièces en double, reprise
+  de la base NOALYSS et du FEC complété, valeur de fiche refusée, ligne de
+  commande (codes 0, 1, 2), frontière du contrat. Format et Ameba sans
+  remarque.
+* Specs du testeur (base `partiduo_test_M_specs`) : 66 exemples verts. Ajouts :
+  règles de reprise d'un FEC (lettrage réutilisé par compte auxiliaire,
+  nature des journaux, exercice d'après la clôture ou `--fiscal-start`,
+  pièces tronquées et dédoublées, lignes à zéro, écriture refusée par le
+  socle, mode strict, Comptabilité inactive, acteur sans droits), bornes de
+  la balance âgée et écart d'un centime, défauts de lecture du FEC, codes de
+  sortie des sources illisibles, base NOALYSS en lecture seule ou d'une autre
+  DBVERSION, journaux, comptes, périodes closes et fiches désactivées de
+  NOALYSS. Deux défauts corrigés (D-MIG-013).
+* Reprise de bout en bout vérifiée par le binaire sur une instance
+  provisionnée par `bin/partiduo-provision` (`partiduo_m_demo`) : essai à
+  blanc, reprise de la base NOALYSS, second passage refusé.
+
+Reste : analytique au lot 5 (B-MIG-001) ; balance âgée et totaux à
+rapprocher des éditions du lot 3 quand elles existeront ; amendement proposé
+`create_card` avec compte (D-MIG-006).
+
+== Clôture du lot M — relecture et vérifications (27 septembre 2026)
+
+Remarques de relecture corrigées dans `partiduo-migrate` (décisions
+D-MIG-014 à D-MIG-021) :
+
+* *Exercices NOALYSS* : les exercices de la source sont repris tels quels
+  (exercice décalé, premier exercice de 18 mois, période d'ouverture ou de
+  clôture d'un jour) ; seules les dates d'écritures qu'aucune période ne
+  couvre reçoivent un exercice, aligné sur les exercices voisins ; une
+  période n'est fermée que si toutes les périodes NOALYSS qu'elle recouvre
+  sont closes (D-MIG-014).
+* *Contrôle de lecture* : la source est relue indépendamment du modèle (FEC
+  totalisé sur les montants bruts pendant la lecture ; base NOALYSS relue
+  par agrégats sur `jrnx`) et comparée à lui par compte, journal et mois ;
+  section du rapport et `lecture-source.csv`, tout écart est un échec
+  (D-MIG-015).
+* *Collisions de codes* : deux taux de TVA ou deux journaux source qui
+  donnent le même code restent distincts (code suffixé, consigné) ; un taux
+  du jeu initial n'est mis à jour que s'il a le même taux ; pièces uniques
+  par journal cible (D-MIG-016).
+* *i18n* : messages, anomalies, notes, rapport et CSV en fr, en et nl
+  (`config/locales`, embarqués), option `--locale` ; clé
+  `migrate.rolled_back` définie (D-MIG-017).
+* Mineures : type des comptes d'un FEC par compte parent de l'instance ou
+  table PCG (D-MIG-018) ; montants en devise, dates de lettrage et de pièce
+  signalés au rapport (D-MIG-019) ; ligne FEC à zones en trop refusée,
+  Windows-1252 reconnu (D-MIG-020) ; exception en anomalie « interne »
+  (rapport écrit, code 1), URL NOALYSS expurgée du mot de passe et
+  avertissement hors socket Unix, cellules CSV neutralisées contre les
+  formules (D-MIG-021).
+
+Vérifications (base de test `partiduo_test_M_final`) :
+
+* `partiduo-migrate` : 89 exemples verts (nouveaux fichiers
+  `spec/partiduo_migrate/fiscal_years_spec.cr`, `collisions_spec.cr`,
+  `reading_control_spec.cr`) ; `crystal tool format --check` et Ameba sans
+  remarque ; binaire construit et essayé hors du dépôt (`check` en `nl`,
+  base NOALYSS de démonstration).
+* `partiduo-app` (inchangé hors documentation) : 627 exemples + 13 en
+  attente (Comptabilité seule), 549 + 15 en attente (Facturation seule),
+  673 (les deux), tous verts.
+* `marten migrate` sur base vierge (`partiduo_migrate_M`) : 14 migrations
+  du cœur appliquées, `migrate --check` sans migration en attente.
+
 == Prochaines étapes
 
-. Lot M : `partiduo-migrate` (reprise d'un dossier NOALYSS).
+. Lot 3 : éditions (balance, grand livre, journaux, balance âgée, bilan et
+  compte de résultat) ; y rapprocher la réconciliation de
+  `partiduo-migrate` (balance âgée « avant » par un lettrage relu en SQL,
+  D-MIG-015) et le type des comptes repris (D-MIG-018).
+. Reprise : devises des écritures à passer à `post_entry` quand la source
+  n'en a qu'une (D-MIG-019) ; analytique au lot 5 (B-MIG-001) ; amendement
+  proposé `create_card` avec compte (D-MIG-006).
 . Relever `API_VERSION` (contrat enrichi pendant les lots 2 et F, D-INV-015)
   et faire adopter l'amendement ADR-003 D7 (`payment.unmatched`, D-2F-003).
 . Accès invité du comptable (ADR-006 D4, rôle `comptable` d'ADR-002).
@@ -650,4 +753,17 @@ cd prod-crystal/partiduo/partiduo-skel
 SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install
 crystal run manage.cr -- migrate                   # cœur + extension
 DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' crystal spec
+----
+
+Reprise (`partiduo-migrate`) :
+
+[source,sh]
+----
+cd prod-crystal/partiduo/partiduo-migrate
+SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install && shards build partiduo-migrate
+scripts/noalyss-demo                               # base NOALYSS de démonstration
+DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' crystal spec
+DATABASE_URL='postgres:///partiduo_<dossier>?host=/tmp' bin/partiduo-migrate import \
+  --fec demo/732829320FEC20241231.txt --report rapport/ [--locale en|nl] [--dry-run]
+crystal tool format src spec config && ameba
 ----

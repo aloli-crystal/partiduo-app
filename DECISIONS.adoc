@@ -3156,3 +3156,393 @@ paramètre remplacerait la variable).
   relances si un doublon devient possible (aucun statut à réserver
   aujourd'hui).
 * Téléversement du logo d'un modèle depuis l'écran (D-2F-011).
+
+=== D-MIG-001 — `partiduo-migrate` : dépôt, dépendances, frontière (lot M, migrate)
+
+*Contexte.* ADR-001 D5 : outil dans son propre dépôt, dépendant du cœur
+comme shard, écrivant *exclusivement* par ses services publics.
+
+*Choix.* Dépôt `prod-crystal/partiduo/partiduo-migrate` (branche
+`development`, AGPL v3), `partiduo` et `marten` en `path:` avec
+`shard.override.yml` (D-003). L'outil ne cite du cœur que `Partiduo::Api` et
+`Partiduo::API_VERSION` ; il n'exécute aucune requête SQL sur la base de
+l'instance (la base NOALYSS source est lue en SQL, en session
+`READ ONLY`). Une spec d'architecture le vérifie (références au cœur,
+requêtes, tables d'utilisateurs NOALYSS jamais lues, en-têtes SPDX).
+L'acteur est `Actor.system` (convention C2 pour les outils en ligne de
+commande). Préfixe des décisions : `D-MIG-`.
+
+*Alternative écartée.* Un module Marten dans `partiduo-app` : contraire à
+l'ADR (l'outil ne sert qu'une fois par dossier).
+
+=== D-MIG-002 — Une transaction par reprise ; échec = rien de conservé (lot M, migrate)
+
+*Contexte.* « Une migration qui ne réconcilie pas au centime près est un
+échec, pas un avertissement » (ADR-001 D5) ; une reprise interrompue ne
+doit pas laisser une instance à moitié alimentée.
+
+*Choix.* Reprise, relecture « après » et comparaison dans *un seul*
+`Partiduo::Api::Transaction.run` ; chaque commande du contrat y tourne dans
+son point de sauvegarde (D-024), son refus devient une anomalie. La
+transaction est annulée si une anomalie est bloquante (écriture, lettrage,
+compte, journal, exercice refusés), si un écart existe, ou en essai à blanc
+(`--dry-run`) ; le rapport est écrit dans tous les cas. Anomalies non
+bloquantes (détail de fiche, taux de TVA, pièce jointe) : consignées,
+bloquantes avec `--strict`. L'instance doit être provisionnée, avoir la
+Comptabilité active et *aucune écriture* (instance neuve).
+
+*Alternative écartée.* Valider au fil de l'eau et « nettoyer » en cas
+d'échec : impossible sans effacer des écritures, ce que le contrat refuse
+(extourne seulement).
+
+=== D-MIG-003 — Réconciliation : clés traduites, règles du relevé de l'instance (lot M, migrate)
+
+*Contexte.* Comparer « avant / après » suppose des clés communes et les
+mêmes règles de calcul, notamment pour la balance âgée.
+
+*Choix.* Les chiffres « avant » sont calculés sur la source traduite par les
+correspondances de la reprise (compte normalisé, code de journal, quick
+code) ; les correspondances qui changent un identifiant sont publiées au
+rapport. Balance générale par compte (lignes, débit, crédit, solde), totaux
+par journal et par mois (écritures, débit, crédit), totaux généraux. Balance
+âgée des fiches citées sur un compte de classe 4, au jour `--as-of` (défaut :
+date de clôture du nom du FEC, sinon dernière écriture), avec les règles de
+`account_statement` : lignes non lettrées et reliquat de chaque lettrage
+partiel, référence = échéance sinon date, tranches 0 / 1–30 / 31–60 / > 60
+jours. « Après » : `Api::Accounting.entries` (pages de 500) et
+`account_statement` par fiche. Rapport AsciiDoc + un CSV par tableau (point
+décimal, RFC 4180).
+
+*Alternative écartée.* Une balance du contrat (lot 3, éditions) : pas
+encore disponible ; `entries` suffit et reste dans le contrat.
+
+=== D-MIG-004 — Comptes créés depuis un FEC : type déduit de la classe (lot M, migrate)
+
+*Contexte.* Le FEC ne porte que numéro et libellé ; sans type, un compte
+hérite de celui de son parent, qui peut être une racine de contexte (`4`).
+
+*Choix.* Type de la base NOALYSS quand elle est fournie (`pcm_type`), sinon
+déduit de la classe : 1 passif, 2, 3 et 5 actif, 6 charge, 7 produit ; en
+classe 4, 41 et 409 actif, le reste passif. Parent : plus long préfixe
+existant (règle du cœur). Un compte existant, mouvementé dans la source mais
+non utilisable en saisie, est rendu utilisable (consigné au rapport). Le
+libellé de l'instance est conservé pour un compte existant.
+
+*Alternative écartée.* Refuser la reprise d'un compte absent : la plupart
+des FEC utilisent des sous-comptes (`401000`, `411000`).
+
+=== D-MIG-005 — Journaux et tiers d'un FEC (lot M, migrate)
+
+*Contexte.* Le FEC ne dit ni la nature d'un journal ni celle d'un tiers ;
+un journal financier exige une fiche Banque (D-ACC-010).
+
+*Choix.* Journal de même code déjà présent (A01, V01… du jeu initial) :
+réutilisé, un écart de nature est consigné. Sinon créé, code nettoyé
+(`[A-Z0-9]{1,10}`), nature de NOALYSS ou déduite : financier si chaque
+écriture touche 51 ou 53, achats si chacune touche 40 et 6/2, ventes si 41
+et 7, sinon opérations diverses ; un journal financier reçoit la fiche
+Banque du compte de trésorerie le plus mouvementé (créée au besoin), à
+défaut il devient opérations diverses. Compte auxiliaire → fiche (quick code
+formaté par `Api::Cards.format_code`, nom `CompAuxLib`), catégorie selon le
+compte le plus mouvementé : 40 fournisseur, 41 client, 42 salarié, 43/44
+administration, 51/53 banque, 6 dépense, 7 vente, sinon contact. Chaque ligne
+cite son compte *et* sa fiche (le compte l'emporte, règle du cœur) : les
+montants restent sur le compte du FEC.
+
+*Alternative écartée.* Demander la nature à l'opérateur : l'outil doit
+tourner sans question ; la nature est corrigeable après coup.
+
+=== D-MIG-006 — Compte calculé par l'abonné `card.saved` remplacé puis effacé (lot M, migrate)
+
+*Contexte.* À la création d'une fiche, l'abonné `card.saved` de la
+Comptabilité lui attribue un compte calculé sous le compte de base de sa
+catégorie (`account_compute`, ex. `4100006`) ; la reprise veut le compte de
+la source.
+
+*Choix.* Après `create_card`, `assign_card_account` avec le compte de la
+source ; si le compte précédent n'existait pas avant la création des fiches
+(instantané du plan), il est effacé par `delete_account`. Une fiche déjà
+présente dans l'instance (BANQUE du jeu initial) est conservée telle quelle.
+
+*Alternative écartée.* Amender le contrat pour créer une fiche avec son
+compte en une commande : proposé ici comme amélioration (`CardInput.account`
+ou `create_card(…, account:)`), non appliqué (hors périmètre du lot M).
+
+=== D-MIG-007 — Fiches NOALYSS : catégories, attributs, valeurs refusées (lot M, migrate)
+
+*Contexte.* NOALYSS décrit une fiche par des attributs (`fiche_detail`,
+`attr_def`) ; Partiduo par des colonnes typées contrôlées (TVA, SIREN, IBAN,
+adresse) et des attributs propres par catégorie (D-REF-002, D-REF-007).
+
+*Choix.* Chaque `fiche_def` est rattachée à la catégorie initiale de son
+modèle (`frd_id` : 9 client, 8 fournisseur, 4 banque, 1 vente, 2 achat,
+3 dépense, 16 contact, 10/11/12/25 salarié, 14 administration) — la
+première seulement ; les autres deviennent une catégorie `FD<fd_id>`. Nom,
+quick code, compte, contact, TVA, SIREN, SIRET, IBAN, courriel, téléphone,
+adresse (pays `57`, sinon nom du pays), description, prix, taux de TVA
+(article) vont dans les colonnes typées ; tout autre attribut renseigné
+devient un attribut propre texte `noalyss_<ad_id>` (prénom : `first_name`),
+ajouté à la catégorie. Une valeur refusée par le socle est conservée en
+attribut propre et la fiche reprise (consigné). Fiche désactivée dans
+NOALYSS : désactivée après les écritures.
+
+*Alternative écartée.* Refuser la fiche entière : perte d'information et
+écritures orphelines de leur tiers.
+
+=== D-MIG-008 — Taux de TVA NOALYSS : code nettoyé, taux mis à jour (lot M, migrate)
+
+*Contexte.* `tva_rate` porte un code libre, un taux en fraction, les
+comptes déductible/collecté (`tva_poste`), l'autoliquidation
+(`tva_both_side`) et l'exigibilité (`O`/`P`) ; le socle exige un code
+`[A-Z0-9]{1,5}` et un libellé unique.
+
+*Choix.* Code nettoyé et tronqué à 5 ; taux existant de même code : taux,
+autoliquidation et exigibilité mis à jour, libellé de l'instance conservé ;
+sinon créé (libellé : commentaire NOALYSS, suffixé du code s'il est pris).
+Comptes du taux posés par `set_vat_rate_accounts`. Un refus est un
+avertissement.
+
+*Alternative écartée.* Écraser les libellés du jeu initial : ceux de
+NOALYSS sont souvent des codes (`FR_NOR`).
+
+=== D-MIG-009 — Pièces, montants, devises, lignes nulles (lot M, migrate)
+
+*Contexte.* Le cœur exige une pièce unique par journal (40 caractères au
+plus), des montants positifs à quatre décimales au plus, une seule devise
+par écriture.
+
+*Choix.* Pièce de la source ; en double dans un journal : suffixe `-2`,
+`-3`… (consigné en correspondance) ; vide : numérotation du journal.
+Montant négatif : sens inversé ; débit et crédit sur une même ligne : leur
+solde. Lignes à débit et crédit nuls : ignorées (comptées au rapport, sans
+effet sur les balances). `Montantdevise` / `Idevise` : relus mais non
+reportés — les montants du FEC sont en devise de tenue, l'écriture est
+passée en devise de tenue. Libellé d'écriture : `EcritureLib` de la première
+ligne ; libellé de ligne seulement s'il en diffère. Référence
+`fec:<journal>:<EcritureNum>` ou `noalyss:<jr_id>`.
+
+*Alternative écartée.* Refuser les pièces en double : fréquentes (même
+relevé bancaire pour plusieurs écritures).
+
+=== D-MIG-010 — Pièces jointes NOALYSS et FEC complété (lot M, migrate)
+
+*Contexte.* Une écriture Partiduo porte une pièce jointe (`attachment_id`) ;
+NOALYSS en a une principale (`jrn.jr_pj`, grand objet) et des pièces
+supplémentaires (`jrn_sup_document`, DBVERSION 208).
+
+*Choix.* Pièce principale lue par `lo_get`, déposée par
+`Api::Core.store_attachment` et citée par l'écriture ; pièces
+supplémentaires relevées dans `non-repris.csv`. Avec `--fec` et `--noalyss`,
+les écritures sont celles du FEC ; la base apporte plan complet, nature des
+journaux, fiches, TVA, exercices et périodes closes, échéances et pièces
+jointes, rapprochées par journal, date, pièce et montant.
+
+*Alternative écartée.* Rattacher les pièces supplémentaires aux fiches ou
+les fusionner : sans contrat pour cela.
+
+=== D-MIG-011 — FEC de démonstration produit par l'outil depuis une base NOALYSS (lot M, migrate)
+
+*Contexte.* Il faut un FEC réaliste, reproductible, issu de NOALYSS.
+
+*Choix.* `scripts/noalyss-demo` crée `partiduo_noalyss_demo` depuis
+`include/sql/mod2` (schéma, données, contraintes), applique les correctifs
+202 à 207 (DBVERSION 208) et charge `scripts/noalyss_demo_data.sql` (exercice
+2024 : 133 opérations, 43 lettrages dont un partiel, 14 pièces jointes, 18
+imputations analytiques). `partiduo-migrate export-fec` reprend la requête de
+`noalyss-export` (`v_fec_operation`) en y ajoutant le lettrage
+(`letter_deb`/`letter_cred`, code tiré de `jl_id`, date de la dernière ligne
+lettrée) que l'export de NOALYSS laisse vide ; ISO 8859-15, tabulation. Le
+fichier livré (`demo/732829320FEC20241231.txt`) est comparé octet pour octet
+à un nouvel export par une spec.
+
+*Alternative écartée.* L'extension `noalyss-export` elle-même : PHP, non
+exécutable ici, et sans lettrage.
+
+=== D-MIG-012 — Analytique NOALYSS relevée, non reprise (lot M, migrate)
+
+*Contexte.* Le module Analytique n'a pas encore de contrat (lot 5).
+
+*Choix.* Plans, postes et imputations (`operation_analytique`) relevés dans
+`non-repris.csv` et comptés au rapport ; ils n'entrent pas dans la
+réconciliation comptable. Voir B-MIG-001.
+
+*Alternative écartée.* Écrire les tables de l'analytique en SQL : interdit
+(ADR-001 D5).
+
+=== D-MIG-013 — Lettrage FEC propre à chaque compte auxiliaire ; source illisible en code 2 (lot M, tests)
+
+*Contexte.* Les specs du testeur du lot M ont relevé deux défauts de
+`partiduo-migrate`. (1) Le lettrage était regroupé par compte général et
+code `EcritureLet` : un FEC produit par un logiciel qui lettre au niveau du
+compte auxiliaire et réutilise les codes d'un tiers à l'autre (Sage, EBP,
+Cegid…) fusionnait les lettrages de plusieurs tiers en un seul, et la balance
+âgée imputait le reliquat d'un lettrage partiel à chacun d'eux. (2) Un FEC
+introuvable ou illisible (`File::Error`) faisait planter la commande au lieu
+de rendre le code 2.
+
+*Choix.* `Reconciliation.matching_groups`, partagé par l'importateur et la
+balance âgée « avant » : un code porté par plusieurs comptes auxiliaires,
+dont *chacun* a des lignes au débit et au crédit, forme un lettrage par
+tiers ; sinon (base NOALYSS, dont le code vient de `jl_id` ; lettrage d'un
+compte général) il forme un seul lettrage, comme avant. `File::Error` est
+traité comme une source illisible (code 2). Specs :
+`spec/partiduo_migrate/import_rules_spec.cr`, `source_errors_spec.cr`.
+
+*Alternative écartée.* Toujours inclure le compte auxiliaire dans la clé :
+un lettrage NOALYSS fait par compte général (`Lettering_Account`) qui mêle
+les lignes de plusieurs fiches aurait été coupé en morceaux d'un seul côté,
+que le socle refuse.
+
+=== D-MIG-014 — Exercices NOALYSS : exercices alignés, période de clôture, fermeture exacte (lot M, relecture)
+
+*Contexte.* Relecture du lot M. (1) Les exercices « dérivés » (douze mois
+depuis janvier) étaient créés même quand la base NOALYSS fournissait les
+siens : avec un exercice décalé (1/7-30/6) ou un premier exercice de 18 mois,
+leurs bornes chevauchaient les exercices repris et le socle refusait
+(`period.overlap`), ce qui faisait échouer toute reprise d'un dossier à
+exercice non civil. (2) Avec l'option « 13 périodes » de NOALYSS, la période
+de clôture d'un jour (31/12) close seule faisait fermer tout décembre.
+
+*Choix.* Exercices de la source créés tels quels (période d'ouverture ou de
+clôture d'un jour reprise par `opening_period` / `closing_period` du
+contrat) ; puis, pour chaque date d'écriture qu'aucune période ne couvre
+(`Api::Core.period_for` nul), un exercice aligné sur les exercices voisins
+de la source : après le dernier, douze mois depuis le lendemain de sa fin ;
+avant le premier, douze mois finissant la veille de son début ; entre deux
+exercices, au plus douze mois arrêtés à la veille du suivant. Sans exercices
+dans la source (FEC), règle inchangée. `Source::FiscalYear` porte désormais
+ses périodes (`parm_periode` : début, fin, close) ; une période de l'instance
+n'est fermée que si *toutes* les périodes NOALYSS qu'elle recouvre sont
+closes, sinon elle reste ouverte et c'est consigné au rapport. Specs :
+`spec/partiduo_migrate/fiscal_years_spec.cr`.
+
+*Alternative écartée.* Étendre les exercices de la source jusqu'aux
+écritures orphelines : on modifierait des exercices que la source déclare.
+
+=== D-MIG-015 — Contrôle de lecture de la source, indépendant du modèle (lot M, relecture)
+
+*Contexte.* Le « avant » de la réconciliation était calculé sur le
+`Source::Dataset` même que l'importateur écrit : une erreur de lecture de la
+source (ligne `jrnx` sans `jrn`, ligne dédoublée par la jointure
+`operation_currency`, solde de ligne FEC faux, zones décalées) échappait au
+rapport. ADR-001 D5 demande de comparer avant et après *depuis la source*.
+
+*Choix.* Chaque source porte un `Source::Control`, relevé sans passer par le
+modèle : FEC totalisé pendant la lecture, sur les montants bruts de chaque
+ligne *avant* le calcul de son solde, par compte, journal et mois ; base
+NOALYSS relue par une requête d'agrégat sur `jrnx` (sur le modèle de
+`acc_balance.class.php` : `j_poste`, `j_jrn_def`, mois de `j_date`, lignes
+non nulles, montant négatif de l'autre côté). Le rapport compare ce contrôle
+au modèle (`Reconciliation.reading`, sections « lecture de la source »,
+`lecture-source.csv`) avant la comparaison modèle / instance ; tout écart est
+un échec, comme les autres. Base NOALYSS : lignes, débit, crédit, solde. FEC :
+lignes et solde seulement, car une ligne FEC qui porte débit *et* crédit est
+soldée par la lecture (D-MIG-009) — une ligne sans effet (débit = crédit)
+est ignorée des deux côtés. FEC complété par NOALYSS : contrôle du FEC (ses
+écritures). La commande `check` l'affiche. Spec : une copie de la base de
+démonstration altérée (ligne sans opération, ligne dédoublée) fait échouer
+la reprise (`spec/partiduo_migrate/reading_control_spec.cr`).
+
+*Limite.* La balance âgée « avant » passe encore par les lettrages du modèle
+(`matching_groups`) : un contrôle indépendant demanderait de recalculer le
+lettrage NOALYSS en SQL (`letter_deb`/`letter_cred`) ; les soldes par compte
+de tiers du contrôle de lecture couvrent déjà les montants.
+
+*Alternative écartée.* Relire la base NOALYSS après coup par la même requête
+que les écritures : même point aveugle.
+
+=== D-MIG-016 — Collisions de codes : taux de TVA et journaux (lot M, relecture ; amende D-MIG-005 et D-MIG-008)
+
+*Contexte.* Codes nettoyés puis tronqués (5 caractères pour un taux, 10 pour
+un journal) : deux codes NOALYSS (`FRINTRA_ACH`, `FRINTRA_VEN` → `FRINT`) ne
+créaient qu'un taux, écrasé au second passage, et les fiches articles
+héritaient d'un taux faux ; deux journaux source (`BQ-1`, `BQ1`) étaient
+fusionnés en silence, et l'unicité des pièces, tenue par journal *source*,
+laissait partir des doublons refusés par le socle.
+
+*Choix.* Taux : ensemble des codes attribués pendant la reprise ; un taux du
+jeu initial de même code n'est mis à jour (autoliquidation, exigibilité) que
+si son taux est identique ; sinon, ou si le code a déjà été attribué par la
+reprise, le taux est créé sous le premier code libre `<code tronqué><n>`
+(`FRIN2`, `INT2`), consigné en note et dans `correspondances.csv` (« taux de
+TVA »). Journaux : un code déjà attribué par la reprise à un autre journal
+source donne un journal distinct sous le premier code libre (`BQ12`),
+consigné ; un journal du jeu initial reste réutilisé une fois. Pièces
+rendues uniques par journal *cible* (`ledger_id`). Specs :
+`spec/partiduo_migrate/collisions_spec.cr`.
+
+*Alternative écartée.* Refuser la reprise en cas de collision : l'opérateur
+ne peut pas renommer les codes de la source.
+
+=== D-MIG-017 — Outil traduit : fr, en, nl (lot M, relecture)
+
+*Contexte.* Messages, anomalies, notes, rapport et en-têtes CSV étaient en
+français en dur ; la clé `migrate.rolled_back` n'avait pas de traduction.
+NOALYSS est aussi utilisé en Belgique (français et néerlandais).
+
+*Choix.* `config/locales/{fr,en,nl}.yml` du dépôt `partiduo-migrate`, sous
+la clé `migrate.`, embarqués dans le binaire (`I18n::Loader::YAML.embed`) ;
+`PartiduoMigrate.t` ; option `--locale` (défaut `fr`), lue avant les autres
+options. Étapes des anomalies, compteurs, natures des données non reprises
+et sections du rapport sont des clés (`entry`, `entries_created`,
+`analytic`, `accounts`…) traduites à l'affichage ; les messages avec
+paramètres sont traduits à leur création, dans la langue active. Les noms de
+fichiers du rapport et les noms de zones du FEC ne sont pas traduits.
+`migrate.rolled_back` est défini. Une spec vérifie que les trois langues ont
+les mêmes clés.
+
+*Alternative écartée.* Exception « outil d'exploitation francophone » :
+contraire au contexte du projet et à l'usage belge de NOALYSS.
+
+=== D-MIG-018 — Type des comptes créés depuis un FEC (lot M, relecture ; amende D-MIG-004)
+
+*Contexte.* La règle de D-MIG-004 (classe 4 : 41 et 409 à l'actif, le reste
+au passif) typait mal 4456, 4096, 425, 476, 486 (actif) et 519 (passif) : le
+bilan du lot 3 serait faux pour un FEC seul.
+
+*Choix.* Type de la source NOALYSS s'il existe ; sinon le plus précis de
+deux : type du compte parent dans le plan de l'instance (plus long préfixe
+existant, hors racine de contexte) et table de préfixes du plan comptable
+général (`Importer::PCG_KINDS` : 409, 41 sauf 419, 425, 4287, 4387, 441,
+4456, 44581-44583, 44586, 4487, 462, 465, 4687, 476, 481, 486 à l'actif ; 28,
+29, 39, 49, 59 en actif soustractif ; 519 au passif ; 119 et 129 en passif
+soustractif…). À précision égale, la table.
+
+*Alternative écartée.* Déduire le type du solde à la clôture : un compte de
+tiers change de sens d'un exercice à l'autre.
+
+=== D-MIG-019 — Données relues mais non reprises : devises, dates (lot M, relecture ; amende D-MIG-009)
+
+*Choix.* `non-repris.csv` reçoit une ligne par écriture et par devise autre
+que l'euro (`Montantdevise`/`Idevise` du FEC, `oc_amount`/`cr_code_iso` de
+NOALYSS) ; la synthèse du rapport compte les dates de lettrage (`DateLet`)
+et les dates de pièce différentes de la date d'écriture (`PieceDate`),
+relues et non reprises. `currency_code`/`currency_rate` ne sont pas encore
+passés à `post_entry` : les montants du FEC sont en devise de tenue et le
+taux d'une écriture n'est pas donné par la source ; à reprendre quand une
+écriture n'a qu'une devise et que le contrat des devises (lot 1) le permet.
+
+=== D-MIG-020 — Lecture du FEC : zones en trop, encodage Windows-1252 (lot M, relecture)
+
+*Choix.* Une ligne qui a *plus* de zones que l'en-tête est refusée comme
+celle qui en a moins (un séparateur dans un libellé décale les montants) ;
+seul un séparateur terminal annoncé par l'en-tête est toléré. Sans
+`--encoding`, un fichier non UTF-8 dont la lecture en ISO 8859-15 donne des
+caractères de contrôle C1 (0x80-0x9F) est lu en Windows-1252 ; si un octet
+reste indéfini, la lecture ISO 8859-15 est gardée avec un avertissement
+(sortie d'erreur et rapport).
+
+*Alternative écartée.* Tolérer toute zone finale vide en trop : une ligne
+décalée dont la dernière zone (`Idevise`) est vide passait.
+
+=== D-MIG-021 — Erreur interne, URL de la source, cellules CSV (lot M, relecture)
+
+*Choix.* (1) Une exception pendant la reprise (refus d'accès, fiche
+introuvable, erreur SQL) est rattrapée par `Migration#run` après annulation
+de la transaction : anomalie bloquante « interne », rapport écrit, code de
+sortie 1. (2) L'URL NOALYSS n'apparaît dans les messages et le rapport
+qu'expurgée de l'utilisateur et du mot de passe (autorité et paramètres) ;
+une URL qui n'utilise pas de socket Unix est acceptée avec un avertissement.
+(3) Les cellules de *texte* des CSV qui commencent par `=`, `+`, `-`, `@`,
+une tabulation ou un retour chariot sont précédées d'une apostrophe ; les
+colonnes numériques ne le sont pas.

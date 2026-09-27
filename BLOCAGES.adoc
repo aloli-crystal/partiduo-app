@@ -304,3 +304,14 @@ le client de test de Marten.
 *Levée.* Écoute locale permise, puis essai de `/accounting/entries/misc` et
 `/invoicing/invoices/new` au clavier dans Firefox, Chrome et Safari, et avec
 un lecteur d'écran (annonce de l'équilibre par la région `aria-live`).
+
+== B-MIG-001 — Analytique NOALYSS sans contrat de réception (lot M, migrate)
+
+*Constat.* `Partiduo::Api` n'expose encore ni plans ni postes analytiques
+(module Analytique, lot 5).
+
+*Contournement.* Relevé complet en annexe du rapport (`non-repris.csv`) et
+compté dans `rapport.adoc` (D-MIG-012).
+
+*Levée.* Au lot 5 : reprendre plans, postes et imputations par le contrat
+de l'Analytique et les ajouter à la réconciliation (totaux par poste).
