@@ -35,6 +35,12 @@ module Partiduo
       field :sales_account, :string, max_size: 20, blank: true, default: ""
       field :vat_account, :string, max_size: 20, blank: true, default: ""
       field :bank_account, :string, max_size: 20, blank: true, default: ""
+      # Copie PDF doublant l'envoi par la plateforme agréée (ADR-004 D9) :
+      # période datée, posée pour un an au premier envoi par la plateforme
+      # quand elle est vide (migration invoicing `0003`).
+      field :pdf_copy_enabled, :bool, default: true
+      field :pdf_copy_from, :date, null: true, blank: true
+      field :pdf_copy_until, :date, null: true, blank: true
 
       with_timestamp_fields
     end

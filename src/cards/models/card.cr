@@ -33,6 +33,12 @@ module Partiduo
       field :email, :string, max_size: 254, blank: true, default: ""
       field :phone, :string, max_size: 32, blank: true, default: ""
       field :contact_name, :string, max_size: 128, blank: true, default: ""
+      # Nature d'un client (ADR-004 D9) : `individual`, `business`, `public` ;
+      # vide : pas encore précisée (migration cards `0002`).
+      field :customer_nature, :string, max_size: 16, blank: true, default: ""
+      # Copie PDF d'une facture transmise par la plateforme agréée (ADR-004
+      # D9) : `false` la refuse pour ce client.
+      field :pdf_copy, :bool, default: true
 
       # Articles et services
       field :unit_code, :string, max_size: 3, blank: true, default: ""

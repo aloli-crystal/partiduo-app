@@ -30,25 +30,18 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |G |Module `micro` (ADR-007 D1, D2) : registres, aide URSSAF, 2042-C-PRO, seuils, partie double par la Comptabilité (cœur) ; interface simplifiée (D3) |*Terminé* (cœur, interface simplifiée, écrans de paramétrage ; clôture « Clôture du lot G »)
 |L |Module `liberal` (ADR-007 D6) : livre-journal, immobilisations, 2035, partie double par la Comptabilité ; interface et mode simplifié |*Terminé* (cœur, interface et mode simplifié ; clôture « Clôture du lot L »)
 |T |Extension `partiduo-teledec` (ADR-007 D4, D5) : liasse, TVA, DAS2, IS, greffe par TELEDEC (API Balance, transport abstrait, simulateur) |*Terminé* contre le simulateur (clôture « Clôture du lot T ») ; adaptateur réel en attente (B-TDC-001)
+|F |Critique finale : ADR-004 D9 révisé (nature du client, copie PDF, canal Chorus Pro, saisie express), extensions `partiduo-choruspro` (ADR-004 D9) et `partiduo-urssaf` (ADR-007 D7) |*Terminé* contre des simulateurs (section « Critique de complétude finale ») ; adaptateurs réels en attente (B-FIN-002, B-FIN-003)
 |===
 
-*État (28 septembre 2026, vérification de bout en bout des lots E, G, L
-et T : section du même nom).* Lot en cours : aucun. Les
-lots P à 6 du plan, le lot E (justificatifs, facturation électronique,
-SUPER PDP, factures non électroniques), le lot G (micro-entreprise :
-module `micro`, interface simplifiée, section « Clôture du lot G »), le
-lot L (professions libérales : module `liberal`, 2035, interface
-simplifiée, section « Clôture du lot L ») et le lot T (extension
-`partiduo-teledec`, section « Clôture du lot T ») sont
-terminés, les trois jalons
-vérifiés, et la critique de complétude (section du même nom) a comblé les
-écarts faisables au prompt, aux ADR et à la maquette. Ce qui reste est
-listé dans « Prochaines étapes » et dans BLOCAGES.adoc. Specs :
-`partiduo-app` 1025 + 29 en attente (Comptabilité, Analytique, Stock, Suivi), 768 + 58 (Facturation, Stock, Suivi), 1087 + 13 (Comptabilité et Facturation), 717 + 72 (micro), 779 + 56 (micro et Facturation), 1037 + 25 (micro, Facturation et Comptabilité), 701 + 71 (liberal seul), 959 + 40 (liberal et Comptabilité) ; `partiduo-ui-bulma` 332 ; `partiduo-skel` 24 ;
-`partiduo-document` 69 ; `partiduo-einvoicing` 92 ; `partiduo-superpdp` 71
-(dont 5 contre le bac à sable SUPER PDP) ; `partiduo-teledec` 92 + 1 en
-attente (bac à sable TELEDEC) ; `partiduo-migrate` 93 ; tous
-verts (extensions et reprise : chiffres de la clôture du lot E).
+*État définitif (28 septembre 2026, critique de complétude finale : section
+du même nom).* Lot en cours : aucun. Tous les lots du plan (P à 6), les lots
+E, G, L et T et la critique finale sont terminés ; les trois jalons du prompt
+sont vérifiés, les extensions exigées par ADR-004 D9 révisé et ADR-007 D7
+existent (`partiduo-choruspro`, `partiduo-urssaf`), écrites contre des
+simulateurs. Ce qui reste — adaptateurs réels, vérifications humaines,
+amendements à faire adopter — est listé dans « Prochaines étapes » et dans
+BLOCAGES.adoc. Specs du dernier passage (tout vert) : section « Critique de
+complétude finale ».
 
 == Lot P — ce qui existe (26 septembre 2026)
 
@@ -1945,11 +1938,73 @@ MARTEN_ENV=development … crystal run scripts/verif_t.cr -- --profile=micro|ree
 # (mot de passe : --password, défauts Verif-lotE-Partiduo-2026 et Verif-lotT-Partiduo-2026)
 ----
 
+== Critique de complétude finale (28 septembre 2026)
+
+Comparaison de `partiduo-app`, `partiduo-ui-bulma`, `partiduo-skel`,
+`partiduo-migrate`, `partiduo-einvoicing`, `partiduo-document`,
+`partiduo-superpdp` et `partiduo-teledec` au prompt, aux ADR-001 à 007
+(ADR-004 révisé le 28 septembre : D9) et à la maquette ; parcours dans un
+navigateur. Décisions D-FIN-001 à D-FIN-007, blocages B-FIN-001 à B-FIN-006.
+
+*Écarts comblés.*
+
+* *ADR-004 D9 révisé, non encore porté* (cœur et interface) :
+** nature du client sur la fiche (particulier, professionnel,
+   administration publique), proposée d'après SIREN / TVA, choisie ; canal,
+   B2C, indemnité de 40 € et e-reporting la suivent ; facture à un
+   professionnel en France sans SIREN refusée ; saisie express d'un
+   particulier depuis la facture (D-FIN-001) ;
+** copie PDF doublant l'envoi par la plateforme : option datée du dossier
+   (un an au premier envoi), refus par client, bandeau « Copie », sans XML
+   Factur-X, tracée ; envoi automatique au « marqué envoyé » par la
+   plateforme et à la demande (D-FIN-002) ;
+** canal `chorus_pro` pour les clients publics, ignoré par EINV ;
+** migrations cards 0002 et invoicing 0003 (aller, retour, aller vérifiés),
+   `API_VERSION` 0.4.0 ; contrats `doc/api/invoicing.adoc` et
+   `socle-referentiel.adoc`.
+* *Extensions exigées par les ADR et absentes* : `partiduo-choruspro`
+  (D-FIN-004) et `partiduo-urssaf` (D-FIN-006), chacune avec contrat
+  documenté, interface Bulma montée sous `/ext/<CODE>/`, fr/en/nl, CI,
+  LICENSE, README, specs (conventions SPDX, i18n, frontières ADR-005 D3 et
+  D4, tables préfixées).
+* *Relevé au navigateur* (instance provisionnée `critique`, parcours du lot E
+  rejoué, 47 étapes vertes, puis écrans à 1 100 px, 1 400 px et 375 px ;
+  maquette servie à côté) : tuile « TVA due » du tableau de bord ; ligne
+  « Validité du devis » vide sur une facture ; mentions à l'écran en
+  « 40.0 EUR » (D-FIN-003). Tableau de bord, édition de facture,
+  facture d'achat reçue, justificatifs au téléphone : conformes à la
+  maquette sauf B-FIN-001.
+* *Traductions* : script de contrôle sur les huit dépôts (et les deux
+  nouveaux) : mêmes clés en fr, en et nl, mêmes variables, aucune clé
+  citée absente.
+* *Garde-fous CI* : présents dans chaque dépôt (format, Ameba, specs sur
+  PostgreSQL ; garde-fou ADR-005 D3 dans le cœur et l'interface ; huit
+  configurations de modules dans le cœur, dont les trois du prompt).
+
+*Vérifications* (bases `partiduo_test_critique_final*`, D-FIN-007) :
+`partiduo-app` `scripts/specs-modules.sh --order random` — 1026 + 30 en
+attente (Comptabilité, Analytique, Stock, Suivi), 777 + 58 (Facturation,
+Stock, Suivi), 1096 + 13 (Comptabilité et Facturation), 718 + 73 (micro),
+788 + 56 (micro et Facturation), 1046 + 25 (micro, Facturation et
+Comptabilité), 702 + 72 (liberal), 960 + 41 (liberal et Comptabilité) ;
+`partiduo-ui-bulma` 337 ; `partiduo-choruspro` 22 ; `partiduo-urssaf` 18 ;
+`partiduo-einvoicing` 95 ; `partiduo-document` 71 ; `partiduo-superpdp` 72
+dont 71 verts et 1 en erreur contre le vrai bac à sable (réseau, B-FIN-004) ;
+`partiduo-teledec` 94 + 1 en attente ; `partiduo-skel` 24 ;
+`partiduo-migrate` 93 ;
+`crystal tool format` et Ameba sans remarque ; garde-fous ADR-005 D3 verts ;
+`genmigrations` sans écart (cards, invoicing, choruspro, urssaf).
+
 == Prochaines étapes
 
 Liste à l'issue de la critique de complétude et des lots E, G, L et T ;
 chaque point renvoie à sa décision ou à son blocage.
 
+. *Critique finale* : adaptateurs réels de Chorus Pro (B-FIN-002) et de
+  l'API Tierce Déclaration URSSAF (B-FIN-003) ; adresse de livraison et
+  conditions de paiement dans l'édition d'une facture (B-FIN-001) ;
+  préciser la nature des fiches clientes reprises (D-FIN-001) ;
+  `partiduo-admin` (ADR-008, B-FIN-005).
 . *Micro-entreprise (après le lot G)* : vérifier aux sources les taux,
   seuils et cases initiaux (B-MIC-001) ; essai du mode simplifié sur un
   téléphone (B-UI-009, micro et libéral) ; faire adopter l'amendement
@@ -2063,6 +2118,17 @@ DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' crystal spec
 MARTEN_ENV=test DATABASE_URL='postgres:///partiduo_<base>?host=/tmp' crystal run manage.cr -- migrate
 crystal run manage.cr -- genmigrations einvoicing  # aucun écart attendu
 # Plusieurs `crystal spec` en parallèle : un CRYSTAL_CACHE_DIR par exécution
+----
+
+Extensions de la critique finale (`partiduo-choruspro`, `partiduo-urssaf`),
+même plan :
+
+[source,sh]
+----
+cd prod-crystal/partiduo/partiduo-choruspro      # ou partiduo-urssaf
+SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install
+DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' crystal spec
+crystal run manage.cr -- genmigrations choruspro # ou urssaf ; aucun écart attendu
 ----
 
 Reprise (`partiduo-migrate`) :

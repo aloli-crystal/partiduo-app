@@ -737,3 +737,59 @@ instances de test (`partiduo_je_*`).
 
 *Levée.* `lsof -nP -iTCP:8130-8132 -sTCP:LISTEN` puis `kill <pid>` hors du
 bac à sable.
+
+== Critique de complétude finale (28 septembre 2026)
+
+== B-FIN-001 — Adresse de livraison et conditions de paiement absentes de l'édition d'une facture (maquette)
+
+*Constat.* La maquette « Nouvelle facture » a « Conditions » (30 jours),
+« TVA sur les débits » et « Adresse de livraison (si différente) » ;
+l'écran reprend l'échéance (saisie), la TVA sur les débits des paramètres
+et la première adresse de livraison de la fiche, sans les champs. Lignes :
+code, désignation et mise en forme empilés dans la première cellule (titre
+et sous-total, ADR-006 D5) là où la maquette a une seule ligne. En-tête
+replié en deux rangs vers 1 100 px (boutons « Appliquer » sans JavaScript).
+
+*Levée.* Choix de l'adresse parmi celles de la fiche (HTMX au changement de
+client) et conditions de paiement par document (contrat : `DocumentInput`).
+
+== B-FIN-002 — Adaptateur réel de Chorus Pro (PISTE) non écrit
+
+*Constat.* `partiduo-choruspro` est écrit contre `Choruspro::Transport` et
+un Chorus Pro simulé ; il faut une application PISTE et un compte technique
+de qualification (démarche de l'opérateur).
+
+*Levée.* Adaptateur (OAuth 2 PISTE, en-tête `cpro-account`,
+`/cpro/structures/v1/consulter`, `/cpro/factures/v1/deposer/flux`,
+`/cpro/factures/v1/consulter/fournisseur`) et suite d'intégration au bac à
+sable de qualification.
+
+== B-FIN-003 — Adaptateur réel de l'API Tierce Déclaration URSSAF non écrit
+
+*Constat.* Accès sur souscription de l'opérateur (tiers déclarant) ;
+`partiduo-urssaf` est écrit contre une URSSAF simulée. Le format exact des
+catégories et des montants reste à confronter à la documentation de l'API.
+
+*Levée.* Souscription sur portailapi.urssaf.fr, adaptateur, suite
+d'intégration au bac à sable ; puis télépaiement SEPA.
+
+== B-FIN-004 — Bac à sable SUPER PDP instable pendant la critique
+
+*Constat.* `spec/integration/sandbox_spec.cr` de `partiduo-superpdp` : une
+erreur 500 de SUPER PDP et un « Invalid HTTP chunked content » du
+mandataire réseau sur deux passages (le reste de la suite, vert, n'appelle
+pas le réseau). Déjà observé à la vérification de bout en bout.
+
+*Levée.* Rejouer hors du mandataire ; aucun lien avec les changements de
+cette critique (la copie PDF n'est pas envoyée sans transport de courriel).
+
+== B-FIN-005 — `partiduo-admin` (ADR-008) hors du périmètre de cette exécution
+
+*Constat.* ADR-008 (administration du parc) est postérieur au prompt et
+hors des ADR-001 à 007 confiés ; aucun dépôt `partiduo-admin`.
+
+== B-FIN-006 — Nouveaux dépôts non publiés, CI non exécutée
+
+*Constat.* `partiduo-choruspro` et `partiduo-urssaf` ont leur CI GitHub
+(format, Ameba, specs sur PostgreSQL) mais, comme les autres (B-002), rien
+n'est poussé.

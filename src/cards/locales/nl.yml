@@ -19,6 +19,10 @@ nl:
       employee: "Werknemer"
       contact: "Contactpersoon"
       other: "Andere"
+    natures:
+      individual: "Particulier"
+      business: "Onderneming"
+      public: "Overheid"
     value_types:
       text: "Tekst"
       number: "Getal"
@@ -117,6 +121,9 @@ nl:
           not_applicable: "Dit veld is niet van toepassing op deze fichecategorie."
           not_found: "Dit btw-tarief bestaat niet."
           disabled: "Btw-tarief %{code} is gedeactiveerd."
+        customer_nature:
+          not_applicable: "De aard geldt alleen voor klantenfiches."
+          invalid: "De aard „%{value}” wordt niet herkend (particulier, onderneming, overheid)."
         siren:
           not_applicable: "Dit veld is niet van toepassing op deze fichecategorie."
           invalid: "SIREN „%{value}” is ongeldig (9 cijfers, controlecijfer)."

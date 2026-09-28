@@ -341,6 +341,39 @@ module Partiduo
         end
       end
 
+      # --- Copie PDF (ADR-004 D9) ----------------------------------------------------
+
+      # Copie PDF d'une facture émise au canal `platform` : mise en page du
+      # document, bandeau « Copie — l'original est la facture électronique
+      # transmise par la plateforme agréée », sans XML Factur-X. Calculée à
+      # la demande, jamais conservée comme original.
+      def self.document_pdf_copy(actor : Actor, id : Int64) : FileView
+        authorize!(actor, READ)
+        document = Documents.find(id)
+        raise NotFound.new("pdf_copy", id) unless Partiduo::Invoicing::PdfCopy.eligible?(document)
+        Partiduo::Invoicing::PdfCopy.file(document)
+      end
+
+      # Copie PDF prévue pour ce document ? (option du dossier active à la
+      # date du jour, client qui l'accepte et a une adresse électronique,
+      # facture émise au canal `platform`.)
+      def self.pdf_copy_due?(actor : Actor, id : Int64) : Bool
+        authorize!(actor, READ)
+        Partiduo::Invoicing::PdfCopy.due?(Documents.find(id))
+      end
+
+      # Envoie (ou renvoie) la copie PDF par courriel, à la demande, même
+      # hors de la période de l'option ; tracée comme les autres envois,
+      # sans changer l'état du document. Elle part d'elle-même quand la
+      # facture est marquée envoyée par la plateforme (`mark_sent`).
+      def self.send_pdf_copy(actor : Actor, id : Int64, input : SendInput? = nil) : Result(EmailLogView)
+        authorize!(actor, SEND)
+        # Hors transaction : un échec du transport reste tracé.
+        document = Documents.find(id)
+        Partiduo::Invoicing::PdfCopy.send!(document, actor, input, force: true) ||
+          Result(EmailLogView).failure(Documents.error(FieldError::BASE, "pdf_copy.not_platform"))
+      end
+
       # --- Règlements ------------------------------------------------------------
 
       # Enregistre un règlement (total ou partiel) et publie

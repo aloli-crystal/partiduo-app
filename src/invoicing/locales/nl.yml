@@ -52,10 +52,12 @@ nl:
       platform: "Erkend platform"
       email: "E-mail"
       paper: "Papier"
+      chorus_pro: "Chorus Pro"
     channel_reasons:
       domestic_business: "Zakelijke klant gevestigd in het land van het dossier: e-factuur via het erkende platform"
       foreign_business: "Buitenlandse zakelijke klant: buiten het platform, e-reporting van internationale verkopen"
       private_customer: "Particuliere klant: buiten het platform, B2C e-reporting"
+      public_customer: "Overheid: factuur via Chorus Pro, niet via een erkend platform"
     links:
       from_quote: "Op basis van offerte %{number}"
       from_order: "Op basis van bestelling %{number}"
@@ -171,6 +173,11 @@ nl:
         level2: "Goedendag,\n\nOndanks onze eerste herinnering blijft factuur %{number}, vervallen op %{due_date}, onbetaald voor %{balance} (%{days} dagen achterstand). Gelieve ze onverwijld te betalen.\n\nMet vriendelijke groeten,\n%{seller}"
         level3: "Geachte heer, mevrouw,\n\nFactuur %{number}, vervallen op %{due_date}, blijft ondanks onze herinneringen onbetaald voor %{balance}. Wij stellen u in gebreke om in totaal %{total} te betalen.\n\n%{seller}"
       penalties: "Verwijlintresten: %{interest}; forfaitaire vergoeding voor invorderingskosten: %{indemnity}; totaal verschuldigd: %{total}."
+    pdf_copy:
+      banner: "Kopie — het origineel is de elektronische factuur verzonden via het erkende platform"
+      file_suffix: "kopie"
+      subject: "Kopie van factuur %{number} — %{seller}"
+      body: "Goedendag,\n\nIn bijlage vindt u ter informatie een pdf-kopie van factuur %{number}. Het origineel is de elektronische factuur verzonden via het erkende platform: betaal ze slechts één keer.\n\nMet vriendelijke groeten,\n%{seller}"
     mail:
       subject: "%{kind} %{number} — %{seller}"
       body: "Goedendag,\n\nIn bijlage vindt u ons document %{number} voor een bedrag van %{amount}.\n\nMet vriendelijke groeten,\n%{seller}"
@@ -197,6 +204,7 @@ nl:
         penalty_level: "Herinneringsniveau tussen 0 en 3"
         journal_code: "Dagboekcode: hoofdletters en cijfers, hoogstens acht"
         account: "Rekeningnummer: cijfers en hoofdletters, hoogstens twintig"
+        pdf_copy_period: "Het einde van de periode voor de pdf-kopie ligt vóór het begin"
       document:
         kind:
           immutable: "De aard van een document verandert niet"
@@ -282,6 +290,9 @@ nl:
         credit_exceeds: "De creditnota overschrijdt het resterende bedrag van de factuur (%{remaining})"
         credit_before_invoice: "Een creditnota gaat de verbeterde factuur niet vooraf"
         future: "De uitgiftedatum mag niet na vandaag (%{date}) liggen: het toegekende nummer is definitief"
+        customer_siren_required: "Klant %{customer} is een in Frankrijk gevestigde onderneming: vul het SIREN-nummer in op de fiche vóór de uitgifte"
+      pdf_copy:
+        not_platform: "Alleen een factuur verzonden via het erkende platform heeft een pdf-kopie"
       channel:
         not_fiscal: "Alleen een factuur, een voorschotfactuur of een creditnota heeft een verzendkanaal"
         already_sent: "Document al verzonden: het verzendkanaal wijzigt niet meer"

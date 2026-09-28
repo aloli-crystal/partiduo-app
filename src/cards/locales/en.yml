@@ -19,6 +19,10 @@ en:
       employee: "Employee"
       contact: "Contact"
       other: "Other"
+    natures:
+      individual: "Private individual"
+      business: "Business"
+      public: "Public administration"
     value_types:
       text: "Text"
       number: "Number"
@@ -117,6 +121,9 @@ en:
           not_applicable: "This field does not apply to this card category."
           not_found: "This VAT rate does not exist."
           disabled: "VAT rate %{code} is disabled."
+        customer_nature:
+          not_applicable: "The nature only applies to customer cards."
+          invalid: "The nature “%{value}” is not recognised (private individual, business, public administration)."
         siren:
           not_applicable: "This field does not apply to this card category."
           invalid: "SIREN “%{value}” is not valid (9 digits, check digit)."

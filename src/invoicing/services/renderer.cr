@@ -33,7 +33,8 @@ module Partiduo
       @pages = [] of PDF::Page
       @y : Float64 = HEIGHT - MARGIN
 
-      def initialize(@document : PDF::Document, @view : Api::DocumentView, @layout : Api::LayoutView?)
+      def initialize(@document : PDF::Document, @view : Api::DocumentView, @layout : Api::LayoutView?,
+                     @copy : Bool = false)
         @regular = @document.load_font(Output::FONT_REGULAR.to_slice, "DejaVuSans")
         @bold = @document.load_font(Output::FONT_BOLD.to_slice, "DejaVuSans-Bold")
         @page = new_page
@@ -380,6 +381,15 @@ module Partiduo
 
       # --- Pieds de page -------------------------------------------------------------
 
+      # Bandeau de la copie PDF (ADR-004 D9), en haut de chaque page.
+      private def copy_banner : Nil
+        y = HEIGHT - 20
+        wrap(t("invoicing.pdf_copy.banner"), RIGHT - MARGIN, 8.5, bold: true).first(2).each do |row|
+          text(row, MARGIN, y, 8.5, bold: true, color: "#b42318")
+          y -= 10
+        end
+      end
+
       private def footers : Nil
         footer = @layout.try(&.footer_text).presence
         seller = @view.seller
@@ -387,6 +397,7 @@ module Partiduo
         total = @pages.size
         @pages.each_with_index do |page, index|
           @page = page
+          copy_banner if @copy
           rule(BOTTOM - 12, "#c8d0d4")
           y = BOTTOM - 24
           text(legal, MARGIN, y, 7.0, color: "#555555")

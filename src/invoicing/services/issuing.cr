@@ -42,6 +42,9 @@ module Partiduo
         if card.nil? || card.kind != "customer"
           errors << error("customer_card_id", "document.customer.not_found")
         end
+        if card && Api::FISCAL_KINDS.includes?(document.kind) && siren_required?(card)
+          errors << error("customer_card_id", "issue.customer_siren_required", {"customer" => card.name})
+        end
         return result.failure(errors) unless errors.empty? && card
 
         allocation = Numbering.allocate!(document.series!, issue_date)
@@ -94,6 +97,18 @@ module Partiduo
           errors << error("due_date", "document.due_date.before_issue")
         end
         errors
+      end
+
+      # Facture à un professionnel (ou à une administration publique) établi
+      # en France sans SIREN : refusée à la validation (ADR-004 D9 révisé,
+      # art. 242 nonies A de l'annexe II du CGI). Seulement pour une nature
+      # choisie : une fiche sans nature n'est jamais jugée en silence.
+      def self.siren_required?(card : Partiduo::Api::Cards::CardView) : Bool
+        return false unless card.customer_nature.in?("business", "public")
+        return false unless card.siren.strip.empty?
+        company = Configuration.company
+        country = (card.address.try(&.country_code).presence || company.country_code).upcase
+        country == "FR"
       end
 
       # Acompte annulé ou crédité par avoir depuis l'enregistrement du

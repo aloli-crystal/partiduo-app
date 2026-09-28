@@ -13,6 +13,8 @@ module Partiduo
 
       KINDS       = %w[customer supplier item bank employee contact other]
       PARTY_KINDS = KINDS - %w[item]
+      # Nature d'un client (ADR-004 D9), vide : pas encore précisée.
+      CUSTOMER_NATURES = %w[individual business public]
 
       MAX_SIZES = {
         "name"         => 255,
@@ -61,7 +63,9 @@ module Partiduo
         sale_price : BigDecimal?,
         purchase_price : BigDecimal?,
         vat_rate_id : Int64?,
-        extra : Hash(String, JSON::Any)
+        extra : Hash(String, JSON::Any),
+        customer_nature : String,
+        pdf_copy : Bool
 
       # Normalise et valide. Renvoie les valeurs (même en cas d'erreur, pour
       # le contrôle instantané) et les erreurs par champ.
@@ -105,6 +109,9 @@ module Partiduo
           purchase_price: input.purchase_price,
           vat_rate_id: input.vat_rate_id,
           extra: extra,
+          customer_nature: input.customer_nature.try(&.strip) ||
+                           (kind == "customer" ? current.try(&.customer_nature).to_s : ""),
+          pdf_copy: input.pdf_copy.nil? ? current.try(&.pdf_copy) != false : input.pdf_copy == true,
         )
 
         validate(values, current, errors)
@@ -117,6 +124,7 @@ module Partiduo
           errors << error(field, "too_long", {"max" => max.to_s}) if field_value(values, field).size > max
         end
         validate_code(values, current, errors)
+        validate_nature(values, errors)
         if current && current.category_id != values.category.id && current_kind_conflict?(current, values)
           errors << error("category_id", "kind_mismatch")
         end
@@ -151,6 +159,27 @@ module Partiduo
         elsif QuickCode.taken?(code, current.try(&.id))
           errors << error("code", "taken", {"value" => code})
         end
+      end
+
+      # Nature d'un client : une valeur connue, sur une fiche de client
+      # seulement (ADR-004 D9).
+      private def self.validate_nature(values : Values, errors) : Nil
+        nature = values.customer_nature
+        return if nature.empty?
+        if values.category.kind != "customer"
+          errors << error("customer_nature", "not_applicable")
+        elsif !CUSTOMER_NATURES.includes?(nature)
+          errors << error("customer_nature", "invalid", {"value" => nature})
+        end
+      end
+
+      # Proposition de nature d'après les identifiants (ADR-004 D9) : les
+      # SIREN des personnes morales de droit public commencent par 1 ou 2.
+      def self.propose_nature(siren : String, vat_number : String) : String
+        siren = siren.strip
+        siren = Partiduo::Vat::Fr::VatNumber.siren(vat_number.strip).to_s if siren.empty? && vat_number.strip.starts_with?("FR")
+        return "public" if siren.size == 9 && siren[0].in?('1', '2')
+        siren.empty? && vat_number.strip.empty? ? "individual" : "business"
       end
 
       # Une fiche change de catégorie (`Fiche::move_to`) sans changer de
@@ -299,6 +328,8 @@ module Partiduo
         card.purchase_price = values.purchase_price
         card.vat_rate_id = values.vat_rate_id
         card.extra = JSON::Any.new(values.extra)
+        card.customer_nature = values.category.kind == "customer" ? values.customer_nature : ""
+        card.pdf_copy = values.pdf_copy
         card.save!
 
         Address.filter(card_id: card.id).delete(raw: true)

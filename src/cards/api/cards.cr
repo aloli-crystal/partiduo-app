@@ -13,6 +13,10 @@ module Partiduo
     module Cards
       KINDS = Partiduo::Cards::CardRules::KINDS
       UNITS = Partiduo::Cards::Units::CODES
+      # Natures d'un client (ADR-004 D9) : particulier, professionnel,
+      # administration publique. Elles commandent le canal proposé, le
+      # marquage B2C, les mentions et l'e-reporting.
+      CUSTOMER_NATURES = Partiduo::Cards::CardRules::CUSTOMER_NATURES
 
       # --- Entrées ---------------------------------------------------------------
 
@@ -30,6 +34,10 @@ module Partiduo
       # modification. `extra` : attributs propres de la catégorie (texte,
       # nombre *en chaîne* ou entier, date `AAAA-MM-JJ`, booléen, identifiant
       # de fiche). La première adresse de livraison est celle par défaut.
+      #
+      # `customer_nature` (client seulement, `CUSTOMER_NATURES`) : `nil`
+      # garde la nature enregistrée (vide à la création) ; `""` l'efface.
+      # `pdf_copy` : `nil` garde le choix enregistré (oui à la création).
       record CardInput,
         category_id : Int64,
         name : String,
@@ -51,7 +59,9 @@ module Partiduo
         sale_price : BigDecimal? = nil,
         purchase_price : BigDecimal? = nil,
         vat_rate_id : Int64? = nil,
-        extra : Hash(String, JSON::Any) = {} of String => JSON::Any
+        extra : Hash(String, JSON::Any) = {} of String => JSON::Any,
+        customer_nature : String? = nil,
+        pdf_copy : Bool? = nil
 
       # Attribut propre d'une catégorie. `value_type` : `text`, `number`,
       # `date`, `boolean`, `card`.
@@ -165,9 +175,29 @@ module Partiduo
         vat_rate_code : String?,
         extra : Hash(String, JSON::Any),
         created_at : Time,
-        updated_at : Time do
+        updated_at : Time,
+        customer_nature : String = "",
+        pdf_copy : Bool = true do
         def item? : Bool
           kind == "item"
+        end
+
+        # Clé i18n de la nature du client (`cards.natures.individual`) ;
+        # `nil` si elle n'est pas précisée.
+        def customer_nature_key : String?
+          customer_nature.empty? ? nil : "cards.natures.#{customer_nature}"
+        end
+
+        # Nature proposée d'après le SIREN et le numéro de TVA (ADR-004 D9) :
+        # à confirmer par l'utilisateur, jamais enregistrée en silence.
+        def proposed_nature : String
+          Partiduo::Cards::CardRules.propose_nature(siren, vat_number)
+        end
+
+        # Nature retenue : celle choisie, sinon la proposition (fiches
+        # antérieures à la nature explicite, DECISIONS D-FIN-001).
+        def effective_nature : String
+          customer_nature.presence || proposed_nature
         end
 
         # Adresse de livraison par défaut (la première), sinon `nil`.
@@ -197,6 +227,7 @@ module Partiduo
             email: email, phone: phone, contact_name: contact_name, address: address.try(&.to_input),
             delivery_addresses: delivery_addresses.map(&.to_input), unit_code: unit_code.presence,
             sale_price: sale_price, purchase_price: purchase_price, vat_rate_id: vat_rate_id, extra: extra,
+            customer_nature: customer_nature, pdf_copy: pdf_copy,
           )
         end
       end
@@ -331,6 +362,14 @@ module Partiduo
         formatted = Partiduo::Cards::QuickCode.format(code)
         return if formatted.empty?
         Partiduo::Cards::Card.filter(code: formatted).first.try { |card| card_views([card]).first }
+      end
+
+      # Nature proposée pour un client d'après son SIREN et son numéro de TVA
+      # (ADR-004 D9) : `public` pour un SIREN d'une personne morale de droit
+      # public (premier chiffre 1 ou 2), `business` avec un SIREN ou un
+      # numéro de TVA, `individual` sinon. Une proposition, à confirmer.
+      def self.propose_nature(siren : String, vat_number : String) : String
+        Partiduo::Cards::CardRules.propose_nature(siren, vat_number)
       end
 
       # Format d'un quick code saisi (`comptaproc.format_quickcode`).
@@ -516,6 +555,8 @@ module Partiduo
             extra: card.extra.try(&.as_h?) || {} of String => JSON::Any,
             created_at: card.created_at!,
             updated_at: card.updated_at!,
+            customer_nature: card.customer_nature.to_s,
+            pdf_copy: card.pdf_copy.nil? ? true : card.pdf_copy!,
           )
         end
       end

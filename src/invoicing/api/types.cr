@@ -24,8 +24,10 @@ module Partiduo
         "deposit_invoice" => %w[credit_note],
       }
       # Canaux d'émission d'un document fiscal (ADR-004 D9) : plateforme agréée
-      # (transmise par une extension, `partiduo-einvoicing`), courriel, papier.
-      ISSUE_CHANNELS = %w[platform email paper]
+      # (transmise par une extension, `partiduo-einvoicing`), courriel, papier,
+      # Chorus Pro pour un client public (extension `partiduo-choruspro`,
+      # ADR-004 D9 révisé ; à défaut, remise hors Partiduo puis « envoyé »).
+      ISSUE_CHANNELS = %w[platform email paper chorus_pro]
       # Code UNTDID 1001 du document Factur-X (BT-3).
       TYPE_CODES = {"invoice" => "380", "credit_note" => "381", "deposit_invoice" => "386"}
 
@@ -160,7 +162,10 @@ module Partiduo
         customer_account : String = "",
         sales_account : String = "",
         vat_account : String = "",
-        bank_account : String = ""
+        bank_account : String = "",
+        pdf_copy_enabled : Bool = true,
+        pdf_copy_from : Time? = nil,
+        pdf_copy_until : Time? = nil
 
       # Modèle de mise en page : ni mention, ni montant, seulement l'aspect.
       record LayoutInput,
@@ -243,9 +248,13 @@ module Partiduo
         country_code : String,
         email : String,
         phone : String,
-        routing_id : String do
-        # Client professionnel : identifié par un SIREN ou un numéro de TVA.
+        routing_id : String,
+        nature : String = "" do
+        # Client professionnel ou public (ADR-004 D9 : nature du client) ;
+        # sans nature (identités figées avant la nature explicite) : SIREN ou
+        # numéro de TVA.
         def professional? : Bool
+          return nature.in?("business", "public") unless nature.empty?
           !siren.empty? || !vat_number.empty?
         end
 
@@ -441,7 +450,21 @@ module Partiduo
         customer_account : String,
         sales_account : String,
         vat_account : String,
-        bank_account : String do
+        bank_account : String,
+        pdf_copy_enabled : Bool = true,
+        pdf_copy_from : Time? = nil,
+        pdf_copy_until : Time? = nil do
+        # Copie PDF due à la date `on` (ADR-004 D9) : option active et date
+        # dans la période ; une période vide sera posée au premier envoi par
+        # la plateforme (un an).
+        def pdf_copy_active?(on : Time) : Bool
+          return false unless pdf_copy_enabled
+          from = pdf_copy_from
+          upto = pdf_copy_until
+          return true if from.nil? && upto.nil?
+          (from.nil? || from <= on) && (upto.nil? || on <= upto)
+        end
+
         def reminder_days(level : Int32) : Int32
           case level
           when 1 then reminder1_days
@@ -461,7 +484,8 @@ module Partiduo
             reminder_subject: reminder_subject, reminder_body: reminder_body,
             sales_journal_code: sales_journal_code, bank_journal_code: bank_journal_code,
             customer_account: customer_account, sales_account: sales_account, vat_account: vat_account,
-            bank_account: bank_account,
+            bank_account: bank_account, pdf_copy_enabled: pdf_copy_enabled, pdf_copy_from: pdf_copy_from,
+            pdf_copy_until: pdf_copy_until,
           )
         end
       end
@@ -529,7 +553,8 @@ module Partiduo
       # professionnel établi dans le pays du dossier (SIREN ou numéro de TVA),
       # sinon `email` si la fiche a une adresse électronique, `paper` à
       # défaut ; `b2c` pour un client sans SIREN ni numéro de TVA. `reason` :
-      # `domestic_business`, `foreign_business` ou `private_customer`
+      # `domestic_business`, `foreign_business`, `private_customer` ou
+      # `public_customer` (Chorus Pro)
       # (libellé `invoicing.channel_reasons.<reason>`) ; `international` :
       # client établi hors du pays du dossier (e-reporting des ventes
       # internationales).

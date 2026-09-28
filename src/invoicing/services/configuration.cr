@@ -54,6 +54,9 @@ module Partiduo
           sales_account: row.sales_account.to_s,
           vat_account: row.vat_account.to_s,
           bank_account: row.bank_account.to_s,
+          pdf_copy_enabled: row.pdf_copy_enabled.nil? ? true : row.pdf_copy_enabled!,
+          pdf_copy_from: row.pdf_copy_from,
+          pdf_copy_until: row.pdf_copy_until,
         )
       end
 
@@ -112,6 +115,9 @@ module Partiduo
          "vat_account" => input.vat_account, "bank_account" => input.bank_account}.each do |field, account|
           errors << error(field, "account") unless account.matches?(/\A[0-9A-Z]{0,20}\z/)
         end
+        if (from = input.pdf_copy_from) && (upto = input.pdf_copy_until) && from > upto
+          errors << error("pdf_copy_until", "pdf_copy_period")
+        end
         errors
       end
 
@@ -140,6 +146,9 @@ module Partiduo
         row.sales_account = input.sales_account
         row.vat_account = input.vat_account
         row.bank_account = input.bank_account
+        row.pdf_copy_enabled = input.pdf_copy_enabled
+        row.pdf_copy_from = input.pdf_copy_from.try(&.at_beginning_of_day)
+        row.pdf_copy_until = input.pdf_copy_until.try(&.at_beginning_of_day)
         row.save!
         view(row)
       end
@@ -209,7 +218,7 @@ module Partiduo
           siret: card.siret, vat_number: card.vat_number, line1: address.try(&.line1).to_s,
           line2: address.try(&.line2).to_s, postcode: address.try(&.postcode).to_s, city: address.try(&.city).to_s,
           country_code: address.try(&.country_code) || company.country_code, email: card.email, phone: card.phone,
-          routing_id: card.routing_id,
+          routing_id: card.routing_id, nature: card.effective_nature,
         )
       end
 
@@ -220,6 +229,7 @@ module Partiduo
           "siret" => party.siret, "vat_number" => party.vat_number, "line1" => party.line1, "line2" => party.line2,
           "postcode" => party.postcode, "city" => party.city, "country_code" => party.country_code,
           "email" => party.email, "phone" => party.phone, "routing_id" => party.routing_id,
+          "nature" => party.nature,
         }.to_json)
       end
 
@@ -232,6 +242,7 @@ module Partiduo
           vat_number: text.call("vat_number"), line1: text.call("line1"), line2: text.call("line2"),
           postcode: text.call("postcode"), city: text.call("city"), country_code: text.call("country_code"),
           email: text.call("email"), phone: text.call("phone"), routing_id: text.call("routing_id"),
+          nature: text.call("nature"),
         )
       end
 

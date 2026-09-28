@@ -52,10 +52,12 @@ fr:
       platform: "Plateforme agréée"
       email: "Courriel"
       paper: "Papier"
+      chorus_pro: "Chorus Pro"
     channel_reasons:
       domestic_business: "Client professionnel établi dans le pays du dossier : facture électronique par la plateforme agréée"
       foreign_business: "Client professionnel étranger : hors plateforme, e-reporting des ventes internationales"
       private_customer: "Client particulier : hors plateforme, e-reporting B2C"
+      public_customer: "Administration publique : facture par Chorus Pro, pas par une plateforme agréée"
     links:
       from_quote: "Issu du devis %{number}"
       from_order: "Issu de la commande %{number}"
@@ -171,6 +173,11 @@ fr:
         level2: "Bonjour,\n\nMalgré notre premier rappel, la facture %{number} échue le %{due_date} reste impayée pour %{balance} (%{days} jours de retard). Merci de la régler sans délai.\n\nCordialement,\n%{seller}"
         level3: "Madame, Monsieur,\n\nLa facture %{number} échue le %{due_date} reste impayée pour %{balance} malgré nos rappels. Nous vous mettons en demeure de la régler, soit %{total} au total.\n\n%{seller}"
       penalties: "Pénalités de retard : %{interest} ; indemnité forfaitaire pour frais de recouvrement : %{indemnity} ; total dû : %{total}."
+    pdf_copy:
+      banner: "Copie — l'original est la facture électronique transmise par la plateforme agréée"
+      file_suffix: "copie"
+      subject: "Copie de la facture %{number} — %{seller}"
+      body: "Bonjour,\n\nVeuillez trouver ci-joint, pour information, une copie PDF de la facture %{number}. L'original est la facture électronique transmise par la plateforme agréée : ne la payez qu'une fois.\n\nCordialement,\n%{seller}"
     mail:
       subject: "%{kind} %{number} — %{seller}"
       body: "Bonjour,\n\nVeuillez trouver ci-joint notre document %{number} d'un montant de %{amount}.\n\nCordialement,\n%{seller}"
@@ -197,6 +204,7 @@ fr:
         penalty_level: "Niveau de relance entre 0 et 3"
         journal_code: "Code de journal : lettres majuscules et chiffres, huit au plus"
         account: "Numéro de compte : chiffres et lettres majuscules, vingt au plus"
+        pdf_copy_period: "La fin de la période de copie PDF précède son début"
       document:
         kind:
           immutable: "La nature d'un document ne change pas"
@@ -282,6 +290,9 @@ fr:
         credit_exceeds: "L'avoir dépasse le montant restant de la facture (%{remaining})"
         credit_before_invoice: "Un avoir ne précède pas la facture qu'il corrige"
         future: "La date d'émission ne peut dépasser la date du jour (%{date}) : le numéro attribué est définitif"
+        customer_siren_required: "Le client %{customer} est un professionnel établi en France : indiquez son SIREN sur sa fiche avant d'émettre"
+      pdf_copy:
+        not_platform: "Seule une facture émise par la plateforme agréée a une copie PDF"
       channel:
         not_fiscal: "Seuls une facture, une facture d'acompte ou un avoir ont un canal d'émission"
         already_sent: "Document déjà envoyé : son canal d'émission ne change plus"

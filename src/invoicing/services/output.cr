@@ -37,9 +37,12 @@ module Partiduo
         "#{view.number || "draft-#{view.id}"}.pdf"
       end
 
-      def self.render(view : Api::DocumentView, layout : Api::LayoutView?) : Rendered
+      # `copy` : copie PDF d'une facture transmise par la plateforme agréée
+      # (ADR-004 D9, `PdfCopy`) — bandeau « Copie » sur chaque page et pas de
+      # XML Factur-X, pour qu'elle ne passe pas pour un second original.
+      def self.render(view : Api::DocumentView, layout : Api::LayoutView?, copy : Bool = false) : Rendered
         xml = nil
-        if view.fiscal? && !view.draft?
+        if view.fiscal? && !view.draft? && !copy
           credited = view.credited.try { |link| Documents.view(Documents.find(link.id)) }
           xml = FacturxXml.build(view, credited)
         end
@@ -51,7 +54,7 @@ module Partiduo
           document.creator = "Partiduo #{Partiduo::VERSION}"
           document.producer = "Partiduo #{Partiduo::VERSION}"
           document.lang = view.locale
-          Renderer.new(document, view, layout).draw
+          Renderer.new(document, view, layout, copy).draw
         end
         if xml
           document.attach_file(bytes: xml.to_slice, name: XML_NAME, description: "Factur-X", relationship: :data,

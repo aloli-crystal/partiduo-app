@@ -52,10 +52,12 @@ en:
       platform: "Approved platform"
       email: "Email"
       paper: "Paper"
+      chorus_pro: "Chorus Pro"
     channel_reasons:
       domestic_business: "Business customer established in the company's country: e-invoice through the approved platform"
       foreign_business: "Foreign business customer: outside the platform, international sales e-reporting"
       private_customer: "Private customer: outside the platform, B2C e-reporting"
+      public_customer: "Public administration: invoice through Chorus Pro, not an approved platform"
     links:
       from_quote: "From quote %{number}"
       from_order: "From order %{number}"
@@ -171,6 +173,11 @@ en:
         level2: "Hello,\n\nDespite our first reminder, invoice %{number}, due on %{due_date}, remains unpaid for %{balance} (%{days} days late). Please settle it without delay.\n\nKind regards,\n%{seller}"
         level3: "Dear Sir or Madam,\n\nInvoice %{number}, due on %{due_date}, remains unpaid for %{balance} despite our reminders. We hereby give you formal notice to pay %{total} in total.\n\n%{seller}"
       penalties: "Late payment interest: %{interest}; fixed compensation for recovery costs: %{indemnity}; total due: %{total}."
+    pdf_copy:
+      banner: "Copy — the original is the electronic invoice sent through the approved platform"
+      file_suffix: "copy"
+      subject: "Copy of invoice %{number} — %{seller}"
+      body: "Hello,\n\nPlease find attached, for your information, a PDF copy of invoice %{number}. The original is the electronic invoice sent through the approved platform: please pay it only once.\n\nKind regards,\n%{seller}"
     mail:
       subject: "%{kind} %{number} — %{seller}"
       body: "Hello,\n\nPlease find attached our document %{number} for %{amount}.\n\nKind regards,\n%{seller}"
@@ -197,6 +204,7 @@ en:
         penalty_level: "Reminder level between 0 and 3"
         journal_code: "Journal code: capital letters and digits, eight at most"
         account: "Account number: digits and capital letters, twenty at most"
+        pdf_copy_period: "The end of the PDF copy period is before its start"
       document:
         kind:
           immutable: "A document's type cannot change"
@@ -282,6 +290,9 @@ en:
         credit_exceeds: "The credit note exceeds the invoice's remaining amount (%{remaining})"
         credit_before_invoice: "A credit note cannot predate the invoice it corrects"
         future: "The issue date cannot be later than today (%{date}): the allocated number is final"
+        customer_siren_required: "Customer %{customer} is a business established in France: enter its SIREN on its card before issuing"
+      pdf_copy:
+        not_platform: "Only an invoice issued through the approved platform has a PDF copy"
       channel:
         not_fiscal: "Only an invoice, a deposit invoice or a credit note has an issue channel"
         already_sent: "Document already sent: its issue channel can no longer change"

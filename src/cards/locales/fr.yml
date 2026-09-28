@@ -19,6 +19,10 @@ fr:
       employee: "Salarié"
       contact: "Contact"
       other: "Autre"
+    natures:
+      individual: "Particulier"
+      business: "Professionnel"
+      public: "Administration publique"
     value_types:
       text: "Texte"
       number: "Nombre"
@@ -117,6 +121,9 @@ fr:
           not_applicable: "Ce champ ne concerne pas cette catégorie de fiche."
           not_found: "Ce taux de TVA n'existe pas."
           disabled: "Le taux de TVA %{code} est désactivé."
+        customer_nature:
+          not_applicable: "La nature ne concerne que les fiches de client."
+          invalid: "La nature « %{value} » n'est pas reconnue (particulier, professionnel, administration publique)."
         siren:
           not_applicable: "Ce champ ne concerne pas cette catégorie de fiche."
           invalid: "Le SIREN « %{value} » n'est pas valide (9 chiffres, clé de contrôle)."

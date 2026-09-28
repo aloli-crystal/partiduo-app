@@ -8165,3 +8165,154 @@ de l'année sert à prévoir.
 * Liasse transmise avant la clôture de l'exercice : avertissement
   `fiscal_year_open`, non bloquant (D-TDC) — conservé.
 * TELEDEC simulé : accusé daté du 10 mai 2027 (constante du simulateur).
+
+== Critique de complétude finale (F:critique-finale, 28 septembre 2026)
+
+Comparaison des dépôts livrés au prompt, aux ADR-001 à 007 (ADR-004 révisé
+le 28 septembre 2026 : D9 « PDF pour tous, copie PDF, nature du client,
+Chorus Pro » ; ADR-007 D7 `partiduo-urssaf`) et à la maquette. Blocages :
+BLOCAGES.adoc, B-FIN-001 à B-FIN-006.
+
+=== D-FIN-001 — Nature du client explicite, sur la fiche du socle (ADR-004 D9 révisé)
+
+*Contexte.* ADR-004 D9 révisé : la fiche d'un client porte sa nature —
+particulier, professionnel, administration publique —, proposée d'après le
+SIREN et le numéro de TVA mais *choisie*, jamais déduite en silence ; elle
+commande le canal, le marquage B2C, les mentions et l'e-reporting ; une
+facture à un professionnel établi en France sans SIREN est refusée ; un
+particulier se crée depuis la facture. D-INV-016 déduisait tout des
+identifiants.
+
+*Choix.*
+
+* Colonne `customer_nature` de `cards_card` (migration cards 0002,
+  `individual`, `business`, `public`, vide = pas encore précisée),
+  refusée hors des fiches de client ; `CardInput#customer_nature` (`nil`
+  garde la valeur). `Cards.propose_nature` / `CardView#proposed_nature` :
+  `public` pour un SIREN commençant par 1 ou 2 (personnes morales de droit
+  public), `business` avec SIREN ou TVA, `individual` sinon ;
+  `#effective_nature` = choisie, sinon proposée.
+* *Fiches antérieures sans nature* : la proposition sert au canal proposé et
+  est figée dans l'identité du client à l'émission (`PartyView#nature`),
+  mais le refus « professionnel sans SIREN » ne s'applique qu'à une nature
+  *choisie* (une fiche vide n'est jamais jugée en silence). L'écran de la
+  fiche montre « À préciser (proposée : …) ».
+* Canal : `public` → nouveau canal `chorus_pro` (dossier français, client
+  en France, migration invoicing 0003) ; `individual` → courriel ou papier,
+  B2C ; `business` → plateforme dans le pays du dossier.
+  `PartyView#professional?` suit la nature (indemnité de 40 €).
+  `partiduo-einvoicing` laisse hors plateforme, sans signalement, le canal
+  `chorus_pro` et un client public.
+* Refus à l'émission (`issue.customer_siren_required`) : facture, acompte
+  ou avoir, nature choisie `business` ou `public`, client en France, sans
+  SIREN.
+* Saisie express : panneau « Nouveau client particulier » de l'édition
+  d'une facture (HTMX, `invoicing:express_customer`) qui crée la fiche par
+  `Api::Cards.create_card` (catégorie `CUSTOMER`, nature `individual`) et
+  remplit le champ « Client » (échange hors cible). Sans JavaScript : la
+  fiche se crée depuis « Tiers et articles ».
+* `API_VERSION` 0.4.0 (contrat enrichi, sans rupture).
+
+*Alternatives écartées.* Imposer la nature à toutes les fiches existantes
+(migration de données ou refus d'émettre) : rupture pour les dossiers
+repris ; nature portée par la facture : ADR-004 D9 la met sur la fiche.
+
+*Amendement proposé à ADR-004 D9.* Préciser que la proposition vaut pour
+les fiches antérieures à la nature explicite tant qu'elle n'est pas
+choisie ; noter le canal `chorus_pro` du cœur.
+
+=== D-FIN-002 — Copie PDF doublant l'envoi par la plateforme (ADR-004 D9 révisé)
+
+*Choix.*
+
+* Paramètres de la Facturation (migration invoicing 0003) :
+  `pdf_copy_enabled` (oui par défaut), `pdf_copy_from`, `pdf_copy_until`.
+  « Activée pendant la première année » sans échéance écrite en dur : la
+  période vide est posée *au premier envoi par la plateforme* (`mark_sent`
+  d'un document au canal `platform`) pour un an, puis se règle à l'écran ;
+  période inversée refusée.
+* Fiche client : `pdf_copy` (oui par défaut), case de la fiche.
+* `mark_sent` au canal `platform` envoie d'elle-même la copie si elle est
+  prévue (`pdf_copy_due?`) ; un échec est tracé (`pdf_copy_failed`), jamais
+  bloquant. `send_pdf_copy` l'envoie à la demande (même hors période),
+  `document_pdf_copy` la produit.
+* La copie : mise en page du document, bandeau « Copie — l'original est la
+  facture électronique transmise par la plateforme agréée » en haut de
+  chaque page, *sans XML Factur-X* (un logiciel du client ne peut la lire
+  comme une facture), PDF/A-3 contrôlé ; nom `<numéro>-copie.pdf`. Tracée
+  (`EmailLog`, `pdf_copy_sent`), sans changer l'état du document.
+* Interface : panneau « Canal d'émission » d'une facture au canal
+  plateforme (copie prévue ou non, téléchargement, envoi) ; groupe « Copie
+  PDF » des paramètres.
+
+*Alternative écartée.* Conserver la copie comme pièce jointe : ce serait un
+second document « officiel » ; elle se recalcule à la demande.
+
+=== D-FIN-003 — Corrections relevées au navigateur (interface)
+
+* Dates facultatives d'un document (`Validité du devis` sur une facture) :
+  une chaîne vide est *vraie* dans un gabarit Marten
+  (`Template::Value#truthy?`) ; `DocumentDisplay` rend `nil`. Le même motif
+  peut exister ailleurs (à surveiller : tout `{% if %}` sur une chaîne mise
+  en forme).
+* Mentions obligatoires à l'écran : montants, taux, dates et devise
+  présentés comme dans le PDF (« 40,00 € » au lieu de « 40.0 EUR »,
+  dates localisées).
+* Tableau de bord : tuile « TVA due · <mois> » de la maquette (CA3 ou grille
+  belge du mois calculée par `preview_vat_return`, case 28 ou grille 71),
+  pour qui peut déclarer la TVA.
+
+=== D-FIN-004 — Extension `partiduo-choruspro` (ADR-004 D9 révisé)
+
+*Choix.* Nouveau dépôt, sur le plan de `partiduo-teledec` : code
+`CHORUSPRO`, `depends_on "INVOICING"`, permissions `choruspro.invoice.read`,
+`.transmit`, `choruspro.settings.manage`. Factures au canal `chorus_pro`
+(brouillons compris) ; contrôles (SIRET, structure connue, engagement et
+service exigés, service actif) ; dépôt du PDF/A-3 Factur-X du cœur (numéro
+d'engagement = référence de commande BT-13, code service = référence
+acheteur BT-10 : ils sont imprimés, donc saisis avant l'émission) ;
+idempotence par référence `PDUO-CPP-<facture>-<tentative>` ; facture
+marquée envoyée ; statuts ramenés à six ; « à recycler » se redépose ; repli
+sans transport (PDF à déposer, dépôt et statut notés à la main) ; secrets
+PISTE et compte technique chiffrés (`PARTIDUO_CHORUSPRO_KEY` ou clé de
+l'instance). Transport abstrait et Chorus Pro simulé ; adaptateur réel en
+attente des accès (B-FIN-002).
+
+*Alternative écartée.* Numéro d'engagement et code service propres à
+l'extension, saisis après l'émission : ils ne seraient pas sur la facture
+Factur-X déposée (la structure publique les lit dans le document).
+
+=== D-FIN-005 — Chaîne vide dans le formulaire de fiche : copie PDF décochée
+
+La case « Copie PDF » d'une fiche de client est cochée par défaut à
+l'écran ; un formulaire posté sans elle (script, ancien formulaire) la
+refuse. Conséquence voulue d'une case HTML ; le contrat garde « oui » quand
+`pdf_copy` est `nil`.
+
+=== D-FIN-006 — Extension `partiduo-urssaf` (ADR-007 D7)
+
+*Choix.* Nouveau dépôt : code `URSSAF`, `depends_on "MICRO"`, permissions
+`urssaf.declaration.read`, `.transmit`, `urssaf.settings.manage`. Mandat
+recueilli (date, acceptation explicite), notifié, révocable ; éligibilité
+et périodicité relevées à la notification (périodicité différente de celle
+du module : bloquant) ; chiffre d'affaires *du module `micro`* par
+catégorie, *arrondi à l'euro* (au plus proche, moitié vers le haut, comme
+le formulaire en ligne) ; estimation ; déclaration idempotente, accusé,
+cotisations dues et date limite conservés, période notée « déclarée » dans
+le module (`mark_declared`, référence = numéro de l'URSSAF ; l'accusé est
+gardé même si cette note échoue) ; rejet conservé avec son motif ;
+déclaration acceptée intangible (déclencheur) ; secret chiffré
+(`PARTIDUO_URSSAF_KEY` ou clé de l'instance). Transport abstrait et
+URSSAF simulée ; adaptateur réel après la souscription de l'opérateur
+(B-FIN-003). Télépaiement SEPA et avance immédiate : plus tard.
+
+*Alternative écartée.* Déclarer au centime : le formulaire de l'URSSAF
+n'accepte que des euros.
+
+=== D-FIN-007 — Bases de test de la critique finale
+
+Une base par dépôt, toutes préfixées par la base attribuée
+(`partiduo_test_critique_final`, `_ui`, `_einv`, `_document`, `_superpdp`,
+`_teledec`, `_skel`, `_migrate`, `_cpp`, `_urssaf`, `_mig`) pour que les
+suites tournent en parallèle ; instance de démonstration du parcours au
+navigateur : `partiduo_test_critique_final_demo`.

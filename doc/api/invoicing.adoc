@@ -223,6 +223,47 @@ aucune extension de facturation électronique (D-INV-016).
   nul, figés ensuite.
 * `DocumentView#issue_channel`, `#b2c`, `#channel_editable?`, `#channel_key`.
 
+=== Nature du client, Chorus Pro, copie PDF (ADR-004 D9 révisé, 28 septembre 2026)
+
+* *Nature du client* (fiche du socle, `CardView#customer_nature` :
+  `individual`, `business`, `public`, vide si pas encore précisée ;
+  `#proposed_nature` d'après le SIREN et le numéro de TVA ;
+  `#effective_nature` = la nature choisie, sinon la proposition). Elle
+  commande la proposition du canal : `public` → `chorus_pro` (raison
+  `public_customer`, dossier français), `business` → `platform` dans le pays
+  du dossier, `individual` → `email` ou `paper` et `b2c`. Elle est figée
+  dans l'identité du client à l'émission (`PartyView#nature`) et commande
+  `PartyView#professional?` (indemnité forfaitaire de 40 €).
+* *Refus à l'émission* : facture, acompte ou avoir à un client de nature
+  choisie `business` ou `public` établi en France sans SIREN
+  (`issue.customer_siren_required`). Une fiche sans nature n'est jamais
+  jugée en silence (D-FIN-001).
+* *Canal `chorus_pro`* (`ISSUE_CHANNELS`) : transmission par l'extension
+  `partiduo-choruspro` (à écrire) ; sans elle, document remis hors
+  Partiduo puis marqué envoyé. `partiduo-einvoicing` ne le transmet pas et
+  ne le signale pas.
+* *Copie PDF doublant la plateforme* (D-FIN-002) :
+** `SettingsInput` / `SettingsView` : `pdf_copy_enabled` (oui par défaut),
+   `pdf_copy_from`, `pdf_copy_until` (période datée ; vide, elle est posée
+   pour un an au premier `mark_sent` d'un document au canal `platform`) ;
+   `SettingsView#pdf_copy_active?(on)` ; période inversée refusée
+   (`settings.pdf_copy_period`).
+** Fiche client : `CardInput#pdf_copy` / `CardView#pdf_copy` (refus client
+   par client).
+** `mark_sent` d'un document au canal `platform` envoie d'elle-même la copie
+   si elle est prévue (`pdf_copy_due?(actor, id)`) ; échec tracé
+   (`pdf_copy_failed`), jamais bloquant.
+** `document_pdf_copy(actor, id) : FileView` (lecture) : PDF/A-3 de la mise
+   en page, bandeau « Copie — l'original est la facture électronique
+   transmise par la plateforme agréée » sur chaque page, *sans* XML
+   Factur-X ; `NotFound` hors canal `platform`.
+** `send_pdf_copy(actor, id, input = nil) : Result(EmailLogView)`
+   (`invoicing.invoice.send`) : envoi à la demande, même hors période ;
+   tracé (`EmailLog`, événement `pdf_copy_sent`), sans changer l'état du
+   document ; hors canal `platform` : `pdf_copy.not_platform`.
+* Migrations : cards 0002 (`customer_nature`, `pdf_copy`), invoicing 0003
+  (canal `chorus_pro`, colonnes de la copie). `API_VERSION` 0.4.0.
+
 == Transmission au comptable (Facturation seule)
 
 * `sales_journal_csv(actor, from, to)` : journal des ventes et des

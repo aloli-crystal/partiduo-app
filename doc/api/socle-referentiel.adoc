@@ -119,6 +119,8 @@ saisi déjà pris est refusé.
 |`vat_number` |compacté ; contrôle FR et BE, forme générique UE sinon ; FR : cohérent avec le SIREN
 |`siren`, `siret` |clé de Luhn (exception La Poste) ; SIREN déduit du SIRET ; SIRET commençant par le SIREN
 |`routing_id` |code de routage de l'annuaire (`[A-Za-z0-9._-]`, 100 car.), exige un SIREN ; `CardView#electronic_address` = `SIREN[_SIRET[_CODE]]`
+|`customer_nature` |client seulement : `individual`, `business`, `public` (`CUSTOMER_NATURES`), vide si pas précisée ; `nil` à la saisie garde la valeur ; `Cards.propose_nature(siren, vat_number)` et `CardView#proposed_nature` proposent (SIREN public : premier chiffre 1 ou 2), `#effective_nature` retient (ADR-004 D9, D-FIN-001)
+|`pdf_copy` |client : accepte la copie PDF des factures transmises par la plateforme (oui par défaut ; `nil` garde la valeur) — ADR-004 D9, D-FIN-002
 |`iban`, `bic` |ISO 13616 (clé modulo 97), ISO 9362
 |`address`, `delivery_addresses` |adresse principale et adresses de livraison (20 au plus, la première par défaut) ; pays ISO 3166-1, celui de la société si vide
 |`unit_code` |articles : recommandation UN/ECE n° 20 (`Api::Cards::UNITS`, libellés `cards.units.<code>`), `C62` par défaut
