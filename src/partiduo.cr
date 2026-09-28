@@ -13,6 +13,7 @@ require "pg"
 # Lecture des colonnes `numeric` en BigDecimal (Marten ne la charge que si
 # `pg` est requis avant lui), avec le correctif des grands multiples de 10 000.
 require "./partiduo/ext/pg_numeric"
+require "./partiduo/ext/date_time_precision"
 
 require "./partiduo/version"
 require "./partiduo/config"
