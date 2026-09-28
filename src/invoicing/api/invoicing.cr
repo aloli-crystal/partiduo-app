@@ -184,6 +184,7 @@ module Partiduo
         records = Partiduo::Invoicing::Document.all
         records = records.filter(kind: query.kind) if query.kind
         records = records.filter(status: query.status) if query.status
+        records = records.filter(issue_channel: query.issue_channel) if query.issue_channel
         records = records.filter(customer_id: query.customer_card_id) if query.customer_card_id
         records = records.filter(issue_date__gte: query.from) if query.from
         records = records.filter(issue_date__lte: query.to) if query.to

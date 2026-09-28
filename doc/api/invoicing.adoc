@@ -222,6 +222,9 @@ aucune extension de facturation électronique (D-INV-016).
   sur un document émis, canal et marquage modifiables tant que `sent_at` est
   nul, figés ensuite.
 * `DocumentView#issue_channel`, `#b2c`, `#channel_editable?`, `#channel_key`.
+* `DocumentQuery#issue_channel` : `documents` et `count_documents` limités à
+  un canal, filtré par PostgreSQL (extensions de canal comme Chorus Pro,
+  D-CPP-004).
 
 === Nature du client, Chorus Pro, copie PDF (ADR-004 D9 révisé, 28 septembre 2026)
 

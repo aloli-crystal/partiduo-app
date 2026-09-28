@@ -753,16 +753,25 @@ replié en deux rangs vers 1 100 px (boutons « Appliquer » sans JavaScript).
 *Levée.* Choix de l'adresse parmi celles de la fiche (HTMX au changement de
 client) et conditions de paiement par document (contrat : `DocumentInput`).
 
-== B-FIN-002 — Adaptateur réel de Chorus Pro (PISTE) non écrit
+== B-FIN-002 — Adaptateur réel de Chorus Pro (PISTE) écrit, non essayé
 
 *Constat.* `partiduo-choruspro` est écrit contre `Choruspro::Transport` et
 un Chorus Pro simulé ; il faut une application PISTE et un compte technique
-de qualification (démarche de l'opérateur).
+de qualification (démarche de l'opérateur). Mise à jour K:choruspro :
+`Choruspro::PisteTransport` est écrit d'après la documentation publique et
+testé contre un HTTP simulé (D-CPP-001), mais `~/.config/partiduo/choruspro/`
+et `~/.config/partiduo/choruspro-sandbox.env` n'existent pas : la suite
+`spec/integration/qualification_spec.cr` est en attente et l'adaptateur
+n'est pas branché par défaut. Comme EINV (B-SPDP-001), son HTTP ne suit pas
+`HTTPS_PROXY`.
 
-*Levée.* Adaptateur (OAuth 2 PISTE, en-tête `cpro-account`,
-`/cpro/structures/v1/consulter`, `/cpro/factures/v1/deposer/flux`,
-`/cpro/factures/v1/consulter/fournisseur`) et suite d'intégration au bac à
-sable de qualification.
+*Levée.* Créer l'application PISTE et le compte technique de qualification,
+renseigner `CHORUSPRO_SANDBOX_CLIENT_ID`, `_CLIENT_SECRET`, `_LOGIN`,
+`_PASSWORD`, `_RECIPIENT_SIRET` dans `choruspro-sandbox.env` (dossier
+`choruspro/` non vide, avec `facturx.pdf` pour un dépôt réel sous
+`CHORUSPRO_SANDBOX_DEPOSIT=on`), relancer la suite ; confirmer l'appel de
+vérification des identifiants et le corps de `rechercher/fournisseur` ;
+puis brancher par `PARTIDUO_CHORUSPRO_TRANSPORT=piste`.
 
 == B-FIN-003 — Adaptateur réel de l'API Tierce Déclaration URSSAF non écrit
 

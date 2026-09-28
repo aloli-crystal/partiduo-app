@@ -135,6 +135,8 @@ module Partiduo
         subject : String? = nil,
         body : String? = nil
 
+      # `issue_channel` : canal d'émission (`ISSUE_CHANNELS`), filtré par
+      # PostgreSQL (extensions de canal, D-CPP-004).
       record DocumentQuery,
         kind : String? = nil,
         status : String? = nil,
@@ -143,7 +145,8 @@ module Partiduo
         to : Time? = nil,
         search : String? = nil,
         limit : Int32 = 100,
-        offset : Int32 = 0
+        offset : Int32 = 0,
+        issue_channel : String? = nil
 
       # Paramètres (ligne entière). Taux en pourcentage.
       record SettingsInput,

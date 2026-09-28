@@ -8746,3 +8746,208 @@ l'écran dans chaque langue.
 *Alternative écartée.* Bouton désactivé (visible mais inerte) : plus
 confus qu'un message.
 
+
+== Extension CHORUSPRO — adaptateur PISTE et paiements (K:choruspro, 28 septembre 2026)
+
+=== D-CPP-001 — Adaptateur PISTE écrit d'après la documentation publique, branché sur demande
+
+*Contexte.* Aucun accès de qualification (`~/.config/partiduo/choruspro/` et
+`choruspro-sandbox.env` absents) ; aucun compte ne peut être créé. La
+documentation publique (communauté Chorus Pro, « Aide aux développeurs API
+en mode OAuth2 ») et le module libre `l10n_fr_chorus_account` (OCA) donnent
+les adresses, en-têtes et corps des appels.
+
+*Choix.* `Choruspro::PisteTransport` : jeton OAuth 2 _client credentials_
+(portée `openid`) sur `sandbox-oauth.piste.gouv.fr` / `oauth.piste.gouv.fr`,
+gardé en mémoire, rejoué une fois sur 401 ; en-têtes `Authorization` et
+`cpro-account` (base 64 de `login:mot de passe`) ; `structures/v1/rechercher`,
+`consulter`, `rechercher/services` ; dépôt `factures/v1/deposer/flux`
+(`IN_DP_E2_CII_FACTURX`), identifiant provisoire `flux:<numeroFluxDepot>` ;
+suivi par `transverses/v1/consulterCRDetaille` puis
+`factures/v1/rechercher/fournisseur` (identifiant CPP retenu,
+`RemoteStatus#remote_id`) et `factures/v1/consulter/historique`
+(`statutCourantCode`). Vérification des identifiants : jeton puis
+`transverses/v1/recuperer/structures/actives/fournisseur` (appel choisi sans
+confirmation, à vérifier). Branché seulement par
+`PARTIDUO_CHORUSPRO_TRANSPORT=piste` ; sinon repli (dépôt noté à la main).
+Idempotence locale seulement (référence par tentative) : l'API de dépôt de
+flux n'a pas de clé d'idempotence.
+
+*Alternative écartée.* Brancher l'adaptateur par défaut : non essayé, il
+pourrait refuser des dépôts valides ; le repli manuel reste sûr. Dépôt PDF
+(`deposer/pdf` puis `soumettre`) : plus d'appels et de champs, alors que le
+Factur-X porte déjà engagement et service.
+
+=== D-CPP-002 — Réaction aux paiements lettrés
+
+*Contexte.* La tâche demande de réagir à `payment.matched`. La Facturation,
+abonnée avant l'extension, règle déjà la facture.
+
+*Choix.* `Choruspro::Payments`, abonné de `payment.matched` et
+`payment.unmatched` : relit la facture par `Partiduo::Api::Invoicing` ;
+historique `payment` (une fois par lettrage et statut de la facture) ;
+facture entièrement réglée → `settled_at` (migration choruspro 0003) et
+statut `paid` s'il était `submitted`, `delivered` ou `suspended` ; le suivi
+(`refresh_all`) s'arrête ; un statut distant en retard ne fait pas revenir
+en arrière. Délettrage → `settled_at` effacé, historique `unpayment`, statut
+`paid` venu du seul lettrage ramené au dernier statut relevé. Aucun appel à
+Chorus Pro dans la transaction de l'événement.
+
+*Alternative écartée.* Statut local supplémentaire « réglée » : changerait la
+contrainte des statuts et l'affichage pour une information que la date
+suffit à porter.
+
+=== D-CPP-003 — Corrections révélées par les specs du lot K (Chorus Pro)
+
+*Contexte.* Les specs de règles (`spec/choruspro/rules_spec.cr`) ont révélé
+deux défauts de `partiduo-choruspro` : `transmit` d'un *brouillon* complet
+passait les contrôles (le brouillon n'a que des avertissements), déposait la
+facture chez Chorus Pro puis échouait à l'enregistrement (numéro vide) ; et
+des secrets enregistrés illisibles (clé de l'instance changée, valeur
+altérée) bloquaient toute nouvelle saisie des identifiants, même avec les
+deux secrets fournis.
+
+*Choix.* `Deposits.transmit!` ajoute le contrôle bloquant
+`choruspro.controls.draft` pour un brouillon, avant tout appel au transport
+(comme `note_manual`). `save_credentials` ne signale
+`choruspro.errors.credentials.unreadable` que si un secret laissé vide
+devait être repris de la valeur illisible ; deux secrets saisis la
+remplacent.
+
+*Alternative écartée.* Obliger à effacer les identifiants avant de les
+ressaisir : message « saisissez-les de nouveau » alors trompeur.
+
+=== D-CPP-004 — Filtre `issue_channel` dans `DocumentQuery` (amendement du contrat du cœur) ; visibilité limitée au canal
+
+*Contexte.* Relecture du lot K : `Deposits.documents` parcourait tous les
+documents fiscaux du dossier (vues complètes, filtre du canal en Crystal) à
+chaque affichage de l'index et de `counts`. Et `Api.invoice` lisait tout
+document avec l'acteur système : `choruspro.invoice.read` suffisait à voir
+client, SIRET et montants de n'importe quelle facture.
+
+*Choix.* Champ facultatif `issue_channel : String? = nil` ajouté en dernier
+à `Partiduo::Api::Invoicing::DocumentQuery`, filtré par PostgreSQL dans
+`documents` et `count_documents` (ajout rétrocompatible, spec
+`channels_rules_spec`, `doc/api/invoicing.adoc`). L'extension ne lit plus
+que les documents `public_portal` ; dépôts, réservations et historiques en
+trois requêtes ; `counts` sans contrôles ni historiques.
+`Deposits.visible_document!` : document hors canal, jamais déposé ni
+réservé → `NotFound` pour `invoice`, `pdf`, `transmit`, `note_manual`,
+`release`.
+
+*Alternative écartée.* Garder le parcours complet avec un cache : complexité
+et invalidation pour un besoin que le filtre SQL règle. Contrôle
+`not_chorus_channel` rendu à l'appelant : il divulguait déjà le nom du
+client dans les paramètres.
+
+=== D-CPP-005 — Réservation du dépôt avant l'appel à Chorus Pro ; pas d'idempotence promise
+
+*Contexte.* `transmit!` appelait le transport sans verrou : deux POST
+simultanés déposaient deux fois ; une transaction locale en échec après un
+dépôt accepté n'en gardait aucune trace. Le contrat `Transport#submit` se
+disait « idempotent sur `deposit.reference` », mais l'API PISTE de dépôt de
+flux ne reçoit pas cette référence et n'a pas de clé d'idempotence ; la
+simulation, idempotente, masquait le défaut.
+
+*Choix.* Table `choruspro_pending` (migration choruspro 0004), une ligne au
+plus par facture (unicité), insérée par `INSERT … ON CONFLICT DO NOTHING`
+hors de toute transaction *avant* l'appel : un second dépôt simultané est
+refusé (`deposit_running`). Refus certain de Chorus Pro → réservation levée.
+Pas de réponse (`TransportError::UNAVAILABLE` : réseau, délai, 5xx) →
+réservation `uncertain` : ni redépôt automatique ni bouton « Déposer » ;
+l'utilisateur vérifie sur le portail puis note le dépôt à la main
+(réservation levée, identifiant repris) ou lève la réservation
+(`Api.release`, historique `released`) pour redéposer. Succès →
+identifiant écrit aussitôt dans la réservation, puis enregistrement en une
+transaction ; s'il échoue, historique `error`
+(`choruspro.errors.deposit.unrecorded`, `remote_id`) écrit à part, et un
+nouveau `transmit` finalise sans nouvel appel. Un appel `running` depuis
+plus de dix minutes est tenu pour interrompu (`uncertain`). Le contrat du
+`Transport` ne promet plus l'idempotence ; la simulation ne l'est plus et
+sait perdre une réponse après un dépôt accepté.
+
+*Alternative écartée.* `pg_advisory_xact_lock` : le verrou tombe avec la
+transaction, alors que l'appel distant doit rester hors transaction.
+Recherche préalable par numéro de facture (`factures/v1/rechercher/fournisseur`)
+avant chaque redépôt : un flux pas encore intégré n'y figure pas, la
+recherche ne prouve donc rien ; à ajouter à l'adaptateur PISTE après essai
+en qualification (B-FIN-002).
+
+=== D-CPP-006 — « À recycler » : recyclage sur le portail, plus de redépôt
+
+*Contexte.* Le statut `to_recycle` autorisait un nouveau dépôt du même
+PDF Factur-X (même numéro, SIRET et BT-10 figés) : Chorus Pro le refuse
+comme doublon, et corriger la fiche ne change pas la facture émise.
+
+*Choix.* Plus aucun statut ne permet un nouveau dépôt (`RESUBMITTABLE`
+supprimé ; `Config::ATTENTION` pour les compteurs). Une facture « à
+recycler » a le contrôle bloquant `recycle_on_portal` : le recyclage
+(nouveau service ou destinataire, sans nouveau dépôt) se fait sur le portail
+Chorus Pro, puis le statut se relève (API) ou se note (dépôt manuel). La
+branche morte de `counts` disparaît.
+
+*Alternative écartée.* Commande « recycler » (`factures/v1/recycler`) dans
+le `Transport`, l'adaptateur PISTE et la simulation : corps de l'appel non
+confirmé sans accès de qualification (B-FIN-002) ; à ajouter après essai.
+
+=== D-CPP-007 — Historique : motifs avec leurs paramètres, statut local et statut brut
+
+*Contexte.* Une erreur n'était enregistrée que par sa clé i18n (le motif
+de refus de Chorus Pro était perdu) ; un statut noté à la main était
+journalisé et affiché par son code brut.
+
+*Choix.* `choruspro_submission_event` gagne `params` (JSON des paramètres
+de la clé de `detail`) et `remote_status` (statut brut) ; `status` porte
+le statut local (ou, pour un paiement, celui de la facture dans la
+Facturation). L'écran traduit `detail` avec ses paramètres et le statut
+(`choruspro.statuses.*`, `invoicing.statuses.*`), le statut brut à part.
+Les lignes anciennes (code brut dans `status`) s'affichent telles quelles.
+
+*Alternative écartée.* Message traduit enregistré en base : figé dans la
+langue de l'auteur.
+
+=== D-CPP-008 — Délettrage : retour au statut d'avant le lettrage
+
+*Contexte.* `on_unmatched` revenait au statut déduit de `remote_status`,
+toujours `DEPOSEE` pour un dépôt noté à la main : un statut « mise à
+disposition » noté, lettré puis délettré revenait à « déposée ».
+
+*Choix.* Colonne `settled_from` (migration 0004) : statut avant le passage à
+`paid` par le lettrage. Au délettrage : dépôt par l'API → dernier statut
+relevé (il a pu changer pendant le règlement), sinon `settled_from` ; dépôt
+noté à la main → `settled_from`. Une suspension rétablie reprend le motif du
+dernier changement de statut noté.
+
+*Alternative écartée.* Relire le dernier événement `status` : les anciens
+événements portaient le code brut, et un paiement noté entre-temps
+brouille la lecture.
+
+=== D-CPP-009 — Clé `PARTIDUO_CHORUSPRO_KEY` mal formée refusée
+
+*Contexte.* Une variable définie mais mal formée était ignorée en silence :
+la clé dérivée de `secret_key` prenait le relais et les secrets enregistrés
+devenaient illisibles sans diagnostic.
+
+*Choix.* `Secrets.configuration_error` ; au démarrage, erreur journalisée
+(sans la valeur) ; chiffrer ou déchiffrer lève `Secrets::Error` (dépôt :
+`no_credentials` ; enregistrement des identifiants :
+`choruspro.errors.credentials.key`).
+
+*Alternative écartée.* Arrêter l'instance au démarrage : une extension mal
+configurée ne doit pas empêcher la comptabilité de tourner.
+
+=== D-CPP-010 — Relevé général : continuer après l'erreur d'une facture
+
+*Contexte.* `refresh_all` s'arrêtait à la première `TransportError` : une
+facture inconnue de Chorus Pro bloquait le relevé de toutes les autres, et
+le nombre de changements déjà faits était perdu.
+
+*Choix.* `refresh_all : Result(RefreshReport)` (`changed`, `errors` avec le
+numéro de la facture en `field`) ; l'erreur est notée dans l'historique de
+la facture et la boucle continue ; échec seulement pour une erreur qui vaut
+pour tous (`no_transport`, `no_credentials`, identifiants refusés,
+`unavailable`). L'écran affiche le nombre et, en avertissement, les factures
+en erreur.
+
+*Alternative écartée.* Garder `Result(Int32)` et taire les erreurs : la
+facture en cause ne serait plus signalée.

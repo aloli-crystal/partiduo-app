@@ -90,6 +90,20 @@ describe_module "INVOICING", "Facturation — canal d'émission : règles et cas
     actions.should contain("marked_sent")
   end
 
+  it "filtre la liste des documents sur le canal d'émission (D-CPP-004)" do
+    setup = InvoicingSpec.setup
+    paper = InvoicingSpec.issued(setup)
+    Api.set_issue_channel(InvoicingSpec.actor, paper.id, Api::ChannelInput.new("paper")).value!
+    email = InvoicingSpec.issued(setup)
+    Api.set_issue_channel(InvoicingSpec.actor, email.id, Api::ChannelInput.new("email")).value!
+    query = Api::DocumentQuery.new(kind: "invoice", issue_channel: "paper")
+    ids = Api.documents(InvoicingSpec.actor, query).map(&.id)
+    ids.should contain(paper.id)
+    ids.should_not contain(email.id)
+    Api.count_documents(InvoicingSpec.actor, query).should eq(ids.size.to_i64)
+    Api.documents(InvoicingSpec.actor, Api::DocumentQuery.new(issue_channel: "public_portal")).should be_empty
+  end
+
   it "refuse le contrat du canal quand la Facturation est inactive" do
     setup = InvoicingSpec.setup
     invoice = InvoicingSpec.issued(setup)

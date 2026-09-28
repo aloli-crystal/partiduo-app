@@ -31,12 +31,13 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |L |Module `liberal` (ADR-007 D6) : livre-journal, immobilisations, 2035, partie double par la Comptabilité ; interface et mode simplifié |*Terminé* (cœur, interface et mode simplifié ; clôture « Clôture du lot L »)
 |T |Extension `partiduo-teledec` (ADR-007 D4, D5) : liasse, TVA, DAS2, IS, greffe par TELEDEC (API Balance, transport abstrait, simulateur) |*Terminé* contre le simulateur (clôture « Clôture du lot T ») ; adaptateur réel en attente (B-TDC-001)
 |F |Critique finale : ADR-004 D9 révisé (nature du client, copie PDF, canal Chorus Pro, saisie express), extensions `partiduo-choruspro` (ADR-004 D9) et `partiduo-urssaf` (ADR-007 D7) |*Terminé* contre des simulateurs (section « Critique de complétude finale ») ; adaptateurs réels en attente (B-FIN-002, B-FIN-003)
+|K |Extension `partiduo-choruspro` (ADR-004 D9 révisé) : adaptateur PISTE, réaction aux paiements lettrés, relecture (réservation du dépôt, recyclage sur le portail, visibilité, historique) |*Terminé* contre Chorus Pro simulé (sections « Extension CHORUSPRO » et « Clôture du lot K ») ; qualification réelle non essayée (B-FIN-002)
 |H |Extension `partiduo-esalink` (ADR-004 D2 révisé le 28 septembre 2026) : adaptateur EsaLink hérité de l'adaptateur XP Z12-013 d'EINV, points d'extension ajoutés à EINV |*Terminé* contre EsaLink simulée (sections « Extension ESALINK » et « Clôture du lot H ») ; préproduction réelle non essayée (B-ESL-001)
 |===
 
 *État définitif (28 septembre 2026, critique de complétude finale : section
-du même nom ; lot H clos le même jour).* Lot en cours : aucun. Tous les
-lots du plan (P à 6), les lots E, G, H, L et T et la critique finale sont
+du même nom ; lots H et K clos le même jour).* Lot en cours : aucun. Tous les
+lots du plan (P à 6), les lots E, G, H, K, L et T et la critique finale sont
 terminés ; les trois jalons du prompt
 sont vérifiés, les extensions exigées par ADR-004 D9 révisé et ADR-007 D7
 existent (`partiduo-choruspro`, `partiduo-urssaf`), écrites contre des
@@ -2151,6 +2152,66 @@ et Ameba sans remarque ; garde-fous ADR-005 D3 verts ; `marten migrate` sur
 base vierge (`partiduo_migrate_C`) sans erreur, puis retour de cards 0003
 et nouvel aller.
 
+== Extension CHORUSPRO — adaptateur PISTE et paiements (K:choruspro, 28 septembre 2026)
+
+Reprise de `partiduo-choruspro` (déjà créée par la critique finale,
+D-FIN-004) ; complété :
+
+* adaptateur réel `Choruspro::PisteTransport` (OAuth 2 PISTE, `cpro-account`,
+  structures et services, dépôt de flux Factur-X, suivi du flux puis de la
+  facture), branché par `PARTIDUO_CHORUSPRO_TRANSPORT=piste`, testé contre
+  un HTTP simulé ; non essayé faute d'accès (D-CPP-001, B-FIN-002) ;
+* suite d'intégration facultative `spec/integration/qualification_spec.cr`
+  (en attente : `~/.config/partiduo/choruspro/` et `choruspro-sandbox.env`
+  absents) ;
+* réaction à `payment.matched` / `payment.unmatched` : dépôt réglé
+  (`settled_at`, migration choruspro 0003), statut « mise en paiement »,
+  suivi arrêté, historique (D-CPP-002) ; écran : date de règlement ;
+* identifiant définitif appris au suivi (`RemoteStatus#remote_id`).
+
+Vérifications : `partiduo-choruspro` 34 exemples, 0 échec, 1 en attente
+(qualification) ; `genmigrations choruspro` sans écart ; format et Ameba
+sans remarque.
+
+== Clôture du lot K — relecture et vérifications (K:final, 28 septembre 2026)
+
+*Lots terminés* : P, 0, 1, 2, F, M, 3, 4, 5, 6, E, G, H, L, T, critique
+finale, C et K (extension Chorus Pro). *Lot en cours* : aucun ; la suite
+est dans « Prochaines étapes ».
+
+Corrections de la relecture (DECISIONS D-CPP-003 à D-CPP-010) :
+
+* Dépôt réservé avant l'appel à Chorus Pro (table `choruspro_pending`,
+  migration choruspro 0004) : un second dépôt simultané est refusé ; sans
+  réponse, dépôt « à vérifier » sur le portail (noter à la main ou lever la
+  réservation, `Api.release`), jamais rejoué seul ; dépôt accepté mais
+  enregistrement en échec gardé et finalisé sans nouvel appel. Le contrat
+  `Transport#submit` ne promet plus l'idempotence ; la simulation non plus
+  (D-CPP-005).
+* « À recycler » : plus de redépôt (doublon refusé par Chorus Pro) ;
+  recyclage sur le portail puis relevé (D-CPP-006).
+* Visibilité : un document hors canal Chorus Pro jamais déposé est
+  introuvable pour l'extension ; documents filtrés par PostgreSQL grâce au
+  nouveau `DocumentQuery#issue_channel` du cœur (amendement rétrocompatible
+  du contrat, D-CPP-004) ; index et compteurs sans N+1.
+* Historique : motifs avec leurs paramètres, statut local et statut brut
+  distincts, traduits à l'écran (D-CPP-007) ; délettrage d'un dépôt noté à
+  la main ramené au statut d'avant le lettrage (D-CPP-008) ; clé
+  `PARTIDUO_CHORUSPRO_KEY` mal formée refusée et signalée (D-CPP-009) ;
+  relevé général poursuivi après l'erreur d'une facture (D-CPP-010).
+* Corrections déjà faites au lot K et désormais commitées : brouillon
+  refusé au dépôt, secrets illisibles remplacés par une nouvelle saisie
+  (D-CPP-003), specs de règles, d'intégrité, de paiements et d'écran.
+
+*Vérifications* (base `partiduo_test_K_final`) : `partiduo-app` trois
+configurations, `--order random` — 920 + 51 en attente (Comptabilité),
+751 + 62 (Facturation), 1009 + 31 (Comptabilité et Facturation) ;
+`partiduo-choruspro` 84 exemples, 0 échec, 1 en attente (qualification,
+B-FIN-002) ; `crystal tool format` et Ameba sans remarque ;
+`genmigrations choruspro` sans écart ; `marten migrate` sur base vierge
+(`partiduo_migrate_K`) sans erreur, puis retour de choruspro 0004 et nouvel
+aller.
+
 == Prochaines étapes
 
 Liste à l'issue de la critique de complétude et des lots E, G, L et T ;
@@ -2159,7 +2220,10 @@ chaque point renvoie à sa décision ou à son blocage.
 . *EsaLink (après le lot H)* : essai contre la préproduction (identifiants
   à fournir), adresse de production, adresse d'authentification et tri de
   la recherche à confirmer (B-ESL-001, D-ESL-002, D-ESL-003).
-. *Critique finale* : adaptateurs réels de Chorus Pro (B-FIN-002) et de
+. *Critique finale* : essai de l'adaptateur PISTE de Chorus Pro sur la
+  qualification (B-FIN-002, écrit : D-CPP-001), puis commande « recycler »
+  (`factures/v1/recycler`, D-CPP-006) et recherche d'un flux déjà déposé
+  avant de lever une réservation sans réponse (D-CPP-005) et adaptateur réel de
   l'API Tierce Déclaration URSSAF (B-FIN-003) ; adresse de livraison et
   conditions de paiement dans l'édition d'une facture (B-FIN-001) ;
   nature des fiches clientes reprises faite (migration cards 0003,
@@ -2290,6 +2354,9 @@ cd prod-crystal/partiduo/partiduo-choruspro      # ou partiduo-urssaf
 SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install
 DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' crystal spec
 crystal run manage.cr -- genmigrations choruspro # ou urssaf ; aucun écart attendu
+PARTIDUO_MODULES=invoicing DATABASE_URL='postgres:///partiduo_<base>?host=/tmp' crystal run manage.cr -- migrate
+bin/ameba && crystal tool format src spec ui
+# PARTIDUO_CHORUSPRO_TRANSPORT=piste : adaptateur réel (non essayé, B-FIN-002)
 ----
 
 Reprise (`partiduo-migrate`) :
