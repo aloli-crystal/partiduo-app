@@ -8951,3 +8951,229 @@ en erreur.
 
 *Alternative écartée.* Garder `Result(Int32)` et taire les erreurs : la
 facture en cause ne serait plus signalée.
+
+== Extension URSSAF — suivi, paiements, mode simplifié (U:urssaf, 28 septembre 2026)
+
+Compléments de `partiduo-urssaf` pour couvrir ADR-007 D7 (suivi, paiement
+SEPA, mandats SEPA, accusés) au-delà de D-FIN-006, qui renvoyait le
+télépaiement « à plus tard ».
+
+=== D-URS-001 — Paiements, anomalies et mandats SEPA dans des tables à part
+
+*Contexte.* Une déclaration acceptée est intangible (déclencheur
+`urssaf_filing_guard`, D-FIN-006) ; le suivi (paiements, régularisations,
+anomalies) évolue après l'accusé.
+
+*Choix.* Tables `urssaf_payment`, `urssaf_anomaly`, `urssaf_sepa_mandate`
+(migration 0002) ; la déclaration garde ses cotisations de l'accusé ; une
+régularisation de l'URSSAF ouvre une anomalie `contributions_changed`
+(avant, après) sans toucher à la déclaration. L'accusé en pièce jointe est
+posé à l'acceptation, dans la même écriture que la déclaration.
+
+*Alternative écartée.* Assouplir le déclencheur pour certaines colonnes :
+l'intangibilité serait moins lisible et moins sûre.
+
+=== D-URS-002 — Payer le reste dû entier, par le mandat SEPA actif
+
+*Choix.* `Urssaf::Api.pay(actor, starts_on)` règle le reste dû
+(cotisations moins paiements effectués ou en cours ; un paiement rejeté ne
+compte pas) par le dernier mandat SEPA actif, à la date limite fixée par
+l'URSSAF ; référence d'idempotence `PDUO-PAY-<SIREN>-<période>-<n>`.
+Permission nouvelle `urssaf.payment.transmit`, distincte de la
+déclaration.
+
+*Alternative écartée.* Montant ou date de prélèvement au choix : réversible
+plus tard (`PaymentOrder` porte déjà `debit_on`), inutile tant que l'API
+réelle n'est pas connue.
+
+=== D-URS-003 — IBAN transmis, jamais conservé
+
+*Choix.* L'IBAN complet ne va qu'au transport ; la base garde la forme
+masquée `FR76 **** **** 0189` (contrainte `urssaf_sepa_mandate_masked_check`,
+masquage aussi si un adaptateur rendait l'IBAN en clair) ; `to_s` et
+`inspect` des entrées le masquent ; le formulaire refusé n'est pas
+réaffiché. Contrôle local : format ISO 13616 et clé modulo 97, BIC
+facultatif (8 ou 11 caractères) ; autorisation explicite du prélèvement.
+
+*Alternative écartée.* Chiffrer l'IBAN en base : Partiduo n'en a pas
+l'usage, l'URSSAF le détient.
+
+=== D-URS-004 — Relevé du suivi à la demande, anomalies sans doublon
+
+*Choix.* `Urssaf::Api.refresh` relève, à la demande (bouton « Relever le
+suivi »), l'état du mandat (révoqué depuis l'espace URSSAF : mandat noté
+révoqué, anomalie `mandate_revoked`), des déclarations acceptées
+(régularisations, anomalies signalées), des paiements initiés et des
+mandats SEPA (absents chez l'URSSAF : notés révoqués). Une anomalie
+identique encore ouverte n'est pas rouverte ; elle se note traitée
+(`resolve_anomaly`). Périodes « à déclarer » : échéance passée ou proche,
+non transmises, pas avant le début d'activité (à défaut, la première
+recette), comme l'aide URSSAF du module ; une période à zéro reste à
+déclarer.
+
+*Alternative écartée.* Relevé périodique en tâche de fond : le cœur n'a
+pas d'ordonnanceur d'extension ; réversible (la commande existe).
+
+=== D-URS-005 — Entrée du mode simplifié ajoutée par l'extension
+
+*Contexte.* ADR-007 D3 : menu réduit de la micro-entreprise
+(`PartiduoUi::SimpleMode::MENU`, interface) ; l'extension ne doit pas
+modifier `partiduo-ui-bulma`.
+
+*Choix.* `ui/bulma/bulma.cr` insère, au chargement, l'entrée
+`URSSAF_ONLINE` (menu du manifeste) juste après `MICRO_URSSAF`, une seule
+fois (`Urssaf::Ui.add_simple_entry`) ; elle n'apparaît que si l'extension
+est active et permise (règle de `SimpleMode.sections`). Compteur et ligne
+« À traiter » par `PartiduoUi::Extensions.counter` (périodes à déclarer,
+cotisations à payer, anomalies). Fil d'Ariane depuis l'aide URSSAF du
+module.
+
+*Alternative écartée.* Point d'extension dédié dans `SimpleMode`
+(`SimpleMode.register`) : plus propre, à proposer à l'interface ;
+l'insertion actuelle se remplace alors en une ligne.
+
+=== D-URS-006 — OAuth 2 prêt, adaptateur réel non deviné
+
+*Choix.* `Urssaf::OAuth2` (jeton _client credentials_, Basic, cache, oubli
+sur 401, HTTPS seul, erreurs sans secret) est écrit et testé ; le point de
+jeton et la portée sont des paramètres. L'adaptateur `td-ae` lui-même
+n'est pas écrit (B-URS-001) : ni documentation ni bac à sable.
+
+*Alternative écartée.* Écrire l'adaptateur d'après des chemins supposés :
+code faux présenté comme réel.
+
+
+=== D-URS-007 — IBAN en clair reconnu malgré les séparateurs (bug révélé par les specs du lot U)
+
+*Contexte.* Les specs du testeur (lot U) ont montré qu'un IBAN rendu en
+clair par un adaptateur, groupé par quatre caractères
+(`FR76 3000 6000 0112 3456 7890 189`), était conservé et affiché tel quel :
+le masquage de `FollowUp.upsert_sepa` et la contrainte
+`urssaf_sepa_mandate_masked_check` (migration 0002) ne cherchaient que neuf
+caractères alphanumériques d'affilée, séparateurs compris.
+
+*Choix.* `Urssaf::Iban.clear?` ignore les séparateurs (tout sauf lettres,
+chiffres et `*`) avant la recherche ; `Iban.mask` retire aussi ces
+séparateurs. Migration 0003 (`0003_urssaf_iban_mask`) : même règle en base
+(`regexp_replace` puis `!~ '[0-9A-Za-z]{9,}'`), réversible vers la
+contrainte de 0002. La migration 0002, déjà commitée, n'est pas modifiée.
+
+*Alternative écartée.* Corriger la contrainte dans 0002 : une base déjà
+migrée ne la verrait pas changer.
+
+=== D-URS-008 — Déclaration idempotente et sérialisée (relecture du lot U)
+
+*Contexte.* La référence remise à l'URSSAF portait un horodatage : une
+réponse perdue après acceptation (panne réseau) ou un échec de
+l'enregistrement local suivi d'une nouvelle tentative déclarait deux fois
+la même période ; deux déclarations simultanées passaient toutes deux les
+contrôles.
+
+*Choix.* Référence `PDUO-URSSAF-<SIREN>-<AAAAMMJJ>-<n>`, `n` = rejets déjà
+reçus pour la période + 1 (colonne `urssaf_filing.attempts`, migration
+0004) : la même tentative logique renvoie la même référence et l'URSSAF
+(idempotente sur la référence) rend le même accusé. `declare!` s'exécute
+dans une transaction PostgreSQL ouverte par
+`Urssaf::Declarations.serialized`, sous `pg_advisory_xact_lock(hashtext(
+'urssaf:declare:<période>'))`, qui couvre contrôle, appel et
+enregistrement ; un rejet et l'historique restent enregistrés (la
+transaction n'est annulée que par une exception). Specs : réponse perdue
+puis nouvelle tentative (une seule déclaration côté URSSAF simulée),
+numérotation après un rejet, deux déclarations simultanées (l'une
+acceptée, l'autre refusée `already_transmitted`), verrou tenu.
+Amendement de D-FIN-006, qui annonçait déjà l'idempotence.
+
+*Alternative écartée.* `SELECT … FOR UPDATE` sur la ligne de paramètres :
+sérialiserait toutes les périodes et tous les écrans de l'extension ;
+`Partiduo::Api::Transaction.run` : annule sur un résultat en échec, donc
+perdrait le rejet conservé.
+
+=== D-URS-009 — Paiement d'après l'état chez l'URSSAF, sérialisé par déclaration
+
+*Contexte.* Le reste dû ne tenait compte que des paiements locaux : des
+cotisations payées dans l'espace URSSAF étaient prélevées une seconde
+fois ; deux paiements simultanés obtenaient la même référence (erreur
+500) ; un paiement initié sans numéro de l'URSSAF n'était jamais relevé.
+
+*Choix.* `pay!` interroge `declaration_state` et prélève
+min(reste dû local, cotisations selon l'URSSAF − payé selon l'URSSAF −
+paiements locaux en cours) ; ≤ 0 → `urssaf.errors.payment.nothing_due`.
+Quand l'URSSAF compte plus de paiements effectués que Partiduo, anomalie
+`paid_elsewhere` (au paiement et au relevé). Paiements d'une déclaration
+sérialisés (`serialized("pay:<id>")`), numéro d'ordre calculé sous le
+verrou. Paiement `initiated` sans numéro : anomalie `payment_unknown` au
+relevé (à vérifier dans l'espace URSSAF ; le transport ne permet pas de
+chercher par référence). Codes ajoutés par la migration 0004.
+
+*Alternative écartée.* Aligner le reste dû sur l'URSSAF sans rien
+signaler : un paiement externe passerait inaperçu dans le suivi.
+
+=== D-URS-010 — Droits du module `micro` exigés (amendement de D-FIN-006)
+
+*Contexte.* L'extension lisait et notait les déclarations du module
+`micro` avec l'acteur système : `urssaf.declaration.read` montrait le
+chiffre d'affaires sans `micro.register.read`, et
+`urssaf.declaration.transmit` notait la déclaration sans
+`micro.register.write`.
+
+*Choix.* L'acteur réel est passé à `Micro.declarations`, `Micro.settings`,
+`Micro.receipts` et `Micro.mark_declared`. `Urssaf::Api.periods` et
+`estimate` exigent donc aussi `micro.register.read` (`Forbidden` levé par
+le module) ; `Urssaf::Api.declare` vérifie `micro.register.write` en
+première ligne, avant tout appel à l'URSSAF (aucune déclaration transmise
+qui ne pourrait être notée). `overview` et `pending_count` restent
+accessibles sans droit `micro` : sans périodes à déclarer ni à payer ;
+l'écran n'affiche alors pas les périodes. Le SIREN (paramètres du
+socle) et la pièce jointe de l'accusé restent lus avec l'acteur système.
+Spec : utilisateur aux droits URSSAF seuls.
+
+*Alternative écartée.* Garder l'acteur système et documenter
+l'élargissement : les permissions de l'extension étendraient en silence
+celles du module.
+
+=== D-URS-011 — Détails neutres, traduits à l'affichage ; relevé réservé à la transmission
+
+*Choix.* Les détails d'anomalie et d'historique produits par Partiduo sont
+des objets JSON de chaînes neutres (montants `105.00`, codes, références ;
+par exemple `{"before":"105.00","after":"120.00"}`) : le dédoublonnage des
+anomalies ne dépend plus de la langue de celui qui relève, et
+`Urssaf::Ui::Present.detail` les traduit (`urssaf.anomaly_details.*`,
+`urssaf.event_details.*`) dans la langue du lecteur, montants mis en forme,
+codes traduits ; un motif libre de l'URSSAF reste affiché tel quel.
+`Urssaf::Api.refresh` exige `urssaf.declaration.transmit` (il écrit et
+appelle l'URSSAF) ; le bouton « Relever le suivi » n'est montré qu'à ces
+titulaires. Contrôle bloquant `negative_turnover` (catégorie au chiffre
+d'affaires négatif, avoirs de la période). Écran : année bornée à
+2000 … année suivante, `events` et `payments` limités en SQL (`limit`),
+ligne d'estimation et bornes de période par clés i18n
+(`urssaf_ui.flash.estimate_line`, `urssaf_ui.period_range`).
+
+*Alternative écartée.* Traduire à l'enregistrement dans une langue fixe :
+l'affichage resterait dans une seule langue.
+
+*Reste.* Les dates brutes d'historique (`signed` : `2026-01-05`) sont
+affichées au format ISO ; mineur, non repris.
+
+=== D-URS-012 — Compteur du menu léger
+
+*Contexte.* `pending_count`, évalué à chaque page, recalculait toute la
+vue d'ensemble (plusieurs dizaines de requêtes en périodicité mensuelle).
+
+*Choix.* Anomalies ouvertes : un `COUNT` ; déclarations au reste dû
+positif : une requête SQL agrégeant les paiements ; périodes à déclarer :
+`Micro.declarations` des deux années (trois requêtes chacune) et une
+requête des déclarations acceptées, seulement si l'acteur lit le module
+`micro`. Les vues de déclaration chargent les paiements en une requête
+(`filing_id__in`) ; l'écran passe à `overview` les périodes de l'année
+affichée (`known`) pour ne pas les recalculer. Les déclarations acceptées
+à payer sont comptées toutes années confondues (auparavant : les deux
+dernières années seulement).
+
+*Alternative écartée.* Cache du compteur : invalidation délicate
+(recettes saisies dans le module `micro`), gain faible.
+
+*CI.* La CI GitHub (journal `.ci-logs/partiduo-urssaf.log`, échec de lien
+antérieur au passage à lld) ne peut être relancée sans pousser, ce qui est
+interdit au portage : la suite a été exécutée localement (base
+`partiduo_test_U_final`, ordre aléatoire) et son journal archivé dans
+`.ci-logs/partiduo-urssaf.local.log`.

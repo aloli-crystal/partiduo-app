@@ -33,11 +33,12 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |F |Critique finale : ADR-004 D9 révisé (nature du client, copie PDF, canal Chorus Pro, saisie express), extensions `partiduo-choruspro` (ADR-004 D9) et `partiduo-urssaf` (ADR-007 D7) |*Terminé* contre des simulateurs (section « Critique de complétude finale ») ; adaptateurs réels en attente (B-FIN-002, B-FIN-003)
 |K |Extension `partiduo-choruspro` (ADR-004 D9 révisé) : adaptateur PISTE, réaction aux paiements lettrés, relecture (réservation du dépôt, recyclage sur le portail, visibilité, historique) |*Terminé* contre Chorus Pro simulé (sections « Extension CHORUSPRO » et « Clôture du lot K ») ; qualification réelle non essayée (B-FIN-002)
 |H |Extension `partiduo-esalink` (ADR-004 D2 révisé le 28 septembre 2026) : adaptateur EsaLink hérité de l'adaptateur XP Z12-013 d'EINV, points d'extension ajoutés à EINV |*Terminé* contre EsaLink simulée (sections « Extension ESALINK » et « Clôture du lot H ») ; préproduction réelle non essayée (B-ESL-001)
+|U |Extension `partiduo-urssaf` (ADR-007 D7) complétée : télépaiement et mandats SEPA, suivi (paiements, régularisations, anomalies, mandat révoqué depuis l'espace URSSAF), accusés en pièce jointe, OAuth 2, entrée du mode simplifié |*Terminé* contre l'URSSAF simulée (sections « Extension URSSAF — suivi et paiements » et « Clôture du lot U ») ; adaptateur réel en attente (B-FIN-003, B-URS-001)
 |===
 
 *État définitif (28 septembre 2026, critique de complétude finale : section
-du même nom ; lots H et K clos le même jour).* Lot en cours : aucun. Tous les
-lots du plan (P à 6), les lots E, G, H, K, L et T et la critique finale sont
+du même nom ; lots H, K et U clos le même jour).* Lot en cours : aucun. Tous les
+lots du plan (P à 6), les lots E, G, H, K, L, T et U et la critique finale sont
 terminés ; les trois jalons du prompt
 sont vérifiés, les extensions exigées par ADR-004 D9 révisé et ADR-007 D7
 existent (`partiduo-choruspro`, `partiduo-urssaf`), écrites contre des
@@ -2212,11 +2213,100 @@ B-FIN-002) ; `crystal tool format` et Ameba sans remarque ;
 (`partiduo_migrate_K`) sans erreur, puis retour de choruspro 0004 et nouvel
 aller.
 
+== Extension URSSAF — suivi et paiements (U:urssaf, 28 septembre 2026)
+
+Dépôt `partiduo-urssaf` (0.2.0), repris sur l'existant de la critique
+finale (D-FIN-006) pour couvrir tout ADR-007 D7 (DECISIONS D-URS-001 à
+D-URS-006) :
+
+* *Transport* `Urssaf::Transport` : les six services du catalogue `td-ae`
+  (comptes et périodicité, mandats de tierce déclaration — dont l'état
+  relevé, `mandate_active?` —, estimation, déclaration, télépaiement SEPA
+  `pay` / `payment_state`, mandats SEPA `sepa_mandates` /
+  `register_sepa_mandate` / `revoke_sepa_mandate`) et le suivi d'une
+  déclaration (`declaration_state`). `Urssaf::OAuth2` : jeton _client
+  credentials_ (en-tête Basic, cache jusqu'à une minute de l'échéance,
+  oubli sur 401, erreurs sans secret), brique de l'adaptateur réel.
+  URSSAF simulée étendue (accusé PDF, régularisation, anomalies, SEPA,
+  paiements idempotents, issue des paiements au relevé).
+* *Accusés* conservés en pièce jointe du socle (`Partiduo::Api::Core.
+  store_attachment`) : le document de l'URSSAF, sinon un accusé texte établi
+  d'après sa réponse ; téléchargement `Urssaf::Api.receipt`.
+* *Paiement* : `pay` règle le reste dû d'une déclaration acceptée par le
+  mandat SEPA actif ; mandat SEPA enregistré avec autorisation explicite,
+  IBAN contrôlé (modulo 97), transmis et jamais conservé (IBAN masqué en
+  base, contrainte `urssaf_sepa_mandate_masked_check`).
+* *Suivi* : `refresh` relève mandat, déclarations, paiements et mandats
+  SEPA ; anomalies (`rejected`, `urssaf`, `contributions_changed`,
+  `payment_rejected`, `mandate_revoked`) ouvertes sans doublon, notées
+  traitées ; `overview` (dû, payé, reste, périodes à déclarer et à payer,
+  anomalies, mandat SEPA) et `pending_count`.
+* *Base* : migration 0002 (`urssaf_payment`, `urssaf_anomaly`,
+  `urssaf_sepa_mandate`, `urssaf_filing.receipt_attachment_id`, actions de
+  l'historique étendues), aller, retour, aller vérifiés ; `genmigrations`
+  sans écart. Permission nouvelle `urssaf.payment.transmit`.
+* *Interface* : entrée « URSSAF en ligne » dans le menu du mode simplifié
+  de la micro-entreprise, juste après l'aide URSSAF (D-URS-005), compteur
+  et ligne « À traiter » ; écran : rappel que le micro-entrepreneur garde
+  la main dans son espace URSSAF, tuiles (dû, payé, reste, à déclarer),
+  anomalies, périodes (estimer, déclarer, accusé, payer), prélèvement SEPA,
+  paiements, historique ; fil d'Ariane depuis l'aide URSSAF du module.
+
+*Vérifications* (base `partiduo_test_u_urssaf`) : `partiduo-urssaf` 29
+exemples verts ; `crystal tool format` et Ameba sans remarque ;
+`genmigrations urssaf` sans écart ; migration 0002 défaite puis rejouée.
+
+== Clôture du lot U — relecture et vérifications (28 septembre 2026)
+
+Remarques de relecture de `partiduo-urssaf` corrigées (DECISIONS D-URS-007
+à D-URS-012) :
+
+* *Déclaration idempotente et sérialisée* (majeur, D-URS-008) : référence
+  `PDUO-URSSAF-<SIREN>-<AAAAMMJJ>-<n>` sans horodatage (`n` = rejets reçus
+  + 1, colonne `urssaf_filing.attempts`) ; transaction et verrou
+  consultatif par période couvrant contrôle, appel et enregistrement.
+* *Paiement d'après l'état chez l'URSSAF* (majeur, D-URS-009) : montant
+  borné par ce que l'URSSAF attend encore, refus `nothing_due` si tout est
+  payé ailleurs, anomalie `paid_elsewhere` ; paiements d'une déclaration
+  sérialisés ; paiement sans numéro de l'URSSAF signalé
+  (`payment_unknown`).
+* *Compteur léger* (majeur, D-URS-012) : `COUNT` des anomalies, reste dû
+  agrégé en SQL, périodes à déclarer calculées une fois ; paiements chargés
+  en une requête ; périodes de l'année affichée reprises par la vue
+  d'ensemble.
+* *Droits du module `micro`* (majeur, D-URS-010, amendement de
+  D-FIN-006) : acteur réel passé au module ; `declare` exige
+  `micro.register.write` avant tout appel.
+* *Mineurs* (D-URS-011) : relevé réservé à `urssaf.declaration.transmit` ;
+  détails d'anomalie et d'historique neutres (JSON), traduits et mis en
+  forme à l'affichage ; contrôle bloquant `negative_turnover` ; année
+  bornée, historique et paiements limités en SQL, gabarits de texte en
+  i18n. Migration 0003 (IBAN en clair malgré les séparateurs, D-URS-007),
+  `Iban.clear?` et les specs du testeur commités avec le lot.
+* *Base* : migration 0004 (`attempts`, codes d'anomalie
+  `paid_elsewhere`, `payment_unknown`) ; `migrate` sur base vierge
+  (`partiduo_migrate_U`), retour à 0002 puis nouvel aller sans erreur ;
+  `genmigrations urssaf` sans écart.
+
+*Vérifications* (base `partiduo_test_U_final`) : `partiduo-urssaf`
+68 exemples verts (ordre aléatoire ; journal local
+`.ci-logs/partiduo-urssaf.local.log`, la CI GitHub ne pouvant être relancée
+sans pousser) ; `crystal tool format --check` et Ameba sans remarque ;
+`partiduo-app` (documentation seule) : specs vertes dans les trois
+configurations du prompt : 1033 + 33 en attente (Comptabilité), 803 + 58
+(Facturation), 1122 + 13 (les deux), avec Analytique, Stock et Suivi.
+
 == Prochaines étapes
 
 Liste à l'issue de la critique de complétude et des lots E, G, L et T ;
 chaque point renvoie à sa décision ou à son blocage.
 
+. *URSSAF (après le lot U)* : adaptateur réel `td-ae` sur `Urssaf::OAuth2`
+  dès la souscription (B-URS-001, B-FIN-003), en vérifiant qu'il est
+  idempotent sur la référence (D-URS-008) et rend le payé par déclaration
+  (D-URS-009) ; recherche d'un paiement par référence si l'API la permet
+  (`payment_unknown`) ; faire adopter l'amendement D-URS-010 (droits
+  `micro`) ; relancer la CI GitHub du dépôt pour archiver un journal vert.
 . *EsaLink (après le lot H)* : essai contre la préproduction (identifiants
   à fournir), adresse de production, adresse d'authentification et tri de
   la recherche à confirmer (B-ESL-001, D-ESL-002, D-ESL-003).
@@ -2224,7 +2314,8 @@ chaque point renvoie à sa décision ou à son blocage.
   qualification (B-FIN-002, écrit : D-CPP-001), puis commande « recycler »
   (`factures/v1/recycler`, D-CPP-006) et recherche d'un flux déjà déposé
   avant de lever une réservation sans réponse (D-CPP-005) et adaptateur réel de
-  l'API Tierce Déclaration URSSAF (B-FIN-003) ; adresse de livraison et
+  l'API Tierce Déclaration URSSAF sur `Urssaf::OAuth2` (B-FIN-003,
+  B-URS-001) ; adresse de livraison et
   conditions de paiement dans l'édition d'une facture (B-FIN-001) ;
   nature des fiches clientes reprises faite (migration cards 0003,
   D-CPY-002, D-CPY-008) ; événement `invoice.platform_deposited` à faire

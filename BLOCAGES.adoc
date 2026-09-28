@@ -826,3 +826,28 @@ admet un décalage (`offset`), ce qui lèverait la limite de D-ESL-002. Le trans
 ne suit pas `HTTPS_PROXY` (B-SPDP-001) : derrière un mandataire, la suite
 échouera à la connexion.
 
+== B-URS-001 — Documentation technique et bac à sable de l'API Tierce Déclaration absents (U:urssaf)
+
+*Constat.* `~/.config/partiduo/urssaf/` est vide et
+`~/.config/partiduo/urssaf-sandbox.env` est un fichier vide ; le catalogue
+`td-ae` de https://portailapi.urssaf.fr n'a pas répondu (connexion
+réinitialisée) ; la fiche publique de l'API (data.gouv.fr, ex-api.gouv.fr)
+ne décrit que les six services (comptes, mandats, estimer, déclarer, payer,
+mandats SEPA), OAuth 2 _client credentials_, bac à sable puis production,
+sur souscription. Chemins, champs, codes des catégories, portée et point de
+jeton restent inconnus.
+
+*Contournement.* Transport abstrait couvrant les six services et le suivi,
+URSSAF simulée, client OAuth 2 (`Urssaf::OAuth2`, point de jeton et portée
+passés en paramètres, rien d'écrit en dur) testé contre un HTTP simulé.
+Pas d'adaptateur réel ni de suite d'intégration (rien à essayer, et deviner
+les chemins produirait du code faux).
+
+*Levée.* Souscription de l'opérateur ; déposer la documentation dans
+`~/.config/partiduo/urssaf/` et `URSSAF_SANDBOX_CLIENT_ID`,
+`URSSAF_SANDBOX_CLIENT_SECRET`, `URSSAF_SANDBOX_TOKEN_URL`,
+`URSSAF_SANDBOX_API_URL` dans `urssaf-sandbox.env` ; écrire
+`Urssaf::TdAeTransport < Transport` sur `Urssaf::OAuth2` et une suite
+`spec/integration/sandbox_spec.cr` en attente sans identifiants (modèle :
+`partiduo-esalink`).
+
