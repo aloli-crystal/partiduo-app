@@ -3,7 +3,7 @@
 module Partiduo
   module Vat
     # Spécificités belges (successeur des 12 tables `tva_belge` et de
-    # l'extension TVA de noalyss-plugins, lot 4).
+    # l'extension TVA d'origine, lot 4).
     module Be
       COUNTRY = "BE"
     end

@@ -8,7 +8,7 @@ module Partiduo
     # (TVA sur les débits ou les encaissements, autoliquidation), calculées
     # depuis les écritures par des règles paramétrables ; brouillon corrigé,
     # clôture figée par PostgreSQL, écriture de liquidation. Successeur de
-    # l'extension TVA de noalyss-plugins (schéma `tva_belge`). Types dans
+    # l'extension TVA d'origine (schéma `tva_belge`). Types dans
     # `vat_return_types.cr`.
     #
     # Toutes les opérations exigent `accounting.vat.declare` ; l'écriture de

@@ -29,7 +29,7 @@ module Partiduo
     # Types : `text` (longueur maximale `max_length`), `number` (décimal exact
     # à `decimals` décimales, stocké en chaîne), `date` (`AAAA-MM-JJ`),
     # `boolean`, `card` (identifiant d'une autre fiche, successeur du type
-    # `card` de NOALYSS qui stockait un quick code).
+    # `card` d'origine qui stockait un quick code).
     class CategoryAttribute < Marten::Model
       field :id, :big_int, primary_key: true, auto: true
       field :category, :many_to_one, to: Partiduo::Cards::Category, related: :attributes, on_delete: :cascade

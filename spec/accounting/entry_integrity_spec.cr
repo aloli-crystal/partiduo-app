@@ -151,7 +151,7 @@ describe_module "ACCOUNTING", "Intégrité des écritures en base" do
         EntrySpec.sql_transaction { |db| insert_line(db, view.id, "603", "debit", "0") }
       end
 
-      # Libellé et lettrage restent permis (NOALYSS : date inchangée).
+      # Libellé et lettrage restent permis (règle d'origine : date inchangée).
       EntrySpec.sql("UPDATE accounting_entry SET label = 'Corrigé' WHERE id = $1", view.id)
       Api.entry(EntrySpec.system, view.id).label.should eq("Corrigé")
     end

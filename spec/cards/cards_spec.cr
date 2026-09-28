@@ -87,7 +87,7 @@ describe "Partiduo::Api::Cards — fiches (fiche, fiche_detail)" do
       Api.create_card(writer, R.card_input(category.id, vat_number: "BE0403170701")).success?.should be_true
     end
 
-    it "refuse un nom vide (NOALYSS mettait « Nom vide », D-REF-005)" do
+    it "refuse un nom vide (l'application d'origine mettait « Nom vide », D-REF-005)" do
       result = Api.create_card(writer, R.card_input(customers.id, " "))
       result.error_keys.should eq(["cards.errors.card.name.blank"])
     end

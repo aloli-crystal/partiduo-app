@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-# Lot 3 — rapports personnalisés (`formulaire`, `form_definition` de
-# NOALYSS) : un rapport et ses lignes (libellé et formule), effacées avec
+# Lot 3 — rapports personnalisés (`formulaire`, `form_definition`
+# d'origine) : un rapport et ses lignes (libellé et formule), effacées avec
 # lui par Marten (`on_delete: :cascade`). Les profils ACCOUNTANT des
 # dossiers déjà provisionnés reçoivent la nouvelle permission
 # `accounting.report.write`, qu'un profil créé ensuite reçoit d'office

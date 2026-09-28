@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # Lot 1 : taux de TVA (successeur de `tva_rate`). Contraintes reprises de
-# NOALYSS (`tva_code_number_check` : un code n'est pas qu'un nombre) et de
+# l'application d'origine (`tva_code_number_check` : un code n'est pas qu'un nombre) et de
 # `Tva_Rate_MTable::check` (taux borné, libellé unique sans tenir compte de la
 # casse), plus les catégories UNCL5305 de l'EN 16931.
 class Migration::Vat::V0001 < Marten::Migration

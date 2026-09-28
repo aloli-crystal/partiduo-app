@@ -7,7 +7,7 @@ module Partiduo
       #
       # Montants en devise de tenue. Dates : `Time` à minuit UTC. Toutes les
       # éditions ne lisent que les journaux visibles de l'acteur
-      # (`get_ledger_sql` de NOALYSS). Période par défaut : de début de
+      # (`get_ledger_sql` d'origine). Période par défaut : de début de
       # l'exercice qui contient `date_to` jusqu'à `date_to` (défaut : la date
       # du jour de l'instance).
 
@@ -79,7 +79,7 @@ module Partiduo
         total : TrialBalanceRowView,
         summary : ClassSummaryView do
         # Écart débit − crédit des mouvements (zéro si les écritures sont
-        # équilibrées ; `Totaux delta` de NOALYSS).
+        # équilibrées ; `Totaux delta` d'origine).
         def delta : BigDecimal
           total.debit - total.credit
         end

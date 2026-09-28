@@ -289,7 +289,7 @@ module Partiduo
       end
 
       # Écart d'arrondi de conversion en devise de tenue reporté sur la plus
-      # grande ligne du côté le plus faible (NOALYSS passe une ligne
+      # grande ligne du côté le plus faible (l'application d'origine passe une ligne
       # « différence de change », D-ACC-013).
       def self.balance_rounding!(lines : Array(DraftLine)) : Nil
         debit = lines.select(&.side.debit?).sum(BigDecimal.new(0), &.amount)

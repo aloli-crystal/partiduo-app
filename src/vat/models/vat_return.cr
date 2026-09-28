@@ -4,7 +4,7 @@ module Partiduo
   module Vat
     # Déclaration de TVA ou relevé (lot 4), successeur des tables
     # `tva_belge.declaration_amount`, `tva_belge.assujetti` et
-    # `tva_belge.intracomm` de l'extension TVA de NOALYSS, étendu aux
+    # `tva_belge.intracomm` de l'extension TVA d'origine, étendu aux
     # déclarations françaises (CA3, CA12).
     #
     # * `form` : `be_periodic` (déclaration périodique), `be_client_listing`

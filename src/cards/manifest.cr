@@ -9,7 +9,7 @@ Partiduo::Modules.register do
 
   permission "cards.card.read"
   permission "cards.card.write"
-  # NOALYSS FICCAT : création, modification et effacement de catégorie de fiche.
+  # Droit d'origine FICCAT : création, modification et effacement de catégorie de fiche.
   permission "cards.category.manage"
 
   menu "CARDS_LIST", parent: "REFERENCE", order: 20, route: "cards:index", permission: "cards.card.read"

@@ -12,7 +12,7 @@
 # français reçoit le SIREN qu'il porte (caractères 5 à 13), s'il passe la
 # clé de Luhn : sans cela, la nature désormais choisie ferait refuser à la
 # validation toute facture à ce client (`Issuing.siren_required?`), cas
-# courant des fiches reprises de NOALYSS qui n'ont que la TVA.
+# courant des fiches reprises de l'application d'origine qui n'ont que la TVA.
 #
 # Retour : les natures et les SIREN posés par cette migration (et eux
 # seuls, repérés par deux tables de travail) redeviennent vides.

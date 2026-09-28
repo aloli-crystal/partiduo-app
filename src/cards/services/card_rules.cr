@@ -4,7 +4,7 @@ module Partiduo
   module Cards
     # Règles d'une fiche : normalisation de la saisie, validation,
     # enregistrement. Reprend `Fiche::insert`, `Fiche::update` et
-    # `Card_Property::update`, en les durcissant (NOALYSS n'imposait aucun
+    # `Card_Property::update`, en les durcissant (l'application d'origine n'imposait aucun
     # contrôle sur les valeurs ; seuls le quick code et le taux de TVA étaient
     # vérifiés).
     module CardRules
@@ -149,7 +149,7 @@ module Partiduo
 
       # Le quick code saisi est formaté ; vide, il est généré depuis le nom
       # (création) ou conservé (modification), comme `insert_quick_code` et
-      # `update_quick_code`. Un code saisi déjà pris est refusé (NOALYSS
+      # `update_quick_code`. Un code saisi déjà pris est refusé (l'application d'origine
       # ajoutait un suffixe en silence, D-REF-006).
       private def self.validate_code(values : Values, current : Card?, errors) : Nil
         code = values.code

@@ -62,7 +62,7 @@ module Partiduo
 
       # Abonné de `card.saved` : une fiche sans compte reçoit celui que sa
       # catégorie prévoit (compte calculé ou compte de base), comme
-      # `account_insert` à l'enregistrement d'une fiche NOALYSS. Une catégorie
+      # `account_insert` à l'enregistrement d'une fiche d'origine. Une catégorie
       # sans paramétrage, ou un compte impossible à déterminer, laisse la fiche
       # sans compte : l'enregistrement de la fiche n'échoue jamais pour cela.
       def self.on_card_saved(card_id : Int64) : Nil

@@ -7,8 +7,8 @@ module Partiduo
     # (`check_settings`, `update_settings`, `provision`) : la même règle sert au
     # contrôle instantané et à l'enregistrement.
     #
-    # Reprend et durcit `Noalyss_Parameter_Folder` (`include/class/
-    # noalyss_parameter_folder.class.php`), qui n'imposait aucun contrôle sur
+    # Reprend et durcit la classe des paramètres du dossier d'origine (voir
+    # DECISIONS.adoc, D-NOM-001), qui n'imposait aucun contrôle sur
     # l'identité de la société.
     module SettingsRules
       TAX_REGIMES  = %w[fr be]

@@ -3,7 +3,7 @@
 module Partiduo
   module Invoicing
     # Document commercial (ADR-006 D5) : devis, commande, bon de livraison,
-    # facture, facture d'acompte, avoir. NOALYSS n'en a pas : ses devis et
+    # facture, facture d'acompte, avoir. L'application d'origine n'en a pas : ses devis et
     # bons de commande sont des « actions » du suivi (`action_gestion`) et sa
     # facture une écriture du journal de ventes (`jrn` + `quant_sold`).
     #

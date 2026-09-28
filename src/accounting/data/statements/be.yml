@@ -2,7 +2,7 @@
 #
 # Bilan et compte de résultats, régime BE : schéma abrégé des comptes
 # annuels (Code des sociétés et des associations, art. 3:3 de l'arrêté
-# royal du 29 avril 2019), sur le PCMN, d'après le formulaire de NOALYSS
+# royal du 29 avril 2019), sur le PCMN, d'après le formulaire d'origine
 # `html/document/fr_be/bnb.form` (soldes signés `-s` et signes inversés au
 # passif), mis à jour pour le schéma en vigueur (DECISIONS D-ED-005).
 # Mêmes clés que `fr.yml` ; libellés `accounting.statements.be.<état>.<code>`.

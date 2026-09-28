@@ -2,8 +2,8 @@
 
 require "../spec_helper"
 
-# Déclarations belges (lot 4), successeur de l'extension TVA de
-# noalyss-plugins : grilles calculées depuis les écritures (`Tva_Amount`,
+# Déclarations belges (lot 4), successeur de l'extension TVA
+# d'origine : grilles calculées depuis les écritures (`Tva_Amount`,
 # `Ext_Tva::compute`), listing des clients assujettis (`Ext_List_Assujetti`),
 # relevé intracommunautaire (`Ext_List_Intra`), fichiers Intervat, clôture et
 # écriture de liquidation (`Ext_Tva::propose_form`).

@@ -8,7 +8,7 @@ require "./initial_data"
 
 module Partiduo
   # Module Suivi (lot 6) : actions de suivi et relations avec les tiers
-  # (`action_gestion`, `follow_up` de NOALYSS) — types d'action, états,
+  # (`action_gestion`, `follow_up` d'origine) — types d'action, états,
   # rappels, commentaires, fiches concernées, actions liées, opérations
   # rattachées, étiquettes. Hors GED : les documents relèvent de
   # l'extension `partiduo-document`.

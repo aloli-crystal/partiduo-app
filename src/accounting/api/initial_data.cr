@@ -3,8 +3,8 @@
 module Partiduo
   module Api
     module Accounting
-      # Charge le plan comptable (PCMN belge ou PCG français, repris de
-      # NOALYSS), les comptes par défaut, le compte de base des catégories de
+      # Charge le plan comptable (PCMN belge ou PCG français, repris des
+      # modèles d'origine), les comptes par défaut, le compte de base des catégories de
       # fiches par défaut du socle et les quatre journaux (achats,
       # ventes, financier, opérations diverses) du régime, noms des journaux
       # dans `locale`. Appelé par `partiduo-provision` (chargeur

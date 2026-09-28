@@ -58,7 +58,7 @@ module Partiduo
 
       # Rapprochement d'un relevé. Soldes de début et de fin donnés tous
       # deux et différents : le total des opérations cochées doit égaler leur
-      # écart (règle de NOALYSS).
+      # écart (règle d'origine).
       record ReconcileInput,
         ledger_id : Int64,
         reference : String,
@@ -184,7 +184,7 @@ module Partiduo
         errors
       end
 
-      # Règle de NOALYSS : soldes donnés et différents, le total coché doit
+      # Règle d'origine : soldes donnés et différents, le total coché doit
       # égaler leur écart.
       private def self.mismatch_error(ledger : Partiduo::Accounting::Ledger, ids : Array(Int64), input : ReconcileInput) : FieldError?
         start, finish = input.start_balance, input.end_balance

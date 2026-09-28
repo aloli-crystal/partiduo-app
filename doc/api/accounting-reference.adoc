@@ -185,7 +185,7 @@ autoliquidé (`accounting.errors.vat_rate_account.*`).
 (droits `accounting.account.write` et `accounting.ledger.write`), chargeur
 `ACCOUNTING.reference_data` (ordre 20) : plan comptable du régime
 (`src/accounting/data/chart_{be,fr}.yml`, produits par
-`scripts/chart_from_noalyss.cr` depuis `mod1` et `mod2`), comptes par défaut,
+`scripts/chart_from_legacy.cr` depuis `mod1` et `mod2`), comptes par défaut,
 compte de base des catégories de fiches par défaut du socle, comptes de TVA
 des taux du régime (section `vat_accounts`), fiche Banque du journal
 financier (catégorie `BANK`, compte `510001` en FR, `550` en BE), journaux

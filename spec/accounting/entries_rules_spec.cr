@@ -2,7 +2,7 @@
 
 require "../spec_helper"
 
-# Lot 2F — cas limites des écritures, repris des règles NOALYSS :
+# Lot 2F — cas limites des écritures, repris des règles de l'application d'origine :
 # `Acc_Operation::update_receipt` (pièce déjà prise : numéro suivant),
 # `Acc_Ledger_Sale::insert` (avoirs, devise), `Acc_Ledger::reverse`
 # (extourne dans une autre période), `Acc_Ledger_Fin::insert` (lignes

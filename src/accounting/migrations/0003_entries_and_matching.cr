@@ -160,7 +160,7 @@ class Migration::Accounting::V0003 < Marten::Migration
              AND NEW.amount = OLD.amount AND NEW.currency_code = OLD.currency_code
              AND NEW.currency_rate = OLD.currency_rate THEN
             -- Libellé, pièce, échéance, pièce jointe : permis même en période
-            -- close (NOALYSS : la date inchangée n'est pas contrôlée).
+            -- close (règle d'origine : la date inchangée n'est pas contrôlée).
             NEW.period_id := OLD.period_id;
             RETURN NEW;
           END IF;

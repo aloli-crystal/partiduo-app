@@ -3,7 +3,7 @@
 module Partiduo
   module Core
     # Exercice comptable, héritier de `parm_periode.p_exercice` et
-    # `p_exercice_label` : dans NOALYSS l'exercice n'est qu'une colonne des
+    # `p_exercice_label` : à l'origine l'exercice n'est qu'une colonne des
     # périodes ; il devient une ligne, à qui appartiennent ses périodes.
     #
     # `year` : numéro d'exercice (entre 1900 et 2100, `COMPTA_MIN_YEAR` et

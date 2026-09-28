@@ -4,7 +4,7 @@ module Partiduo
   module Stock
     # Mouvements automatiques (D-STK-004), héritiers de
     # `Stock_Goods::insert_goods` appelé par la saisie des achats et des
-    # ventes de NOALYSS :
+    # ventes d'origine :
     #
     # * Facturation — `delivery_note.issued` : sortie des articles livrés ;
     #   `invoice.issued` : sortie, sauf facture d'acompte et facture issue

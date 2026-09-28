@@ -5,9 +5,9 @@ require "yaml"
 module Partiduo
   module Accounting
     # Jeu de données initial du module (convention C6) : plan comptable, comptes
-    # par défaut et journaux du régime fiscal, repris des modèles de dossier de
-    # NOALYSS (`include/sql/mod1` belge — PCMN —, `mod2` français — PCG) par
-    # `scripts/chart_from_noalyss.cr` (D-ACC-003). Les fichiers sont embarqués
+    # par défaut et journaux du régime fiscal, repris des modèles de dossier
+    # d'origine (`include/sql/mod1` belge — PCMN —, `mod2` français — PCG) par
+    # `scripts/chart_from_legacy.cr` (D-ACC-003). Les fichiers sont embarqués
     # à la compilation. Service interne.
     module ReferenceData
       SOURCES = {

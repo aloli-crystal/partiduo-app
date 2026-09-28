@@ -78,7 +78,7 @@ module Partiduo
         end
       end
 
-      # Types d'action de NOALYSS (`document_type`), libellés dans la langue
+      # Types d'action d'origine (`document_type`), libellés dans la langue
       # `locale` ; déjà présents (même préfixe) : conservés. Renvoie les
       # préfixes créés.
       def self.load_default_action_types(actor : Actor, locale : String = "fr") : Array(String)

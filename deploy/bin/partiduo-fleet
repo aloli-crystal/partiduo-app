@@ -118,7 +118,7 @@ remote() {
 # --- Inventaire -----------------------------------------------------------------
 # Une ligne par instance : « <dossier> <serveur ssh> [commentaire] ». C'est
 # l'inventaire des instances, hors application (ADR-001 D2 : la table
-# ac_dossier de NOALYSS disparaît).
+# ac_dossier de l'application d'origine disparaît).
 
 inventory_lines() {
   [ -f "$INVENTORY" ] || return 0

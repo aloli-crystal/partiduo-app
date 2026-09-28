@@ -51,7 +51,7 @@ end
 
 describe_module "FOLLOWUP", "Suivi : actions et relations" do
   describe "types d'action" do
-    it "charge les types de NOALYSS une seule fois, dans la langue voulue" do
+    it "charge les types d'action d'origine une seule fois, dans la langue voulue" do
       Api.load_default_action_types(system, "nl").size.should eq(13)
       Api.load_default_action_types(system, "fr").should be_empty
       Api.action_types(system).find!(&.code.==("FAC")).label.should eq("Factuur")

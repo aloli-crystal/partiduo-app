@@ -4,7 +4,7 @@ module Partiduo
   module Accounting
     # Fichier des écritures comptables (article A47 A-1 du livre des
     # procédures fiscales, arrêté du 29 juillet 2013 ; BOI-CF-IOR-60-40-20),
-    # successeur de l'extension `noalyss-export` (`Export_FEC_CSV`) :
+    # successeur de l'extension d'export d'origine (`Export_FEC_CSV`) :
     #
     # * 18 zones dans l'ordre réglementaire, première ligne = noms des zones ;
     # * séparateur tabulation ou barre verticale, fin de ligne CRLF ;

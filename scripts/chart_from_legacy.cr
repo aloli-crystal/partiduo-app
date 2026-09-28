@@ -1,14 +1,17 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # Produit les plans comptables initiaux `src/accounting/data/chart_{be,fr}.yml`
-# depuis les modèles de dossier de NOALYSS (`include/sql/mod1` belge,
+# depuis les modèles de dossier de l'application d'origine (`include/sql/mod1` belge,
 # `include/sql/mod2` français) : table `tmp_pcmn` (comptes), `parm_code`
 # (comptes par défaut), `fiche_def` (compte de base des catégories de fiches),
 # `jrn_def` (journaux) et `tva_rate.tva_poste` (comptes de TVA de chaque taux).
 # Règles de reprise et corrections : voir DECISIONS.adoc, D-ACC-003, D-ACC-008
 # et D-ACC-009.
 #
-#   crystal run scripts/chart_from_noalyss.cr -- /chemin/vers/noalyss-app
+#   crystal run scripts/chart_from_legacy.cr -- /chemin/vers/scripts-sql-d-origine
+#
+# Le paramètre est la racine de l'application d'origine, qui contient
+# `include/sql/mod1` et `include/sql/mod2`.
 #
 # Le résultat est versionné : ce script ne sert qu'à le régénérer.
 
@@ -24,7 +27,7 @@ INSERT = /^INSERT INTO public\.tmp_pcmn \(pcm_val, pcm_lib, pcm_val_parent, pcm_
 
 record Account, number : String, label : String, parent : String?, kind : String, direct_use : Bool
 
-# Corrections des types (et parents) erronés des modèles de NOALYSS
+# Corrections des types (et parents) erronés des modèles d'origine
 # (D-ACC-008) : numéro → {type, parent ou nil pour garder celui du modèle}.
 # Les numéros de préfixe (`28`, `29`…) valent pour tous les comptes qui en
 # commencent, sauf s'ils sont corrigés un par un.
@@ -57,7 +60,7 @@ FR_ADDITIONS = [
 BE_CONTRA_LABEL = /r[ée]ductions? de valeurs? act[ée]es?/i
 
 # Comptes de TVA des taux Partiduo (`Partiduo::Vat::{Be,Fr}::RATES`), repris
-# de `tva_rate.tva_poste` (« déductible,collectée ») par le code NOALYSS du
+# de `tva_rate.tva_poste` (« déductible,collectée ») par le code d'origine du
 # taux ; `{déductible, collectée}` donnés directement quand le taux Partiduo
 # n'a pas d'équivalent dans le modèle ou que le modèle se trompe (D-ACC-009).
 BE_VAT = {
@@ -75,9 +78,9 @@ FR_VAT = {
 TVA_INSERT = /^INSERT INTO public\.tva_rate \((.*)\) VALUES \((.*)\);$/
 
 # `tva_code` → {déductible, collectée} d'après `tva_rate.tva_poste`.
-def vat_postings(noalyss : String, mod : String) : Hash(String, {String, String})
+def vat_postings(legacy : String, mod : String) : Hash(String, {String, String})
   postings = {} of String => {String, String}
-  File.read_lines(File.join(noalyss, "include/sql", mod, "data.sql")).each do |line|
+  File.read_lines(File.join(legacy, "include/sql", mod, "data.sql")).each do |line|
     match = TVA_INSERT.match(line.strip) || next
     columns = match[1].split(',').map(&.strip)
     values = sql_values(match[2])
@@ -137,10 +140,10 @@ def fixed_kind(regime : String, number : String, label : String, kind : String) 
 end
 
 # ameba:disable Metrics/CyclomaticComplexity
-def generate(noalyss : String, mod : String, regime : String, exclude : Proc(Array(String?), Bool),
+def generate(legacy : String, mod : String, regime : String, exclude : Proc(Array(String?), Bool),
              defaults : Array({String, String}), categories : Array({String, String, Bool}), bank : String,
              vat : Hash(String, String | {String, String}), output : String) : Nil
-  rows = File.read_lines(File.join(noalyss, "include/sql", mod, "data.sql")).compact_map do |line|
+  rows = File.read_lines(File.join(legacy, "include/sql", mod, "data.sql")).compact_map do |line|
     INSERT.match(line.strip).try { |match| sql_values(match[1]) }
   end
   rows.reject!(&exclude)
@@ -178,9 +181,9 @@ def generate(noalyss : String, mod : String, regime : String, exclude : Proc(Arr
 
   File.open(output, "w") do |io|
     io.puts "# SPDX-License-Identifier: AGPL-3.0-or-later"
-    io.puts "# Plan comptable initial, régime « #{regime} », extrait de NOALYSS"
-    io.puts "# (noalyss-app/include/sql/#{mod}/data.sql, tables tmp_pcmn et parm_code)"
-    io.puts "# par scripts/chart_from_noalyss.cr ; voir DECISIONS.adoc, D-ACC-003."
+    io.puts "# Plan comptable initial, régime « #{regime} », extrait des scripts SQL"
+    io.puts "# d'origine (include/sql/#{mod}/data.sql, tables tmp_pcmn et parm_code)"
+    io.puts "# par scripts/chart_from_legacy.cr ; voir DECISIONS.adoc, D-ACC-003."
     io.puts "# Colonnes d'un compte : numéro, libellé, parent (null = racine), type,"
     io.puts "# utilisation directe. Parents avant enfants."
     io.puts "accounts:"
@@ -210,10 +213,10 @@ def generate(noalyss : String, mod : String, regime : String, exclude : Proc(Arr
       io.puts "  - {kind: #{kind}, code: #{code.to_json}, receipt_prefix: #{prefix.to_json}, receipt_padding: 5, bank_account: #{account.try(&.to_json) || "null"}}"
     end
     # Comptes de TVA par code de taux : [déductible, collectée].
-    postings = vat_postings(noalyss, mod)
+    postings = vat_postings(legacy, mod)
     io.puts "vat_accounts:"
     vat.each do |code, source|
-      deductible, collected = source.is_a?(String) ? (postings[source]? || abort("#{regime} : taux NOALYSS #{source} absent")) : source
+      deductible, collected = source.is_a?(String) ? (postings[source]? || abort("#{regime} : taux d'origine #{source} absent")) : source
       {deductible, collected}.each do |number|
         abort "#{regime} : compte de TVA #{number} (#{code}) absent du plan" unless accounts.has_key?(number)
       end
@@ -223,13 +226,13 @@ def generate(noalyss : String, mod : String, regime : String, exclude : Proc(Arr
   STDERR.puts "#{output} : #{accounts.size} comptes"
 end
 
-noalyss = ARGV[0]? || abort("usage : crystal run scripts/chart_from_noalyss.cr -- /chemin/vers/noalyss-app")
+legacy = ARGV[0]? || abort("usage : crystal run scripts/chart_from_legacy.cr -- /chemin/vers/scripts-sql-d-origine")
 data = File.expand_path("../src/accounting/data", __DIR__)
 
 # mod1 : comptes de démonstration des fiches livrées (Client 1, Banque 2…),
 # numéros de 6 caractères et plus sous les comptes de base des catégories.
 be_demo_parents = %w[400 440 604 61 700 701 5500 4890]
-generate(noalyss, "mod1", "be", ->(row : Array(String?)) { row[0].to_s.size >= 6 && be_demo_parents.includes?(row[2]) },
+generate(legacy, "mod1", "be", ->(row : Array(String?)) { row[0].to_s.size >= 6 && be_demo_parents.includes?(row[2]) },
   [{"customer", "400"}, {"supplier", "440"}, {"bank", "550"}, {"cash", "57"}, {"sales", "70"},
    {"internal_transfer", "58"}, {"current_account", "56"}, {"vat", "451"}, {"non_deductible", "67"},
    {"non_deductible_vat", "6740"}, {"vat_deductible_tax", "619000"}, {"private_expense", "4890"}],
@@ -240,7 +243,7 @@ generate(noalyss, "mod1", "be", ->(row : Array(String?)) { row[0].to_s.size >= 6
   "550", BE_VAT.transform_values(&.as(String | {String, String})), File.join(data, "chart_be.yml"))
 
 # mod2 : « 4000001 Four », fiche de démonstration.
-generate(noalyss, "mod2", "fr", ->(row : Array(String?)) { row[0] == "4000001" },
+generate(legacy, "mod2", "fr", ->(row : Array(String?)) { row[0] == "4000001" },
   # COMPTE_TVA est vide dans mod2 : 44551 « TVA à décaisser », ajouté.
   [{"customer", "410"}, {"supplier", "400"}, {"bank", "51"}, {"cash", "53"}, {"sales", "707"},
    {"internal_transfer", "58"}, {"current_account", "455"}, {"vat", "44551"}, {"non_deductible", "67"},

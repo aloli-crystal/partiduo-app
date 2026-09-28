@@ -7,7 +7,7 @@ module Partiduo
     # C1) ; coûts et valeurs en devise de tenue. Référence :
     # `doc/api/stock.adoc`.
     module Stock
-      # Sens d'un mouvement : `in` (entrée, `sg_type = 'd'` de NOALYSS) ou
+      # Sens d'un mouvement : `in` (entrée, `sg_type = 'd'` d'origine) ou
       # `out` (sortie, `sg_type = 'c'`).
       DIRECTIONS = %w[in out]
       # Nature d'une opération manuelle : `change` (mouvements saisis,
@@ -38,7 +38,7 @@ module Partiduo
       # --- Paramètres ------------------------------------------------------------
 
       # Dépôt où la Facturation et la Comptabilité inscrivent leurs mouvements
-      # (le dépôt choisi dans la saisie de NOALYSS). `nil` : aucun mouvement
+      # (le dépôt choisi dans la saisie d'origine). `nil` : aucun mouvement
       # automatique.
       record SettingsInput, default_repository_id : Int64?
 

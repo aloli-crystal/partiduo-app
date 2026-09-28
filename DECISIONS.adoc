@@ -1218,7 +1218,7 @@ de comptes.
 parents absents (551 à 559 dans `mod1`) et, dans `mod2`, toute la classe 7
 typée `PAS`.
 
-*Choix.* `scripts/chart_from_noalyss.cr` produit `src/accounting/data/chart_be.yml`
+*Choix.* `scripts/chart_from_legacy.cr` produit `src/accounting/data/chart_be.yml`
 et `chart_fr.yml` (versionnés, embarqués à la compilation, chargés par
 `Api::Accounting.load_initial_data`, chargeur `ACCOUNTING.reference_data`
 d'ordre 20, après la devise de tenue et les catégories de fiches du socle) :
@@ -1993,7 +1993,7 @@ TVA collectée à l'actif et déductible au passif, 486/487 inversés,
 amortissements et dépréciations à l'actif ; un compte créé pour une fiche
 hérite du type de son compte de base (tous les fournisseurs FR à l'actif).
 
-*Choix.* Table de corrections explicite dans `scripts/chart_from_noalyss.cr`.
+*Choix.* Table de corrections explicite dans `scripts/chart_from_legacy.cr`.
 FR : 400 et 419 au passif ; 409, 410 à l'actif ; 4456, 445661, 445662, 445663
 à l'actif sous 4456 ; 4457, 44571, 44572, 44573 au passif sous 4457 ; 481 et
 486 à l'actif, 487 au passif ; 491, 496, 590 et tous les 28x, 29x, 39x en
@@ -10011,3 +10011,112 @@ un fichier d'archive dans sa durée légale n'est jamais effacé.
 *Alternative écartée.* Faire signer les doubles validations (assertions de
 passkey des deux validateurs vérifiées par l'exécutant) : plus fort, mais
 demande un protocole de plus ; noté en B-CRA-002.
+
+== Aucune mention du logiciel d'origine dans le code (N:nom, 28 septembre 2026)
+
+=== D-NOM-001 — Le nom de NOALYSS réservé aux fichiers *.adoc et *.md
+
+*Contexte.* Règle posée par Philippe le 28 septembre 2026 : le nom de
+NOALYSS ne doit apparaître ni dans les identifiants, ni dans les noms de
+fichiers et de scripts, ni dans les variables d'environnement, les options,
+les traductions, `shard.yml`, la CI ou les commentaires. Seuls les fichiers
+`*.adoc` et `*.md` le citent (attribution exigée par la licence).
+
+*Choix.*
+
+* `scripts/chart_from_noalyss.cr` devient `scripts/chart_from_legacy.cr` ; son
+  paramètre est la racine de l'application d'origine (celle qui contient
+  `include/sql/mod1` et `mod2`, soit `noalyss-app`) ; les en-têtes de
+  `chart_be.yml` et `chart_fr.yml` citent les « scripts SQL d'origine ». La
+  régénération donne des plans identiques, en-tête mis à part.
+* Commentaires reformulés (« d'origine », « l'application d'origine »,
+  « l'extension TVA d'origine ») sans perdre la référence à la classe, à la
+  table ou à la fonction PHP. Références retirées du code, conservées ici :
+** `src/core/services/settings_rules.cr` reprend et durcit
+   `Noalyss_Parameter_Folder` (`include/class/noalyss_parameter_folder.class.php`) ;
+   `src/analytic/services/settings.cr` lit `MY_ANALYTIC` et `MY_ANC_FILTER`
+   de la même classe ;
+** `src/accounting/services/ledgers.cr` et `src/auth/services/ledgers.cr` :
+   `Noalyss_user::get_ledger` et `Noalyss_user::get_ledger_access` ;
+** `src/accounting/services/fec.cr` et `spec/accounting/fec_exports_spec.cr` :
+   extension `noalyss-export` (`Export_FEC_CSV`) ;
+** déclarations de TVA (`src/vat/`, `src/accounting/api/vat_returns.cr`,
+   specs de TVA) : extension TVA de `noalyss-plugins` (schéma `tva_belge`) ;
+** `src/accounting/services/closing.cr` : `operation_exercice.inc.php` de
+   NOALYSS 9.x ; `src/core/models/currency.cr` : table `currency` de
+   NOALYSS 8 ;
+** `spec/liberal/rules_spec.cr` : greffon NOALYSS `amortis` ;
+** droits `RMOPER` (`src/accounting/manifest.cr`) et `FICCAT`
+   (`src/cards/manifest.cr`) : codes de droits de NOALYSS.
+* `shard.yml` : description « Partiduo — comptabilité et facturation en
+  Crystal » ; le README garde l'attribution.
+* Garde-fou : étape « Garde-fou du nom d'origine » du job `qualite` de la CI
+  (`git grep -il` hors `*.adoc` et `*.md`, motif écrit `noaly[s]s` pour que
+  le fichier de CI ne se signale pas lui-même) et spec d'architecture
+  `spec/architecture/origin_name_spec.cr` (même contrôle, motif assemblé).
+
+*Alternative écartée.* Garder le nom dans les seuls commentaires : contraire
+à la règle, et le garde-fou n'aurait plus été un simple `git grep`.
+
+=== D-EINV-028 — Adaptateur `NOALYSS_PEPPOL` renommé `PEPPOL_BE`, en-tête d'authentification paramétré (einvoicing)
+
+*Contexte.* Règle du projet du 28/09/2026 : le nom NOALYSS ne figure plus
+dans le code. L'adaptateur belge s'appelait `NOALYSS_PEPPOL` et le point
+d'accès de l'éditeur de NOALYSS impose l'en-tête HTTP `Noalyss-Authz`
+(`peppol-connect/class/peppol_synchro.class.php`) : c'est une contrainte du
+protocole, pas un choix de Partiduo.
+
+*Choix.* Code `PEPPOL_BE` (« Peppol Belgique », classe
+`Einvoicing::Connectors::PeppolBe`, fichier `connectors/peppol_be.cr`).
+Le nom de l'en-tête devient le paramètre obligatoire `auth_header` du
+raccordement (nature `header`, jeton HTTP de la RFC 9110 contrôlé) ; le
+README de l'extension indique la valeur `Noalyss-Authz`. La migration
+`einvoicing 0003_peppol_be_adapter` renomme en `PEPPOL_BE` les codes
+d'adaptateur de la forme `^[A-Z]+_PEPPOL$` (raccordements, factures émises,
+factures reçues) et déduit `auth_header` de l'ancien code
+(`initcap(<ÉDITEUR>) || '-Authz'`), sans nommer le logiciel. Sans retour
+arrière (l'ancien code n'est plus compilé). Les simulations de spec
+utilisent `Peppol-Authz`. Garde-fou : étape CI et spec d'architecture
+(`git grep -il 'noal[y]ss'`, motif écrit ainsi pour ne pas se trouver
+lui-même).
+
+*Alternative écartée.* Garder l'en-tête en dur (contraire à la règle) ou le
+fabriquer par concaténation dans le code (contournement déguisé) ; rendre
+le paramètre facultatif avec une valeur par défaut (même problème).
+
+=== D-NOM-MIG — partiduo-migrate : la « base d'origine » (`legacy`)
+
+*Contexte.* Règle D-NOM-001 appliquée à `partiduo-migrate`, dont la source
+principale était nommée d'après NOALYSS dans le code (module, option,
+script de démonstration, variables, clés de traduction, données écrites).
+
+*Choix.*
+
+* Module `PartiduoMigrate::Legacy` (`src/partiduo_migrate/legacy/database.cr`),
+  option `--legacy-db URL` (l'ancienne option `--noalyss` est supprimée, sans
+  alias), script `scripts/legacy-demo` et `scripts/legacy_demo_data.sql`,
+  base de démonstration `partiduo_legacy_demo`, variables `LEGACY_DEMO_URL`,
+  `LEGACY_DEMO_DB` et `LEGACY_APP` (racine des sources de l'application
+  d'origine, qui portent `include/sql`), specs `legacy_import_spec.cr` et
+  `legacy_rules_spec.cr` ; libellés « base d'origine » (fr), « legacy
+  database » (en), « oorspronkelijke databank » (nl).
+* `LEGACY_APP` vaut par défaut `../legacy-app` à côté du dépôt (l'ancien
+  défaut pointait vers `prod-github/noalyss/noalyss-app`, chemin qui porte le
+  nom) ; en local : `LEGACY_APP=…/noalyss-app scripts/legacy-demo`.
+* Données écrites dans l'instance : la source d'une écriture reprise devient
+  `legacy:<jr_id>` (au lieu de `noalyss:<jr_id>`) et les attributs propres
+  des fiches `legacy_<ad_id>` (au lieu de `noalyss_<ad_id>`). Aucun autre
+  dépôt ne lit ces préfixes ; aucune instance de production n'a encore été
+  reprise, d'où l'absence de migration de données.
+* CI : le dépôt des sources d'origine est lu dans la variable GitHub
+  `LEGACY_REPO`, sinon dans l'attribut `:legacy-repo:` de `README.adoc` (seule
+  la documentation porte l'URL, qui contient le nom). Garde-fou `git grep -il`
+  dans le job `qualite` (motif écrit `"no""alyss"`) et exemple dans
+  `spec/architecture/boundary_spec.cr` (motif assemblé).
+* Références retirées des commentaires, conservées ici : l'écriture du FEC
+  (`src/partiduo_migrate/fec/writer.cr`) et la lecture des écritures
+  (`legacy/database.cr`) suivent l'extension `noalyss-export`
+  (vue `v_fec_operation`) ; `DBVERSION` est celle de `noalyss-app`.
+
+*Alternative écartée.* Garder `--noalyss` comme alias de `--legacy-db` :
+contraire à la règle (option de ligne de commande).

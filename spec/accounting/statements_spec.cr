@@ -3,7 +3,7 @@
 require "../spec_helper"
 
 # Bilan et compte de résultat (`Acc_Bilan`, formulaires FR et BE de
-# NOALYSS) et rapports personnalisés (`form_definition`).
+# l'application d'origine) et rapports personnalisés (`form_definition`).
 
 private alias Api = Partiduo::Api::Accounting
 

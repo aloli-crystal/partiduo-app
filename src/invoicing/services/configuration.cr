@@ -9,7 +9,7 @@ module Partiduo
     module Configuration
       alias Api = Partiduo::Api::Invoicing
 
-      # Comptes de l'export au comptable, par régime (plans de NOALYSS :
+      # Comptes de l'export au comptable, par régime (plans d'origine :
       # `mod2` en France, `mod1` en Belgique), quand les paramètres n'en
       # indiquent pas.
       DEFAULT_ACCOUNTS = {

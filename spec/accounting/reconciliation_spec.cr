@@ -72,7 +72,7 @@ describe_module "ACCOUNTING", "Rapprochement bancaire" do
     result = reconcile([entries[0].id], start: "0", finish: "1000")
     result.error_keys.should eq(["accounting.errors.reconciliation.mismatch"])
     result.errors.first.params.should eq({"expected" => "1000.00", "selected" => "1200.00", "difference" => "200.00"})
-    # Soldes égaux ou absents : pas de contrôle (NOALYSS).
+    # Soldes égaux ou absents : pas de contrôle (règle d'origine).
     reconcile([entries[0].id], start: "50", finish: "50").success?.should be_true
     reconcile([entries[1].id]).error_keys.should eq(["accounting.errors.reconciliation.reference.taken"])
     reconcile([entries[0].id], "R-002").error_keys.should eq(["accounting.errors.reconciliation.entries.invalid"])

@@ -10,7 +10,7 @@ Partiduo::Modules.register do
 
   permission "accounting.entry.read"
   permission "accounting.entry.post"
-  # Annulation par extourne (NOALYSS RMOPER : effacer une opération).
+  # Annulation par extourne (droit d'origine RMOPER : effacer une opération).
   permission "accounting.entry.cancel"
   permission "accounting.account.read"
   permission "accounting.account.write"

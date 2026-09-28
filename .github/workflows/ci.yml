@@ -24,6 +24,18 @@ jobs:
         run: scripts/ci-checkout-deps.sh
       - name: Format
         run: crystal tool format --check src spec config scripts manage.cr
+      # Aucune mention du logiciel d'origine hors *.adoc et *.md (règle du
+      # projet, D-NOM-001). Motif écrit `noaly[s]s` pour que ce fichier ne
+      # se signale pas lui-même ; git grep : 0 trouvé, 1 rien, >1 erreur.
+      - name: Garde-fou du nom d'origine
+        run: |
+          git config --global --add safe.directory "$PWD"
+          set +e
+          git grep -il 'noaly[s]s' -- . ':!*.adoc' ':!*.md'
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then echo "Mention du logiciel d'origine hors *.adoc/*.md" >&2; exit 1; fi
+          [ "$status" -eq 1 ]
       - name: Shards
         run: shards install
       - name: Ameba

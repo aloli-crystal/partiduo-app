@@ -4,7 +4,7 @@ require "csv"
 
 module Partiduo
   module Followup
-    # Préfixes des types d'action de NOALYSS (`document_type`) ; libellés
+    # Préfixes des types d'action d'origine (`document_type`) ; libellés
     # sous `followup.default_types.<préfixe en minuscules>`.
     DEFAULT_TYPES = %w[DI BCL BFO FAC RAP CO PRP EL DS NFR RFO RCL RMG]
 

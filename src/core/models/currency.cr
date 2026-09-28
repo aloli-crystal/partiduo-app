@@ -2,9 +2,9 @@
 
 module Partiduo
   module Core
-    # Devise, héritière de `currency` (NOALYSS 8) : code ISO 4217, nom,
+    # Devise, héritière de `currency` (table d'origine) : code ISO 4217, nom,
     # nombre de décimales. Une seule devise est la devise *de tenue* du dossier
-    # (`base`, l'euro créé au provisionnement, `currency.id = 0` de NOALYSS) :
+    # (`base`, l'euro créé au provisionnement, `currency.id = 0` d'origine) :
     # elle n'a pas de cours et ne se modifie pas.
     class Currency < Marten::Model
       field :id, :big_int, primary_key: true, auto: true

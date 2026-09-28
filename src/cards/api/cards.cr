@@ -291,7 +291,7 @@ module Partiduo
         end
       end
 
-      # Supprime une catégorie sans fiche (NOALYSS supprimait en silence les
+      # Supprime une catégorie sans fiche (l'application d'origine supprimait en silence les
       # fiches inutilisées, D-REF-007).
       def self.delete_category(actor : Actor, id : Int64) : Result(Nil)
         Guard.authorize!(actor, "cards.category.manage", module_code: "CARDS")

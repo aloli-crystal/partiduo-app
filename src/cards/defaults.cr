@@ -18,7 +18,7 @@ module Partiduo
         Definition.new("PURCHASE", "item"),
         Definition.new("EXPENSE", "item"),
         Definition.new("EMPLOYEE", "employee", [{"first_name", "text"}]),
-        # NOALYSS : attribut « Société » (type `card`) d'un contact.
+        # À l'origine : attribut « Société » (type `card`) d'un contact.
         Definition.new("CONTACT", "contact", [{"first_name", "text"}, {"company", "card"}]),
         Definition.new("TAX_AUTHORITY", "other"),
       ]

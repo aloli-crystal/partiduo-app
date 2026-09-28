@@ -4,7 +4,7 @@ module Partiduo
   module Core
     # Pièce jointe stockée par le socle (ADR-006 D1) : le fichier vit dans le
     # stockage de fichiers de Marten (`media_files`), la ligne en décrit
-    # l'origine et l'empreinte. Remplace les _large objects_ de NOALYSS
+    # l'origine et l'empreinte. Remplace les _large objects_ d'origine
     # (`jrn.jr_pj oid`, ADR-001 D1).
     #
     # Le socle ne sait pas à quoi la pièce est rattachée : l'écriture, la

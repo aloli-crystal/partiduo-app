@@ -51,7 +51,7 @@ describe_module "ACCOUNTING", "Données initiales comptables (PCG, PCMN)" do
     Api.ledger_by_code(system, "f01").default_account.try(&.number).should eq("550")
   end
 
-  it "corrige les types de compte erronés des modèles de NOALYSS (D-ACC-008)" do
+  it "corrige les types de compte erronés des modèles d'origine (D-ACC-008)" do
     AccountingSpec.load("fr")
     kind = ->(number : String) { Api.account(system, number).kind }
     {

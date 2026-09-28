@@ -3,7 +3,7 @@
 require "../spec_helper"
 
 # Déclarations de TVA (lot 4), cas limites et règles de gestion reprises de
-# l'extension TVA de noalyss-plugins : seuil du listing des clients
+# l'extension TVA d'origine : seuil du listing des clients
 # (`Ext_List_Assujetti::get_data`, `amount < amount_min` écarté), relevé
 # intracommunautaire par code (`Ext_List_Intra`), chevauchements et
 # liquidation (`Ext_Tva::propose_form`), contrôles des paramètres et des

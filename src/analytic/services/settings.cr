@@ -3,7 +3,7 @@
 module Partiduo
   module Analytic
     # Paramètres de l'Analytique (`MY_ANALYTIC`, `MY_ANC_FILTER` de
-    # `Noalyss_Parameter_Folder`). Service interne.
+    # paramètres du dossier d'origine). Service interne.
     module Settings
       alias FieldError = Partiduo::Api::FieldError
 

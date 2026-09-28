@@ -3,7 +3,7 @@
 module Partiduo
   module Accounting
     # Écritures de fin d'exercice, héritières d'`Operation_Closing` et
-    # d'`Operation_Opening` (NOALYSS 9.x, `operation_exercice.inc.php`) :
+    # d'`Operation_Opening` (application d'origine, `operation_exercice.inc.php`) :
     #
     # * *clôture* : les comptes de charges et de produits (classes 6 et 7)
     #   d'un exercice sont soldés, la différence (le résultat) passe au
@@ -13,7 +13,7 @@ module Partiduo
     #   par compte et par fiche ; le résultat que la clôture n'a pas soldé va
     #   au compte de résultat.
     #
-    # Là où NOALYSS préparait un brouillon déséquilibré à compléter puis à
+    # Là où l'application d'origine préparait un brouillon déséquilibré à compléter puis à
     # transférer dans un journal, le cœur propose une écriture équilibrée et
     # la passe par `Posting` (D-CLO-001). Service interne.
     module Closing

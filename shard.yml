@@ -2,7 +2,7 @@ name: partiduo
 version: 0.1.0
 
 description: |
-  Partiduo — portage en Crystal de NOALYSS (comptabilité et facturation).
+  Partiduo — comptabilité et facturation en Crystal.
   Socle et modules activables, sans interface : le contrat Partiduo::Api
   est consommé par un dépôt d'interface (partiduo-ui-bulma).
 

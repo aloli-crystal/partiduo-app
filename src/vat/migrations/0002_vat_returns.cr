@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # Lot 4 : déclarations de TVA et relevés (successeur du schéma `tva_belge` de
-# l'extension TVA de NOALYSS : `declaration_amount`, `assujetti`,
+# l'extension TVA d'origine : `declaration_amount`, `assujetti`,
 # `intracomm` et leurs lignes, `parameter_chld`, `representative`),
 # étendus aux déclarations françaises CA3 et CA12.
 #

@@ -34,7 +34,7 @@ describe Partiduo::Vat::Returns do
     Returns.period("quarter", 2026, 0).should be_nil
   end
 
-  it "lit les préfixes de comptes à la manière de NOALYSS (`60%,61%`)" do
+  it "lit les préfixes de comptes à la manière de l'application d'origine (`60%,61%`)" do
     Returns.prefixes("60%, 61 ,,22%").should eq(%w[60 61 22])
     Returns.prefixes("").should eq([] of String)
   end

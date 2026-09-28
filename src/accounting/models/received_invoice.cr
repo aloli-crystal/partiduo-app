@@ -8,7 +8,7 @@ module Partiduo
     # écriture d'achat — numéro, date et montant toutes taxes comprises de la
     # facture, fournisseur, origine (`off_platform` : papier ou PDF simple
     # saisi à la main ; `platform` : reçue par la plateforme agréée, déposée
-    # par une extension). NOALYSS n'en garde que la pièce jointe et le libellé
+    # par une extension). L'application d'origine n'en garde que la pièce jointe et le libellé
     # de l'écriture. Sert au contrôle de doublon commun (même fournisseur, même
     # numéro, même montant). Modèle interne : écrit par
     # `Partiduo::Api::Accounting.post_received_invoice` seulement, jamais

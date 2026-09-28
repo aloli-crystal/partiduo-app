@@ -3,7 +3,7 @@
 module Partiduo
   module Auth
     # Droits par journal, héritiers de `user_sec_jrn` et de
-    # `Noalyss_user::get_ledger_access` : écriture partout pour un profil
+    # `get_ledger_access` de l'utilisateur d'origine : écriture partout pour un profil
     # administrateur ou si la sécurité des journaux est désactivée pour
     # l'utilisateur ; sinon le droit enregistré, et `X` (aucun) à défaut.
     module Ledgers

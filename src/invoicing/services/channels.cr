@@ -3,7 +3,7 @@
 module Partiduo
   module Invoicing
     # Canal d'émission des documents fiscaux et marquage B2C (ADR-004 D9).
-    # NOALYSS n'en a pas : sa facture est une écriture, envoyée à la main ou
+    # L'application d'origine n'en a pas : sa facture est une écriture, envoyée à la main ou
     # par `peppol-connect`. Le canal appartient au cœur et existe sans
     # extension de facturation électronique ; une extension le lit dans
     # `invoice.issued` ou par le contrat pour transmettre à sa plateforme.

@@ -199,7 +199,7 @@ module Partiduo
       end
 
       # Journaux visibles d'un acteur : ceux sur lesquels il a un droit de
-      # lecture ou d'écriture (`Noalyss_user::get_ledger`) ; tous pour qui
+      # lecture ou d'écriture (`get_ledger` de l'utilisateur d'origine) ; tous pour qui
       # administre les journaux (`accounting.ledger.write`).
       def self.access(actor : Partiduo::Api::Actor, ledger_id : Int64) : Partiduo::Api::Accounting::LedgerAccess
         Partiduo::Api::Accounting::LedgerAccess.from_code(Partiduo::Api::Auth.ledger_access(actor, ledger_id))
@@ -211,7 +211,7 @@ module Partiduo
     end
 
     # Numérotation des pièces d'un journal (`jrn_def_pj_pref`,
-    # `jrn_def_pj_padding`, séquence `s_jrn_pj<id>` de NOALYSS). Le compteur
+    # `jrn_def_pj_padding`, séquence `s_jrn_pj<id>` d'origine). Le compteur
     # est une colonne du journal, verrouillée par `SELECT … FOR UPDATE` puis
     # incrémentée dans la transaction de l'écriture : une écriture annulée ne
     # consomme pas de numéro (pas de séquence PostgreSQL, convention C3).

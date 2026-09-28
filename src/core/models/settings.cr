@@ -4,7 +4,7 @@ module Partiduo
   module Core
     # Identité de la société et configuration du dossier : *une seule ligne*
     # par instance (ADR-001 glossaire « Société », D2). Héritière de la table
-    # `parameter` de NOALYSS (`MY_NAME`, `MY_TVA`, `MY_STREET`, `MY_NUMBER`,
+    # `parameter` d'origine (`MY_NAME`, `MY_TVA`, `MY_STREET`, `MY_NUMBER`,
     # `MY_CP`, `MY_COMMUNE`, `MY_TEL`, `MY_COUNTRY`…), réduite à l'identité et
     # à la politique d'authentification (ADR-002 D1) ; les options comptables
     # (`MY_STRICT`, `MY_ANALYTIC`…) arrivent avec les modules qui les lisent.

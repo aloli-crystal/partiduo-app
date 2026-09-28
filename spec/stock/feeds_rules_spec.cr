@@ -35,7 +35,7 @@ private def tracked_invoicing : InvoicingSpec::Setup
 end
 
 describe "Mouvements automatiques : Facturation, cas limites" do
-  it "rentre en stock une ligne de facture à quantité négative (retour), comme NOALYSS" do
+  it "rentre en stock une ligne de facture à quantité négative (retour), comme l'application d'origine" do
     with_active_modules("invoicing,stock") do
       setup = tracked_invoicing
       invoice = InvoicingSpec.issued(setup, lines: [

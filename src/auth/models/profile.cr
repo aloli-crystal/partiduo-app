@@ -6,7 +6,7 @@ module Partiduo
     # `profile_menu` : un profil porte des *permissions nommées* déclarées par
     # les manifestes du registre ; la visibilité des menus en découle.
     #
-    # `admin` reprend le profil administrateur de NOALYSS : toutes les
+    # `admin` reprend le profil administrateur d'origine : toutes les
     # permissions des pièces actives, et l'accès en écriture à tous les
     # journaux. `code` identifie les profils créés par défaut (`ADMIN`,
     # `ACCOUNTANT`) ; il est vide pour ceux de l'administrateur.

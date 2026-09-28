@@ -43,7 +43,7 @@ module Partiduo
       def self.item_errors(forecast : Forecast, input : Api::ForecastItemInput) : Array(FieldError)
         errors = label_errors("label", input.label)
         formula = input.formula.strip
-        # Formule vide admise, comme dans NOALYSS (`fi_account` vide) : le
+        # Formule vide admise, comme à l'origine (`fi_account` vide) : le
         # réel vaut zéro (D-FCT-003).
         if formula.empty?
           # rien à contrôler

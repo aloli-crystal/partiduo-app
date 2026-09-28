@@ -7,7 +7,7 @@ require "../spec_helper"
 # nature du client et de la saisie express d'un particulier (ADR-004 D9
 # révisé ; DECISIONS D-FIN-001, D-FIN-002, D-CPY-001 à D-CPY-004).
 #
-# NOALYSS n'a ni plateforme agréée ni copie PDF : les règles viennent de
+# L'application d'origine n'a ni plateforme agréée ni copie PDF : les règles viennent de
 # l'ADR ; la saisie express reprend les contrôles de `Fiche::insert`
 # (nom obligatoire, courriel valide), déjà portés par `create_card`.
 

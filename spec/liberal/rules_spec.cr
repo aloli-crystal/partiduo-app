@@ -15,7 +15,7 @@ end
 
 # Cas limites du module liberal (ADR-007 D6) : saisie, numérotation,
 # requêtes du livre-journal, paramètres, amortissements (règle du greffon
-# NOALYSS `amortis` : annuités égales arrondies au centime, la dernière solde
+# Extension d'origine `amortis` : annuités égales arrondies au centime, la dernière solde
 # la base), plus et moins-values, 2035 en déficit, ajustements, empreinte.
 describe_module "LIBERAL", Api do
   describe "livre-journal" do

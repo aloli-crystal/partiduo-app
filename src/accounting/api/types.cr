@@ -132,7 +132,7 @@ module Partiduo
         end
       end
 
-      # Saisie d'un journal. `code` : `nil` ou vide = attribué comme NOALYSS
+      # Saisie d'un journal. `code` : `nil` ou vide = attribué comme à l'origine
       # (initiale du type puis rang en base 36 : `A01`, `V02`…).
       # `default_account` : numéro du compte par défaut d'un journal d'achats,
       # de ventes ou d'opérations diverses ; ignoré pour un journal financier.

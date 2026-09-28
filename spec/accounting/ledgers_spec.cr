@@ -27,7 +27,7 @@ end
 
 describe_module "ACCOUNTING", "Journaux (jrn_def)" do
   describe ".create_ledger" do
-    it "attribue un code comme NOALYSS et prépare la numérotation des pièces" do
+    it "attribue un code comme l'application d'origine et prépare la numérotation des pièces" do
       AccountingSpec.base_currency
       _, actor = AccountingSpec.user_actor("erin@example.com", "accounting.ledger.write")
       first = Api.create_ledger(actor, AccountingSpec.ledger_input("Achats", receipt_prefix: "ACH-", receipt_padding: 4)).value!

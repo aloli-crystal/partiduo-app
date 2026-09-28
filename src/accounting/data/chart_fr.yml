@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Plan comptable initial, régime « fr », extrait de NOALYSS
-# (noalyss-app/include/sql/mod2/data.sql, tables tmp_pcmn et parm_code)
-# par scripts/chart_from_noalyss.cr ; voir DECISIONS.adoc, D-ACC-003.
+# Plan comptable initial, régime « fr », extrait des scripts SQL
+# d'origine (include/sql/mod2/data.sql, tables tmp_pcmn et parm_code)
+# par scripts/chart_from_legacy.cr ; voir DECISIONS.adoc, D-ACC-003.
 # Colonnes d'un compte : numéro, libellé, parent (null = racine), type,
 # utilisation directe. Parents avant enfants.
 accounts:

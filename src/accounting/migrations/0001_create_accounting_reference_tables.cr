@@ -138,7 +138,7 @@ class Migration::Accounting::V0001 < Marten::Migration
         SQL
     )
     # Fiche ou catégorie effacée au socle : son rattachement disparaît avec
-    # elle (NOALYSS efface l'attribut « poste comptable » avec la fiche).
+    # elle (l'application d'origine efface l'attribut « poste comptable » avec la fiche).
     execute(
       <<-SQL,
         ALTER TABLE accounting_card_account

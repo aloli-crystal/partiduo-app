@@ -117,7 +117,7 @@ module Partiduo
       end
 
       # Liste des préfixes de comptes d'une chaîne `60,61%, 22` (le `%` de
-      # NOALYSS est admis et ignoré).
+      # l'application d'origine est admis et ignoré).
       def self.prefixes(text : String) : Array(String)
         text.split(',').compact_map(&.strip.rchop('%').strip.presence).uniq!
       end

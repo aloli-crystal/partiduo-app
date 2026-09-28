@@ -7,10 +7,10 @@ module Partiduo
     module Be
       # Fichiers XML à déposer sur Intervat (SPF Finances), repris des classes
       # `Declaration_XML`, `Declaration_Period`, `Client` et
-      # `Client_Intracom` de l'extension TVA de NOALYSS : déclaration
+      # `Client_Intracom` de l'extension TVA d'origine : déclaration
       # périodique (`VATConsignment`), listing annuel des clients assujettis
       # (`ClientListingConsignment`), relevé intracommunautaire
-      # (`IntraConsignment`). Encodage UTF-8 pour les trois (NOALYSS écrivait
+      # (`IntraConsignment`). Encodage UTF-8 pour les trois (l'application d'origine écrivait
       # le listing en ISO 8859-1, D-TVA-008).
       module Intervat
         COMMON_NS  = "http://www.minfin.fgov.be/InputCommon"

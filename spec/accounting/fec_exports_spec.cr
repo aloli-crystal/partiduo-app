@@ -3,7 +3,7 @@
 require "../spec_helper"
 require "pdf-validate"
 
-# FEC (article A47 A-1 du LPF ; extension `noalyss-export`) et exports CSV
+# FEC (article A47 A-1 du LPF ; extension d'export d'origine) et exports CSV
 # et PDF des éditions.
 
 private alias Api = Partiduo::Api::Accounting

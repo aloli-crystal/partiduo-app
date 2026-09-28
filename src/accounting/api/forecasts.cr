@@ -3,7 +3,7 @@
 module Partiduo
   module Api
     # Contrat du module Comptabilité — prévisions budgétaires (lot 6,
-    # `forecast`, `Anticipation` de NOALYSS) : prévisions sur une suite de
+    # `forecast`, `Anticipation` d'origine) : prévisions sur une suite de
     # périodes, catégories, éléments (formule du réel, montant estimé par
     # période), copie, et comparaison de l'estimé et du réel. Référence :
     # `doc/api/accounting-forecasts.adoc`.

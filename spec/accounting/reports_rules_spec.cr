@@ -2,7 +2,7 @@
 
 require "../spec_helper"
 
-# Éditions (lot 3) : règles de NOALYSS et cas limites — solde d'ouverture
+# Éditions (lot 3) : règles d'origine et cas limites — solde d'ouverture
 # limité à l'exercice (D-ED-001), bornes de comptes (D-ED-002), tranches
 # de la balance âgée (D-ED-003), cohérence balance / grand livre / journaux,
 # colonne N-1 des états, rapports personnalisés (`Acc_Report`,
@@ -27,9 +27,9 @@ private def fec_body(file : Api::FileView, encoding : String = "ISO-8859-15") : 
 end
 
 describe Partiduo::Accounting::Formula do
-  # `ImpressTest::test_check_formula` : ce que NOALYSS admet ou refuse et
+  # `ImpressTest::test_check_formula` : ce que l'application d'origine admet ou refuse et
   # que Partiduo sait calculer.
-  it "suit check_formula de NOALYSS pour les références de comptes et de fiches" do
+  it "suit check_formula d'origine pour les références de comptes et de fiches" do
     {"1", "(45+5)", "round([45])", "[45%]", "[50]*[51%]", "[50]*9", "[50]*9.0", "[50%]*9.0 FROM=01.2004",
      "[50%]*9.0FROM=01.2004", "[45ABC]*1", "[4511-s]", "{TEL}", "{TEL}*45", "{TEL-s}*45", "{1TEL-s}*45",
      "{1TEL}*45"}.each do |text|

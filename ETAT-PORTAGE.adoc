@@ -165,7 +165,7 @@ Cœur, référentiel comptable (D-ACC-001 à D-ACC-007,
 link:doc/api/accounting-reference.adoc[]) :
 
 * Plan comptable : relation parent, numéro normalisé, arbre en SQL récursif ;
-  plans initiaux BE et FR repris de NOALYSS (`scripts/chart_from_noalyss.cr`,
+  plans initiaux BE et FR repris de NOALYSS (`scripts/chart_from_legacy.cr`,
   types corrigés à la relecture, D-ACC-008).
 * Journaux : champs repris de NOALYSS, numérotation des pièces, devise,
   droits par journal ; rattachement fiche → compte ; comptes par défaut.

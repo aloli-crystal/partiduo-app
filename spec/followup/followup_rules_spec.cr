@@ -113,7 +113,7 @@ end
 
 describe_module "FOLLOWUP", "Suivi : cas limites" do
   describe "types d'action" do
-    it "charge les 13 types de NOALYSS, libellés en anglais au besoin, et retombe sur le français" do
+    it "charge les 13 types d'action d'origine, libellés en anglais au besoin, et retombe sur le français" do
       Api.load_default_action_types(system, "en").should eq(%w[DI BCL BFO FAC RAP CO PRP EL DS NFR RFO RCL RMG])
       Api.action_types(system).map(&.next_number).uniq!.should eq([1])
       Api.action_types(system).find!(&.code.==("FAC")).label.should eq("Invoice")

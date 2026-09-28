@@ -7,7 +7,7 @@ module Partiduo
     # XML CII (UN/CEFACT Cross Industry Invoice D16B) au profil EN 16931 de
     # Factur-X 1.0 (ADR-004, ADR-006 D5), embarqué dans le PDF/A-3. Type
     # 380 (facture), 381 (avoir, avec la facture d'origine en BT-25), 386
-    # (facture d'acompte). NOALYSS (`facturx.class.php`) émettait toujours
+    # (facture d'acompte). L'application d'origine (`facturx.class.php`) émettait toujours
     # 380.
     #
     # Les éléments suivent l'ordre du schéma XSD ; les montants sont écrits

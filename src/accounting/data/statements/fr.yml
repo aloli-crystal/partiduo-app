@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Bilan et compte de résultat, régime FR : modèle abrégé du plan comptable
-# général (art. 832-1 et 832-2), d'après les formulaires de NOALYSS
+# général (art. 832-1 et 832-2), d'après les formulaires d'origine
 # (`html/document/fr_fr/fr_plan_abrege_perso_bil10000.form` et
 # `…_cr1000.form`), corrigés (DECISIONS D-ED-005) : soldes signés au lieu des
 # valeurs absolues, comptes de tiers répartis entre actif et passif selon

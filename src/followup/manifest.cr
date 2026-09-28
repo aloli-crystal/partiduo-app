@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # Module Suivi (lot 6, D-FUP-001) : actions de suivi et relations avec les
-# tiers (`follow_up`, `action_gestion` de NOALYSS), hors GED (extension
+# tiers (`follow_up`, `action_gestion` d'origine), hors GED (extension
 # `partiduo-document`). Ne dépend que du socle.
 Partiduo::Modules.register do
   code "FOLLOWUP"
