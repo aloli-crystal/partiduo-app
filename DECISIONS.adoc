@@ -9177,3 +9177,669 @@ antérieur au passage à lld) ne peut être relancée sans pousser, ce qui est
 interdit au portage : la suite a été exécutée localement (base
 `partiduo_test_U_final`, ordre aléatoire) et son journal archivé dans
 `.ci-logs/partiduo-urssaf.local.log`.
+
+== Interface en ligne de commande d'instance (A:cli-instance, 28 septembre 2026)
+
+=== D-CLI-001 — Une commande Marten `instance` du cœur, une ligne JSON, codes de sortie fixés
+
+*Contexte.* ADR-008 D4 : l'exécutant de `partiduo-admin` pilote une instance
+par une « interface en ligne de commande d'instance » dans `partiduo-app`,
+contrat versionné. Il faut qu'elle soit présente dans le binaire de gestion de
+la distribution, qui embarque déjà les commandes du cœur (`provision`).
+
+*Choix.* Une commande Marten `instance` (`src/core/commands/instance.cr`),
+actions en premier argument (`version`, `status`, `migrations`, `migrate`,
+`enable`, `disable`, `read-only`, `admin-invite`, `backup-plan`). Réponse :
+une seule ligne JSON sur la sortie standard, enveloppe fixe (`contract`,
+`action`, `ok`, `data` ou `error{code, reason, message, details}`), y compris
+pour les erreurs d'options. Codes de sortie : 0 succès, 1 interne, 2 usage,
+3 inconnu, 4 refus métier, 5 lecture seule, 6 base injoignable, 7 migrations
+en attente. Logique dans `Partiduo::Core::InstanceAdmin` et
+`Partiduo::Core::AdminInvitation` (socle : aucune référence aux modules ;
+seul `Partiduo::Auth`, qui fait partie du socle, est référencé pour le
+journal d'audit — précision de D-AFN-014).
+Contrat : `doc/api/instance-cli.adoc`.
+
+*Alternative écartée.* Un binaire séparé (`partiduo-instance`) : un binaire de
+plus à construire et à livrer, qui devrait de toute façon embarquer les
+extensions de la distribution pour connaître leurs migrations et manifestes.
+Une commande par geste (`instance-status`, …) : encombre `manage --help`.
+
+=== D-CLI-002 — Version propre du contrat, `INSTANCE_CLI_VERSION`
+
+*Contexte.* ADR-008 : « l'interface en ligne de commande d'instance devient un
+contrat, versionné comme `Partiduo::Api` ».
+
+*Choix.* `Partiduo::INSTANCE_CLI_VERSION = "1.0.0"` (`src/partiduo/version.cr`),
+distincte de `API_VERSION` : les deux contrats évoluent séparément. Rendue
+dans chaque réponse ; majeure incrémentée à toute suppression ou tout
+renommage d'action, d'option, de clé, de code.
+
+*Alternative écartée.* Réutiliser `API_VERSION` : un changement de
+`Partiduo::Api` sans effet sur l'exécutant forcerait une montée de version
+de `partiduo-admin`.
+
+=== D-CLI-003 — Lecture seule par `default_transaction_read_only` sur la base
+
+*Contexte.* « Mise en lecture seule et levée » (tâche, ADR-008 D4) : pendant
+un archivage, une sauvegarde cohérente, une suspension. Le contrat
+`Partiduo::Api` n'a pas de point unique qui distingue lecture et écriture
+(`Guard` est appelé en tête des requêtes comme des commandes, et toutes les
+écritures ne passent pas par `Transaction.run`).
+
+*Choix.* `ALTER DATABASE <base> SET default_transaction_read_only = on` (et
+`RESET`) : PostgreSQL refuse toute écriture de toute nouvelle session, quel
+que soit le chemin ; le propriétaire de la base (rôle de l'instance) a le
+droit de le faire. État relu dans `pg_db_role_setting` ; motif et date dans
+le journal d'audit (`instance.read_only.on`), sans table nouvelle. Les
+sessions *du processus de la commande* sont remises en écriture
+(`setup_connection` du pool) : c'est l'outil qui lève l'état et qui migre ;
+chaque action décide elle-même si elle est permise (activation et
+réémission refusées, code 5 ; `migrate`, `backup-plan`, `status` permis).
+Les sessions déjà ouvertes du serveur ne changent pas : `restart_required`
+demande à l'exécutant de redémarrer le service, ou `--terminate-sessions`
+les coupe.
+
+*Alternative écartée.* Un drapeau applicatif vérifié par `Guard` : il
+faudrait classer chaque appel du contrat en lecture ou écriture, et une
+écriture oubliée passerait. Une révocation de `INSERT/UPDATE/DELETE` au rôle :
+le rôle de l'instance est propriétaire des tables, les droits ne s'appliquent
+pas à lui.
+
+*Reste.* L'interface ne sait pas encore que l'instance est en lecture seule :
+une écriture échoue par une erreur PostgreSQL (SQLSTATE 25006), rendue en
+erreur 500. À faire côté `partiduo-ui-bulma` : bandeau et message, par une
+requête du contrat à ajouter (`Partiduo::Api::Core`, mineure de
+`API_VERSION`).
+
+=== D-CLI-004 — Désactivation d'une pièce : sémantique de l'ADR-006 D2 inchangée
+
+*Contexte.* La tâche dit « désactiver garde les données en lecture seule » ;
+l'ADR-006 D2 dit « conserve ses données en lecture seule ; rien n'est
+supprimé » *et* « ses commandes et requêtes refusent l'appel
+(`ModuleDisabled`) ».
+
+*Choix.* `disable` appelle `Partiduo::Api::Modules.deactivate`, tel quel :
+données conservées, intactes (`"data": "kept"`), commandes et requêtes du
+module refusées tant qu'il est inactif ; réactiver rend tout. « Lecture
+seule » est lu comme « conservées sans modification possible ».
+
+*Alternative écartée.* Ouvrir en consultation les requêtes d'un module
+inactif : contraire au deuxième point de l'ADR-006 D2 et à D-UI-019 (404 d'un
+module inactif). *Amendement proposé* à l'ADR-006 D2, si la consultation est
+voulue : distinguer un état « gelé » (requêtes permises, commandes refusées)
+de l'état « inactif ».
+
+=== D-CLI-005 — Réémission de l'invitation : jamais de droits nouveaux
+
+*Contexte.* ADR-008 D3 : recours d'accès, réémission de l'invitation
+d'administrateur « avec double validation », trace dans l'instance ;
+ADR-002 D3 : l'autorisation est locale, la société seule ouvre l'accès.
+
+*Choix.* `admin-invite EMAIL` exige `--reason`, `--approval-ref` et deux
+validateurs distincts (`--approvers`), refus 2 sinon : l'instance ne vérifie
+pas la validation (elle n'a pas d'accès à `partiduo-admin`) mais n'accepte
+pas une tâche qui n'en porte pas la trace. Administrateur existant : nouvelle
+invitation. Adresse inconnue : compte créé avec le profil administrateur.
+Compte existant sans profil administrateur, ou révoqué : refus (4). Journal :
+`user.invite`/`user.create` puis `instance.admin_invitation` (motif,
+référence, validateurs, tâche, demandeur), dans une transaction. La réponse
+donne `usable_admins` (administrateurs qui avaient encore un moyen de
+connexion), sans refuser s'il y en a : la double validation a déjà eu lieu,
+et « avoir un moyen » n'est pas « pouvoir s'en servir » (passkey perdue).
+
+*Alternative écartée.* Promouvoir un compte existant au profil
+administrateur : ce serait la plateforme qui donne des droits.
+
+*Amendée par D-AFN-003* : une adresse inconnue est désormais refusée, aucun
+compte n'est créé.
+
+=== D-CLI-006 — Préparation de sauvegarde : chemins de stockage, jamais les noms déposés
+
+*Contexte.* ADR-008 D5 : sauvegarde `pg_dump` et fichiers joints ; D3 : pas
+d'accès aux données. Les pièces jointes du socle (`core_attachment`) sont le
+seul stockage de fichiers du cœur et des extensions (vérifié : aucune autre
+utilisation de `media_files_storage`).
+
+*Choix.* `backup-plan` rend, par pièce, le nom de stockage
+(`attachments/AAAA/MM/<uuid>.ext`), la taille, l'empreinte et l'état
+(`present`, `missing`, `corrupted` avec `--verify`), et écrit la liste des
+présentes pour `tar -T`. Le nom déposé (« facture-durand.pdf ») n'est pas
+rendu. `partiduo-fleet backup` enchaîne `pg_dump`, `backup-plan`, `tar` sous
+un même nom.
+
+*Alternative écartée.* Archiver tout le répertoire `media/` : emporte les
+fichiers orphelins et ne signale pas les pièces manquantes.
+
+*Reste.* La première montée de version *depuis* une version sans la commande
+`instance` échouerait à la sauvegarde préalable (le binaire de l'ancienne
+version n'a pas `backup-plan`) ; aucune instance n'est déployée, sans effet.
+
+=== D-CLI-007 — Certificat Let's Encrypt par instance, vhost d'amorçage
+
+*Contexte.* ADR-001 D2 retient un certificat *par instance* ; les gabarits du
+lot 0 pointaient sur un certificat générique `*.<domaine>`.
+
+*Choix.* `nginx-vhost.conf.tmpl` cite `/etc/letsencrypt/live/<hôte>/` et sert
+les défis ACME sur le port 80 ; nouveau gabarit `nginx-acme.conf.tmpl`
+(HTTP seul, défis ACME, 503 sinon) installé le temps d'obtenir le certificat,
+nginx refusant un vhost dont le certificat manque. `INSTALL.txt` (désormais
+`set -eu`) : vhost d'amorçage, `certbot certonly --webroot --cert-name <hôte>
+--keep-until-expiring --deploy-hook 'systemctl reload nginx'`, vhost
+définitif. Options `--acme-email` (`$PARTIDUO_ACME_EMAIL`), `--acme-webroot`,
+`--acme-staging` (`--test-cert`, hors quota) ; reprises par
+`partiduo-fleet` (`ACME_EMAIL`, `ACME_WEBROOT`, `ACME_STAGING`), qui supprime
+le certificat au retrait.
+
+*Alternative écartée.* Garder le certificat générique en option : l'ADR l'a
+écarté (DNS-01, point de défaillance commun) ; défi `standalone` de certbot :
+exige d'arrêter nginx, donc tout le parc du serveur.
+
+== Administration du parc : `partiduo-admin` (A:admin, 28 septembre 2026)
+
+Décisions prises en créant le dépôt `partiduo-admin` (ADR-008). Préfixe
+`D-ADM-`. Le code est dans `../partiduo-admin` ; seules ces notes sont ici.
+
+=== D-ADM-001 — Application autonome, sans dépendance au shard `partiduo`
+
+*Contexte.* ADR-008 D1 : l'admin ne dépend de partiduo-app que pour
+l'interface en ligne de commande d'instance, jamais pour ses modèles.
+
+*Choix.* `partiduo-admin` n'a pas `partiduo` dans `shard.yml` : Marten, `pg`,
+`authn` (hachage seul, `authn/password`, B-AUTH-002), `password-policy`,
+`totp`, `webauthn`, `jose`. Une application Marten `admin` (tables
+`admin_*`), namespace `PartiduoAdmin`. L'exécutant appelle
+`partiduo-manage instance …` et `partiduo-provision` comme programmes
+(jamais par un shell). Le protocole partagé admin ↔ exécutant
+(`src/shared/protocol.cr`) n'utilise pas Marten.
+
+*Alternative écartée.* Réutiliser `Partiduo::Auth` du cœur : il est lié au
+modèle `User` et à la politique d'une *société* ; l'admin a ses propres
+rôles et sa propre base.
+
+=== D-ADM-002 — Authentification : mêmes mécanismes que le cœur, réécrits pour l'admin
+
+*Choix.* Niveaux ADR-002 D2 (0 enrôlement, 1 mot de passe, 2 + TOTP ou code
+de récupération, 3 passkey). Niveau exigé : 3 pour le super-admin, 2 sinon
+(ADR-008 D2) ; une session sous ce niveau n'ouvre que la page du compte.
+Limitation des tentatives identique à D-AUTH-012 (réservation atomique,
+temporisation dès le 3ᵉ échec, blocage au 10ᵉ). RP ID WebAuthn : le nom
+d'hôte de l'admin (`admin.<domaine>`), distinct de celui des dossiers — une
+passkey d'administration ne sert pas dans un dossier et inversement. Le
+super-admin n'a pas de mot de passe (l'écran le refuse) : passkey seule.
+Invitation → session d'enrôlement ; l'élévation au niveau 3 se fait par une
+assertion WebAuthn après l'enregistrement de la passkey.
+
+*Alternative écartée.* Élever au niveau 3 dès l'enregistrement de la
+passkey : l'enregistrement ne prouve que la possession d'un lien
+d'invitation.
+
+=== D-ADM-003 — Amorçage : commande `bootstrap`, refusée dès qu'un super-admin existe
+
+*Choix.* `partiduo-admin-manage bootstrap --email=…` crée le premier
+super-admin sans secret, envoie et *affiche* le lien d'invitation (7 jours).
+Refus s'il existe déjà un super-admin ; `--reinvite` réémet le lien du
+super-admin unique qui n'aurait pas encore de passkey (lien perdu). Les
+suivants sont invités depuis l'interface ; un utilisateur qui a perdu ses
+moyens est « réinvité » par un admin habilité (secrets, passkeys, codes et
+sessions révoqués, trace d'audit).
+
+=== D-ADM-004 — Journal d'audit en ajout seul par déclencheur, `TRUNCATE` non couvert
+
+*Choix.* Déclencheur `BEFORE UPDATE OR DELETE` sur `admin_audit_entry`
+(migration 0002), comme `auth_audit_event` du cœur. `TRUNCATE` (réservé au
+propriétaire de la table) n'est pas bloqué : `marten/spec` vide les tables
+par lui après chaque exemple.
+
+*Amendement possible.* En production, faire tourner l'application sous un
+rôle PostgreSQL non propriétaire des tables pour fermer aussi `TRUNCATE`.
+
+=== D-ADM-005 — Donneur d'ordre : modèle `Payer` rattaché à un cabinet, obligatoire en base
+
+*Choix.* `admin_payer` (nature `firm` / `company` / `other`, raison sociale,
+SIREN contrôlé par Luhn, TVA, adresse de facturation, contact) porte un
+`firm_id` : portée des droits (un admin de cabinet ne voit et ne modifie
+que les siens). `admin_dossier.payer_id` est `NOT NULL`. Export CSV de la
+vue « dossiers par donneur d'ordre » (cellules commençant par `= + - @`
+neutralisées). Aucune donnée de tarif, période ou facture.
+
+*Alternative écartée.* Donneur d'ordre global au parc : fuite d'identité
+entre cabinets.
+
+=== D-ADM-006 — Droits : le gestionnaire fait la gestion courante, l'admin de cabinet le cycle de vie
+
+*Contexte.* ADR-008 D2 fixe les portées, pas le détail des gestes.
+
+*Choix.* Gestionnaire (dossiers confiés) : voir, modules et extensions,
+sauvegarde, restauration test, *demander* un recours d'accès. Admin de
+cabinet (son cabinet) : en plus créer, suspendre, réactiver, archiver,
+restaurer (archive, date), monter de version, demander une suppression,
+valider une double validation, utilisateurs, affectations, donneurs
+d'ordre, journal d'audit du cabinet. Super-admin : en plus cabinets,
+serveurs, versions, vagues. Double validation : le validateur est une
+*autre* personne, admin du cabinet du dossier ou super-admin ; une demande
+expire en 7 jours. Tout est dans `src/admin/services/access.cr`.
+
+=== D-ADM-007 — Protocole de l'exécutant : tirage, bail de 10 minutes, compte rendu idempotent
+
+*Choix.* `POST /api/agent/v1/claim` (tâche en attente la plus ancienne du
+serveur, ou tâche en cours dont le bail a expiré : reprise après coupure,
+`FOR UPDATE SKIP LOCKED`), `…/tasks/<id>/log` (lignes, bail prolongé),
+`…/tasks/<id>/finish` (idempotent : une tâche terminée répond `ok` sans
+rien changer). Jeton du serveur en `Authorization: Bearer`, empreinte
+SHA-256 en base, affiché une seule fois ; HTTPS exigé par l'exécutant sauf
+vers la machine elle-même. Côté admin, une tâche identique en attente ou en
+cours n'est pas dupliquée. Côté exécutant, chaque tâche tient un journal de
+reprise (`<state-dir>/tasks/task-<id>.json`, 0600) : une nouvelle tentative
+saute les étapes faites ; noms de fichiers de sauvegarde figés au premier
+passage. Liste fermée : `Protocol::KINDS` = `Plans::PLANS` (vérifié par une
+spec).
+
+=== D-ADM-008 — Usage du contrat `manage instance` (coordination avec A:cli-instance)
+
+*Choix.* L'exécutant vérifie la majeure du contrat (`version`, 1.x) avant
+tout geste, passe `--task` et `--requested-by`, lit la dernière ligne JSON
+de la sortie standard et son code de sortie. Correspondance : modules →
+`disable` puis `enable` ; archivage → `read-only on --terminate-sessions`,
+`pg_dump -Fc`, `backup-plan --list-file` + `tar`, relecture
+(`pg_restore --list`, empreinte), arrêt du service ; montée de version →
+sauvegarde préalable, arrêt, bascule du lien `release`, `migrate` avec le
+binaire de la nouvelle version, démarrage, `status` (0 migration en
+attente), sinon retour arrière (lien rebasculé, base restaurée depuis la
+sauvegarde préalable si la bascule a eu lieu) ; recours →
+`admin-invite EMAIL --reason --approval-ref --approvers A,B` ; restauration
+test → base temporaire `partiduo_rt_<dossier>_<tâche>` (`partiduo_adm_rt_…`
+en local), `status` avec `DATABASE_URL` sur elle, base supprimée ensuite ;
+supervision → `status` par dossier, `systemctl is-active`, échéance du
+certificat `/etc/letsencrypt/live/<hôte>/cert.pem` (D-CLI-007).
+
+*Demande au cœur (non bloquante).* Une option `--database` (ou la variable
+`DATABASE_URL` seule, déjà utilisée) suffit ; rien à ajouter au contrat 1.0.0.
+
+=== D-ADM-009 — Lien d'invitation d'un dossier : envoyé par courriel, jamais stocké
+
+*Contexte.* D-CLI-005 : le jeton n'est écrit nulle part ailleurs que dans la
+réponse de `admin-invite` ; `partiduo-provision` affiche le lien (D-J1-001).
+
+*Choix.* L'exécutant rend le lien dans le résultat ; l'admin l'envoie aussitôt
+à l'adresse invitée puis le retire du résultat conservé (`url`, `token`,
+`invitation_url`). Le journal de reprise de l'exécutant le garde le temps de
+la tâche (fichier 0600, effacé à la réussite).
+
+*Alternative écartée.* L'afficher à l'utilisateur d'administration :
+contraire à ADR-008 D3 (aucun accès « de support »).
+
+=== D-ADM-010 — Mode local de l'exécutant et mode à blanc
+
+*Choix.* `--mode local` : bases `partiduo_adm_*` exclusivement (garde-fou
+dans chaque opération), `partiduo-provision --output-dir <work-dir>/instances`
+sans installation (ni systemd, ni vhost, ni certbot), service simulé par un
+fichier témoin `SUSPENDED`, version courante dans un fichier `RELEASE`.
+`--mode dry-run` : système simulé en mémoire, chaque geste au journal
+(`[à blanc] …`), option `fail_on` pour les specs du retour arrière et de la
+reprise. Le nom de base d'un dossier est choisi par l'exécutant selon son
+mode et renvoyé à l'admin.
+
+=== D-ADM-011 — Quota Let's Encrypt : compté par l'admin, création refusée au plafond
+
+*Choix.* Chaque certificat de production émis à la création est enregistré
+(`admin_certificate_issue`, signalé par l'exécutant quand le certificat
+n'existait pas avant `INSTALL.txt`) ; semaine glissante par domaine,
+alerte à 40, création refusée à 50 (sauf domaines `.localhost` et `.test`).
+
+*Alternative écartée.* Interroger crt.sh : dépendance réseau, retard
+d'indexation.
+
+=== D-ADM-012 — Planification par commande et minuteur systemd
+
+*Choix.* `partiduo-admin-manage schedule` toutes les 15 minutes : sauvegarde
+planifiée due (quotidienne ou hebdomadaire), élagage des sauvegardes
+échues (jamais la dernière réussie ni une archive figée), restauration test
+de la dernière sauvegarde tous les `test_restore_days` (30 par défaut),
+supervision de chaque serveur, alertes (dernière sauvegarde > 36 h, quota,
+exécutant silencieux > 30 min), expiration des doubles validations.
+Alertes envoyées par courriel à `PARTIDUO_ADMIN_ALERTS_TO` à l'ouverture.
+
+=== D-ADM-013 — Restauration « instance neuve » en production : fichiers produits, installation manuelle
+
+*Choix.* La base neuve est restaurée et le fichier d'environnement dérivé
+de celui du dossier source ; service, vhost et certificat restent à
+installer comme pour `partiduo-provision` (journal de la tâche). En mode
+local et à blanc, le parcours est complet.
+
+*Alternative écartée.* Réutiliser `partiduo-provision` : il recrée la société
+et le jeu de données initial, incompatible avec une restauration.
+
+*Suite.* Une option `--restore-from DUMP` de `partiduo-provision` (sans
+l'étape 3) fermerait ce point. *Remplacée par D-AFN-009* (option
+`--files-only`, installation complète).
+
+== Tests du lot A — interface d'instance, administration, exécutant (A:specs, 28 septembre 2026)
+
+Specs ajoutées : `partiduo-app/spec/core/instance_cli_rules_spec.cr` (17
+exemples), `partiduo-admin/spec/admin/rules_spec.cr` (30) et
+`partiduo-admin/spec/agent/rules_spec.cr` (14). Bases de test :
+`partiduo_test_A_specs` (cœur) et `partiduo_test_A_specs_admin`
+(administration : sa suite vide le schéma public, elle ne peut partager la
+base du cœur). Les bogues avérés ci-dessous sont corrigés dans
+`partiduo-admin`, sans changer le contrat `manage instance`.
+
+=== D-ASP-001 — Sous-domaines réservés : `admin`, `www` et le préfixe `rt-`
+
+*Contexte.* `Protocol.valid_slug?` reprenait la règle de
+`partiduo-provision` seule. Un dossier `admin` aurait pris l'hôte de
+l'administration (`admin.<domaine>`, ADR-008 D1) et, en production, la base
+`partiduo_admin`. Un dossier `rt-x-5` aurait eu pour base
+`partiduo_rt_x_5`, nom de la base temporaire de la restauration test de la
+tâche 5 du dossier `x`, que l'exécutant supprime avant et après usage.
+
+*Choix.* `Protocol::RESERVED_SLUGS = admin, www` et
+`Protocol::RESERVED_PREFIX = "rt-"`, refusés à la création, à la
+restauration en instance neuve et par l'exécutant. L'exécutant refuse en
+outre la base `partiduo_admin` quel que soit le paramètre reçu.
+
+*Alternative écartée.* Renommer les bases de restauration test : cela
+aurait laissé ouverte la collision de l'hôte `admin`.
+
+*Suite.* `partiduo-provision` (partiduo-app) accepte encore ces
+sous-domaines en ligne de commande ; aligner sa règle le jour où il sera
+retouché.
+
+=== D-ASP-002 — Version d'un dossier : une version publiée, jamais un chemin
+
+*Contexte.* À la création, la version venait d'un champ de formulaire non
+vérifié côté serveur ; l'exécutant en faisait
+`ln -sfn <releases_dir>/<version>` puis lançait
+`<releases_dir>/<version>/bin/partiduo-manage`. Une valeur `../../x`
+aurait fait exécuter un binaire hors des versions publiées, contraire à
+l'ADR-008 D4 (« jamais de commande arbitraire »).
+
+*Choix.* L'admin n'accepte qu'une version enregistrée (`Release`) ;
+`Protocol::VERSION` (chiffres, points, tirets, sans `/`) est vérifié par
+l'admin à la publication et par l'exécutant (`Context#release`) pour
+`version` et `from_version`, avant tout geste.
+
+=== D-ASP-003 — Recours d'accès : état du dossier recontrôlé à la validation
+
+*Contexte.* La suppression recontrôlait l'état du dossier au moment de la
+validation, pas le recours d'accès : un dossier suspendu ou archivé entre
+la demande et la validation recevait quand même la tâche
+`instance.admin_invite`.
+
+*Choix.* `Approvals.approve` refuse (`admin.errors.dossier.not_active`) si le
+dossier n'est plus actif ; la demande reste en attente.
+
+=== D-ASP-004 — Export CSV : toutes les cellules citées, tabulation et retour chariot neutralisés
+
+*Contexte.* Le constructeur CSV de Crystal ne cite pas une cellule qui
+contient un retour chariot : un nom de donneur d'ordre `"\rX"` coupait la
+ligne. La neutralisation des formules ignorait la tabulation et le retour
+chariot en tête (OWASP).
+
+*Choix.* `CSV.build(quoting: ALL)` et neutralisation de `= + - @ \t \r`.
+
+=== D-ASP-005 — Essai à blanc : mêmes garde-fous de chemin qu'en production
+
+*Contexte.* En mode à blanc, `remove` acceptait tout chemin : un élagage ou
+une suppression demandant d'effacer `/etc/passwd` « réussissait » à blanc
+et n'échouait qu'en production.
+
+*Choix.* `DrySystem#remove` applique `guard_backup_path!`, comme les modes
+local et production.
+
+== Clôture du lot A — remarques de relecture (A:final, 28 septembre 2026)
+
+Corrections des remarques de relecture du lot A (interface d'instance,
+`partiduo-admin`, `partiduo-agent`). Préfixe `D-AFN-`. Code dans
+`partiduo-app` et `../partiduo-admin`.
+
+=== D-AFN-001 — Bases de la clôture
+
+*Choix.* `partiduo_test_A_final` (suites de `partiduo-app`, trois
+configurations de modules), `partiduo_test_A_final_admin` (suite de
+`partiduo-admin`, qui vide le schéma public : elle ne peut partager la base
+du cœur, comme D-ASP-*), `partiduo_migrate_A` (migrations sur base vierge,
+recréée pour chaque dépôt).
+
+=== D-AFN-002 — Production : deux scripts enveloppes possédés par root, seuls permis par sudoers
+
+*Contexte.* Relecture (bloquant) : `ProductionSystem#instance` plaçait le nom
+de base, venu de la tâche, dans un script `sh -c` sans le valider (une base
+`x; commande #` exécutait une commande sous le compte des instances) ; les
+règles sudoers donnaient en pratique root à `partiduo-agent` (`/bin/sh
+INSTALL.txt` relatif, écrit par l'exécutant lui-même ; jokers d'arguments
+qui couvrent espaces et `/` ; `sh -c … exec env *` sous `partiduo`),
+contrairement à l'ADR-008 D4 (« jamais de commande arbitraire »).
+
+*Choix.* sudoers ne permet plus que deux programmes, sans joker :
+`deploy/libexec/partiduo-agent-root` (en root) et
+`deploy/libexec/partiduo-agent-instance` (sous `partiduo`), installés par
+root en 0755 dans `/usr/local/libexec/partiduo-agent/`. Chacun valide ses
+arguments (sous-domaine : règle de `Protocol.valid_slug?`, réservés
+compris ; base `partiduo_[a-z0-9_]+` hors `partiduo_admin` ; version
+publiée présente dans `releases/` ; chemins sous `BACKUP_DIR` sans `..` ;
+action de l'interface d'instance dans la liste du contrat ; options de
+`partiduo-provision` dans une liste fermée) et tire tout le reste de
+`/etc/partiduo-agent/helpers.conf`, possédée par root (vérifié). Aucun
+argument n'est évalué par un shell : la base de l'interface d'instance est
+un argument de l'enveloppe, qui pose `DATABASE_URL` elle-même.
+`ProductionSystem` appelle `guard_database!` avant tout appel et ne produit
+plus que des argv `sudo -n [-u partiduo] <enveloppe> <geste> <valeurs>`.
+
+L'installation (`install SLUG`) n'exécute plus `INSTALL.txt` : l'enveloppe
+racine refait elle-même ses gestes. Elle produit l'unité systemd et les
+vhosts depuis une *copie possédée par root* des gabarits
+(`TEMPLATES_DIR`, jamais ceux d'une version installée, modifiables par
+`partiduo`) ; du fichier d'environnement produit par `partiduo-provision`
+(répertoire `STAGE_DIR`, compte `partiduo`), elle ne reprend que des clés
+connues, aux caractères sûrs, et impose les valeurs qui désignent l'instance
+(hôte, `DATABASE_URL` de la base du sous-domaine, stockage, port numérique) ;
+le fichier n'est jamais évalué, un lien symbolique est refusé, aucune valeur
+refusée n'est répétée dans les messages. Certificat (`cert HÔTE`), service
+(`service SLUG start|stop`) et retrait (`remove SLUG`) : chemins calculés
+depuis le sous-domaine.
+
+*Écart à la recommandation.* Les fichiers générés sont relus dans
+`STAGE_DIR`, possédé par `partiduo`, et non dans un répertoire possédé par
+root : seul le fichier d'environnement y est lu, validé clé par clé, jamais
+exécuté ; les fichiers exécutables par root (unité, vhosts) ne viennent pas
+de là.
+
+*Alternative écartée.* Garder `INSTALL.txt` en le copiant dans un
+répertoire racine : son contenu resterait écrit par un compte non
+privilégié. Faire tourner `partiduo-provision` en root : il lance le
+binaire de l'application (migrations), ce qui donnerait root à tout code
+d'une version installée.
+
+*Reste.* Enveloppes essayées sur macOS pour leurs refus seulement (specs) :
+`systemctl`, `certbot`, `nginx` et `sudo` réels non essayés (B-AFN-001).
+
+=== D-AFN-003 — `admin-invite` limité aux administrateurs existants (amendement de D-CLI-005)
+
+*Contexte.* Relecture (majeur) : pour une adresse inconnue, `admin-invite`
+créait un compte administrateur ; la plateforme faisait donc entrer
+n'importe quelle adresse comme administrateur, alors que l'ADR-008 D3 parle
+de *réémission* et l'ADR-002 D3 réserve l'ouverture de l'accès à la
+société.
+
+*Choix.* Une adresse sans compte est refusée (code 4,
+`instance.admin_invitation.unknown`), comme une adresse invalide ; seul un
+compte existant au profil administrateur, non révoqué, reçoit une nouvelle
+invitation. `user_created` reste dans la réponse, toujours `false`
+(compatibilité du contrat 1.0.0, non publié). L'aide de l'écran de
+`partiduo-admin` le dit.
+
+*Alternative écartée.* Accepter la seule adresse de l'administrateur
+initial : l'instance ne la connaît pas autrement que par ses comptes.
+*Amendement d'ADR à proposer* si la création d'un administrateur par la
+plateforme devenait nécessaire (société sans aucun compte administrateur) :
+ADR-008 D3, avec l'accord écrit de la société.
+
+=== D-AFN-004 — Hôte et base recalculés depuis le sous-domaine
+
+*Contexte.* Relecture (majeur) : `host` et `database` venaient de la tâche ;
+une tâche forgée ou un inventaire altéré pouvait supprimer la base ou le
+certificat d'un autre dossier.
+
+*Choix.* Option `--domain` de `partiduo-agent`, obligatoire en production
+(même valeur que `DOMAIN` des enveloppes). Avant tout geste, toute tâche
+d'un dossier recalcule l'hôte (`<sous-domaine>.<domaine>`) et la base
+(`database_for(slug)`) et refuse une valeur reçue différente, comme un
+domaine de tâche différent de celui de l'exécutant ; hors production, le
+domaine de la tâche est accepté s'il est bien formé. Restauration en
+instance neuve : hôte et base du nouveau sous-domaine, recalculés de même.
+Supervision : entrée étrangère ignorée. En production, les enveloppes
+recalculent en outre elles-mêmes hôtes, bases et chemins.
+
+=== D-AFN-005 — Rôle propriétaire : celui des instances
+
+*Contexte.* Relecture (majeur) : en production, `partiduo-provision`,
+`createdb`, `pg_restore`, `pg_dump` et `dropdb` tournaient sous
+`partiduo-agent`, propriétaire alors des bases et des tables ; l'instance,
+sous `partiduo`, n'y avait pas accès et `read-only` échouait.
+
+*Choix.* Tous ces gestes passent par l'enveloppe `partiduo-agent-instance`,
+sous le compte `partiduo`, rôle PostgreSQL du même nom (authentification
+« peer ») : bases créées `--owner=partiduo`, migrations et société par
+`partiduo-provision` sous ce rôle (avec `--owner`, `--install-root`,
+`--etc-dir`, `--system-user`, `PARTIDUO_TEMPLATES` de la configuration),
+restaurations `--no-owner` sous ce rôle. `partiduo-agent` n'a plus besoin de
+rôle PostgreSQL. Sauvegardes : `/var/backups/partiduo` en
+`partiduo:partiduo-agent` 2770 (setgid), fichiers 0640 (`umask 027` de
+l'enveloppe) : l'exécutant relit, vérifie, fusionne les listes et élague ;
+`partiduo` écrit. Spec : argv produits en mode production.
+
+*Alternative écartée.* Rôle `partiduo-agent` membre de `partiduo` : les
+migrations lancées par `partiduo-provision` créeraient encore les tables
+sous le rôle de connexion.
+
+=== D-AFN-006 — Ordre des modules et extensions selon leurs dépendances
+
+*Contexte.* Relecture (majeur) : retirer un module et une extension qui en
+dépend échouait (`Modules.deactivate` refuse une pièce requise par une
+pièce active) ; l'ordre d'activation était celui de la saisie.
+
+*Choix.* L'admin met les extensions retirées avant les modules retirés, les
+modules ajoutés avant les extensions ajoutées. L'exécutant relit les
+dépendances rendues par `status` (`depends_on`, alternatives `A|B`
+comptées) et ordonne par parcours en profondeur : une pièce se désactive
+après celles qui la requièrent, s'active après celles qu'elle requiert ;
+sans dépendance connue, l'ordre reçu est gardé.
+
+=== D-AFN-007 — Montée de version : service arrêté avant la sauvegarde, retour arrière sur toute erreur
+
+*Contexte.* Relecture (majeur) : la sauvegarde préalable était prise
+service en marche (écritures perdues au retour arrière) ; seule une
+`StepError` déclenchait le retour arrière.
+
+*Choix.* Étape « arrêt du service » avant la sauvegarde préalable ; toute
+exception déclenche le retour arrière, puis est relevée en `StepError`
+(code de la catégorie si c'en était une, `internal` sinon) ; un retour
+arrière lui-même en échec est signalé comme incomplet. Même règle pour la
+restauration en remplacement (service arrêté avant la sauvegarde de
+sûreté, relancé si elle échoue) et pour `partiduo-fleet upgrade`.
+
+=== D-AFN-008 — Lien d'invitation jamais perdu : compte rendu annulé si le courriel échoue
+
+*Contexte.* Relecture (majeur) : le résultat expurgé était enregistré avant
+l'envoi du courriel ; un échec SMTP faisait répondre 500, le compte rendu
+rejoué recevait « déjà terminée » et le lien était perdu.
+
+*Choix.* `Tasks.finish` applique état, résultat expurgé, journal d'audit et
+effets dans une transaction ; un envoi en échec (`Effects::DeliveryError`)
+annule tout, ouvre l'alerte `mail_failed` (écran et courriel des alertes)
+et l'API répond 503. La tâche reste « en cours » ; l'exécutant garde le lien
+dans son journal de reprise (0600) et, le bail échu, reprend la tâche
+(étapes faites sautées) et rend compte de nouveau : le courriel est
+réessayé. Un recours d'accès repris réémet une invitation neuve, la
+précédente n'ayant jamais été envoyée.
+
+*Alternative écartée.* Conserver le lien chiffré avec un bouton « renvoyer »
+: le jeton serait stocké dans l'admin (contraire à D-ADM-009) et demanderait
+un écran de plus.
+
+=== D-AFN-009 — Restauration en instance neuve installée comme une création (remplace D-ADM-013)
+
+*Choix.* Base restaurée, puis `partiduo-provision --files-only` (nouvelle
+option : ni base, ni migrations, ni société ; nouveau port, nouvelle clé
+secrète ; le premier port libre tient compte des instances installées de
+`--etc-dir`), installation (service, vhost, certificat) par l'enveloppe
+racine, version de la sauvegarde, pièces jointes. Le certificat émis est
+compté dans le quota ; l'admin refuse la restauration en instance neuve au
+plafond du quota ; la copie passe à « active » après réussite, à « erreur »
+après un échec. `partiduo-fleet restore` remet aussi les pièces jointes
+(archive `<libellé>.media.tar.gz`).
+
+=== D-AFN-010 — Double validation atomique, jamais rejouée
+
+*Choix.* `Approvals.approve` passe la demande à « validée » par une mise à
+jour conditionnelle (`state = 'pending'`, une ligne attendue) dans la
+transaction qui enregistre la tâche : de deux validations simultanées, une
+seule crée la tâche. Une tâche `instance.admin_invite` ou `instance.delete`
+échouée n'est pas rejouable (`Tasks.retryable?`, bouton masqué) : il faut
+une nouvelle demande, donc une nouvelle double validation et un nouveau
+contrôle de l'état du dossier.
+
+=== D-AFN-011 — Second facteur et compte rendu : une seule consommation
+
+*Choix.* La session n'est ouverte que si `Challenges.consume` rend la
+poignée (sinon « expirée ») : deux requêtes concurrentes n'ouvrent qu'une
+session. `Tasks.finish` passe la tâche de `running` à son état final par une
+mise à jour conditionnelle avant d'appliquer les effets : le second de deux
+comptes rendus concurrents n'applique rien.
+
+*Reste.* `Approvals.reject` n'est pas conditionnel (sans effet de bord :
+une demande validée puis « rejetée » garde sa tâche) ; à aligner.
+
+=== D-AFN-012 — Pièces jointes relevées avant et après `pg_dump`
+
+*Contexte.* Relecture (mineur) : la liste des pièces était produite après
+`pg_dump` ; une pièce supprimée entre les deux manquait à l'archive. La
+produire avant seulement ferait manquer une pièce déposée entre les deux.
+
+*Choix.* `backup-plan` avant *et* après `pg_dump`, archive de l'union des
+deux listes (`tar --ignore-failed-read`), dans l'exécutant comme dans
+`partiduo-fleet backup` ; seule une pièce supprimée après `pg_dump` et avant
+`tar` peut encore manquer. Montée de version, archivage et restauration en
+remplacement sauvegardent service arrêté ou en lecture seule.
+
+*Alternative écartée.* Lecture seule pendant chaque sauvegarde planifiée :
+elle interromprait la saisie tous les jours.
+
+=== D-AFN-013 — Interface d'instance : erreurs traduites, hôte du lien, trace après l'effet
+
+*Choix.* Erreur d'option levée avant `run` : message
+`core.instance_cli.errors.option` dans la langue de `--locale` si elle est
+déjà lue, sinon en français ; erreur interne :
+`core.instance_cli.errors.internal` qui cite l'erreur d'origine. Lien
+d'invitation bâti sur l'hôte de l'instance (domaine de la société, sinon
+`PARTIDUO_HOST`, sinon le premier de `MARTEN_ALLOWED_HOSTS`), refus 4
+`instance.host_unknown` avant toute invitation sinon — jamais sur le domaine
+du parc. `read-only on|off` : réglage et trace dans une même transaction,
+sessions coupées ensuite.
+
+*Écart (mineur non corrigé).* Textes d'aide de `manage instance --help` en
+français : aide d'un outil d'exploitation, comme les autres commandes du
+cœur ; les réponses JSON, elles, sont traduites.
+
+=== D-AFN-014 — `backup-plan` par lots, empreinte en flux
+
+*Choix.* Pièces lues par lots de 500 identifiants
+(`InstanceAdmin.each_backup_file`), empreinte par
+`Digest::SHA256#file` : la mémoire ne dépend plus de la taille des pièces.
+D-CLI-001 précisé : seul le socle (dont `Partiduo::Auth`, journal d'audit)
+est référencé.
+
+=== D-AFN-015 — Journal des tâches en français ; supervision robuste
+
+*Choix.* Les lignes du journal d'une tâche (« échec : … », « étape … déjà
+faite ») restent en français : journal technique d'exploitation, comme les
+journaux de serveur, que l'interface affiche tel quel ; l'état, le type et
+les erreurs de formulaire de l'interface sont, eux, traduits. Supervision :
+une entrée mal formée, ou dont l'hôte ou la base ne correspondent pas au
+sous-domaine, est ignorée et journalisée ; une erreur d'un dossier ne fait
+plus échouer la supervision du serveur. La tâche reçoit le domaine du
+serveur.
+
+*Alternative écartée.* Codes stables traduits par l'admin : changement du
+protocole de l'exécutant pour un texte que seuls les exploitants lisent.

@@ -21,9 +21,13 @@ fichiers de service. N'installe rien sur le système.
 |`templates/instance.env.tmpl`
 |Environnement de l'instance : base, modules, domaine, clé secrète, port.
 
+|`templates/nginx-acme.conf.tmpl`
+|Vhost d'amorçage : ne sert que les défis ACME (HTTP-01), le temps d'obtenir
+le certificat de l'instance.
+
 |`templates/nginx-vhost.conf.tmpl`
-|Vhost nginx : redirection HTTPS, certificat générique du parc, mandataire
-vers le port local de l'instance.
+|Vhost nginx : défis ACME et redirection HTTPS, certificat Let's Encrypt
+*propre à l'instance*, mandataire vers le port local de l'instance.
 
 |`templates/partiduo-instance.service.tmpl`
 |Unité systemd `partiduo-<dossier>.service`, durcie.
@@ -49,7 +53,9 @@ bin/partiduo-provision --name "Exemple SARL" --regime fr --siren 732829320 \
 Étapes (ADR-001 D2 § Provisionnement) :
 
 . `createdb --owner=<rôle> --encoding=UTF8 partiduo_<dossier>` (`--owner`,
-  `--database`, `--skip-createdb`) ;
+  `--database`, `--skip-createdb` ; `--files-only` saute les étapes 1 à 3
+  pour une base déjà remplie, restauration dans une instance neuve,
+  D-AFN-009) ;
 . `migrate` sur cette base, avec `PARTIDUO_MODULES` = modules + extensions ;
 . commande Marten `provision` : société (`Settings`, ligne unique) puis jeu de
   données initial des pièces actives, selon le régime (`--regime fr|be`), par
@@ -57,9 +63,32 @@ bin/partiduo-provision --name "Exemple SARL" --regime fr --siren 732829320 \
   `--admin-email`, le lien d'invitation de l'administrateur est affiché, à lui
   transmettre (D-J1-001) ;
 . génération, dans `--output-dir` (défaut `./tmp/instances/<dossier>/`), de
-  `<dossier>.env` (mode 600, clé secrète aléatoire), `<dossier>.nginx.conf`,
-  `partiduo-<dossier>.service` et `INSTALL.txt`, la liste des commandes
-  d'installation — *non exécutées*.
+  `<dossier>.env` (mode 600, clé secrète aléatoire), `<dossier>.acme.nginx.conf`,
+  `<dossier>.nginx.conf`, `partiduo-<dossier>.service` et `INSTALL.txt`, les
+  commandes d'installation (script `sh`, `set -eu`) — *non exécutées*.
+
+=== Certificat TLS : un par instance
+
+ADR-001 D2 retient un certificat Let's Encrypt *par instance* (pas de
+certificat générique). `INSTALL.txt` :
+
+. installe le vhost d'amorçage (HTTP seul, défis ACME sur `--acme-webroot`,
+  défaut `/var/www/letsencrypt`) et recharge nginx ;
+. `certbot certonly --webroot -d <dossier>.<domaine> --cert-name <dossier>.<domaine>
+  --keep-until-expiring --deploy-hook 'systemctl reload nginx'` ;
+. installe le vhost définitif (`/etc/letsencrypt/live/<dossier>.<domaine>/`) et
+  recharge nginx.
+
+Le renouvellement est celui de certbot (minuteur du paquet), par le même
+webroot, que le vhost définitif continue de servir. `--acme-email` (ou
+`$PARTIDUO_ACME_EMAIL`) désigne le compte ACME — celui qui portera la demande
+de relèvement de quota (ADR-001 D2) ; sans adresse, compte sans courriel.
+
+*Quota* : 50 nouveaux certificats par semaine pour `partiduo.app`, tous
+comptes confondus. `--keep-until-expiring` ne réémet pas un certificat valide
+quand on rejoue `INSTALL.txt` ; `--acme-staging` utilise l'autorité de test
+(`--test-cert`), hors quota, pour les essais. `partiduo-fleet retire` supprime
+le certificat de l'instance retirée (`certbot delete`).
 
 `--dry-run` affiche les étapes sans rien exécuter. La ligne de commande Marten
 utilisée est `--manage`, sinon `$PARTIDUO_MANAGE`, sinon `bin/partiduo-manage`
@@ -116,8 +145,21 @@ deploy/bin/partiduo-fleet status
 /etc/partiduo/<dossier>.env                     # root:partiduo, 640
 /etc/systemd/system/partiduo-<dossier>.service
 /etc/nginx/sites-available/partiduo-<dossier>.conf
-/var/backups/partiduo/<dossier>/*.dump          # pg_dump -Fc
+/var/backups/partiduo/<dossier>/<nom>.dump      # pg_dump -Fc
+/var/backups/partiduo/<dossier>/<nom>.media.tar.gz  # pièces jointes
 ----
+
+=== Sauvegardes
+
+`backup` (et la sauvegarde préalable de `upgrade` et `retire`) écrit, sous un
+même nom dans `$BACKUP_DIR/<dossier>/` : `<nom>.dump` (`pg_dump -Fc`),
+`<nom>.plan.json` et `<nom>.files` (réponse et liste de
+`partiduo-manage instance backup-plan`, link:../doc/api/instance-cli.adoc[]),
+`<nom>.media.tar.gz` (les pièces jointes listées). La liste vient de
+l'instance, relevée avant et après `pg_dump` (union, D-AFN-012) : seules les
+pièces enregistrées sont archivées, les fichiers manquants sont signalés
+dans `plan.json`. `restore <dossier> <nom>.dump` remet la base puis les
+pièces jointes de `<nom>.media.tar.gz` sous `$PARTIDUO_MEDIA_ROOT`.
 
 === La mise à jour est une opération de parc
 
@@ -131,7 +173,8 @@ déploiement et une stratégie de migration progressive ». La stratégie retenu
   un parc temporairement hétérogène est explicite, visible par `status` ;
 * `upgrade` exige une sélection (`--canary N`, `--only a,b`, `--all`), vérifie
   toute la sélection avant de commencer, puis traite les instances *une par
-  une* : sauvegarde `pre-<version>-<date>.dump`, arrêt, `migrate` avec la
+  une* : arrêt, sauvegarde `pre-<version>-<date>.dump` (service arrêté :
+  rien n'est écrit entre la sauvegarde et un retour arrière), `migrate` avec la
   nouvelle version, bascule du lien (l'ancien devient `release.previous`),
   démarrage, contrôle de santé HTTP ;
 * *au premier échec*, l'instance est remise dans son état d'avant (lien et
@@ -148,8 +191,8 @@ déploiement et une stratégie de migration progressive ». La stratégie retenu
   avec `CREATEDB` (`provision` le crée au besoin), authentification `peer` ;
 * un compte système `partiduo` ; l'utilisateur ssh de déploiement peut
   `sudo` ;
-* nginx, un certificat générique `*.<domaine>` dans
-  `/etc/letsencrypt/live/<domaine>/` ;
+* nginx et certbot ; le DNS de `<dossier>.<domaine>` pointe sur le serveur
+  (défi HTTP-01) ;
 * `curl` pour le contrôle de santé.
 
 Rien de cet outillage n'a été exécuté contre un serveur réel au lot 0 : les

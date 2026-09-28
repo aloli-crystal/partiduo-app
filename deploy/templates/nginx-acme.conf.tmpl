@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Instance Partiduo {{DOSSIER}} — vhost d'amorçage, généré par partiduo-provision.
+#
+# Installé seul le temps d'obtenir le certificat de l'instance : nginx refuse
+# un vhost HTTPS dont le certificat n'existe pas encore. Il ne sert que les
+# défis ACME (HTTP-01) ; le vhost définitif ({{DOSSIER}}.nginx.conf) le
+# remplace dès le certificat émis.
+
+server {
+  listen      80;
+  listen      [::]:80;
+  server_name {{HOST}};
+
+  location ^~ /.well-known/acme-challenge/ {
+    root {{ACME_WEBROOT}};
+    default_type text/plain;
+  }
+
+  location / {
+    return 503;
+  }
+}

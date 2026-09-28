@@ -1,12 +1,23 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Instance Partiduo {{DOSSIER}} — généré par partiduo-provision.
-# Certificat : un certificat générique *.{{DOMAIN}} pour tout le parc.
+# Certificat : un certificat Let's Encrypt propre à l'instance (ADR-001 D2),
+# obtenu par certbot en HTTP-01 sur {{ACME_WEBROOT}} (voir INSTALL.txt et
+# nginx-acme.conf.tmpl, le vhost d'amorçage).
 
 server {
   listen      80;
   listen      [::]:80;
   server_name {{HOST}};
-  return 301  https://$host$request_uri;
+
+  # Défis ACME : renouvellement du certificat par certbot (webroot).
+  location ^~ /.well-known/acme-challenge/ {
+    root {{ACME_WEBROOT}};
+    default_type text/plain;
+  }
+
+  location / {
+    return 301 https://$host$request_uri;
+  }
 }
 
 server {
@@ -15,8 +26,8 @@ server {
   http2       on;
   server_name {{HOST}};
 
-  ssl_certificate     /etc/letsencrypt/live/{{DOMAIN}}/fullchain.pem;
-  ssl_certificate_key /etc/letsencrypt/live/{{DOMAIN}}/privkey.pem;
+  ssl_certificate     /etc/letsencrypt/live/{{HOST}}/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/{{HOST}}/privkey.pem;
 
   add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
 

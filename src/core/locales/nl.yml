@@ -218,6 +218,30 @@ nl:
         other: "Aanmaken van het dossier geweigerd: %{count} fouten."
       invalid_number: "Onleesbare numerieke waarde (kapitaal, niveau of sessieduur)."
       invitation: "Uitnodiging voor beheerder %{email}, geldig tot %{expires}, door te geven: %{url}"
+    instance_cli:
+      errors:
+        option: "Onbekende optie of ontbrekende waarde: %{option}."
+        database_unavailable: "De database van de instantie is onbereikbaar: %{detail}"
+        read_only: "De instantie is alleen-lezen: hef eerst de alleen-lezenmodus op (read-only off)."
+        action_missing: "Ontbrekende actie; mogelijke acties: %{actions}."
+        action_unknown: "Onbekende actie: %{action}; mogelijke acties: %{actions}."
+        argument_missing: "Ontbrekend argument voor de actie %{action}."
+        argument_extra: "Overbodig argument: %{argument}."
+        migrations_pending:
+          one: "Er moet nog %{count} migratie worden toegepast (migrate)."
+          other: "Er moeten nog %{count} migraties worden toegepast (migrate)."
+        migration_failed: "Migratie mislukt na %{applied} toegepaste migratie(s): %{detail}"
+        module_unknown: "Module of extensie onbekend in deze versie: %{code}."
+        reason_missing: "Een reden is verplicht (--reason)."
+        read_only_mode: "Onbekende alleen-lezenmodus: %{mode} (on, off of status)."
+        approval_missing: "De referentie van de dubbele goedkeuring is verplicht (--approval-ref)."
+        approvers: "Twee verschillende personen moeten hebben goedgekeurd (--approvers a,b)."
+        not_provisioned: "De instantie is niet ingericht (geen onderneming)."
+        not_admin: "%{email} heeft een account zonder beheerdersprofiel: alleen de onderneming kan die rechten geven."
+        revoked: "De onderneming heeft de toegang van %{email} ingetrokken: het platform heropent die niet."
+        unknown: "Geen account voor %{email}: het platform maakt geen beheerders aan; alleen een bestaande beheerder krijgt een nieuwe uitnodiging."
+        host_unknown: "Host van de instantie onbekend (onderneming zonder domein, geen PARTIDUO_HOST of MARTEN_ALLOWED_HOSTS): geen uitnodigingslink mogelijk."
+        internal: "Interne fout: %{detail}"
   partiduo:
     api:
       errors:

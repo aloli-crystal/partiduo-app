@@ -797,6 +797,9 @@ cette critique (la copie PDF n'est pas envoyée sans transport de courriel).
 *Constat.* ADR-008 (administration du parc) est postérieur au prompt et
 hors des ADR-001 à 007 confiés ; aucun dépôt `partiduo-admin`.
 
+*Levé* (A:admin, 28 septembre 2026) : dépôt `partiduo-admin` créé
+(D-ADM-001 à D-ADM-013, B-ADM-001, B-ADM-002).
+
 == B-FIN-006 — Nouveaux dépôts non publiés, CI non exécutée
 
 *Constat.* `partiduo-choruspro` et `partiduo-urssaf` ont leur CI GitHub
@@ -850,4 +853,43 @@ les chemins produirait du code faux).
 `Urssaf::TdAeTransport < Transport` sur `Urssaf::OAuth2` et une suite
 `spec/integration/sandbox_spec.cr` en attente sans identifiants (modèle :
 `partiduo-esalink`).
+
+
+== B-ADM-001 — Serveurs de vérification restés ouverts sur 127.0.0.1:8200 (A:admin)
+
+*Constat.* Trois processus `partiduo-admin` lancés pendant la vérification
+de `partiduo-admin` (PID 44583, 44770, 44863, port 8200, base de
+développement `partiduo_admin`) n'ont pu être arrêtés : le bac à sable
+refuse `kill` sur un processus lancé par une commande précédente (comme
+B-VE-002). Les vérifications suivantes ont été faites sur le port 8210,
+serveur arrêté proprement.
+
+*Levée.* `kill 44583 44770 44863` hors bac à sable.
+
+== B-ADM-002 — `partiduo-admin` : CI non exécutée, passkeys et mode production non essayés en réel (A:admin)
+
+*Constat.* Dépôt neuf sans dépôt distant (poussée interdite) : la CI GitHub
+(`.github/workflows/ci.yml`) n'a pas tourné ; ses étapes ont été rejouées
+localement (format, Ameba, compilation des trois binaires, specs). Les
+passkeys sont vérifiées par un authentificateur simulé (ES256), pas par un
+appareil réel. Le mode `production` de l'exécutant (sudo, systemctl,
+certbot, règles `deploy/partiduo-agent.sudoers`) n'a pas été essayé : aucun
+serveur d'hébergement. Le mode `local` a été essayé de bout en bout contre
+un vrai `partiduo-provision` et un `partiduo-manage` compilé (création,
+sauvegarde, restauration test, modules, suspension, réactivation,
+archivage, restauration de l'archive, recours d'accès).
+
+*Levée.* Publier le dépôt et ses dépendances (B-002) ; essai d'une passkey
+réelle sur `admin.partiduo.localhost` ; répétition sur un serveur de
+préproduction avec `--acme-staging`, en relisant les règles sudoers.
+
+== B-AFN-001 — Enveloppes de sudo non essayées sur un serveur réel (A:final)
+
+Les scripts `deploy/libexec/partiduo-agent-root` et
+`partiduo-agent-instance` de `partiduo-admin` (D-AFN-002) sont essayés sur
+macOS pour leurs refus et pour l'appel de l'interface d'instance ; `sudo`,
+`systemctl`, `certbot`, `nginx`, `stat -c` (GNU) et l'installation complète
+d'une instance n'ont pas été essayés faute de serveur Linux. Contournement :
+specs des argv produits par `ProductionSystem` et des refus des
+enveloppes ; essai à faire sur le premier serveur (B-ADM-002).
 

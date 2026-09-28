@@ -34,11 +34,12 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |K |Extension `partiduo-choruspro` (ADR-004 D9 révisé) : adaptateur PISTE, réaction aux paiements lettrés, relecture (réservation du dépôt, recyclage sur le portail, visibilité, historique) |*Terminé* contre Chorus Pro simulé (sections « Extension CHORUSPRO » et « Clôture du lot K ») ; qualification réelle non essayée (B-FIN-002)
 |H |Extension `partiduo-esalink` (ADR-004 D2 révisé le 28 septembre 2026) : adaptateur EsaLink hérité de l'adaptateur XP Z12-013 d'EINV, points d'extension ajoutés à EINV |*Terminé* contre EsaLink simulée (sections « Extension ESALINK » et « Clôture du lot H ») ; préproduction réelle non essayée (B-ESL-001)
 |U |Extension `partiduo-urssaf` (ADR-007 D7) complétée : télépaiement et mandats SEPA, suivi (paiements, régularisations, anomalies, mandat révoqué depuis l'espace URSSAF), accusés en pièce jointe, OAuth 2, entrée du mode simplifié |*Terminé* contre l'URSSAF simulée (sections « Extension URSSAF — suivi et paiements » et « Clôture du lot U ») ; adaptateur réel en attente (B-FIN-003, B-URS-001)
+|A |Administration du parc (ADR-008) : interface en ligne de commande d'instance (`manage instance`), application `partiduo-admin` (cabinets, rôles, cycle de vie, sauvegardes, mises à jour, supervision) et exécutant `partiduo-agent` ; certificat Let's Encrypt par instance (ADR-001 D2) |*Terminé* (sections « Interface en ligne de commande d'instance », « Administration du parc » et « Clôture du lot A ») ; mode production non essayé sur un serveur réel (B-ADM-002, B-AFN-001)
 |===
 
 *État définitif (28 septembre 2026, critique de complétude finale : section
-du même nom ; lots H, K et U clos le même jour).* Lot en cours : aucun. Tous les
-lots du plan (P à 6), les lots E, G, H, K, L, T et U et la critique finale sont
+du même nom ; lots H, K, U et A clos le même jour).* Lot en cours : aucun. Tous les
+lots du plan (P à 6), les lots A, E, G, H, K, L, T et U et la critique finale sont
 terminés ; les trois jalons du prompt
 sont vérifiés, les extensions exigées par ADR-004 D9 révisé et ADR-007 D7
 existent (`partiduo-choruspro`, `partiduo-urssaf`), écrites contre des
@@ -2296,6 +2297,137 @@ sans pousser) ; `crystal tool format --check` et Ameba sans remarque ;
 configurations du prompt : 1033 + 33 en attente (Comptabilité), 803 + 58
 (Facturation), 1122 + 13 (les deux), avec Analytique, Stock et Suivi.
 
+== Interface en ligne de commande d'instance (A:cli-instance, 28 septembre 2026)
+
+Contrat entre une instance et l'exécutant de `partiduo-admin` (ADR-008 D4),
+dans le cœur : `partiduo-manage instance <action>`, une ligne JSON par
+réponse, codes de sortie 0 à 7, version `INSTANCE_CLI_VERSION` 1.0.0
+(link:doc/api/instance-cli.adoc[], D-CLI-001, D-CLI-002). Aucune donnée
+comptable lue ni écrite (ADR-008 D3).
+
+* `version`, `status` : versions (code, `Partiduo::Api`, contrat), base,
+  provisionnement, régime, lecture seule, migrations appliquées et en
+  attente, pièces et leur état.
+* `migrations [--check]`, `migrate` : plan et application par le
+  `Runner` de Marten, trace au journal d'audit.
+* `enable`, `disable` : par `Partiduo::Api::Modules`, mêmes règles que
+  l'écran ; désactiver conserve les données (ADR-006 D2, D-CLI-004).
+* `read-only on|off|status` : `default_transaction_read_only` posé sur la
+  base, motif et date au journal d'audit, `--terminate-sessions` ou
+  redémarrage du service (D-CLI-003).
+* `admin-invite` : recours d'accès, motif, référence de la double
+  validation et deux validateurs exigés, trace `instance.admin_invitation`
+  dans le journal de l'instance ; jamais de droits nouveaux (D-CLI-005).
+* `backup-plan [--verify] [--list-file]` : pièces jointes à inclure (noms
+  de stockage, tailles, empreintes, manquantes, altérées), sans les noms
+  déposés (D-CLI-006) ; `partiduo-fleet backup` archive base et pièces.
+* `partiduo-provision` : certificat Let's Encrypt par instance (vhost
+  d'amorçage ACME, `certbot --webroot --keep-until-expiring`, vhost
+  définitif, `--acme-email`, `--acme-staging`), `INSTALL.txt` en
+  `set -eu` ; `partiduo-fleet` : configuration ACME, suppression du
+  certificat au retrait (D-CLI-007).
+
+Vérifié en réel sur une instance provisionnée (`partiduo_a_cli_demo`, binaire
+compilé) : migrations d'une base vierge, activation refusée pour dépendance
+(4), pièce inconnue (3), lecture seule effective pour une nouvelle session
+puis refus des gestes (5) et levée, réémission tracée, base injoignable (6).
+
+Specs : `spec/core/instance_cli_spec.cr` (12 exemples), `spec/deploy/scripts_spec.cr`
+(certificat, sauvegarde). Suite complète verte (base `partiduo_test_a_cli`,
+ordre aléatoire) : 1048 + 33 en attente (Comptabilité, avec Analytique,
+Stock, Suivi), 818 + 58 (Facturation, Stock, Suivi), 1137 + 13 (les deux) ;
+format et Ameba sans remarque, garde-fou ADR-005 D3 vert.
+
+Reste : l'interface ne signale pas la lecture seule (erreur 500 à
+l'écriture, D-CLI-003) ; `partiduo-admin` et son exécutant (autre dépôt).
+
+== Administration du parc : `partiduo-admin` (A:admin, 28 septembre 2026)
+
+Nouveau dépôt `../partiduo-admin` (ADR-008), branche `development` :
+application Marten séparée (base `partiduo_admin`, `partiduo_admin_test`
+en test), interface HTMX + Bulma sur `theme.css` de la maquette, fr/en/nl,
+et exécutant `partiduo-agent` (même dépôt). Décisions D-ADM-001 à
+D-ADM-013, blocages B-ADM-001 et B-ADM-002.
+
+* Modèles : cabinets, utilisateurs d'administration (super-admin, admin de
+  cabinet, gestionnaire), affectations, donneurs d'ordre (obligatoires,
+  vue et export CSV par donneur d'ordre), dossiers, serveurs (jeton
+  d'exécutant), tâches, vagues, sauvegardes, versions, doubles validations,
+  alertes, certificats émis, journal d'audit en ajout seul (déclencheur).
+* Authentification ADR-002 : passkey exigée du super-admin (niveau 3),
+  niveau 2 sinon, limitation des tentatives, codes de récupération,
+  invitation ; commande `bootstrap` du premier super-admin.
+* Actions ADR-008 D5 : création, modules et extensions, suspension,
+  réactivation, archivage vérifié (dix ans), restauration d'archive,
+  suppression après la durée légale avec double validation, sauvegardes
+  planifiées et rétention, restauration à une date, restauration test,
+  montée de version par dossier ou par vagues avec retour arrière,
+  supervision et alertes, quota Let's Encrypt, recours d'accès avec double
+  validation. Planification : `partiduo-admin-manage schedule`.
+* Exécutant : API `/api/agent/v1` tirée en HTTPS avec le jeton du serveur,
+  liste fermée de 14 types traduits en appels à `partiduo-provision` et à
+  `partiduo-manage instance` (contrat 1.0.0, D-ADM-008), tâches
+  idempotentes et reprenables, modes `dry-run`, `local` (bases
+  `partiduo_adm_*`, fichiers dans un répertoire temporaire) et `production`.
+
+Vérifications (base `partiduo_test_a_admin`) : 56 exemples verts, ordre
+aléatoire répété (modèles, droits par rôle, parcours des tâches et de
+l'API, authentification avec passkey simulée, écrans, exécutant contre une
+administration simulée et contre la vraie API, mode local réel avec
+`pg_dump`/`pg_restore`) ; format et Ameba sans remarque. Essai réel en mode
+local contre `partiduo-provision` et un `partiduo-manage` compilé (dossier
+`adm-local`, base `partiduo_adm_adm_local`) : création, sauvegarde,
+restauration test, modules, suspension, réactivation, archivage,
+restauration de l'archive, recours d'accès (trace
+`instance.admin_invitation` dans l'instance). Écrans vus au navigateur
+(1 400 px et 800 px).
+
+Reste : mode production non essayé (B-ADM-002) ; restauration « instance
+neuve » en production à installer à la main (D-ADM-013) ; montée de version
+en mode local non essayée faute de second binaire de version ; entrée
+courante du menu non marquée (`aria-current`).
+
+== Clôture du lot A — relecture et vérifications (A:final, 28 septembre 2026)
+
+Remarques de relecture corrigées (D-AFN-001 à D-AFN-015, B-AFN-001) :
+
+* *Privilèges de l'exécutant* (bloquants) : sudoers réduit à deux scripts
+  enveloppes possédés par root (`partiduo-admin/deploy/libexec/`) qui
+  valident chacun de leurs arguments ; plus de `sh -c`, de joker ni
+  d'`INSTALL.txt` exécuté en root ; unité et vhosts produits depuis une
+  copie racine des gabarits, fichier d'environnement relu clé par clé
+  (D-AFN-002).
+* *Tâches* : hôte et base recalculés depuis le sous-domaine (`--domain`
+  obligatoire en production, D-AFN-004) ; bases, provisionnement et
+  sauvegardes sous le rôle des instances (D-AFN-005) ; modules ordonnés
+  selon leurs dépendances (D-AFN-006) ; service arrêté avant la sauvegarde
+  préalable et retour arrière sur toute erreur (D-AFN-007) ; restauration en
+  instance neuve installée et comptée dans le quota
+  (`partiduo-provision --files-only`, D-AFN-009) ; pièces jointes relevées
+  avant et après `pg_dump`, restaurées par `partiduo-fleet restore`
+  (D-AFN-012) ; supervision robuste (D-AFN-015).
+* *Administration* : lien d'invitation jamais perdu (compte rendu annulé et
+  alerte si le courriel échoue, D-AFN-008) ; double validation, compte rendu
+  et second facteur atomiques, tâches à double validation non rejouables
+  (D-AFN-010, D-AFN-011).
+* *Interface d'instance* : `admin-invite` limité aux administrateurs
+  existants (D-AFN-003, amendement de D-CLI-005) ; erreurs d'options et
+  internes traduites, lien sur l'hôte de l'instance, trace de lecture seule
+  après l'effet (D-AFN-013) ; `backup-plan` par lots et empreinte en flux
+  (D-AFN-014).
+
+Vérifications : `partiduo-app` (base `partiduo_test_A_final`, ordre
+aléatoire) : 1067 + 33 en attente (Comptabilité, avec Analytique, Stock,
+Suivi), 837 + 58 (Facturation, Stock, Suivi), 1156 + 13 (les deux), format
+et Ameba sans remarque, garde-fou ADR-005 D3 vert ; `partiduo-admin` (base
+`partiduo_test_A_final_admin`, ordre aléatoire) : 120 exemples verts, Ameba
+sans remarque ; migrations sur base vierge (`partiduo_migrate_A`) pour les
+deux dépôts ; format vérifié.
+
+Reste : essai du mode production sur un serveur Linux (sudo, systemd,
+certbot, nginx : B-AFN-001, B-ADM-002) ; `Approvals.reject` à rendre
+conditionnel (D-AFN-011).
+
 == Prochaines étapes
 
 Liste à l'issue de la critique de complétude et des lots E, G, L et T ;
@@ -2319,8 +2451,13 @@ chaque point renvoie à sa décision ou à son blocage.
   conditions de paiement dans l'édition d'une facture (B-FIN-001) ;
   nature des fiches clientes reprises faite (migration cards 0003,
   D-CPY-002, D-CPY-008) ; événement `invoice.platform_deposited` à faire
-  adopter dans ADR-003 D7 (D-CPY-001) ;
-  `partiduo-admin` (ADR-008, B-FIN-005).
+  adopter dans ADR-003 D7 (D-CPY-001).
+. *Administration du parc (après le lot A)* : premier serveur Linux —
+  installation de l'exécutant et de ses enveloppes (README de
+  `partiduo-admin`), création, montée de version et restauration réelles
+  (B-AFN-001, B-ADM-002) ; `Approvals.reject` conditionnel (D-AFN-011) ;
+  sous-domaines réservés dans `partiduo-provision` (D-ASP-001) ; bandeau de
+  lecture seule dans l'interface (D-CLI-003).
 . *Micro-entreprise (après le lot G)* : vérifier aux sources les taux,
   seuils et cases initiaux (B-MIC-001) ; essai du mode simplifié sur un
   téléphone (B-UI-009, micro et libéral) ; faire adopter l'amendement
@@ -2448,6 +2585,19 @@ crystal run manage.cr -- genmigrations choruspro # ou urssaf ; aucun écart atte
 PARTIDUO_MODULES=invoicing DATABASE_URL='postgres:///partiduo_<base>?host=/tmp' crystal run manage.cr -- migrate
 bin/ameba && crystal tool format src spec ui
 # PARTIDUO_CHORUSPRO_TRANSPORT=piste : adaptateur réel (non essayé, B-FIN-002)
+----
+
+Administration du parc (`partiduo-admin`, exécutant `partiduo-agent`) :
+
+[source,sh]
+----
+cd prod-crystal/partiduo/partiduo-admin
+SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install
+createdb --encoding=UTF8 partiduo_admin && crystal run manage.cr -- migrate
+crystal run manage.cr -- bootstrap --email=vous@exemple.fr
+MARTEN_ENV=development crystal run src/server.cr     # http://127.0.0.1:8200
+DATABASE_URL='postgres:///partiduo_test_<agent>_admin?host=/tmp' crystal spec --order random
+crystal tool format --check src spec && bin/ameba
 ----
 
 Reprise (`partiduo-migrate`) :

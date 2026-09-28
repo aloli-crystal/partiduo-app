@@ -218,6 +218,30 @@ en:
         other: "Company file creation refused: %{count} errors."
       invalid_number: "Unreadable numeric value (capital, level or session duration)."
       invitation: "Invitation for administrator %{email}, valid until %{expires}, to be passed on: %{url}"
+    instance_cli:
+      errors:
+        option: "Unrecognized option or missing value: %{option}."
+        database_unavailable: "The instance database cannot be reached: %{detail}"
+        read_only: "The instance is read-only: lift read-only mode first (read-only off)."
+        action_missing: "Missing action; available actions: %{actions}."
+        action_unknown: "Unknown action: %{action}; available actions: %{actions}."
+        argument_missing: "Missing argument for action %{action}."
+        argument_extra: "Unexpected argument: %{argument}."
+        migrations_pending:
+          one: "%{count} migration is pending (migrate)."
+          other: "%{count} migrations are pending (migrate)."
+        migration_failed: "Migration failed after %{applied} applied migration(s): %{detail}"
+        module_unknown: "Module or extension unknown to this version: %{code}."
+        reason_missing: "A reason is required (--reason)."
+        read_only_mode: "Unknown read-only mode: %{mode} (on, off or status)."
+        approval_missing: "The dual-approval reference is required (--approval-ref)."
+        approvers: "Two distinct people must have approved (--approvers a,b)."
+        not_provisioned: "The instance is not provisioned (no company)."
+        not_admin: "%{email} has an account without the administrator profile: only the company can grant it."
+        revoked: "The company revoked access for %{email}: the platform does not reopen it."
+        unknown: "No account for %{email}: the platform does not create administrators; only an existing administrator receives a new invitation."
+        host_unknown: "Unknown instance host (company without a domain, no PARTIDUO_HOST nor MARTEN_ALLOWED_HOSTS): cannot build the invitation link."
+        internal: "Internal error: %{detail}"
   partiduo:
     api:
       errors:

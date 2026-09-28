@@ -1,0 +1,301 @@
+= Interface en ligne de commande d'instance (`manage instance`)
+:toc: left
+:toc-title: Table des matières
+:toclevels: 3
+:icons: font
+:source-language: sh
+
+Contrat entre une instance Partiduo et l'*exécutant* de `partiduo-admin`
+(ADR-008 D4) : les gestes de cycle de vie qu'une tâche d'administration
+traduit en appels, sans jamais entrer dans les données comptables du dossier
+(ADR-008 D3).
+
+*Version du contrat : 1.0.0* (`Partiduo::INSTANCE_CLI_VERSION`, rendue dans
+chaque réponse). Versionnage sémantique, comme `Partiduo::Api` : retirer ou
+renommer une action, une option, une clé JSON, un code d'erreur ou un code de
+sortie incrémente la majeure ; en ajouter incrémente la mineure. L'exécutant
+vérifie la majeure avant tout geste (`version`).
+
+== Appel
+
+La commande est une commande Marten du cœur : tout binaire de gestion qui
+embarque `partiduo/cli` la fournit (`partiduo-manage` de la distribution,
+`crystal run manage.cr --` en développement). Elle se lance *dans
+l'environnement de l'instance* (fichier `/etc/partiduo/<dossier>.env` :
+`DATABASE_URL`, `PARTIDUO_MODULES`, `PARTIDUO_MEDIA_ROOT`…), sous le compte
+système de l'instance :
+
+[source]
+----
+sudo -u partiduo sh -c 'set -a && . /etc/partiduo/exemple.env && set +a &&
+  /opt/partiduo/instances/exemple/release/bin/partiduo-manage instance status'
+----
+
+Forme générale :
+
+[source]
+----
+partiduo-manage instance <action> [argument] [options]
+----
+
+[cols="2,1,4",options="header"]
+|===
+|Option |Actions |Rôle
+
+|`--task ID`
+|toutes
+|identifiant de la tâche de `partiduo-admin`, reporté au journal d'audit de
+l'instance
+
+|`--requested-by LIBELLÉ`
+|toutes
+|demandeur de la tâche (adresse de l'utilisateur d'administration), reporté
+au journal d'audit
+
+|`--locale fr\|en\|nl`
+|toutes
+|langue des *messages* (défaut `fr`) ; les codes ne changent pas
+
+|`--reason TEXTE`
+|`read-only on` (obligatoire), `read-only off`, `admin-invite` (obligatoire)
+|motif, inscrit au journal d'audit
+
+|`--approval-ref RÉF`
+|`admin-invite` (obligatoire)
+|référence de la double validation dans `partiduo-admin`
+
+|`--approvers A,B`
+|`admin-invite` (obligatoire)
+|les deux personnes (distinctes) qui ont validé
+
+|`--check`
+|`migrations`
+|code 7 s'il reste des migrations à appliquer
+
+|`--terminate-sessions`
+|`read-only`
+|coupe aussi les sessions ouvertes des autres processus sur la base
+
+|`--verify`
+|`backup-plan`
+|recalcule l'empreinte SHA-256 de chaque fichier
+
+|`--list-file CHEMIN`
+|`backup-plan`
+|écrit la liste des fichiers à inclure, un chemin relatif par ligne
+(`tar -C <media_root> -T <liste>`)
+|===
+
+`-h` / `--help` affiche l'aide Marten en texte (hors contrat).
+
+== Réponse
+
+*Une seule ligne JSON* sur la sortie standard, en succès comme en échec ;
+rien sur la sortie d'erreur. Les clés sont stables et toujours présentes
+(une valeur absente vaut `null`). Horodatages en RFC 3339, UTC.
+
+.Succès
+[source,json]
+----
+{"contract":"1.0.0","action":"enable","ok":true,"data":{"code":"FOLLOWUP","kind":"module","active":true,"data":"kept"}}
+----
+
+.Échec
+[source,json]
+----
+{"contract":"1.0.0","action":"disable","ok":false,
+ "error":{"code":"refused","reason":"modules.errors.activation.required_by",
+          "message":"ANALYTIC requiert ACCOUNTING : désactivez d'abord ANALYTIC.",
+          "details":[{"field":"code","key":"modules.errors.activation.required_by","message":"…"}]}}
+----
+
+* `error.code` : catégorie, liée au code de sortie (tableau suivant) ;
+* `error.reason` : clé précise et stable (`usage.reason_missing`,
+  `modules.errors.activation.missing_dependency`,
+  `instance.admin_invitation.not_admin`…) ;
+* `error.message` : texte traduit, pour le journal de la tâche ;
+* `error.details` : erreurs par champ du contrat `Partiduo::Api`, s'il y en a.
+
+Quand l'analyse des options échoue avant la lecture de l'action (option sans
+valeur), `action` vaut `""` ; le message est traduit dans la langue de
+`--locale` si elle a déjà été lue, en français sinon. Les erreurs internes
+portent un message traduit qui cite l'erreur d'origine.
+
+=== Codes de sortie
+
+[cols="1,2,4",options="header"]
+|===
+|Code |`error.code` |Sens
+
+|0 |— |succès
+|1 |`internal` |erreur inattendue, ou migration en échec (`migrations.failed`) ; la tâche est à examiner
+|2 |`usage` |action, argument ou option invalide ou manquant ; rien n'a été fait
+|3 |`not_found` |module ou extension inconnu de cette version
+|4 |`refused` |règle métier : pièce du socle, dépendance, adresse inconnue, compte sans profil administrateur, compte révoqué, hôte inconnu, instance non provisionnée
+|5 |`read_only` |l'instance est en lecture seule ; lever d'abord (`read-only off`)
+|6 |`database_unavailable` |base injoignable
+|7 |`migrations_pending` |des migrations restent à appliquer (`migrate`)
+|===
+
+Les codes 2 à 7 ne laissent aucune écriture derrière eux ; l'exécutant peut
+rejouer la tâche après correction (ADR-008 D4 : tâches idempotentes).
+
+== Actions
+
+=== `version`
+
+Version du code, du contrat `Partiduo::Api`, de ce contrat, et pièces
+compilées dans le binaire (socle, modules, extensions). *Ne touche pas la
+base.*
+
+[source,json]
+----
+{"version":"0.1.0","api_version":"0.5.0","contract":"1.0.0",
+ "pieces":[{"code":"CORE","kind":"socle","version":"0.1.0"}, …]}
+----
+
+=== `status`
+
+État de l'instance.
+
+[cols="1,3",options="header"]
+|===
+|Clé |Contenu
+
+|`version`, `api_version`, `contract` |comme `version`
+|`database` |nom de la base
+|`provisioned` |la société (réglages) existe
+|`domain` |nom d'hôte de l'instance
+|`tax_regime`, `default_locale` |régime (`fr`, `be`) et langue ; `null` avant provisionnement
+|`read_only` |`{"active", "since", "reason"}` (voir `read-only`)
+|`migrations` |`{"applied", "pending"}` : nombres
+|`modules` |pièces : `code`, `kind` (`socle`, `module`, `extension`), `version`, `active`, `depends_on` (une alternative s'écrit `A\|B`)
+|===
+
+Ni raison sociale, ni utilisateur, ni donnée comptable.
+
+=== `migrations` et `migrate`
+
+`migrations` liste les migrations en attente, dans l'ordre d'application
+(`{"applied": n, "pending": [{"app", "name"}]}`) ; avec `--check`, code 7 s'il
+y en a.
+
+`migrate` les applique toutes (`{"applied": [{"app", "name"}], "pending": 0}`)
+et inscrit la liste au journal d'audit (`instance.migrate`). Chaque migration
+est dans sa transaction : en cas d'échec (code 1, `migrations.failed`), celles
+déjà appliquées le restent ; le retour arrière est la restauration de la
+sauvegarde préalable (ADR-008 D5, `partiduo-fleet upgrade`). `migrate` est
+permis sur une instance en lecture seule (D-CLI-003).
+
+=== `enable CODE` et `disable CODE`
+
+Active ou désactive un module ou une extension (ADR-006 D2), par
+`Partiduo::Api::Modules.activate` / `deactivate` : mêmes règles que l'écran
+d'administration (dépendances, pièces du socle), mêmes clés d'erreur.
+Désactiver *conserve les données* (`"data": "kept"`) : rien n'est supprimé,
+et réactiver rend tout. Action inscrite au journal d'audit
+(`instance.module.enable` / `.disable`). Refusé (5) sur une instance en
+lecture seule, et (7) s'il reste des migrations.
+
+Le code est insensible à la casse ; une pièce déjà dans l'état demandé ne
+change rien (succès).
+
+=== `read-only on|off|status`
+
+Met la base de l'instance en lecture seule (`on`, `--reason` obligatoire),
+lève cet état (`off`) ou le lit (`status`).
+
+La lecture seule est le réglage PostgreSQL `default_transaction_read_only`
+posé *sur la base* (`ALTER DATABASE … SET`) : toute nouvelle session de
+l'instance refuse d'écrire, quel que soit le chemin (D-CLI-003). Les sessions
+déjà ouvertes par le serveur ne sont pas touchées : `restart_required: true`
+dit à l'exécutant de redémarrer le service, sauf avec `--terminate-sessions`
+(les sessions sont coupées, le serveur se reconnecte).
+
+[source,json]
+----
+{"read_only":{"active":true,"since":"2026-09-28T12:30:33Z","reason":"archivage"},
+ "sessions_terminated":0,"restart_required":true}
+----
+
+`since` et `reason` viennent de la dernière entrée `instance.read_only.on` du
+journal d'audit. Poser un état déjà posé ne crée pas de nouvelle entrée.
+
+=== `admin-invite EMAIL`
+
+Recours d'accès (ADR-008 D3) : réémet l'invitation d'administrateur quand la
+société a perdu tout accès administrateur. `--reason`, `--approval-ref` et
+`--approvers` (deux personnes distinctes) sont obligatoires : la double
+validation a lieu dans `partiduo-admin`, sa trace est reportée ici.
+
+* Adresse d'un administrateur existant (profil administrateur) : nouvelle
+  invitation (`user_created` vaut toujours `false`, clé gardée pour la
+  compatibilité du contrat 1.0.0).
+* Adresse inconnue (ou invalide) : refus (4,
+  `instance.admin_invitation.unknown`) ; la plateforme ne crée pas
+  d'administrateur (D-AFN-003, amendement de D-CLI-005).
+* Compte existant *sans* profil administrateur : refus (4,
+  `instance.admin_invitation.not_admin`) ; compte révoqué par la société :
+  refus (4, `instance.admin_invitation.revoked`). La plateforme ne donne ni
+  ne rend de droits que la société n'a pas donnés (ADR-002 D3, D-CLI-005).
+* Lien bâti sur l'hôte de l'instance : domaine de la société, sinon
+  `PARTIDUO_HOST`, sinon le premier de `MARTEN_ALLOWED_HOSTS` ; aucun :
+  refus (4, `instance.host_unknown`), avant toute invitation.
+
+[source,json]
+----
+{"email":"patron@exemple.fr","user_created":false,"token":"…",
+ "url":"https://exemple.partiduo.app/invitation/…","expires_at":"2026-10-05T12:31:13Z",
+ "usable_admins":0}
+----
+
+`usable_admins` : administrateurs actifs, non révoqués, ayant un moyen
+d'authentification (mot de passe ou passkey) *avant* la réémission — à
+consigner dans la tâche. L'exécutant transmet le lien ; le jeton n'est écrit
+nulle part ailleurs que dans la réponse.
+
+Journal d'audit de l'instance : `user.invite` (acteur `system`), puis `instance.admin_invitation` (acteur `partiduo-admin`) dont le
+détail JSON porte `email`, `reason`, `approval_ref`, `approvers`, `created`
+(toujours `false`),
+`task`, `requested_by`. Les deux dans une même transaction.
+
+=== `backup-plan`
+
+Prépare la sauvegarde des fichiers joints (ADR-008 D5 : `pg_dump` *et*
+fichiers joints). Lecture seule, permis en lecture seule.
+
+[source,json]
+----
+{"generated_at":"…","database":"partiduo_exemple","read_only":false,
+ "media_root":"/opt/partiduo/instances/exemple/media","list_file":"/var/backups/…/x.files",
+ "verified":false,"file_count":12,"total_bytes":3456789,
+ "files":[{"path":"attachments/2026/09/<uuid>.pdf","bytes":34567,"sha256":"…","state":"present"}],
+ "missing":[]}
+----
+
+* `files` : toutes les pièces jointes enregistrées, par identifiant ; `state`
+  vaut `present`, `missing` (fichier absent) ou `corrupted` (empreinte
+  différente, seulement avec `--verify`) ;
+* `file_count`, `total_bytes` et `--list-file` ne comptent que les fichiers
+  `present` ; `missing` liste les autres, à signaler ;
+* le nom déposé par l'utilisateur n'est *pas* rendu : il peut révéler le
+  contenu d'une pièce (ADR-008 D3).
+
+Pour une sauvegarde cohérente base + fichiers : service arrêté ou
+`read-only on`, puis `pg_dump`, `backup-plan --list-file`, `tar`. Service en
+marche, une pièce peut être déposée ou supprimée pendant la sauvegarde :
+`deploy/bin/partiduo-fleet backup` et l'exécutant de `partiduo-admin`
+appellent `backup-plan` *avant et après* `pg_dump` et archivent l'union des
+deux listes (D-AFN-012) ; seule une pièce supprimée après `pg_dump` et avant
+`tar` peut encore manquer (`tar --ignore-failed-read` la signale sans
+échouer).
+
+== Ce que le contrat ne fait pas
+
+* Aucune lecture ni écriture de donnée comptable, de fiche, de document ;
+  aucune requête SQL libre.
+* Aucun compte « de support » : `admin-invite` n'invite que l'adresse que
+  désigne la société, après double validation.
+* Aucune opération système (service, vhost, certificat, fichiers
+  d'environnement) : elles sont le fait de `partiduo-provision` et de
+  l'exécutant.

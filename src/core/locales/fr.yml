@@ -218,6 +218,30 @@ fr:
         other: "Création du dossier refusée : %{count} erreurs."
       invalid_number: "Valeur numérique illisible (capital, niveau ou durée de session)."
       invitation: "Invitation de l'administrateur %{email}, valable jusqu'au %{expires}, à lui transmettre : %{url}"
+    instance_cli:
+      errors:
+        option: "Option non reconnue ou sans valeur : %{option}."
+        database_unavailable: "Base de l'instance injoignable : %{detail}"
+        read_only: "L'instance est en lecture seule : levez d'abord la lecture seule (read-only off)."
+        action_missing: "Action manquante ; actions possibles : %{actions}."
+        action_unknown: "Action inconnue : %{action} ; actions possibles : %{actions}."
+        argument_missing: "Argument manquant pour l'action %{action}."
+        argument_extra: "Argument en trop : %{argument}."
+        migrations_pending:
+          one: "%{count} migration reste à appliquer (migrate)."
+          other: "%{count} migrations restent à appliquer (migrate)."
+        migration_failed: "Échec de migration après %{applied} migration(s) appliquée(s) : %{detail}"
+        module_unknown: "Module ou extension inconnu de cette version : %{code}."
+        reason_missing: "Le motif est obligatoire (--reason)."
+        read_only_mode: "Mode de lecture seule inconnu : %{mode} (on, off ou status)."
+        approval_missing: "La référence de la double validation est obligatoire (--approval-ref)."
+        approvers: "Deux personnes distinctes doivent avoir validé (--approvers a,b)."
+        not_provisioned: "L'instance n'est pas provisionnée (aucune société)."
+        not_admin: "%{email} a un compte sans profil administrateur : la société seule peut lui en donner les droits."
+        revoked: "L'accès de %{email} a été révoqué par la société : la plateforme ne le rouvre pas."
+        unknown: "Aucun compte pour %{email} : la plateforme ne crée pas d'administrateur ; seul un administrateur existant reçoit une nouvelle invitation."
+        host_unknown: "Hôte de l'instance inconnu (société sans domaine, ni PARTIDUO_HOST ni MARTEN_ALLOWED_HOSTS) : lien d'invitation impossible."
+        internal: "Erreur interne : %{detail}"
   partiduo:
     api:
       errors:

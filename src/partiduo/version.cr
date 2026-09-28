@@ -8,3 +8,12 @@ module Partiduo
   # versionnage sémantique : toute rupture du contrat incrémente la majeure.
   API_VERSION = "0.5.0"
 end
+
+module Partiduo
+  # Version du contrat de l'interface en ligne de commande d'instance
+  # (`manage instance`, ADR-008 D4, `doc/api/instance-cli.adoc`), consommé
+  # par l'exécutant de partiduo-admin. Versionnage sémantique : retirer ou
+  # renommer une action, une clé JSON ou un code de sortie incrémente la
+  # majeure ; en ajouter incrémente la mineure.
+  INSTANCE_CLI_VERSION = "1.0.0"
+end

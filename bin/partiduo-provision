@@ -7,8 +7,11 @@
 #   2. migrations Marten sur cette base
 #   3. société (Settings) et jeu de données initial selon le régime
 #      (commande `provision`, par Partiduo::Api::Core.provision)
-#   4. génération, depuis deploy/templates/, du fichier d'environnement, du
-#      vhost nginx et de l'unité systemd de l'instance
+#   4. génération, depuis deploy/templates/, du fichier d'environnement, des
+#      vhosts nginx (amorçage ACME puis définitif) et de l'unité systemd de
+#      l'instance, et des commandes d'installation, dont l'obtention du
+#      certificat TLS Let's Encrypt de l'instance (ADR-001 D2 : un
+#      certificat par instance)
 #
 # Rien n'est installé sur le système : les fichiers générés et les commandes
 # d'installation sont écrits dans <sortie>/<dossier>/ (INSTALL.txt). Leur
@@ -55,11 +58,23 @@ Base et service :
   --database NOM          nom de la base (défaut : partiduo_<dossier>)
   --pg-socket RÉP         répertoire du socket PostgreSQL (défaut : /tmp)
   --skip-createdb         la base existe déjà (vide)
+  --files-only            fichiers de service seulement, pour une base déjà
+                          remplie (restauration dans une instance neuve) :
+                          ni createdb, ni migrations, ni société ; nouveau
+                          port et nouvelle clé secrète
   --port N                port HTTP local de l'instance (défaut : premier libre dès 8101)
   --install-root RÉP      racine d'installation sur le serveur (défaut : /opt/partiduo)
   --etc-dir RÉP           répertoire des fichiers d'environnement (défaut : /etc/partiduo)
   --system-user NOM       compte système du service (défaut : partiduo)
   --output-dir RÉP        où écrire les fichiers générés (défaut : ./tmp/instances)
+
+Certificat TLS (Let's Encrypt, un par instance, défi HTTP-01) :
+  --acme-email ADRESSE    compte ACME (défaut : $PARTIDUO_ACME_EMAIL ; sans
+                          adresse, compte sans courriel)
+  --acme-webroot RÉP      répertoire des défis servi par nginx
+                          (défaut : /var/www/letsencrypt)
+  --acme-staging          autorité de test de Let's Encrypt (--test-cert) :
+                          n'entame pas le quota de 50 certificats par semaine
   --manage COMMANDE       ligne de commande Marten de la distribution
                           (défaut : $PARTIDUO_MANAGE, sinon bin/partiduo-manage,
                           sinon « crystal run manage.cr -- »)
@@ -123,10 +138,11 @@ secret_key() {
   fi
 }
 
-# Premier port libre à partir de 8101, d'après les instances déjà générées.
+# Premier port libre à partir de 8101, d'après les instances déjà générées
+# et celles déjà installées (fichiers d'environnement lisibles de $ETC_DIR).
 next_port() {
   max=8100
-  for env in "$OUTPUT_DIR"/*/*.env; do
+  for env in "$OUTPUT_DIR"/*/*.env "$ETC_DIR"/*.env; do
     [ -f "$env" ] || continue
     port=$(sed -n 's/^PORT=//p' "$env" | head -n 1)
     case "$port" in '' | *[!0-9]*) continue ;; esac
@@ -139,6 +155,7 @@ next_port() {
 
 DRY_RUN=0
 SKIP_CREATEDB=0
+FILES_ONLY=0
 DOSSIER=""
 MODULES="accounting,invoicing"
 EXTENSIONS=""
@@ -154,6 +171,9 @@ OUTPUT_DIR="./tmp/instances"
 MANAGE="${PARTIDUO_MANAGE:-}"
 LOCALE=""
 PROVISION_ARGS=""
+ACME_EMAIL="${PARTIDUO_ACME_EMAIL:-}"
+ACME_WEBROOT="/var/www/letsencrypt"
+ACME_STAGING=0
 
 # Ajoute « --option=valeur » aux arguments de la commande `provision`, un par
 # ligne (les valeurs peuvent contenir des espaces, pas de saut de ligne).
@@ -173,6 +193,8 @@ while [ $# -gt 0 ]; do
     -h | --help) usage; exit 0 ;;
     --dry-run) DRY_RUN=1 ;;
     --skip-createdb) SKIP_CREATEDB=1 ;;
+    --files-only) FILES_ONLY=1 ;;
+    --acme-staging) ACME_STAGING=1 ;;
     --*=*)
       option="${1%%=*}"
       value="${1#*=}"
@@ -200,6 +222,8 @@ while [ $# -gt 0 ]; do
     --system-user) need_value "$@"; SYSTEM_USER="$2"; shift ;;
     --output-dir) need_value "$@"; OUTPUT_DIR="$2"; shift ;;
     --manage) need_value "$@"; MANAGE="$2"; shift ;;
+    --acme-email) need_value "$@"; ACME_EMAIL="$2"; shift ;;
+    --acme-webroot) need_value "$@"; ACME_WEBROOT="$2"; shift ;;
     -*) die "option inconnue : $1 (voir --help)" ;;
     *)
       [ -z "$DOSSIER" ] || die "un seul dossier à la fois ($DOSSIER, $1)"
@@ -228,6 +252,12 @@ for code in $(printf '%s' "$MODULES,$EXTENSIONS" | tr ',' ' '); do
   printf '%s' "$code" | grep -Eq '^[a-z][a-z0-9_]*$' || die "code de module ou d'extension invalide : « $code »"
 done
 
+if [ -n "$ACME_EMAIL" ]; then
+  printf '%s' "$ACME_EMAIL" | grep -Eq '^[^@[:space:]'"'"'"]+@[^@[:space:]'"'"'"]+\.[^@[:space:]'"'"'"]+$' ||
+    die "adresse ACME invalide : « $ACME_EMAIL »"
+fi
+printf '%s' "$ACME_WEBROOT" | grep -Eq '^/[A-Za-z0-9_./-]*$' || die "répertoire ACME invalide : « $ACME_WEBROOT »"
+
 if [ -z "$PORT" ]; then PORT=$(next_port); fi
 case "$PORT" in '' | *[!0-9]*) die "port invalide : « $PORT »" ;; esac
 [ "$PORT" -ge 1024 ] && [ "$PORT" -le 65535 ] || die "port hors limites : $PORT"
@@ -253,7 +283,9 @@ echo "== Instance $DOSSIER : https://$HOST/ (base $DATABASE, modules $ACTIVE, po
 
 # --- 1. Base -------------------------------------------------------------------
 
-if [ "$SKIP_CREATEDB" = 1 ]; then
+if [ "$FILES_ONLY" = 1 ]; then
+  echo "== 1 à 3. Base $DATABASE déjà remplie (--files-only) : ni createdb, ni migrations, ni société"
+elif [ "$SKIP_CREATEDB" = 1 ]; then
   echo "== 1. Base : $DATABASE existante (--skip-createdb)"
 else
   echo "== 1. Base"
@@ -262,27 +294,31 @@ fi
 
 # --- 2. Migrations -------------------------------------------------------------
 
-echo "== 2. Migrations"
 export DATABASE_URL
 export PARTIDUO_MODULES="$ACTIVE"
 export PARTIDUO_DOMAIN="$DOMAIN"
-# shellcheck disable=SC2086 # $MANAGE est une ligne de commande
-run $MANAGE migrate
+if [ "$FILES_ONLY" = 0 ]; then
+  echo "== 2. Migrations"
+  # shellcheck disable=SC2086 # $MANAGE est une ligne de commande
+  run $MANAGE migrate
+fi
 
 # --- 3. Société et jeu de données initial --------------------------------------
 
-echo "== 3. Société et jeu de données initial"
-set -- --domain="$HOST" --modules="$MODULES"
-[ -z "$EXTENSIONS" ] || set -- "$@" --with="$EXTENSIONS"
-OLD_IFS=$IFS
-IFS='
+if [ "$FILES_ONLY" = 0 ]; then
+  echo "== 3. Société et jeu de données initial"
+  set -- --domain="$HOST" --modules="$MODULES"
+  [ -z "$EXTENSIONS" ] || set -- "$@" --with="$EXTENSIONS"
+  OLD_IFS=$IFS
+  IFS='
 '
-for arg in $PROVISION_ARGS; do
-  [ -n "$arg" ] && set -- "$@" "$arg"
-done
-IFS=$OLD_IFS
-# shellcheck disable=SC2086
-run $MANAGE provision "$@"
+  for arg in $PROVISION_ARGS; do
+    [ -n "$arg" ] && set -- "$@" "$arg"
+  done
+  IFS=$OLD_IFS
+  # shellcheck disable=SC2086
+  run $MANAGE provision "$@"
+fi
 
 # --- 4. Fichiers de service ----------------------------------------------------
 
@@ -305,30 +341,54 @@ TPL_INSTALL_ROOT="$INSTALL_ROOT"
 TPL_ETC_DIR="$ETC_DIR"
 TPL_ENV_FILE="$ETC_DIR/$DOSSIER.env"
 TPL_SYSTEM_USER="$SYSTEM_USER"
+TPL_ACME_WEBROOT="$ACME_WEBROOT"
 export TPL_SECRET_KEY TPL_DOSSIER TPL_HOST TPL_DOMAIN TPL_PORT TPL_DATABASE_URL TPL_MODULES TPL_LOCALE \
-  TPL_INSTALL_ROOT TPL_ETC_DIR TPL_ENV_FILE TPL_SYSTEM_USER
+  TPL_INSTALL_ROOT TPL_ETC_DIR TPL_ENV_FILE TPL_SYSTEM_USER TPL_ACME_WEBROOT
 
 OLD_UMASK=$(umask)
 umask 077
 render "$TEMPLATES/instance.env.tmpl" "$INSTANCE_DIR/$DOSSIER.env"
 umask "$OLD_UMASK"
+render "$TEMPLATES/nginx-acme.conf.tmpl" "$INSTANCE_DIR/$DOSSIER.acme.nginx.conf"
 render "$TEMPLATES/nginx-vhost.conf.tmpl" "$INSTANCE_DIR/$DOSSIER.nginx.conf"
 render "$TEMPLATES/partiduo-instance.service.tmpl" "$INSTANCE_DIR/partiduo-$DOSSIER.service"
+
+# Certificat de l'instance : compte ACME, autorité de test éventuelle. Un
+# certificat encore valide n'est pas réémis (--keep-until-expiring) : rejouer
+# l'installation n'entame pas le quota Let's Encrypt du domaine.
+if [ -n "$ACME_EMAIL" ]; then
+  ACME_ACCOUNT="--email $(quote "$ACME_EMAIL")"
+else
+  ACME_ACCOUNT="--register-unsafely-without-email"
+fi
+ACME_TEST=""
+[ "$ACME_STAGING" = 0 ] || ACME_TEST=" --test-cert"
+echo "+ certificat Let's Encrypt pour $HOST ($([ "$ACME_STAGING" = 1 ] && echo 'autorité de test' || echo 'production'))"
 
 INSTALL="$INSTANCE_DIR/INSTALL.txt"
 if [ "$DRY_RUN" = 0 ]; then
   cat >"$INSTALL" <<EOF
 # Installation de l'instance $DOSSIER ($HOST) — à exécuter sur le serveur,
-# en root, depuis ce répertoire. partiduo-provision ne l'a PAS fait.
+# en root, depuis ce répertoire (sh INSTALL.txt). partiduo-provision ne l'a
+# PAS fait. Le certificat TLS est propre à l'instance (ADR-001 D2) : le vhost
+# d'amorçage sert le défi ACME, certbot obtient le certificat, puis le vhost
+# définitif le remplace. Quota : 50 certificats par semaine pour le domaine.
+set -eu
 install -d -o root -g $SYSTEM_USER -m 750 $ETC_DIR
 install -o root -g $SYSTEM_USER -m 640 $DOSSIER.env $ETC_DIR/$DOSSIER.env
 install -d -o $SYSTEM_USER -g $SYSTEM_USER $INSTALL_ROOT/instances/$DOSSIER/media
 ln -sfn $INSTALL_ROOT/current $INSTALL_ROOT/instances/$DOSSIER/release
 install -m 644 partiduo-$DOSSIER.service /etc/systemd/system/partiduo-$DOSSIER.service
-install -m 644 $DOSSIER.nginx.conf /etc/nginx/sites-available/partiduo-$DOSSIER.conf
-ln -sfn /etc/nginx/sites-available/partiduo-$DOSSIER.conf /etc/nginx/sites-enabled/partiduo-$DOSSIER.conf
 systemctl daemon-reload
 systemctl enable --now partiduo-$DOSSIER.service
+# Certificat : vhost d'amorçage (défi HTTP-01), certbot, vhost définitif.
+install -d -m 755 $ACME_WEBROOT
+install -m 644 $DOSSIER.acme.nginx.conf /etc/nginx/sites-available/partiduo-$DOSSIER.conf
+ln -sfn /etc/nginx/sites-available/partiduo-$DOSSIER.conf /etc/nginx/sites-enabled/partiduo-$DOSSIER.conf
+test -f /etc/letsencrypt/live/$HOST/fullchain.pem || { nginx -t && systemctl reload nginx; }
+certbot certonly --webroot -w $ACME_WEBROOT -d $HOST --cert-name $HOST --keep-until-expiring \\
+  --non-interactive --agree-tos $ACME_ACCOUNT$ACME_TEST --deploy-hook 'systemctl reload nginx'
+install -m 644 $DOSSIER.nginx.conf /etc/nginx/sites-available/partiduo-$DOSSIER.conf
 nginx -t && systemctl reload nginx
 EOF
 fi

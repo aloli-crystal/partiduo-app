@@ -115,11 +115,18 @@ bin/partiduo-provision --name "Exemple SARL" --regime fr \
 ----
 
 crée la base, applique les migrations, enregistre la société et charge le jeu
-de données initial du régime, puis génère environnement, vhost nginx et unité
-systemd dans `tmp/instances/exemple-sarl/` (sans les installer).
+de données initial du régime, puis génère environnement, vhosts nginx, unité
+systemd et commandes d'installation (certificat Let's Encrypt de l'instance
+compris) dans `tmp/instances/exemple-sarl/` (sans les installer).
 `deploy/bin/partiduo-fleet` outille le parc (montée de version progressive,
 sauvegardes, retour arrière) : voir link:deploy/README.adoc[] et, pour le
 contrat, link:doc/api/core-settings.adoc[].
+
+L'exécutant de `partiduo-admin` (ADR-008 D4) pilote une instance par
+`partiduo-manage instance <action>` : état et version, migrations,
+activation des modules et extensions, lecture seule, réémission de
+l'invitation d'administrateur, préparation de sauvegarde. Réponse JSON,
+codes de sortie normalisés, contrat versionné : link:doc/api/instance-cli.adoc[].
 
 == Contrat `Partiduo::Api`
 

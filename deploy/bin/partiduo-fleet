@@ -31,8 +31,9 @@ Commandes :
                                      contrôle ; retour arrière et arrêt au premier échec
   rollback DOSSIER                   revient à la version précédente de l'instance
   status [DOSSIER]                   version et état du service de chaque instance
-  backup DOSSIER | --all             sauvegarde (pg_dump -Fc) la base
-  restore DOSSIER FICHIER            restaure une sauvegarde (service arrêté)
+  backup DOSSIER | --all             sauvegarde la base (pg_dump -Fc) et les pièces jointes
+  restore DOSSIER FICHIER            restaure une sauvegarde, base et pièces jointes
+                                     (FICHIER.dump et FICHIER.media.tar.gz, service arrêté)
   retire DOSSIER                     sauvegarde puis retire l'instance (base conservée)
   cleanup                            supprime les versions qu'aucune instance n'utilise
 
@@ -82,6 +83,9 @@ DISTRIBUTION_DIR="$APP_ROOT/../partiduo-ui-bulma"
 ARCHIVE_DIR="$APP_ROOT/tmp/releases"
 KEEP_RELEASES=5
 SUDO="sudo"
+ACME_EMAIL=""
+ACME_WEBROOT="/var/www/letsencrypt"
+ACME_STAGING=0
 # shellcheck disable=SC1090
 . "$CONFIG"
 
@@ -203,12 +207,16 @@ cmd_provision() {
   for arg in "$@"; do
     args="$args '$(printf '%s' "$arg" | sed "s/'/'\\\\''/g")'"
   done
+  acme=""
+  [ -z "$ACME_EMAIL" ] || acme=" --acme-email=$ACME_EMAIL"
+  [ "$ACME_STAGING" = 0 ] || acme="$acme --acme-staging"
   echo "# Provisionnement de $dossier sur $server ($(mode_label))"
   remote "$server" "$SUDO -u postgres createuser --createdb --no-superuser $PG_OWNER 2>/dev/null || true"
   remote "$server" "$SUDO -u $SYSTEM_USER env PARTIDUO_MANAGE=$release/bin/partiduo-manage" \
     "PARTIDUO_TEMPLATES=$release/deploy/templates" \
     "$release/bin/partiduo-provision --domain=$PARTIDUO_DOMAIN --owner=$PG_OWNER --pg-socket=$PG_SOCKET" \
-    "--install-root=$INSTALL_ROOT --etc-dir=$ETC_DIR --system-user=$SYSTEM_USER --output-dir=$work$args $dossier"
+    "--install-root=$INSTALL_ROOT --etc-dir=$ETC_DIR --system-user=$SYSTEM_USER --output-dir=$work" \
+    "--acme-webroot=$ACME_WEBROOT$acme$args $dossier"
   remote "$server" "cd $work/$dossier && $SUDO sh INSTALL.txt && $SUDO rm -rf $work"
   remote "$server" "$SUDO ln -sfn $(readlink_release_cmd) $(instance_dir "$dossier")/release"
   local_run "printf '%s %s\\n' '$dossier' '$server' >> '$INVENTORY'"
@@ -269,8 +277,11 @@ cmd_upgrade() {
     stamp='$(date +%Y%m%d-%H%M%S)'
     echo "## $dossier ($server)"
     remote "$server" "test -x $release/bin/partiduo-server || { echo 'version $version absente' >&2; exit 1; }"
-    backup_cmd "$server" "$dossier" "pre-$version-$stamp"
+    # Service arrêté AVANT la sauvegarde préalable : rien n'est écrit entre
+    # la sauvegarde et un éventuel retour arrière (D-AFN-007).
     remote "$server" "$SUDO systemctl stop partiduo-$dossier.service"
+    backup_cmd "$server" "$dossier" "pre-$version-$stamp" ||
+      { remote "$server" "$SUDO systemctl start partiduo-$dossier.service"; exit 1; }
     remote "$server" "$SUDO -u $SYSTEM_USER sh -c '$(load_env "$dossier") && $release/bin/partiduo-manage migrate'" ||
       fail_upgrade "$server" "$dossier" "migrations"
     remote "$server" "$SUDO -u $SYSTEM_USER sh -c 'ln -sfn \$(readlink -f $dir/release) $dir/release.previous && ln -sfn $release $dir/release'"
@@ -303,15 +314,34 @@ backup_cmd() {
   server="$1"
   dossier="$2"
   label="$3"
+  # Base (pg_dump -Fc) et pièces jointes, sous un même nom : la liste des
+  # fichiers vient de l'instance elle-même (interface en ligne de commande
+  # d'instance, `backup-plan`, doc/api/instance-cli.adoc), relevée avant ET
+  # après pg_dump : l'archive porte l'union des deux listes, donc toute pièce
+  # déposée ou supprimée pendant la sauvegarde que la base peut citer
+  # (D-AFN-012). `--ignore-failed-read` : une pièce supprimée entre-temps est
+  # signalée sans faire échouer la sauvegarde.
   remote "$server" "$SUDO install -d -o $SYSTEM_USER -g $SYSTEM_USER -m 750 $BACKUP_DIR/$dossier" \
-    "&& $SUDO -u $SYSTEM_USER sh -c '$(load_env "$dossier") && pg_dump -Fc -d \"\$DATABASE_URL\" -f $BACKUP_DIR/$dossier/$label.dump'"
+    "&& $SUDO -u $SYSTEM_USER sh -c '$(load_env "$dossier") && f=$BACKUP_DIR/$dossier/$label" \
+    "&& m=$(instance_dir "$dossier")/release/bin/partiduo-manage" \
+    "&& \$m instance backup-plan --list-file \$f.files.before >/dev/null" \
+    "&& pg_dump -Fc -d \"\$DATABASE_URL\" -f \$f.dump" \
+    "&& \$m instance backup-plan --list-file \$f.files.after >\$f.plan.json" \
+    "&& sort -u \$f.files.before \$f.files.after >\$f.files && rm -f \$f.files.before \$f.files.after" \
+    "&& tar -C \"\$PARTIDUO_MEDIA_ROOT\" --ignore-failed-read -czf \$f.media.tar.gz -T \$f.files'"
 }
 
+# Base, puis pièces jointes : l'archive <libellé>.media.tar.gz prise avec la
+# sauvegarde <libellé>.dump est extraite sous $PARTIDUO_MEDIA_ROOT si elle
+# existe (les pièces présentes sont remplacées, aucune n'est supprimée).
 restore_cmd() {
   server="$1"
   dossier="$2"
   file="$3"
-  remote "$server" "$SUDO -u $SYSTEM_USER sh -c '$(load_env "$dossier") && pg_restore --clean --if-exists --no-owner -d \"\$DATABASE_URL\" $file'"
+  remote "$server" "$SUDO -u $SYSTEM_USER sh -c '$(load_env "$dossier") && f=$file" \
+    "&& pg_restore --clean --if-exists --no-owner -d \"\$DATABASE_URL\" \$f" \
+    "&& a=\${f%.dump}.media.tar.gz && if [ -f \"\$a\" ]; then mkdir -p \"\$PARTIDUO_MEDIA_ROOT\"" \
+    "&& tar -C \"\$PARTIDUO_MEDIA_ROOT\" -xzf \"\$a\"; else echo \"pièces jointes : \$a absente\" >&2; fi'"
 }
 
 cmd_rollback() {
@@ -379,6 +409,8 @@ cmd_retire() {
   remote "$server" "$SUDO systemctl disable --now partiduo-$dossier.service"
   remote "$server" "$SUDO rm -f /etc/nginx/sites-enabled/partiduo-$dossier.conf && $SUDO nginx -t && $SUDO systemctl reload nginx"
   remote "$server" "$SUDO rm -f /etc/systemd/system/partiduo-$dossier.service && $SUDO systemctl daemon-reload"
+  # Le vhost retiré, le renouvellement du certificat échouerait.
+  remote "$server" "$SUDO certbot delete --cert-name $dossier.$PARTIDUO_DOMAIN --non-interactive || true"
   local_run "sed -i.bak '/^$dossier[[:space:]]/d' '$INVENTORY' && rm -f '$INVENTORY.bak'"
 }
 
