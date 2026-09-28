@@ -667,6 +667,25 @@ identifiants de test dans `teledec-sandbox.env` ; écrire l'adaptateur
 `Teledec::Payload`), le brancher (`Teledec::Transports.current`) et la
 suite d'intégration, sans jamais afficher ni journaliser les secrets.
 
+*Levé le 28 septembre 2026 (T2:teledec-reel).* Documentation relevée
+(`partiduo/.teledec-doc/`) et identifiants du stage déposés : adaptateur
+`Teledec::HttpTransport` écrit et branché par défaut (DECISIONS D-TDC-017 à
+D-TDC-022), TELEDEC simulé refait au niveau HTTP, suite d'intégration
+`spec/integration/sandbox_spec.cr` écrite (stage seulement). Elle n'a pas pu
+tourner depuis le bac à sable de l'agent : le processus Crystal n'y a pas
+d'accès direct au réseau (seuls les outils qui passent par le mandataire
+HTTP du bac à sable sortent) ; ses exemples passent alors en attente
+(`pending!`). Les échanges ont été vérifiés à la main sur le stage, par
+`curl`, le 28 septembre : jeton (200, `expires_in` 3600) ; suivi d'un
+compte inconnu (400, texte « Utilisateur non trouvé pour l'email fourni »),
+sans déclaration (404, `{"message":"declaration not found","status":"ERREUR"}`),
+jeton faux (401, texte) ; création d'entreprise (400 sans mot de passe
+bcrypt, 200 avec) ; CA3 en marque blanche (200, `{"lien": …}`, suivi
+`{"status":"readyToBeSent"}`, visible dans `/service/declarations` avec le
+statut `ReadyToBeSent`) ; comptes-rendus absents (404) ; liasse refusée
+(500, erreur 101, source non reconnue : B-TDC-004). *Reste* : lancer la
+suite depuis un poste qui joint TELEDEC directement.
+
 == B-TDC-002 — Format d'import de balance de TELEDEC non documenté publiquement (T:teledec, extension TELEDEC)
 
 *Constat.* Le site de TELEDEC annonce l'import de la balance (« votre
@@ -680,6 +699,12 @@ publier le format.
 partenaire les colonnes, séparateur et encodage attendus ; ajuster
 `Teledec::Balance.csv`.
 
+*Levé en partie (T2:teledec-reel).* Le format de l'API Balance est connu et
+suivi par l'adaptateur (`compte;libellé;ouv. débit;ouv. crédit;mvt
+débit;mvt crédit;solde débit;solde crédit`, point décimal, précédé de
+l'identification `#CLE valeur`). Le fichier de repli (import sur le site)
+garde son format : l'import manuel du site n'est pas documenté.
+
 == B-TDC-003 — Échéances approchées et écrans non vus dans un navigateur (T:teledec, extension TELEDEC)
 
 *Constat.* Les échéances suivent les règles générales (D-TDC-006) sans les
@@ -689,6 +714,61 @@ par les specs (HTML rendu), pas dans un navigateur ni sur un téléphone.
 
 *Levée.* Table datée des échéances par millésime si besoin ; parcours au
 clavier et sur téléphone, comme B-UI-009.
+
+== B-TDC-004 — Points de l'API TELEDEC non confirmés (T2:teledec-reel, extension TELEDEC)
+
+*Constat.* La synthèse de l'API et les spécifications des formulaires
+laissent des incertitudes ; l'adaptateur retient l'option la plus simple
+(DECISIONS D-TDC-018 à D-TDC-022) :
+
+. *Source de la liasse.* `#SOURCE` doit être « un partenaire reconnu par
+  TELEDEC » : le stage refuse `PARTIDUO`, `Partiduo`, `ALOLI`, l'identifiant
+  du client… (erreur 101). Valeur à obtenir de TELEDEC ; réglable par
+  `PARTIDUO_TELEDEC_SOURCE` (défaut `PARTIDUO`) ; refus traduit en
+  `teledec.errors.transport.source`.
+. *Codes de la CA3.* `KW`, `KX`, `KZ` retenus pour A4, A5, B2 (libellés du
+  millésime 2025-juillet) plutôt que `DK`, `CC` ; la ligne 14 (annexe
+  3310-A) et, sur la CA12, A2, A4, A5, B2, B5, 17 et 29 n'ont pas de code
+  sûr (contrôle bloquant). À vérifier sur une CA3 de test complète.
+. *DAS2.* Forme JSON des répétitions (`repetitionDAS2TV`, tableau d'objets)
+  et une répétition par nature pour un même bénéficiaire : supposées. Le
+  bénéficiaire est toujours déclaré en raison sociale (`AF_3036_1`) : les
+  fiches fournisseurs du socle ne distinguent pas la personne physique
+  (`AE_3036_1` nom, `AE_3036_2` prénoms, `AI` date de naissance). *Levée* :
+  une nature « personne physique » des fiches fournisseurs (cœur), puis le
+  formateur DAS2.
+. *2572.* Seul l'impôt total (`GE`) est transmis, sans ventilation entre
+  taux normal et taux réduit (`TN`/`TP`, `RB`/`TB`) : TELEDEC peut
+  recalculer le total ; l'utilisateur complète sur TELEDEC.
+. *Bloc JSON de la liasse.* Noms `zones_formulaires` → `"2035A":
+  {"AA_2035A": …}` d'après l'exemple `"2065": {"HA_2065": …}` ; non
+  essayé. Les cases de la 2035 préparée par `liberal` suivent sa table
+  (`src/liberal/data/defaults.yml`, relevée de mémoire, B-LIB-001), qui
+  diffère des codes de la 2035-A 2026 de TELEDEC (CET `JY`/`BE`, entretien
+  `BH`/`EB`, intérimaires `BJ`/`EC`, petit outillage `BK`/`ED`, chauffage
+  `BL`/`EE`, honoraires `BM`/`EF`, assurances `BN`/`EG`, déplacements
+  `BQ`/`EJ`, fournitures `BX`/`EK`, actes `BY`/`EL`, cotisations `BZ`/`EM`,
+  frais divers `CB`/`EN`…) : à corriger dans les données de `liberal`.
+. *`CompleteWithErrors`.* Compris comme « traitée par la DGFiP avec
+  erreurs » (rejet) ; `CompleteWithWarnings` comme accusé.
+. *Rappels.* Acceptation d'un `auth.url` portant le jeton en paramètre, et
+  configuration côté TELEDEC de l'adresse des rappels (Basic ou JWT
+  permanent) : à convenir avec TELEDEC. L'authentification `Basic`
+  configurée chez TELEDEC (mot de passe = jeton des rappels) est à préférer
+  au paramètre, qui n'est envoyé qu'en https (D-TDC-027). La liasse (API
+  Balance) n'a pas de champ d'adresse de rappel. Types de rappel
+  (`declarationType`) de la DAS2 et des relevés d'IS non documentés : seul
+  le paiement est écarté pour eux (D-TDC-024).
+. *Compte de l'entreprise.* La marque blanche a été essayée sur un compte
+  créé par `creation-entreprise` ; création automatique du compte pour un
+  email nouveau non vérifiée.
+. *Greffe.* Aucune route documentée : `teledec.errors.transport.unsupported`.
+. *Mandataire sortant.* `Remote::Net` ne traverse pas de mandataire HTTP
+  (`HTTPS_PROXY`) : l'instance doit joindre TELEDEC directement.
+
+*Levée.* Obtenir de TELEDEC la valeur de `SOURCE`, confirmer les points
+ci-dessus sur le stage (suite d'intégration, CA3 et DAS2 complètes), puis
+ajuster `Teledec::Remote::Formats`.
 
 == Vérification de bout en bout des lots E, G, L et T (28 septembre 2026)
 

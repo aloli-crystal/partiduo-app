@@ -29,7 +29,7 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |E |Justificatifs (`partiduo-document`), facturation électronique (`partiduo-einvoicing`, adaptateurs XP Z12-013 et Peppol Belgique `PEPPOL_BE`, ex-NOALYSS-PEPPOL), SUPER PDP (`partiduo-superpdp`), factures non électroniques (cœur et interface) |*Terminé* (clôture « Clôture du lot E »)
 |G |Module `micro` (ADR-007 D1, D2) : registres, aide URSSAF, 2042-C-PRO, seuils, partie double par la Comptabilité (cœur) ; interface simplifiée (D3) |*Terminé* (cœur, interface simplifiée, écrans de paramétrage ; clôture « Clôture du lot G »)
 |L |Module `liberal` (ADR-007 D6) : livre-journal, immobilisations, 2035, partie double par la Comptabilité ; interface et mode simplifié |*Terminé* (cœur, interface et mode simplifié ; clôture « Clôture du lot L »)
-|T |Extension `partiduo-teledec` (ADR-007 D4, D5) : liasse, TVA, DAS2, IS, greffe par TELEDEC (API Balance, transport abstrait, simulateur) |*Terminé* contre le simulateur (clôture « Clôture du lot T ») ; adaptateur réel en attente (B-TDC-001)
+|T |Extension `partiduo-teledec` (ADR-007 D4, D5) : liasse, TVA, DAS2, IS, greffe par TELEDEC (API Balance, transport abstrait, simulateur) |*Terminé* (clôture « Clôture du lot T ») ; lot T2 (adaptateur réel de l'API TELEDEC) *terminé* (sections « Adaptateur réel de TELEDEC » et « Clôture du lot T2 ») ; suite d'intégration au stage non exécutée depuis le bac à sable, points à confirmer (B-TDC-004)
 |F |Critique finale : ADR-004 D9 révisé (nature du client, copie PDF, canal Chorus Pro, saisie express), extensions `partiduo-choruspro` (ADR-004 D9) et `partiduo-urssaf` (ADR-007 D7) |*Terminé* contre des simulateurs (section « Critique de complétude finale ») ; adaptateurs réels en attente (B-FIN-002, B-FIN-003)
 |K |Extension `partiduo-choruspro` (ADR-004 D9 révisé) : adaptateur PISTE, réaction aux paiements lettrés, relecture (réservation du dépôt, recyclage sur le portail, visibilité, historique) |*Terminé* contre Chorus Pro simulé (sections « Extension CHORUSPRO » et « Clôture du lot K ») ; qualification réelle non essayée (B-FIN-002)
 |H |Extension `partiduo-esalink` (ADR-004 D2 révisé le 28 septembre 2026) : adaptateur EsaLink hérité de l'adaptateur XP Z12-013 d'EINV, points d'extension ajoutés à EINV |*Terminé* contre EsaLink simulée (sections « Extension ESALINK » et « Clôture du lot H ») ; préproduction réelle non essayée (B-ESL-001)
@@ -38,8 +38,8 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |===
 
 *État définitif (28 septembre 2026, critique de complétude finale : section
-du même nom ; lots H, K, U et A clos le même jour).* Lot en cours : aucun. Tous les
-lots du plan (P à 6), les lots A, E, G, H, K, L, T et U et la critique finale sont
+du même nom ; lots H, K, U, A et T2 clos le même jour).* Lot en cours : aucun. Tous les
+lots du plan (P à 6), les lots A, E, G, H, K, L, T, T2 et U et la critique finale sont
 terminés ; les trois jalons du prompt
 sont vérifiés, les extensions exigées par ADR-004 D9 révisé et ADR-007 D7
 existent (`partiduo-choruspro`, `partiduo-urssaf`), écrites contre des
@@ -2548,6 +2548,78 @@ les noms d'alors (`--noalyss`, `scripts/noalyss-demo`,
 `partiduo_noalyss_demo`, `noalyss_<ad_id>`) : lire `--legacy-db`,
 `scripts/legacy-demo`, `partiduo_legacy_demo`, `legacy_<ad_id>`.
 
+== Adaptateur réel de TELEDEC (`partiduo-teledec`, T2:teledec-reel, 28 septembre 2026)
+
+Documentation de l'API partenaire (`partiduo/.teledec-doc/`) et
+identifiants du stage déposés (B-TDC-001 levé). Décisions D-TDC-017 à
+D-TDC-022, blocage B-TDC-004 :
+
+* `Teledec::HttpTransport` (`src/teledec/remote/`), branché par défaut :
+  jeton OAuth2 `client_credentials` (`Basic`, scopes `stage/…` ou
+  `prod/…`, cache une heure, renouvelé sur 401) ; liasse par l'API Balance
+  (identification `#CLE valeur`, balance à huit colonnes, 2035 en bloc
+  JSON, URL de la liasse rendue) ; CA3, CA12, DAS2, 2571, 2572 par la
+  marque blanche (codes des formulaires par millésime, lien de la
+  déclaration) ; suivi par `declaration-status` et les comptes-rendus
+  (accusé PDF, erreurs de la DGFiP) ; greffe refusé (pas de route).
+* Rappels de TELEDEC sur `POST /hooks/TELEDEC/callback` (interface de
+  l'extension, sans session ni CSRF, jeton de l'instance en Basic, Bearer
+  ou paramètre), 200 idempotent sur `declarationId`, accusé en pièce
+  jointe.
+* Paramètres : client OAuth2, email du compte TELEDEC, SIRET, adresse des
+  rappels affichée aux gestionnaires ; fiche d'un dépôt : état chez
+  TELEDEC et bouton « Ouvrir sur TELEDEC ». Migration
+  `0003_teledec_remote`.
+* TELEDEC simulé refait au niveau HTTP (serveur en mémoire) : l'adaptateur
+  réel est exercé par toutes les specs.
+* Specs (base `partiduo_test_t2_teledec`) : 115 exemples, 0 échec,
+  4 en attente (suite d'intégration au stage : processus sans accès direct
+  au réseau dans le bac à sable ; échanges vérifiés à la main par `curl`,
+  B-TDC-001) ; `crystal tool format` et Ameba sans remarque ;
+  `genmigrations teledec` sans écart ; `scripts/verif_t.cr` compile.
+
+Reste : valeur de `#SOURCE` à obtenir de TELEDEC et points de B-TDC-004 à
+confirmer sur le stage ; codes de la 2035 du module `liberal` à aligner.
+
+== Clôture du lot T2 — relecture de l'adaptateur réel de TELEDEC (T2:final, 28 septembre 2026)
+
+Remarques de la relecture corrigées dans `partiduo-teledec` (DECISIONS
+D-TDC-023 à D-TDC-028, B-TDC-004 complété) :
+
+* *Statut d'un rappel* : `formulairesStatus` fait seul foi (`Sent` + `OK`
+  reste en attente) ; rappels de paiement, ou d'un autre type de
+  déclaration, ignorés ; comptes-rendus de paiement écartés du suivi
+  (D-TDC-024).
+* *Envois successifs* : `Transport#status(…, reference)` ; un compte-rendu
+  ou un rappel d'un envoi précédent (autre référence) ne s'applique plus
+  au nouvel envoi ; `declarationId` ne sert qu'aux rappels sans référence
+  (D-TDC-025).
+* *TVA* : totaux (16, 23, 25, 27, 28, 32 ; CA12 : `sp`, `ex`) recalculés
+  sur les cases arrondies à l'euro, à la préparation et au formatage
+  (`Teledec::VatTotals`, D-TDC-026).
+* *Adresse des rappels* : https seulement, sous l'adresse publique de
+  l'instance (domaine de la société, `PARTIDUO_HOST`,
+  `MARTEN_ALLOWED_HOSTS`), jamais tirée de la requête ; jeton des rappels
+  renouvelable dans les paramètres (D-TDC-027).
+* *Mineures* (D-TDC-028) : nature DAS2 sans lettre bloquante, SIRET de
+  l'établissement dans chaque répétition ; erreur de source reconnue sur
+  un motif précis ; 413 sur un rappel trop gros, réponses de TELEDEC
+  bornées à 16 Mo ; SIRET contrôlé contre le SIREN ; messages techniques en
+  dur retirés ; `create_company` documenté comme outil d'intégration.
+* Index unique partiel sur `declaration_id` (migration
+  `0004_teledec_declaration_unique`, D-TDC-023).
+
+Vérifications :
+
+* `partiduo-teledec` (base `partiduo_test_T2_final`) : 178 exemples,
+  0 échec, 4 en attente (suite d'intégration au stage : pas d'accès direct
+  au réseau depuis le bac à sable, B-TDC-001) ; `crystal tool format` et
+  Ameba sans remarque ; `scripts/verif_t.cr` compile.
+* `marten migrate` sur une base vierge (`partiduo_migrate_T2`) : toutes
+  les migrations, `teledec_0001` à `teledec_0004` comprises, appliquées.
+* `partiduo-app` : documentation seule (DECISIONS, BLOCAGES, état) ; pas
+  de code touché, specs du cœur non relancées.
+
 == Prochaines étapes
 
 Liste à l'issue de la critique de complétude et des lots E, G, L et T ;
@@ -2593,9 +2665,12 @@ chaque point renvoie à sa décision ou à son blocage.
   paramétrable par millésime et réintégration automatique (D-LIB-012) ;
   ventilation de la TVA pour un libéral assujetti si le besoin se confirme
   (D-LIB-009) ; essai du mode simplifié sur un téléphone (B-UI-009).
-. *Télédéclarations (après le lot T)* : adaptateur réel de TELEDEC et suite
-  d'intégration au bac à sable dès réception de la documentation et des
-  identifiants (B-TDC-001) ; format d'import de la balance vérifié
+. *Télédéclarations (après le lot T2)* : lancer la suite d'intégration au
+  stage depuis un poste qui joint TELEDEC (B-TDC-001) ; obtenir la valeur
+  de `#SOURCE`, confirmer les points de B-TDC-004 (codes de la CA3, DAS2,
+  rappels en `Basic`, types de rappel de la DAS2 et de l'IS) ; nature
+  « personne physique » des fiches fournisseurs pour la DAS2 ; aligner les
+  codes de la 2035 du module `liberal` ; format d'import de la balance vérifié
   (B-TDC-002) ; DAS2 sur les sommes payées plutôt que facturées
   (D-TDC-007) ; échéances datées par millésime et essai de l'écran dans un
   navigateur (B-TDC-003).
@@ -2690,6 +2765,9 @@ et l'interface :
 cd prod-crystal/partiduo/partiduo-einvoicing       # ou partiduo-document, partiduo-superpdp, partiduo-esalink, partiduo-teledec
 SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install
 DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' crystal spec
+# partiduo-teledec : suite du stage activée par ~/.config/partiduo/teledec-sandbox.env ;
+# adresse des rappels sous le domaine de la société ou PARTIDUO_HOST (https)
+crystal run scripts/verif_t.cr -- --serve-only     # partiduo-teledec : instance de vérification (TELEDEC simulé)
 MARTEN_ENV=test DATABASE_URL='postgres:///partiduo_<base>?host=/tmp' crystal run manage.cr -- migrate
 crystal run manage.cr -- genmigrations einvoicing  # aucun écart attendu
 # Plusieurs `crystal spec` en parallèle : un CRYSTAL_CACHE_DIR par exécution

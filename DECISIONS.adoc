@@ -8007,6 +8007,299 @@ de 0001, déjà commitée) : `teledec_filing.fiscal_year_id` →
 table du module Comptabilité, pas du socle, et le dépôt garde son
 document. Spec : `spec/teledec/integrity_spec.cr`.
 
+=== D-TDC-017 — Adaptateur réel sur un échange HTTP injectable ; le TELEDEC simulé reproduit les échanges (T2:teledec-reel)
+
+*Contexte.* La documentation de l'API partenaire et des identifiants du
+stage sont déposés (`.teledec-doc/API-TELEDEC.adoc`, B-TDC-001). Le TELEDEC
+simulé du lot T implémentait `Teledec::Transport` lui-même : l'adaptateur
+réel n'aurait été essayé que contre le stage.
+
+*Choix.* `Teledec::HttpTransport < Transport` (`src/teledec/remote/`)
+traduit tout en requêtes HTTP remises à un `Teledec::Remote::Exchange` :
+`Remote::Net` (`HTTP::Client`, délais bornés) en production,
+`SimulatedTeledec::Server` (serveur en mémoire) dans les specs. Le TELEDEC
+simulé est désormais l'adaptateur réel branché sur ce serveur, qui vérifie
+ce que TELEDEC vérifie (jeton `Basic` et scopes, `Bearer` expiré → 401,
+`#SOURCE` reconnue, balance à huit colonnes, horodatage de moins d'une
+heure, email du compte, 404 sans déclaration) et répond comme le stage
+(texte brut pour les erreurs, `readyToBeSent` en casse mixte, `lien`). Le
+transport réel est branché par défaut (`Transports.current`) ; `nil` garde
+le repli de D-TDC-004.
+
+*Alternative écartée.* Garder un simulateur au niveau de
+`Teledec::Transport` : l'adaptateur (jeton, formats, suivi) ne serait
+couvert que par la suite d'intégration, optionnelle.
+
+=== D-TDC-018 — Identifiant de suivi, lien de la déclaration, retour de `submit` (T2:teledec-reel)
+
+*Contexte.* TELEDEC ne rend aucun identifiant à l'envoi : l'API Balance
+rend l'URL de la liasse, la marque blanche `{"status": "ok"}` ou
+`{"lien": …}` ; le suivi (`declaration-status`, comptes-rendus) s'interroge
+par email, SIREN, date de fin, formulaire et, au besoin, échéance.
+
+*Choix.* `Transport#submit` rend `Submitted(remote_id, url,
+remote_status)`. `remote_id` = `<formulaire>:<siren>:<fin>[:<échéance>]`
+(échéance pour 2571, CA3, CA12 : plusieurs déclarations par date de fin),
+seule clé que le suivi comprend. Le dépôt garde la référence envoyée
+(`remote_reference`, clé d'idempotence de D-TDC-008, renvoyée par les
+rappels), l'état brut normalisé (`remote_status`), le lien (`remote_url`,
+page de la déclaration chez TELEDEC, bouton « Ouvrir sur TELEDEC » tant que
+le dépôt est transmis) et l'identifiant de la déclaration dès qu'il est
+connu (`declaration_id`) — migration `0003_teledec_remote`. La marque
+blanche demande le lien (`retournerLien`) : l'utilisateur vérifie et envoie
+lui-même depuis TELEDEC, rien ne part à la DGFiP sans lui.
+
+*Remarque.* Le lien rendu par le stage est un jeton de connexion au compte
+TELEDEC de l'entreprise, valable environ 24 h ; il n'est montré qu'aux
+lecteurs de la fiche du dépôt (`teledec.return.read`), jamais journalisé.
+
+*Alternative écartée.* Relever l'identifiant par `/service/declarations`
+après chaque envoi : un appel de plus, et la liasse n'y figure qu'après
+génération.
+
+=== D-TDC-019 — Identifiants : client OAuth2, compte TELEDEC de l'entreprise, SIRET (T2:teledec-reel)
+
+*Choix.* `login` et `api_key` deviennent l'identifiant et le secret du
+client OAuth2 (même chiffrement, D-TDC-005). Nouveaux paramètres, non
+secrets : `email` (compte TELEDEC auquel les déclarations sont rattachées ;
+vide : email de la société du socle) et `siret` (14 chiffres, facultatif,
+envoyé s'il commence par le SIREN). La liasse exige le SIRET
+(`teledec.errors.transport.siret`) : TELEDEC y rattache la balance. Le jeton
+d'accès est gardé en mémoire (clé : environnement, client, empreinte du
+secret), jamais en base ni dans les journaux.
+
+*Alternative écartée.* Ajouter le SIRET au socle (`core_settings`) :
+modification du cœur pour un seul usage ; à reconsidérer si d'autres
+extensions en ont besoin.
+
+=== D-TDC-020 — Correspondances des cases par millésime ; case sans code bloquante (T2:teledec-reel)
+
+*Choix.* `Teledec::Remote::Formats` porte les tables, par premier
+millésime d'application, tirées de `FORMULAIRES-TELEDEC.adoc` : CA3 (lignes
+du 3310-CA3 → `CA`, `CB`, `KH`, `KW`, `KX`, `KZ`, `CG`, `CE`, `DA`, `DB`,
+`DC`, `DD`, `FP`/`GP`, `FB`/`GB`, `FR`/`GR`, `FM`/`GM`, `FN`/`GN`,
+`FC`/`GC`, `GG`, `GH`, `GJ`, `HA`…`HG`, `JA`…`JC`, `KA`, `KB`, `KE`), CA12
+(bases et taxes par taux `EW`/`FW`…, `EB`, `EC`, `ED`, `EA`, `VN`, `EH`,
+`GB`, `GC`, `JA`, `HA`, `KB`, `KA`, `KD`, `LB`, `LA`, acomptes `MM`, solde
+`NA`/`SC`, excédent `NB`), 2571 (`CA`, `CE`, `CH`), 2572 (impôt `GE`, `RH`,
+`RS`, `RF`, acomptes `RT`, solde `PN`/`AD`/`CA`, excédent `PQ`/`BD`/`DA`),
+DAS2 (établissement `AA_*`, `AE` ; une répétition `repetitionDAS2TV` par
+bénéficiaire et par nature, lettre `H`, `C`, `O`, `R`, `J`, `A`, `I`, `V` ;
+totaux `repetitionDAS2TotauxSommesVersees`). Une case de TVA non nulle sans
+code (ligne 14 des taux particuliers, détaillée sur l'annexe 3310-A que
+Partiduo ne tient pas ; A2, A4, A5, B2, B5, 17, 29 sur la CA12) est un
+contrôle bloquant de la préparation (`teledec.controls.box_unmapped`) :
+mieux vaut déposer sur le site que transmettre une déclaration incomplète.
+Déclaration nulle : mention néant (`KF`, `SD`). Montant dû et `noPayment`
+d'après la ligne 32 (CA3), le solde (CA12, 2572) ou l'acompte (2571).
+Liasse : catégorie fiscale et régime d'après ses formulaires (2065/2033 →
+`BIC-IS` `SIMPLIFIE`…), forme juridique du socle (texte libre) → code
+TELEDEC (`ZZZ` si inconnue), 2035 préparée par `liberal` en bloc
+`zones_formulaires`.
+
+*Alternative écartée.* Laisser TELEDEC ignorer une case inconnue : la
+déclaration partirait sans elle.
+
+=== D-TDC-021 — États de TELEDEC et motif d'un rejet (T2:teledec-reel)
+
+*Choix.* Casse et ponctuation ignorées (le stage rend `readyToBeSent`).
+`NotCompleted`, `ReadyToBeSent`, `Sent` : transmis, en attente ; `OK`,
+`Accepted`, `CompleteWithWarnings` : accusé ; `ERREUR`, `Rejected`,
+`CompleteWithErrors` : rejeté ; autre valeur : en attente (état brut
+affiché). Le compte-rendu le plus récent (date de la DGFiP) fait foi ;
+absent du suivi, il est relevé par la liste des comptes-rendus. Motif :
+erreurs de la DGFiP (`formulaire champ (libellé) = valeur : code libellé`,
+jointes par « ; »), sinon `erreurCode erreurLibelle`, sinon `statusLibelle`.
+Accusé ou certificat de rejet (`pdf`, base64) en pièce jointe du socle.
+
+=== D-TDC-022 — Rappels de TELEDEC : route hors de `/ext/`, jeton de l'instance, idempotence (T2:teledec-reel ; amendement proposé à `partiduo-ui-bulma`)
+
+*Contexte.* TELEDEC poste un JSON à l'adresse `auth.url` de la marque
+blanche, ou à celle configurée chez lui (HTTP Basic ou JWT permanent).
+Toute route sous `/ext/<CODE>/` exige un utilisateur connecté
+(`PartiduoUi::ExtensionHandler`).
+
+*Choix.* L'interface de l'extension ajoute `POST /hooks/TELEDEC/callback`
+aux routes de Marten (`Teledec::Ui::CallbackHandler`, sans session ni jeton
+CSRF). L'appel est authentifié par un jeton aléatoire de l'instance
+(32 octets, chiffré dans `teledec_settings.callback_token`, créé à
+l'enregistrement des identifiants), présenté en mot de passe `Basic`, en
+`Bearer` ou en paramètre `token`, comparé en temps constant ; réponses 200
+(traité, ignoré, rejoué), 400, 401, 404 (extension inactive), 405.
+Le rappel est rattaché au dépôt par la référence envoyée, sinon par
+`declarationId` ; il est idempotent (déclaration déjà accusée ou rejetée :
+rien ne change). L'adresse envoyée dans `auth.url` est construite depuis
+la requête de l'utilisateur qui transmet (`Api.transmit(…, base_url)`) ;
+l'adresse complète est affichée aux gestionnaires dans les paramètres,
+pour la configuration côté TELEDEC.
+
+*Amendement proposé (`partiduo-ui-bulma`, ADR-003 D3).* Un montage
+« machine » déclaré par l'extension (`PartiduoUi::Extensions.mount_hook`
+par exemple), servi sans session sous un préfixe commun (`/hooks/<CODE>/`),
+pour que l'interface garde la liste des points d'entrée publics. Non
+appliqué : la route est ajoutée par l'extension elle-même.
+
+*Alternative écartée.* Relève seule (`refresh`) : pas d'accusé sans action
+de l'utilisateur ; le repli reste disponible.
+
+=== D-TDC-023 — Identifiant de déclaration unique ; adresse publique des rappels (T2, testeur)
+
+*Contexte.* La migration `0003_teledec_remote` annonce qu'un même
+identifiant de déclaration de TELEDEC ne désigne qu'un dépôt, mais ne
+posait qu'un index simple ; les rappels retrouvent pourtant un dépôt par cet
+identifiant quand la référence manque (`Filing.filter(declaration_id:).first`).
+Par ailleurs, `TransmitHandler#base_url` ajoutait `request.port` à
+`request.host`, qui contient déjà le port de l'en-tête `Host` : sur un port
+autre que 80/443, l'adresse des rappels envoyée à TELEDEC portait deux fois
+le port (`http://hote:8000:8000/hooks/…`), différente de celle affichée dans
+les paramètres.
+
+*Choix.* Migration `0004_teledec_declaration_unique` : index unique partiel
+`teledec_filing_declaration_id_key` sur `declaration_id <> ''` (SQL brut,
+sans écart pour `genmigrations`). Une seule méthode
+`Teledec::Ui::Handler#public_base_url` (`schéma://hôte`, port compris par
+l'en-tête `Host`) sert à la transmission et à l'affichage dans les
+paramètres. Specs : `spec/teledec/remote_api_spec.cr`,
+`spec/ui/teledec_ui_remote_spec.cr`.
+
+*Alternative écartée.* Contrainte `UNIQUE` pleine : la valeur vide, par
+défaut tant que TELEDEC n'a pas donné d'identifiant, serait en double.
+
+=== D-TDC-024 — Statut d'un rappel : les formulaires font foi ; rappels de paiement écartés (T2, relecture)
+
+*Contexte.* Un rappel de TELEDEC porte `status` (`OK`/`ERREUR` : issue de
+l'étape du rappel), `formulairesStatus` (`Accepted`, `Rejected`, `Sent`)
+et `declarationType` (`TVA`, `Liasse`, `Paiement`…). La lecture retenait le
+premier statut non « en attente » : `{"formulairesStatus": "Sent",
+"status": "OK"}` (parti à la DGFiP, pas encore accepté) passait le dépôt en
+« accusé », définitivement. Un rappel de paiement (`paiementStatus`, même
+référence) pouvait marquer rejetée une déclaration acceptée (prélèvement
+refusé) ou accusée une déclaration sans accusé.
+
+*Choix.* `formulairesStatus`, s'il est présent et non vide, fait seul foi
+(`Sent` : en attente) ; `status` puis `declarationStatus` ne servent qu'en
+son absence. `Remote::Formats::Report` garde `declaration_type` ; un rappel
+de type `Paiement`, ou d'un type connu différent de celui du dépôt (`TVA`
+pour CA3 et CA12, `Liasse` pour la liasse ; DAS2 et IS : type non
+documenté, seul le paiement est écarté), est ignoré (`ignored`). Le suivi
+(`HttpTransport#status`) écarte de même les comptes-rendus de paiement.
+Specs : `formats_spec.cr`, `http_transport_spec.cr`, `remote_api_spec.cr`.
+
+*Alternative écartée.* Tenir compte de `paiementStatus` pour noter le
+paiement : Partiduo ne suit pas le paiement (TELEDEC l'encaisse, puis la
+facturation passe entre éditeurs).
+
+=== D-TDC-025 — Référence de l'envoi : un compte-rendu d'un envoi précédent ne vaut pas pour le suivant (T2, relecture)
+
+*Contexte.* Après un rejet, le dépôt est préparé puis transmis de nouveau :
+même clé de suivi (`remote_id`), nouvelle référence
+(`partiduo-<id>-<rang>-…`). Le suivi retenait le compte-rendu le plus
+récent pour formulaire, SIREN et date de fin, et les rappels se
+rattachaient par `declarationId` quand leur référence ne correspondait à
+rien : l'ancien `ERREUR` et son motif s'appliquaient aussitôt au nouvel
+envoi.
+
+*Choix.* `Transport#status(credentials, remote_id, reference = "")` reçoit
+la référence de l'envoi en cours (`Api.refresh` passe
+`remote_reference`) ; les comptes-rendus dont la référence est renseignée et
+différente sont écartés, et s'il n'en reste aucun le dépôt reste en attente
+(état brut inchangé). `Callbacks.find` ne se rabat sur `declarationId` que
+si le rappel ne porte aucune référence : une référence inconnue est celle
+d'un envoi précédent, le rappel est ignoré. Les doubles de `Transport` des
+specs et de `scripts/verif_t.cr` suivent la nouvelle signature.
+
+*Alternative écartée.* Vérifier la référence dans `Api.refresh` seulement :
+le transport aurait déjà choisi le compte-rendu le plus récent, sans voir
+un compte-rendu plus ancien du bon envoi.
+
+=== D-TDC-026 — TVA : totaux recalculés sur les cases arrondies à l'euro (T2, relecture)
+
+*Contexte.* Chaque case de la CA3 ou de la CA12 était arrondie à l'euro
+séparément, totaux compris : 08 = 100,40 et 09 = 100,40 donnaient
+100 + 100 en détail et 201 en ligne 16. `bloquerSiIncoherence` valant
+`false`, TELEDEC aurait transmis une déclaration incohérente, que les
+contrôles de la DGFiP risquent de rejeter.
+
+*Choix.* `Teledec::VatTotals.coherent(kind, cases)` arrondit les cases de
+détail, puis recalcule les lignes de total à partir des cases arrondies,
+avec les formules de la déclaration de la Comptabilité : 16 = taxes brutes
+par taux + 15 ; 23 = 19 à 22 ; 25 (crédit) et 28 (TVA nette) par
+différence ; CA3 : 27 = 25 − 26, 32 = 28 + 29 ; CA12 : `sp`/`ex` d'après
+28 + 29 et les acomptes `ac`. Appliqué à la préparation (le document et la
+fiche du dépôt montrent les montants transmis ; l'empreinte change pour les
+dépôts préparés avant : « préparer de nouveau ») et, par sûreté, par le
+formateur de la marque blanche (sans effet sur un document déjà
+cohérent). Le montant à payer (`period.montant`) suit la ligne 32 ou le
+solde recalculé. Les formules sont reprises dans l'extension, qui ne voit
+le cœur que par `Partiduo::Api` (ADR-006 D3).
+
+*Alternative écartée.* Contrôle bloquant de cohérence à la préparation :
+l'utilisateur ne pourrait rien corriger lui-même, l'écart venant du seul
+arrondi.
+
+=== D-TDC-027 — Adresse des rappels : https seulement, tirée des réglages de l'instance ; jeton renouvelable (T2, relecture ; remplace la seconde partie de D-TDC-023)
+
+*Contexte.* L'adresse des rappels, jeton secret compris en paramètre
+`token`, était construite depuis la requête de l'utilisateur qui transmet
+(`request.scheme`, en-tête `Host` : `Ui::Handler#public_base_url`, D-TDC-023)
+et acceptée en `http://` : derrière un mandataire qui termine TLS, ou en
+accès direct en HTTP, TELEDEC recevait une adresse en clair, et l'adresse
+dépendait de l'hôte par lequel l'utilisateur était arrivé. Le jeton n'était
+jamais renouvelé.
+
+*Choix.* `Callbacks.instance_base_url` : `https://` + domaine de la société
+(`provision --domain`), sinon `PARTIDUO_HOST`, sinon le premier de
+`MARTEN_ALLOWED_HOSTS` (même ordre que le lien d'invitation,
+`core/commands/instance.cr`), nom d'hôte seulement (pas de joker). Le
+cœur n'offre pas de réglage « schéma public » : https est imposé, un
+rappel en clair n'est jamais proposé. `Callbacks.url` n'accepte que
+`https://` (sinon pas d'`auth.url`, suivi par `refresh`) ;
+`Api.transmit(…, base_url)` garde son argument (surcharge explicite, https
+seulement) mais l'interface ne le passe plus ; `SettingsView#callback_url`
+donne l'adresse complète aux gestionnaires (l'écran signale l'absence
+d'adresse publique). `public_base_url` est retiré de l'interface. Case
+« Renouveler le jeton des rappels » dans les paramètres
+(`CredentialsInput#renew_callback_token`) : l'ancien jeton cesse aussitôt
+de valoir. L'authentification `Basic` configurée chez TELEDEC (mot de
+passe = jeton) est à préférer au jeton en paramètre : documenté dans
+l'écran et dans B-TDC-004, le paramètre reste accepté tant que TELEDEC n'a
+pas confirmé que ses appels vers `auth.url` portent l'authentification
+configurée.
+
+*Alternative écartée.* Garder l'adresse tirée de la requête en exigeant
+`X-Forwarded-Proto` : dépend de la configuration du mandataire, et l'hôte
+resterait celui de l'utilisateur.
+
+=== D-TDC-028 — Remarques mineures de la relecture du lot T2
+
+*Choix.*
+
+* *DAS2.* Une nature sans lettre de la DGFiP est un contrôle bloquant à la
+  préparation (`teledec.controls.das2_nature`) et, par sûreté, une
+  `TransportError` (`teledec.errors.transport.das2_nature`) au formatage,
+  au lieu de la lettre `V` (autres). Le SIRET de l'établissement est repris
+  dans chaque répétition (`AD`). Personne physique ou morale : les fiches
+  fournisseurs ne le distinguent pas, le bénéficiaire reste déclaré en
+  raison sociale (`AF_3036_1`) — B-TDC-004.
+* *Erreur de source.* Une réponse n'est classée `teledec.errors.transport.source`
+  que si elle dit « la source » ou « source non reconnue » en mots entiers
+  (« Ressource introuvable », une autre erreur 101 : refus ordinaire).
+* *Tailles.* L'interface répond 413 à un rappel dont `Content-Length`
+  dépasse `Callbacks::MAX_BYTES` (8 Mo), avant de lire le corps ; la lecture
+  elle-même est bornée par Marten (`request_max_body_size`, 2,5 Mo par
+  défaut, à relever dans la distribution si un accusé en base64 le
+  dépasse). Les réponses de TELEDEC sont lues au plus sur 16 Mo
+  (`Remote::Net::MAX_BYTES`, `teledec.errors.transport.invalid` au-delà).
+* *SIRET.* À l'enregistrement, un SIRET doit commencer par le SIREN de la
+  société (`teledec.errors.credentials.siret_siren`) ; la marque blanche
+  n'envoie donc le SIREN seul (champ `identity.siret`) que si le SIRET est
+  vide.
+* *Messages.* Les `TransportError` n'ont plus de message technique en dur
+  (le message est la clé i18n).
+* *`create_company`.* Gardé dans l'adaptateur, documenté comme outil
+  d'intégration (la suite du stage prépare son compte de test) :
+  l'application ne l'appelle pas.
+
 == Vérification de bout en bout des lots E, G, L et T (V:bout-en-bout, 28 septembre 2026)
 
 === D-VE-001 — Serveur réel dans le processus de vérification, plateformes simulées à côté
