@@ -640,3 +640,47 @@ paramétrage comptable (`Api::Accounting.set_liberal_account`).
 `/accounting/liberal-accounts`, mode simplifié du module (D-UI-069 à
 D-UI-073, `spec/ui/liberal_spec.cr`). Reste, comme pour la
 micro-entreprise, l'essai sur un téléphone réel (B-UI-009).
+
+== B-TDC-001 — Adaptateur réel de TELEDEC en attente du partenariat (T:teledec, extension TELEDEC)
+
+*Constat.* L'API partenaire de TELEDEC n'est pas publique (ADR-007 D5).
+Le partenariat a été demandé le 27 septembre 2026 ; au 28 septembre, le
+dossier `~/.config/partiduo/teledec/` est vide et
+`~/.config/partiduo/teledec-sandbox.env` aussi : ni documentation ni
+identifiants de test. Aucun formulaire n'a été rempli, personne n'a été
+contacté.
+
+*Contournement.* L'extension est écrite contre `Teledec::Transport` et
+testée contre un TELEDEC simulé (`spec/support/simulated_teledec.cr`).
+Sans transport branché : préparation, contrôles, export de la balance au
+format d'import et saisie de l'issue d'un dépôt fait sur le site
+(D-TDC-004). La suite `spec/integration/sandbox_spec.cr` est en attente.
+
+*Levée.* Déposer la documentation dans `~/.config/partiduo/teledec/` et les
+identifiants de test dans `teledec-sandbox.env` ; écrire l'adaptateur
+(`Teledec::…Transport < Teledec::Transport`, traduction de
+`Teledec::Payload`), le brancher (`Teledec::Transports.current`) et la
+suite d'intégration, sans jamais afficher ni journaliser les secrets.
+
+== B-TDC-002 — Format d'import de balance de TELEDEC non documenté publiquement (T:teledec, extension TELEDEC)
+
+*Constat.* Le site de TELEDEC annonce l'import de la balance (« votre
+bilan et compte de résultat se remplissent automatiquement ») sans en
+publier le format.
+
+*Contournement.* CSV au format courant (D-TDC-004) ; le FEC du cœur
+(`Api::Accounting.fec`) en second recours.
+
+*Levée.* Vérifier sur un compte TELEDEC ou dans la documentation
+partenaire les colonnes, séparateur et encodage attendus ; ajuster
+`Teledec::Balance.csv`.
+
+== B-TDC-003 — Échéances approchées et écrans non vus dans un navigateur (T:teledec, extension TELEDEC)
+
+*Constat.* Les échéances suivent les règles générales (D-TDC-006) sans les
+reports annuels de la DGFiP ni la date de dépôt propre de chaque
+entreprise pour la CA3 ; l'écran « Télédéclarations » n'a été vérifié que
+par les specs (HTML rendu), pas dans un navigateur ni sur un téléphone.
+
+*Levée.* Table datée des échéances par millésime si besoin ; parcours au
+clavier et sur téléphone, comme B-UI-009.

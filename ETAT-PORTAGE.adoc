@@ -29,21 +29,24 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |E |Justificatifs (`partiduo-document`), facturation électronique (`partiduo-einvoicing`, adaptateurs XP Z12-013 et NOALYSS-PEPPOL), SUPER PDP (`partiduo-superpdp`), factures non électroniques (cœur et interface) |*Terminé* (clôture « Clôture du lot E »)
 |G |Module `micro` (ADR-007 D1, D2) : registres, aide URSSAF, 2042-C-PRO, seuils, partie double par la Comptabilité (cœur) ; interface simplifiée (D3) |*Terminé* (cœur, interface simplifiée, écrans de paramétrage ; clôture « Clôture du lot G »)
 |L |Module `liberal` (ADR-007 D6) : livre-journal, immobilisations, 2035, partie double par la Comptabilité ; interface et mode simplifié |*Terminé* (cœur, interface et mode simplifié ; clôture « Clôture du lot L »)
+|T |Extension `partiduo-teledec` (ADR-007 D4, D5) : liasse, TVA, DAS2, IS, greffe par TELEDEC (API Balance, transport abstrait, simulateur) |*Terminé* contre le simulateur (clôture « Clôture du lot T ») ; adaptateur réel en attente (B-TDC-001)
 |===
 
-*État (28 septembre 2026, clôture du lot L).* Lot en cours : aucun. Les
+*État (28 septembre 2026, clôture du lot T).* Lot en cours : aucun. Les
 lots P à 6 du plan, le lot E (justificatifs, facturation électronique,
 SUPER PDP, factures non électroniques), le lot G (micro-entreprise :
-module `micro`, interface simplifiée, section « Clôture du lot G ») et le
+module `micro`, interface simplifiée, section « Clôture du lot G »), le
 lot L (professions libérales : module `liberal`, 2035, interface
-simplifiée, section « Clôture du lot L ») sont
+simplifiée, section « Clôture du lot L ») et le lot T (extension
+`partiduo-teledec`, section « Clôture du lot T ») sont
 terminés, les trois jalons
 vérifiés, et la critique de complétude (section du même nom) a comblé les
 écarts faisables au prompt, aux ADR et à la maquette. Ce qui reste est
 listé dans « Prochaines étapes » et dans BLOCAGES.adoc. Specs :
 `partiduo-app` 1025 + 29 en attente (Comptabilité, Analytique, Stock, Suivi), 768 + 58 (Facturation, Stock, Suivi), 1087 + 13 (Comptabilité et Facturation), 717 + 72 (micro), 779 + 56 (micro et Facturation), 1037 + 25 (micro, Facturation et Comptabilité), 701 + 71 (liberal seul), 959 + 40 (liberal et Comptabilité) ; `partiduo-ui-bulma` 332 ; `partiduo-skel` 24 ;
 `partiduo-document` 69 ; `partiduo-einvoicing` 92 ; `partiduo-superpdp` 71
-(dont 5 contre le bac à sable SUPER PDP) ; `partiduo-migrate` 93 ; tous
+(dont 5 contre le bac à sable SUPER PDP) ; `partiduo-teledec` 92 + 1 en
+attente (bac à sable TELEDEC) ; `partiduo-migrate` 93 ; tous
 verts (extensions et reprise : chiffres de la clôture du lot E).
 
 == Lot P — ce qui existe (26 septembre 2026)
@@ -1771,22 +1774,107 @@ et Ameba sans remarque ; garde-fous ADR-005 D3 verts ; `marten migrate` sur
 base vierge (`partiduo_migrate_L`) sans erreur. Commits `development` dans
 `partiduo-app` et `partiduo-ui-bulma`.
 
+== Extension TELEDEC — télédéclarations fiscales (`partiduo-teledec`, T:teledec, 28 septembre 2026)
+
+Nouveau dépôt `prod-crystal/partiduo/partiduo-teledec` (branche
+`development`, AGPL v3), ADR-007 D4 et D5, décisions D-TDC-001 à
+D-TDC-009, blocages B-TDC-001 à B-TDC-003, contrat `doc/api/teledec.adoc`
+du dépôt :
+
+* Manifeste `TELEDEC`, `depends_on "ACCOUNTING"`, permissions
+  `teledec.return.read`, `.prepare`, `.transmit`, `teledec.settings.manage` ;
+  menus « Télédéclarations » (rubrique TVA) et « TELEDEC » (Paramètres).
+* Formule API Balance : liasse selon le régime (2065/2033, 2065/2050,
+  2031/2033, 2031/2050, 2035, 2072) — balance de l'exercice avant clôture,
+  balance N-1, identité, aucune case calculée ; 2035 préparée par
+  `Partiduo::Api::Liberal` jointe si `liberal` est actif ; CA3 et CA12
+  closes au lot 4 ; DAS2 depuis les écritures et les fiches fournisseurs
+  (TTC, seuil 1 200 €) ; relevés 2571 et 2572 ; greffe en option.
+* Suivi : échéances de l'exercice, dépôts préparés, transmis, accusés
+  (accusé en pièce jointe du socle), rejetés (motif), historique ;
+  document intangible après transmission (déclencheur) ; empreinte et
+  idempotence.
+* Interface abstraite `Teledec::Transport`, TELEDEC simulé pour les specs ;
+  *adaptateur réel en attente* (documentation et identifiants absents,
+  B-TDC-001) : repli par export de la balance (CSV) et saisie de l'issue
+  d'un dépôt fait sur le site ; identifiants de l'API chiffrés en base.
+* Interface `ui/bulma/` sous `/ext/TELEDEC/` : échéances par exercice,
+  préparation, contrôle, transmission, statut, accusé, export, paramètres.
+* Specs (base `partiduo_test_t_teledec`) : 41 exemples verts + 1 en
+  attente (intégration au bac à sable), ordre aléatoire ; `crystal tool
+  format` et Ameba sans remarque ; `marten migrate` sur schéma vierge puis
+  second passage sans migration ; `genmigrations teledec` sans écart.
+* Specs du lot T (base `partiduo_test_T_specs`) : 81 exemples verts + 1 en
+  attente ; ajout des contraintes en base et du déclencheur, des arrondis,
+  du chiffrement, du calendrier aux limites, des règles de la DAS2 et de
+  l'IS, du cycle d'un dépôt, des droits et de `ModuleDisabled` sur tout le
+  contrat, des écrans en lecture seule ; deux correctifs (D-TDC-010 seuil
+  strict de la DAS2, D-TDC-011 pièce d'un rejet détachée).
+
+Reste : adaptateur réel et suite d'intégration (B-TDC-001) ; format
+d'import vérifié (B-TDC-002) ; DAS2 sur les sommes payées (D-TDC-007) ;
+amendement `depends_on_any` pour un libéral sans Comptabilité (D-TDC-002) ;
+essai dans un navigateur (B-TDC-003).
+
+== Clôture du lot T — relecture et vérifications (28 septembre 2026)
+
+Corrections de la relecture (décisions D-TDC-012 à D-TDC-016, compléments
+de D-TDC-002 et D-TDC-004) :
+
+* DAS2 : TVA répartie par taux sur les seules lignes de base (ligne
+  exonérée sans TVA fictive), TVA autoliquidée écartée, écritures de
+  clôture et de réouverture écartées (plus d'avertissements
+  `das2_orphan` négatifs) ; année bornée à 2000..2100 (D-TDC-012,
+  D-TDC-015).
+* Cycle d'un dépôt : verrou `teledec_filing` et relecture du dépôt dans
+  `check`, `transmit`, `refresh`, `record_outcome` ; `record_outcome` en
+  une seule transaction (pièce refusée : dépôt resté préparé), pièce
+  remise en flux au socle (lecture bornée) ; transmission concurrente
+  d'une nouvelle préparation notée dans l'historique (D-TDC-013).
+* Identifiants illisibles (clé de l'instance changée) :
+  `teledec.errors.credentials.unreadable` au lieu d'une erreur 500 ;
+  `refresh_all` isole chaque dépôt (D-TDC-014).
+* Contrat : `Api.filings` rend des `FilingSummaryView` (document non
+  relu) ; `login` réservé à `teledec.settings.manage` ; exercice sans date
+  de fin refusé proprement (D-TDC-015).
+* Base : migration `0002_teledec_foreign_keys` (exercice, auteurs,
+  historique, paramètres ; D-TDC-016).
+* Écart à ADR-006 D3 signalé, amendement proposé (`optional_depends_on
+  "LIBERAL"` ou point d'extension du socle, D-TDC-002) ; en-tête CSV figé
+  déclaré comme format d'échange non traduit (D-TDC-004).
+
+Vérifications (base `partiduo_test_T_final`) : `partiduo-teledec` 92
+exemples verts + 1 en attente (ordre aléatoire), `crystal tool format` et
+Ameba sans remarque ; `partiduo-app` (code inchangé au lot T, documents
+seulement) : `scripts/specs-modules.sh` — tout vert, chiffres identiques à la clôture du lot L — 1025 + 29 en attente (Comptabilité, Analytique, Stock, Suivi), 768 + 58 (Facturation, Stock, Suivi), 1087 + 13 (Comptabilité et Facturation), 717 + 72 (micro), 779 + 56 (micro et Facturation), 1037 + 25 (micro, Facturation et Comptabilité), 701 + 71 (liberal seul), 959 + 40 (liberal et Comptabilité) ; `marten
+migrate` sur base vierge (`partiduo_migrate_T`) sans erreur, clés
+étrangères de 0002 présentes. Commits `development` dans `partiduo-teledec`
+et `partiduo-app` (documents).
+
 == Prochaines étapes
 
-Liste à l'issue de la critique de complétude, du lot E et du lot G ;
+Liste à l'issue de la critique de complétude et des lots E, G, L et T ;
 chaque point renvoie à sa décision ou à son blocage.
 
 . *Micro-entreprise (après le lot G)* : vérifier aux sources les taux,
   seuils et cases initiaux (B-MIC-001) ; essai du mode simplifié sur un
   téléphone (B-UI-009, micro et libéral) ; faire adopter l'amendement
-  D-MIC-003 ; extension `partiduo-teledec` (D4) ; noter
+  D-MIC-003 ; extension `partiduo-teledec` faite (lot T clos), adaptateur
+  réel en attente (B-TDC-001) ; noter
   plusieurs déclarations URSSAF passées d'un coup (D-MIC-012).
 . *Professions libérales (après le lot L)* : vérifier au formulaire
   officiel les lignes et cases de la 2035 (B-LIB-001) ; transmission par
-  `partiduo-teledec` (D-LIB-007) ; plafond d'amortissement des véhicules
+  `partiduo-teledec` (faite contre le simulateur, D-TDC-002 ; réelle :
+  B-TDC-001) ; plafond d'amortissement des véhicules
   paramétrable par millésime et réintégration automatique (D-LIB-012) ;
   ventilation de la TVA pour un libéral assujetti si le besoin se confirme
   (D-LIB-009) ; essai du mode simplifié sur un téléphone (B-UI-009).
+. *Télédéclarations (après le lot T)* : adaptateur réel de TELEDEC et suite
+  d'intégration au bac à sable dès réception de la documentation et des
+  identifiants (B-TDC-001) ; format d'import de la balance vérifié
+  (B-TDC-002) ; DAS2 sur les sommes payées plutôt que facturées
+  (D-TDC-007) ; échéances datées par millésime et essai de l'écran dans un
+  navigateur (B-TDC-003).
 
 . *Facturation électronique* : écran de saisie libre de l'écriture d'une
   facture reçue dans EINV (D-EINV-025) ; statut de plateforme sur l'écran de
@@ -1814,7 +1902,10 @@ chaque point renvoie à sa décision ou à son blocage.
 . *Amendements à faire adopter* : ADR-006 D3 (D-STK-001), ADR-005 rubrique
   `FOLLOW_UP` (D-FUP-002), ADR-003 D7 `payment.unmatched` (D-2F-003),
   ADR-005 D3 `Partiduo::Api::Distribution` (D-014), `create_card` avec
-  compte (D-MIG-006), comptes 120 / 129 au plan FR initial (D-CLO-003).
+  compte (D-MIG-006), comptes 120 / 129 au plan FR initial (D-CLO-003),
+  dépendance optionnelle déclarée `optional_depends_on "LIBERAL"` pour
+  TELEDEC (ADR-003, ADR-006 D3 ; D-TDC-002) et `depends_on_any` pour un
+  libéral sans Comptabilité (ADR-007 D4).
 . *Contrat* : `limit` / `offset` pour `general_ledger` et `journals`, comptes
   des rubriques d'un état (D-UI-036) ; lecture des fiches en bloc (D-STK-013) ;
   livraison par ligne (D-STK-010).
@@ -1866,11 +1957,12 @@ DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' crystal spec
 ----
 
 Extensions du lot E (`partiduo-document`, `partiduo-einvoicing`,
-`partiduo-superpdp`), chacune composée avec le cœur et l'interface :
+`partiduo-superpdp`) et `partiduo-teledec`, chacune composée avec le cœur
+et l'interface :
 
 [source,sh]
 ----
-cd prod-crystal/partiduo/partiduo-einvoicing       # ou partiduo-document, partiduo-superpdp
+cd prod-crystal/partiduo/partiduo-einvoicing       # ou partiduo-document, partiduo-superpdp, partiduo-teledec
 SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install
 DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' crystal spec
 MARTEN_ENV=test DATABASE_URL='postgres:///partiduo_<base>?host=/tmp' crystal run manage.cr -- migrate

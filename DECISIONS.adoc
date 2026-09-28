@@ -7712,3 +7712,297 @@ de cette année a des lignes. Interface : libellé « SIREN » traduit
 (`ui.liberal.tax_return.siren`) ; longueurs maximales à l'écran alignées sur
 le contrat (255 pour la désignation, le tiers et le libellé d'un
 ajustement).
+
+== Extension TELEDEC — télédéclarations fiscales (`partiduo-teledec`, T:teledec, 28 septembre 2026)
+
+=== D-TDC-001 — Dépôt, manifeste et menus de l'extension (T:teledec, teledec)
+
+*Contexte.* ADR-007 D4 : extension au sens de l'ADR-003, `depends_on
+"ACCOUNTING"`, écran « Télédéclarations » dans `ui/bulma/`.
+
+*Choix.* Dépôt `prod-crystal/partiduo/partiduo-teledec` (branche
+`development`, AGPL v3, plan de `partiduo-skel`) ; code `TELEDEC` ;
+permissions `teledec.return.read`, `teledec.return.prepare`,
+`teledec.return.transmit`, `teledec.settings.manage` ; menu
+« Télédéclarations » sous la rubrique `VAT` (celle des déclarations) et
+« TELEDEC » sous `SETTINGS`. Routes sous `/ext/TELEDEC/`, montées avec
+`teledec.return.read`, chaque commande vérifiant sa propre permission.
+Réservé aux dossiers de régime `fr` (`teledec.errors.regime`).
+
+*Alternative écartée.* Rubrique `EXTENSION` : les déclarations fiscales
+seraient séparées de la TVA qu'elles reprennent.
+
+=== D-TDC-002 — Dépendance à la Comptabilité seule ; 2035 du module `liberal` lue s'il est actif (T:teledec ; amendement proposé à ADR-007 D4)
+
+*Contexte.* ADR-007 D4 fixe `depends_on "ACCOUNTING"` ; D-LIB-007 prévoit
+que `partiduo-teledec` lise la 2035 préparée par `liberal`, qui peut être
+tenu sans Comptabilité (pas de balance).
+
+*Choix.* `depends_on "ACCOUNTING"` comme l'ADR. Pour un régime `bnc`, si
+`LIBERAL` est actif (`Api::Modules.get`), la liasse joint les cases de
+`Partiduo::Api::Liberal.tax_return` (euros entiers) et son empreinte
+(`tax_return_fingerprint`) ; un contrôle bloquant de la 2035 préparée
+bloque la transmission (`teledec.controls.liberal_not_ready`).
+
+*Amendement proposé (ADR-007 D4).* `depends_on_any ["ACCOUNTING",
+"LIBERAL"]` pour servir un libéral sans Comptabilité (2035 seule, sans
+balance). Non appliqué : l'ADR fait foi.
+
+*Écart signalé (relecture du lot T).* `Teledec::Builder` appelle
+directement `Partiduo::Api::Liberal.tax_return` : c'est un appel de module
+à module, à la limite d'ADR-006 D3 (les modules ne communiquent que par le
+socle et les événements), et une dépendance que le manifeste ne déclare
+pas (ADR-003 : dépendances déclarées). L'appel reste gardé par
+`Api::Modules.get("LIBERAL")` (module inactif : aucune case jointe) et ne
+passe que par le contrat public `Partiduo::Api::Liberal`, jamais par ses
+modèles.
+
+*Amendement proposé (ADR-003 et ADR-006 D3).* Deux voies, à trancher par
+l'auteur des ADR : (a) une dépendance *optionnelle* déclarée au manifeste,
+par exemple `optional_depends_on "LIBERAL"`, que le registre vérifierait
+(contrat lu seulement si le module est actif, écart visible dans
+`Modules.list`) ; (b) un point d'extension du socle qui expose les cases
+d'une déclaration préparée par un module (`Partiduo::Api::TaxForms`,
+alimenté par `liberal`), sans lien direct entre modules. Non appliqué :
+les ADR font foi ; la voie (a) est la plus simple à ajouter au registre.
+
+=== D-TDC-003 — Balance transmise : tous les journaux, avant l'écriture de clôture (T:teledec)
+
+*Contexte.* Formule API Balance : TELEDEC remplit bilan et compte de
+résultat depuis la balance. `trial_balance` ne lit que les journaux
+visibles de l'acteur ; l'écriture de clôture (`closing:<exercice>`, datée
+du dernier jour) solde les classes 6 et 7.
+
+*Choix.* Après le contrôle des droits (`teledec.return.prepare` et
+`accounting.report.read`), la balance est lue par
+`Partiduo::Api::Accounting.trial_balance` avec l'acteur système, sur les
+dates de l'exercice (à-nouveaux compris), puis les lignes de l'écriture de
+clôture en vigueur (`entries(source: "closing:<id>")`) sont retranchées
+(`details.closing_neutralised`). La balance de l'exercice précédent est
+jointe. Contrôles : balance vide ou déséquilibrée (bloquants), exercice non
+clos (avertissement).
+
+*Alternative écartée.* Balance de l'acteur : une liasse partielle serait
+fausse (même raisonnement que D-TVA-011 et D-ED-011).
+
+=== D-TDC-004 — Repli sans transport : balance CSV et issue notée à la main (T:teledec ; ADR-007 D5)
+
+*Contexte.* L'API partenaire n'est pas publique ; ni la documentation ni
+des identifiants de test ne sont déposés (`~/.config/partiduo/teledec/`
+vide, `teledec-sandbox.env` vide). Le site public de TELEDEC annonce
+l'import de la balance sans en décrire le format.
+
+*Choix.* `Teledec::Transports.current` vaut `nil` : préparation et
+contrôles fonctionnent, la transmission est refusée
+(`teledec.errors.transport.unavailable`). Repli : `balance_file` produit
+la balance au format d'import le plus courant des logiciels comptables
+(« Compte ; Intitulé ; Débit ; Crédit ; Solde débiteur ; Solde créditeur »,
+`;`, virgule décimale, UTF-8 avec BOM, CRLF, nom
+`<SIREN>-balance-<clôture>.csv`) — le FEC du cœur reste disponible — et
+`record_outcome` note le dépôt fait sur le site (référence), l'accusé
+(fichier en pièce jointe) ou le rejet (motif) ; le dépôt est marqué
+`manual`.
+
+*Alternative écartée.* Deviner l'API de TELEDEC : un adaptateur non
+vérifiable serait trompeur (BLOCAGES B-TDC-001).
+
+*Exception à la règle « aucune chaîne en dur » (relecture du lot T).*
+L'en-tête du fichier d'import est un *format d'échange*, pas un texte
+d'interface : il reste en français quelle que soit la langue de
+l'utilisateur, déclaré dans la constante commentée
+`Teledec::Balance::CSV_HEADER` (« format d'import, non traduit »). De même,
+les messages de `Teledec::Secrets::Error` et ceux du déclencheur
+`teledec_filing_guard` sont des diagnostics techniques (journaux,
+exceptions de dernier recours) jamais montrés tels quels : l'utilisateur
+reçoit une clé i18n (`teledec.errors.credentials.unreadable`, statut
+refusé par le contrat avant d'atteindre le déclencheur).
+
+=== D-TDC-005 — Identifiants de l'API chiffrés par l'extension (T:teledec ; comme D-EINV-004)
+
+*Choix.* `Teledec::Secrets`, même format que `Einvoicing::Secrets`
+(AES-256-CBC, HMAC-SHA-256, `v1:<base64>`), clé `PARTIDUO_TELEDEC_KEY` ou
+dérivée de `MARTEN_SECRET_KEY` avec un sel propre. La clé n'est jamais
+rendue (`key_stored`), `Credentials#to_s` et `#inspect` la masquent ; les
+erreurs du transport sont des clés i18n sans secret. L'amendement ADR-003
+D6 de D-EINV-004 (service `Partiduo::Api::Core.secrets`) couvrirait aussi
+cette extension.
+
+*Alternative écartée.* Dépendre de `partiduo-einvoicing` pour ses
+secrets : dépendance sans rapport métier.
+
+=== D-TDC-006 — Échéances : règles générales du calendrier fiscal (T:teledec)
+
+*Choix.* `Teledec::Calendar` : liasse au deuxième jour ouvré suivant le
+1ᵉʳ mai + 15 jours (clôture au 31 décembre ; sinon trois mois + 15
+jours) ; 2572 le 15 mai (sinon le 15 du quatrième mois) ; 2571 aux 15
+mars, juin, septembre, décembre compris dans l'exercice ; CA3 le 19 du
+mois suivant ; CA12 et DAS2 au deuxième jour ouvré suivant le 1ᵉʳ mai ;
+greffe le dernier jour du septième mois. Les reports annuels annoncés par
+la DGFiP et les jours de dépôt propres à chaque entreprise (CA3 du 15 au
+24) ne sont pas repris (BLOCAGES B-TDC-003).
+
+*Alternative écartée.* Table de dates par millésime : plus juste, mais à
+maintenir chaque année ; à faire si le besoin se confirme.
+
+=== D-TDC-007 — DAS2 depuis les écritures : comptes paramétrés, tiers de l'écriture, toutes taxes comprises (T:teledec)
+
+*Contexte.* ADR-007 D4 : « DAS2 (honoraires, calculée depuis les fiches
+fournisseurs et les écritures) ».
+
+*Choix.* Lignes des comptes paramétrés (défaut : 6226 honoraires, 6221 et
+6222 commissions, 6516 droits d'auteur ; préfixe → nature parmi
+`DAS2_NATURES`), hors lignes de TVA, de l'année civile, extournes
+comprises ; bénéficiaire = fiche de la ligne `40…` de l'écriture, sinon
+fiche de la ligne de charge (écriture sans fiche : avertissement
+`das2_orphan`) ; montant TTC (TVA déductible de l'écriture au prorata des
+bases) ; seuil 1 200 € par bénéficiaire (paramétrable) ; euros entiers.
+Identité depuis la fiche : nom, SIRET (avertissement s'il manque pour un
+bénéficiaire français), adresse (bloquant si absente), profession =
+description de la fiche.
+
+*Limite.* Base « facturé dans l'année » et non « payé dans l'année » : la
+DAS2 déclare les sommes versées ; suivre les règlements lettrés est un
+report (le lettrage partiel compliquerait le calcul).
+
+=== D-TDC-008 — Document neutre, empreinte et idempotence (T:teledec)
+
+*Choix.* Le document préparé est un JSON stable (`Teledec::Payload`,
+schéma `partiduo-teledec/1`) stocké avec son empreinte SHA-256 ; la
+transmission le recalcule et refuse s'il a changé
+(`teledec.errors.filing.changed`) ; `check` le signale
+(`teledec.controls.changed`). La clé d'idempotence remise au transport est
+`partiduo-<dépôt>-<rang de transmission>-<empreinte>` : un envoi rejoué ne
+crée pas de doublon, un dépôt rejeté puis préparé de nouveau est un nouvel
+envoi. Un dépôt transmis ou accusé garde son document et un dépôt accusé
+son statut (déclencheur `teledec_filing_guard`).
+
+=== D-TDC-009 — Relevés d'IS : montants saisis, acomptes transmis déduits (T:teledec)
+
+*Contexte.* ADR-007 D4 : l'extension ne calcule pas les cases de la
+liasse ; les relevés 2571 et 2572 n'ont pas de balance à envoyer.
+
+*Choix.* 2571 : numéro 1 à 4 et montant saisi (euros). 2572 : impôt saisi,
+à défaut solde du compte 695 de la balance avant clôture ; acomptes = 2571
+transmis ou accusés de l'exercice ; solde = impôt − acomptes. Réservés aux
+régimes `is_rsi` et `is_rn`.
+
+*Alternative écartée.* Calculer l'acompte (quart de l'IS de l'exercice
+précédent, contribution sociale) : règles de seuils et de taux à tenir à
+jour, hors du périmètre « balance + identité ».
+
+=== D-TDC-010 — DAS2 : seuil strict, apprécié avant l'arrondi (T:specs, correctif de D-TDC-007)
+
+*Contexte.* Specs du lot T : la DAS2 déclarait un bénéficiaire dont les
+sommes valaient exactement 1 200 € (comparaison `>=`), et comparait le
+seuil au total déjà arrondi à l'euro (1 200,41 € TTC écarté comme
+1 200 €). CGI art. 240 : sont déclarées les sommes qui *dépassent* 1 200 €
+par an et par bénéficiaire ; le commentaire de `Das2` disait déjà « au-delà
+du seuil ».
+
+*Choix.* `Das2.compute` compare le total exact de l'année (toutes natures,
+avant arrondi) au seuil, strictement (`>`) ; les montants déclarés restent
+arrondis à l'euro. Spec : `spec/teledec/das2_rules_spec.cr`. L'exemple
+existant de `vat_das2_spec.cr` passe de 1 000 € HT à 1 010 € HT pour
+rester au-delà du seuil.
+
+*Alternative écartée.* Garder `>=` : contraire au texte du CGI.
+
+=== D-TDC-011 — Nouvelle préparation d'un dépôt rejeté : pièce du rejet détachée (T:specs)
+
+*Contexte.* Un rejet noté à la main peut joindre une pièce
+(`record_outcome`, `receipt_attachment_id`) ; préparer de nouveau le dépôt
+gardait ce lien, et la fiche du dépôt *préparé* proposait « Accusé de
+réception ».
+
+*Choix.* `Filings.save` remet à `nil` `receipt_attachment_id` et
+`acknowledged_at` ; la pièce reste dans `core_attachment`. Spec :
+`spec/teledec/lifecycle_spec.cr`.
+
+*Alternative écartée.* Garder le lien et filtrer à l'affichage : la vue
+du contrat resterait fausse pour tout autre client.
+
+=== D-TDC-012 — DAS2 : TVA de son propre taux, autoliquidation et fin d'exercice écartées (T:relecture, correctif de D-TDC-007)
+
+*Contexte.* Relecture du lot T : la TVA de l'écriture était répartie sur
+toute ligne DAS2, même sans rôle `base` (une ligne d'honoraires exonérée
+voisine d'une ligne taxée recevait une TVA fictive) ; la TVA autoliquidée
+(4452 et 4456 passées ensemble) s'ajoutait comme si le prestataire l'avait
+perçue ; l'écriture de clôture (`closing:<exercice>`), qui solde 6226 sans
+fiche, produisait des avertissements `das2_orphan` négatifs.
+
+*Choix.* `Das2.vat_by_rate` : par code de TVA, {bases, TVA 4456} ; une
+ligne de base ne reçoit que la TVA de son propre taux, au prorata des
+bases de ce taux ; une ligne sans rôle `base` n'en reçoit pas. Un taux
+dont une ligne de TVA n'est pas sur 4456 (TVA due passée en même temps :
+autoliquidation, `reverse_charge` du taux) est écarté ; pour une écriture
+sans code de TVA, une ligne 4452 écarte toute la TVA. Écritures dont la
+`source` commence par `closing:`, `opening:` ou `reopening:` écartées.
+Specs : `spec/teledec/das2_rules_spec.cr` (ligne exonérée, taux `INTS`,
+clôture).
+
+*Alternative écartée.* Lire le taux par `Partiduo::Api::Vat.rate_by_code`
+pour connaître `reverse_charge` : un appel par ligne et une dépendance au
+module TVA, alors que les lignes de l'écriture suffisent.
+
+=== D-TDC-013 — Verrou des dépôts sur toutes les transitions ; transmission concurrente (T:relecture)
+
+*Contexte.* Seul `Filings.save` prenait le verrou consultatif
+`teledec_filing` ; `transmit`, `check`, `refresh` et `record_outcome`
+réécrivaient un objet `Filing` lu avant l'appel à TELEDEC : une
+préparation faite pendant l'envoi était écrasée. `record_outcome`
+enregistrait « transmis à la main » hors transaction, puis échouait sur la
+pièce jointe : le dépôt restait transmis sans retour possible.
+
+*Choix.* Toute écriture d'un dépôt se fait dans une
+`Partiduo::Api::Transaction.run` qui prend `Filings.lock!` puis *relit*
+le dépôt et revérifie son statut (et, pour `transmit`, son empreinte ;
+pour `refresh`, sa référence TELEDEC). L'appel réseau reste hors
+transaction (pas de verrou tenu pendant l'attente de TELEDEC).
+`record_outcome` est une seule transaction : une pièce refusée par le
+socle annule tout, le dépôt reste préparé ; la pièce est remise telle
+quelle (IO) au socle, qui borne la lecture à `MAX_BYTES`. Transmission
+dont le dépôt a été préparé de nouveau pendant l'envoi : échec
+`teledec.errors.filing.concurrent` et événement `error` qui garde la
+référence rendue par TELEDEC (à vérifier sur le site). Spec :
+`spec/teledec/review_spec.cr`.
+
+*Alternative écartée.* Tenir le verrou pendant l'appel à TELEDEC :
+préparations bloquées pendant la durée d'un appel réseau.
+
+=== D-TDC-014 — Identifiants illisibles, suivi isolé par dépôt (T:relecture)
+
+*Contexte.* `Secrets.decrypt` lève `Secrets::Error` quand la clé de
+l'instance change ou que la valeur est altérée ; `transmit`, `refresh`,
+`refresh_all` et `save_credentials` rendaient une erreur 500 et
+`refresh_all` s'arrêtait au premier dépôt.
+
+*Choix.* `Filings.credentials` rend un `Result(Credentials)` :
+`teledec.errors.credentials.missing` ou `.unreadable` (fr, en, nl) ;
+`save_credentials` sans nouvelle clé rend `unreadable` sur `api_key`.
+`refresh_all` isole chaque dépôt (erreur journalisée, boucle poursuivie ;
+`Forbidden` et `ModuleDisabled` restent propagées).
+
+=== D-TDC-015 — Vue résumée des listes, identifiant de l'API réservé, saisies bornées (T:relecture)
+
+*Choix.* `Api.filings` rend des `FilingSummaryView` (en-tête, statut,
+contrôles) sans relire le document JSON ; `Api.filing(id)` garde la vue
+complète. `Api.settings` ne rend `login` qu'aux titulaires de
+`teledec.settings.manage` (chaîne vide sinon). DAS2 : année bornée à
+2000..2100 (`teledec.errors.year.invalid`) ; exercice sans date de fin :
+`teledec.errors.fiscal_year.unknown` à la préparation, `NotFound` pour
+`balance_file`.
+
+*Alternative écartée.* Une seconde méthode `settings_summary` pour les
+lecteurs : deux vues pour une seule donnée sensible.
+
+=== D-TDC-016 — Clés étrangères vers le socle (T:relecture, ADR-006 D1)
+
+*Choix.* Migration `0002_teledec_foreign_keys` (plutôt qu'une réécriture
+de 0001, déjà commitée) : `teledec_filing.fiscal_year_id` →
+`core_fiscal_year` (suppression d'un exercice cité refusée :
+`delete_fiscal_year` rend `in_use`), `prepared_by_id`,
+`transmitted_by_id`, `teledec_filing_event.user_id`,
+`teledec_settings.updated_by_id` → `auth_user` avec `ON DELETE SET NULL`.
+`vat_return_id` reste sans clé étrangère : la déclaration de TVA est une
+table du module Comptabilité, pas du socle, et le dépôt garde son
+document. Spec : `spec/teledec/integrity_spec.cr`.
