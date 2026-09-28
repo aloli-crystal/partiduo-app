@@ -31,11 +31,13 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |L |Module `liberal` (ADR-007 D6) : livre-journal, immobilisations, 2035, partie double par la Comptabilité ; interface et mode simplifié |*Terminé* (cœur, interface et mode simplifié ; clôture « Clôture du lot L »)
 |T |Extension `partiduo-teledec` (ADR-007 D4, D5) : liasse, TVA, DAS2, IS, greffe par TELEDEC (API Balance, transport abstrait, simulateur) |*Terminé* contre le simulateur (clôture « Clôture du lot T ») ; adaptateur réel en attente (B-TDC-001)
 |F |Critique finale : ADR-004 D9 révisé (nature du client, copie PDF, canal Chorus Pro, saisie express), extensions `partiduo-choruspro` (ADR-004 D9) et `partiduo-urssaf` (ADR-007 D7) |*Terminé* contre des simulateurs (section « Critique de complétude finale ») ; adaptateurs réels en attente (B-FIN-002, B-FIN-003)
+|H |Extension `partiduo-esalink` (ADR-004 D2 révisé le 28 septembre 2026) : adaptateur EsaLink hérité de l'adaptateur XP Z12-013 d'EINV, points d'extension ajoutés à EINV |*Terminé* contre EsaLink simulée (sections « Extension ESALINK » et « Clôture du lot H ») ; préproduction réelle non essayée (B-ESL-001)
 |===
 
 *État définitif (28 septembre 2026, critique de complétude finale : section
-du même nom).* Lot en cours : aucun. Tous les lots du plan (P à 6), les lots
-E, G, L et T et la critique finale sont terminés ; les trois jalons du prompt
+du même nom ; lot H clos le même jour).* Lot en cours : aucun. Tous les
+lots du plan (P à 6), les lots E, G, H, L et T et la critique finale sont
+terminés ; les trois jalons du prompt
 sont vérifiés, les extensions exigées par ADR-004 D9 révisé et ADR-007 D7
 existent (`partiduo-choruspro`, `partiduo-urssaf`), écrites contre des
 simulateurs. Ce qui reste — adaptateurs réels, vérifications humaines,
@@ -1466,6 +1468,95 @@ Reste : Factur-X de la Facturation à compléter (BT-23, BT-34, B-SPDP-003) ;
 mode _authorization code_ à essayer avec une vraie application d'opérateur
 (B-SPDP-004) ; mandataire HTTP dans le transport d'EINV (B-SPDP-001).
 
+== Extension ESALINK — plateforme agréée EsaLink (`partiduo-esalink`, 28 septembre 2026)
+
+Nouveau dépôt `prod-crystal/partiduo/partiduo-esalink` (branche
+`development`, AGPL v3, CI sur le modèle de `partiduo-superpdp`), ADR-004
+D2 révisé, décisions D-ESL-001 à D-ESL-005, blocage B-ESL-001, contrat
+`doc/api/esalink.adoc` du dépôt :
+
+* Manifeste `ESALINK`, `depends_on "EINV"`, permission
+  `esalink.connection.manage` (plus `einvoicing.settings.manage` pour
+  enregistrer ou débrancher) ; aucune table ni migration : le raccordement
+  est la ligne `ESALINK` d'`einvoicing_connection`.
+* `Esalink::Connector < Einvoicing::Connectors::Afnor` : l'API Flux
+  XP Z12-013 (dépôt `/flows` avec `Request-Id`, `flowInfo`, Factur-X,
+  `processingRule` ; recherche ; téléchargement ; CDAR ; e-reporting ;
+  annuaire) est celle d'EINV. Propre à EsaLink : `POST /token` en JSON
+  (identifiant, mot de passe), jeton chiffré redemandé à l'expiration ou
+  sur 401, clé `hubtimize-api-key` facultative, préproduction
+  `https://ppd.hubtimize.fr/api/orchestrator/v1/` et production
+  paramétrables, `GET /healthcheck`, sept écarts constatés à la norme
+  (D-ESL-003).
+* `partiduo-einvoicing` : points d'extension protégés de l'adaptateur
+  XP Z12-013 (`flow_url`, `platform_headers`, `request_url`,
+  `download_accept`, `page_limit`, `more_without_cursor?`, `authenticate`),
+  recherche sans curseur lue par date sans recouvrement ; commit séparé,
+  98 exemples verts (D-ESL-002).
+* Interface `ui/bulma/` sous `/ext/ESALINK/` : identifiants (secrets jamais
+  réaffichés), environnement toujours affiché, adresses, « Tester et
+  raccorder », « Tester la connexion », déconnexion, écarts à la norme.
+* Specs : voir « Clôture du lot H » ci-dessous.
+
+Reste : essayer contre la vraie préproduction dès que des identifiants
+sont fournis (`~/.config/partiduo/esalink-sandbox.env`) et confirmer les
+écarts relevés par la seule lecture de PDPConnectFR (B-ESL-001) ; adresse
+de production à obtenir d'EsaLink.
+
+== Clôture du lot H — relecture et vérifications (28 septembre 2026)
+
+Remarques de relecture corrigées (D-ESL-002 révisé, D-ESL-003 à D-ESL-006) :
+
+* *Majeur — pagination sans `nextCursor`* (`partiduo-einvoicing`) : l'ordre
+  des flux n'étant pas garanti, une recherche incomplète est relue d'un
+  seul appel (`limit = total`, point d'extension `full_read_limit`, 5 000
+  pour EsaLink) et triée par `updatedAt` ; au-delà, pages par date avec
+  une seconde de recul, arrêt dès qu'une page ne fait plus avancer la date.
+  Plateforme simulée : ordre croissant, décroissant ou mêlé.
+* *Majeur — secrets vers une adresse modifiée* : EINV exige de saisir à
+  nouveau les secrets enregistrés pour toute adresse nouvelle (écran
+  générique compris) ; ESALINK aussi pour un changement d'environnement ou
+  l'effacement d'une adresse, avant tout appel à la plateforme.
+* *Mineurs* : champ facultatif `token_url` ; `adapter_missing` traduit au
+  lieu d'une exception ; `rescue Einvoicing::ConnectorError` seulement ;
+  libellés sous `esalink.fields.*` / `esalink.environments.*` grâce à
+  `Connections::Field` `label:` et `choice_prefix:` (amendement porté dans
+  EINV) ; `StatusView#can_link` : formulaire et déconnexion masqués sans
+  `einvoicing.settings.manage` ; specs de l'extension toutes commitées,
+  traduction néerlandaise vérifiée sur des libellés propres à l'écran.
+
+*Vérifications* (base `partiduo_test_H_final`, `partiduo-app` sur
+`partiduo_test_H_final_app`) : `partiduo-einvoicing` 103 exemples verts ;
+`partiduo-esalink` 77 exemples verts, dont 1 en attente (préproduction
+réelle, B-ESL-001) ; `partiduo-app` (fichiers de suivi seulement) dans les
+trois configurations du prompt : 1033 + 33 en attente (Comptabilité,
+Analytique, Stock, Suivi), 802 + 58 (Facturation, Stock, Suivi), 1121 + 13
+(Comptabilité et Facturation), et les cinq autres configurations de
+`scripts/specs-modules.sh` vertes (micro 725 + 76, micro et Facturation
+813 + 56, micro, Facturation et Comptabilité 1071 + 25, libéral 709 + 75,
+libéral et Comptabilité 967 + 44) ; `crystal tool format` et Ameba sans
+remarque ; `marten migrate` (composition de `partiduo-esalink`) sur base
+vierge `partiduo_migrate_H` : 37 migrations appliquées sans erreur.
+`partiduo-superpdp` (dépend d'EINV) : 70 exemples verts ; 2 erreurs dans
+sa suite d'intégration contre le vrai bac à sable SUPER PDP (« facture en
+cours de traitement, réessayer plus tard »), sans lien avec ce lot.
+
+Commandes :
+
+[source,sh]
+----
+cd prod-crystal/partiduo/partiduo-esalink       # composé avec le cœur, EINV et l'interface
+SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install
+DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' crystal spec
+MARTEN_ENV=test DATABASE_URL='postgres:///partiduo_<base>?host=/tmp' crystal run manage.cr -- migrate
+bin/ameba
+----
+
+Prochaines étapes : essai contre la préproduction EsaLink dès que des
+identifiants sont fournis, confirmation des écarts, de l'adresse
+d'authentification et du tri de la recherche (B-ESL-001) ; adresse de
+production à obtenir d'EsaLink.
+
 == Tests du lot E — justificatifs, facturation électronique, factures non électroniques (27 septembre 2026)
 
 Specs de règles, cas limites, permissions, modules inactifs et contraintes
@@ -2065,6 +2156,9 @@ et nouvel aller.
 Liste à l'issue de la critique de complétude et des lots E, G, L et T ;
 chaque point renvoie à sa décision ou à son blocage.
 
+. *EsaLink (après le lot H)* : essai contre la préproduction (identifiants
+  à fournir), adresse de production, adresse d'authentification et tri de
+  la recherche à confirmer (B-ESL-001, D-ESL-002, D-ESL-003).
 . *Critique finale* : adaptateurs réels de Chorus Pro (B-FIN-002) et de
   l'API Tierce Déclaration URSSAF (B-FIN-003) ; adresse de livraison et
   conditions de paiement dans l'édition d'une facture (B-FIN-001) ;
@@ -2179,7 +2273,7 @@ et l'interface :
 
 [source,sh]
 ----
-cd prod-crystal/partiduo/partiduo-einvoicing       # ou partiduo-document, partiduo-superpdp, partiduo-teledec
+cd prod-crystal/partiduo/partiduo-einvoicing       # ou partiduo-document, partiduo-superpdp, partiduo-esalink, partiduo-teledec
 SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install
 DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' crystal spec
 MARTEN_ENV=test DATABASE_URL='postgres:///partiduo_<base>?host=/tmp' crystal run manage.cr -- migrate

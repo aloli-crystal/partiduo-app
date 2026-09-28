@@ -8553,3 +8553,196 @@ seul cet écran en a besoin et lit déjà `pdf_copy_status`.
 `partiduo_test_C_final_einv`, `partiduo_test_C_final_cpp` (interface,
 facturation électronique, Chorus Pro) ; contrôle des migrations sur base
 vierge : `partiduo_migrate_C`.
+
+== Extension ESALINK — plateforme agréée EsaLink (`partiduo-esalink`, H:esalink, 28 septembre 2026)
+
+=== D-ESL-001 — Dépôt `partiduo-esalink`, espace `Esalink`, routes `esalink:*`, sans table (extension, esalink)
+
+*Contexte.* ADR-004 D2 révisé le 28 septembre 2026 : EsaLink (Hubtimize
+e-Invoicing) est un adaptateur dans un dépôt `partiduo-esalink` qui
+réutilise l'adaptateur XP Z12-013 d'EINV et n'ajoute que le propre
+d'EsaLink.
+
+*Choix.* Dépôt `prod-crystal/partiduo/partiduo-esalink` (branche
+`development`, AGPL v3) sur le plan de `partiduo-superpdp` : code
+`ESALINK`, espace `Esalink` (`Esalink::Api`, `Esalink::Ui`,
+`Esalink::Connector`), applications Marten `esalink` (libellés seulement) et
+`esalink_ui`, écran sous `/ext/ESALINK/`, menu « EsaLink » sous
+« Paramètres » (ordre 92). *Aucune table ni migration* : paramètres,
+secrets et jetons vivent dans la ligne `ESALINK` d'`einvoicing_connection`
+(chiffrés par EINV) ; pas de `cli.cr`. Régime `fr` seulement (plateforme
+agréée française). Permission `esalink.connection.manage`, plus
+`einvoicing.settings.manage` pour enregistrer ou débrancher (même règle
+que D-SPDP-003).
+
+*Alternative écartée.* Des tables `esalink_*` (compte, dernier essai) :
+rien à conserver que le raccordement d'EINV ne porte déjà ; l'heure du
+dernier test n'est rendue qu'à l'écran.
+
+=== D-ESL-002 — Points d'extension protégés dans l'adaptateur XP Z12-013 d'EINV (extension, einvoicing)
+
+*Contexte.* L'adaptateur `Einvoicing::Connectors::Afnor` écrivait en dur
+l'adresse des chemins (`flow_url` + `/v1/…`), les en-têtes
+(`Organization-Id`), le type accepté (`application/json`), la taille de
+page, la fin de pagination (`nextCursor` seul) et OAuth 2 dans une méthode
+privée `token`. EsaLink s'écarte de la norme sur chacun de ces points ;
+les redéfinir aurait obligé à recopier `call`, `download` et `search`.
+
+*Choix.* Commit séparé dans `partiduo-einvoicing` : méthodes *protégées*
+`flow_url(path)`, `platform_headers`, `request_url(url, request_id)`,
+`download_accept`, `page_limit`, `more_without_cursor?(body, results)` et
+`authenticate` (OAuth 2 déplacé tel quel), `token`, `call` (paramètre
+`accept`) et `ensure_success!` protégées ; comportement par défaut
+inchangé pour `AFNOR`. `updatedAfter` et le curseur portent les
+millisecondes ; une nouvelle synchronisation garde le recouvrement de dix
+minutes (D-EINV-005).
+
+*Recherche sans `nextCursor` (révisé à la clôture du lot H, relecture).*
+La norme ne fait pas trier la recherche, et PDPConnectFR retrie lui-même
+les flux d'EsaLink après les avoir tous lus d'un seul appel (`limit =
+total`) : avancer par le plus grand `updatedAt` d'une page partielle
+sauterait les flux plus anciens non rendus (factures fournisseurs
+perdues). Désormais, une réponse que l'adaptateur déclare incomplète
+(`more_without_cursor?`) est *relue d'un seul appel* avec `limit = total`,
+plafonné par le nouveau point d'extension `full_read_limit` (0 par défaut ;
+5 000 pour EsaLink) ; les flux de toute page sont triés par `updatedAt`
+croissant avant d'être rendus. Si la relecture reste incomplète (total au-
+delà du plafond, ou plateforme qui plafonne `limit`), la page suivante part
+du dernier flux lu *moins une seconde* (`CURSORLESS_MARGIN` : couvre un
+`updatedAfter` strict ou tronqué à la seconde ; l'enregistrement idempotent
+écarte les doublons) et la lecture s'arrête dès qu'une page ne fait plus
+avancer ce point (plus de relecture à l'infini, même bornée par
+`MAX_PAGES`). Specs : plateforme simulée qui rend les flux par ordre
+croissant, décroissant ou mêlé (`result_order`), page pleine au même
+horodatage. Spec `afnor_extension_spec.cr` (adaptateur
+hérité) et mode sans curseur de la plateforme simulée ; contrat
+`doc/api/einvoicing.adoc` complété.
+
+*Limite.* Au-delà du plafond de relecture complète, une plateforme qui ne
+trie pas peut encore faire sauter des flux : sans décalage (`offset`) ni
+tri demandé dans la norme, rien ne permet de mieux faire ; le recouvrement
+de dix minutes de la synchronisation suivante les rattrape s'ils sont
+récents. Plus d'une page de flux dans la même seconde : la lecture
+s'arrête et les suivants attendent ce même recouvrement. Le téléchargement
+d'un flux relu (recul d'une seconde) est refait, puis écarté.
+
+*Alternative écartée.* Adaptateur EsaLink écrit de zéro (duplication de
+l'API Flux, contraire à ADR-004 D2 révisé) ; composition par un objet
+« dialecte » passé à `Afnor` (plus de code pour le même effet).
+
+=== D-ESL-003 — Écarts d'EsaLink à la norme relevés dans PDPConnectFR (extension, esalink)
+
+*Contexte.* Aucune documentation publique de l'API d'EsaLink n'a été
+trouvée ; aucun compte n'est créé (consigne). Le module libre PDPConnectFR
+de Dolibarr (GPL-3.0, `EsalinkPDPProvider.class.php`) montre son usage ;
+il a été *lu*, pas recopié.
+
+*Choix.* L'adaptateur absorbe sept écarts, listés dans
+`Esalink::Connector::DEVIATIONS` (libellés affichés à l'écran) :
+`token_password` (`POST /token` en JSON `username`/`password`, rend
+`access_token`, `expires_in`), `api_key_header` (`hubtimize-api-key`,
+facultative : PDPConnectFR l'exige, le prompt ne la cite pas),
+`request_id_query` (`Request-Id` en paramètre d'adresse, envoyé *aussi* en
+en-tête), `download_accept` (`application/octet-stream`),
+`search_without_cursor` (`total`, `limit`, pas de `nextCursor`, ordre non
+garanti ; 200 flux par page, relecture complète jusqu'à 5 000 : D-ESL-002),
+`no_refresh_token` (jeton redemandé ; sans `expires_in`, quinze
+minutes), `production_url` (non publiée : PDPConnectFR pointe aussi la
+production sur `ppd.hubtimize.fr`, avec un « TODO »). `processingRule` est
+envoyé comme la norme le demande, bien que PDPConnectFR l'omette.
+L'environnement choisi (préproduction, production) fixe le mode affiché.
+
+*Adresse d'authentification (ajout à la clôture du lot H).* PDPConnectFR
+distingue `prod_auth_url` et `prod_api_url` (identiques en préproduction,
+inconnues en production). Champ facultatif `token_url` : par défaut
+`<adresse de l'API>token` ; hypothèse à vérifier au premier essai en
+production (B-ESL-001).
+
+*Alternative écartée.* Exiger la clé d'API : bloquerait un accès qui n'en
+a pas ; ne pas envoyer `Request-Id` en en-tête : contraire à la norme,
+sans gain.
+
+=== D-ESL-004 — Identifiants essayés avant d'être enregistrés (extension, esalink)
+
+*Contexte.* Un raccordement enregistré avec de mauvais identifiants ne se
+révélerait qu'à la synchronisation suivante.
+
+*Choix.* `Esalink::Api.connect` contrôle les champs (règles d'EINV, plus
+l'adresse de production obligatoire en production), puis demande un jeton
+et passe le contrôle de santé *avec les paramètres saisis* (secrets
+enregistrés repris s'ils sont laissés vides, jeton d'essai jamais
+conservé), et seulement alors appelle `Einvoicing::Api.configure`. L'écran
+générique d'EINV reste utilisable, sans cet essai.
+
+*Secrets et adresse modifiée (ajout à la clôture du lot H, relecture).*
+Reprendre les secrets enregistrés vers une adresse que l'utilisateur vient
+de saisir permettait à qui a les deux permissions de recevoir en clair un
+mot de passe qu'il ne connaît pas (serveur à lui en `preproduction_url`,
+`production_url`, `directory_url`). Désormais :
+
+* EINV (`Connections.check`, donc aussi l'écran générique) : une adresse
+  (`kind: "url"`) nouvelle — non vide, admise, différente de celle
+  enregistrée — oblige à saisir à nouveau chaque secret enregistré
+  (`einvoicing.errors.connection.field.secret_reentry`) ; vaut aussi pour
+  `token_url` d'AFNOR ;
+* ESALINK (`Esalink::Api.connect`, avant tout appel à la plateforme) : de
+  même si l'environnement ou l'une des adresses (`preproduction_url`,
+  `production_url`, `directory_url`, `token_url`) diffère de la ligne
+  enregistrée, effacement compris (`esalink.errors.connection.secret_reentry`
+  sur `password` et sur `api_key` si elle est enregistrée).
+
+Ce qui est déjà enregistré a été saisi avec les secrets : la
+synchronisation n'envoie les secrets qu'à des adresses choisies par
+quelqu'un qui les connaissait.
+
+*Alternative écartée (sécurité).* Liste d'hôtes admis (`*.hubtimize.fr`)
+avec dérogation : l'adresse de production n'est pas publiée et peut ne
+pas être sous ce domaine (PDPConnectFR ne la connaît pas) ; la
+dérogation reviendrait à la même permission. À reconsidérer quand
+l'adresse de production sera connue.
+
+*Alternative écartée.* Enregistrer puis tester : laisserait un
+raccordement actif inutilisable et remplacerait l'adaptateur précédent.
+
+=== D-ESL-005 — Libellés des champs sous `einvoicing.fields.*` fournis par l'extension (extension, esalink)
+
+*Contexte.* L'écran générique d'EINV libelle un champ par
+`einvoicing.fields.<nom>` et un choix par `einvoicing.modes.<choix>` ;
+`username`, `password`, `api_key`, `preproduction_url`, `production_url`
+et `preproduction` n'y existent pas.
+
+*Choix initial.* Les fichiers `src/esalink/locales/*.yml` ajoutaient ces
+clés sous `einvoicing.` (couplage fragile entre extensions : la fusion du
+catalogue les écraserait selon l'ordre de chargement si EINV les
+définissait un jour).
+
+*Choix révisé (clôture du lot H, amendement porté dans EINV).*
+`Einvoicing::Connections::Field` accepte `label:` (clé du libellé ;
+`Field#label_key` rend `einvoicing.fields.<nom>` à défaut) et
+`choice_prefix:` (défaut `einvoicing.modes`) ; `FieldView` les transmet
+(`label_key`, `choice_key(choix)`), et l'écran générique d'EINV s'en sert.
+Les libellés d'EsaLink sont sous `esalink.fields.*` et
+`esalink.environments.*` ; plus aucune clé hors `esalink` / `esalink_ui`
+dans les locales de l'extension (vérifié par la spec de conventions).
+
+*Alternative écartée.* Ajouter ces clés dans `partiduo-einvoicing` : EINV
+ne connaîtrait les champs d'aucune plateforme particulière (ADR-004 D6).
+
+=== D-ESL-006 — Remarques de relecture mineures (clôture du lot H, extension, esalink)
+
+*Contexte.* Relecture du lot H.
+
+*Choix.* Adaptateur non enregistré : `Result` en échec
+`esalink.errors.connection.adapter_missing` (fr, en, nl) au lieu d'une
+exception non traduite ; adresse effective d'état calculée avec
+`rescue Einvoicing::ConnectorError` seulement (plus de `rescue` en ligne).
+`StatusView#can_link` (`einvoicing.settings.manage`) : sans elle, l'écran
+masque le formulaire « Tester et raccorder » et « Déconnecter » et le dit
+(message traduit) au lieu d'un 403 brut ; `Esalink::Api` continue de
+refuser. Specs de l'extension toutes suivies par git et commitées ; la
+spec de traduction vérifie le titre, un bouton et un libellé propres à
+l'écran dans chaque langue.
+
+*Alternative écartée.* Bouton désactivé (visible mais inerte) : plus
+confus qu'un message.
+

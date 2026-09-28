@@ -793,3 +793,27 @@ hors des ADR-001 à 007 confiés ; aucun dépôt `partiduo-admin`.
 *Constat.* `partiduo-choruspro` et `partiduo-urssaf` ont leur CI GitHub
 (format, Ameba, specs sur PostgreSQL) mais, comme les autres (B-002), rien
 n'est poussé.
+
+== B-ESL-001 — Préproduction EsaLink non essayée : aucun identifiant (H:esalink, extension ESALINK)
+
+*Constat.* `~/.config/partiduo/esalink-sandbox.env` existe mais est vide ;
+aucun compte ne peut être créé ni aucun contact pris (consigne). Les specs
+tournent contre une EsaLink simulée qui reproduit l'API telle que la
+montre PDPConnectFR ; les écarts à la norme (D-ESL-003) ne sont donc pas
+confirmés par un essai, et l'adresse de production reste inconnue.
+
+*Contournement.* Suite `spec/integration/preproduction_spec.cr` écrite
+(lecture seule : jeton, santé, recherche de flux) et marquée en attente
+tant que les identifiants manquent.
+
+*Levée.* Obtenir un accès de préproduction auprès d'EsaLink ou d'un
+distributeur membre de PDP Libre, renseigner `ESALINK_SANDBOX_USERNAME`,
+`ESALINK_SANDBOX_PASSWORD` (et au besoin `ESALINK_SANDBOX_API_KEY`,
+`ESALINK_SANDBOX_URL`) dans ce fichier, relancer les specs, corriger la
+simulation et l'adaptateur selon les réponses réelles. Vérifier au passage
+que la production authentifie bien sur `<adresse de l'API>token` (sinon
+renseigner `token_url`, D-ESL-003) et si EsaLink trie la recherche ou
+admet un décalage (`offset`), ce qui lèverait la limite de D-ESL-002. Le transport d'EINV
+ne suit pas `HTTPS_PROXY` (B-SPDP-001) : derrière un mandataire, la suite
+échouera à la connexion.
+
