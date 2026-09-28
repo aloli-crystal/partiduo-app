@@ -52,6 +52,27 @@ module Partiduo
         end
       end
 
+      # Cadre de facturation français (BT-23, règle BR-FR-08) d'après la
+      # catégorie d'opération : dépôt d'une facture de biens (`B1`), de
+      # services (`S1`) ou mixte (`M1`). Vendeur hors de France : aucun.
+      CADRES = {"goods" => "B1", "services" => "S1", "mixed" => "M1"}
+
+      def self.business_process(view : Api::DocumentView) : String?
+        return unless view.seller.country_code == "FR"
+        CADRES[view.operation_category]?
+      end
+
+      # Adresse électronique du vendeur (BT-34, obligatoire, règle
+      # BR-FR-13) : son SIREN dans l'annuaire (schéma 0225), à défaut son
+      # courriel (schéma EM).
+      def self.seller_address(party : Api::PartyView) : {String, String}?
+        if party.siren.size == 9
+          {party.siren, "0225"}
+        elsif !party.email.empty?
+          {party.email, "EM"}
+        end
+      end
+
       def self.build(view : Api::DocumentView, credited : Api::DocumentView? = nil,
                      settings : Api::SettingsView = Configuration.settings) : String
         type_code = view.type_code || raise ArgumentError.new("document non fiscal : #{view.kind}")
@@ -60,6 +81,11 @@ module Partiduo
           xml.element("rsm:CrossIndustryInvoice", {"xmlns:rsm" => NS_RSM, "xmlns:qdt" => NS_QDT,
                                                    "xmlns:ram" => NS_RAM, "xmlns:udt" => NS_UDT}) do
             xml.element("rsm:ExchangedDocumentContext") do
+              if code = business_process(view)
+                xml.element("ram:BusinessProcessSpecifiedDocumentContextParameter") do
+                  xml.element("ram:ID") { xml.text code }
+                end
+              end
               xml.element("ram:GuidelineSpecifiedDocumentContextParameter") do
                 xml.element("ram:ID") { xml.text GUIDELINE }
               end
@@ -174,9 +200,11 @@ module Partiduo
             xml.element("ram:CityName") { xml.text party.city } unless party.city.empty?
             xml.element("ram:CountryID") { xml.text party.country_code }
           end
-          if !party.email.empty? && seller
-            xml.element("ram:URIUniversalCommunication") do
-              xml.element("ram:URIID", {"schemeID" => "EM"}) { xml.text party.email }
+          if seller
+            if address = seller_address(party)
+              xml.element("ram:URIUniversalCommunication") do
+                xml.element("ram:URIID", {"schemeID" => address[1]}) { xml.text address[0] }
+              end
             end
           elsif !seller && (siren = party.siren.presence)
             # Adresse électronique de l'annuaire (schéma 0225, ADR-004).

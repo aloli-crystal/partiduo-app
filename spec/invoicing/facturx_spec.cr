@@ -99,6 +99,22 @@ describe_module "INVOICING", "Facturation — PDF/A-3 Factur-X" do
     xpaths(xml, "//rsm:ExchangedDocument/ram:IncludedNote/ram:SubjectCode").should contain("PMT")
   end
 
+  it "écrit le cadre de facturation (BT-23) et l'adresse électronique 0225 du vendeur (BT-34, BLOCAGES B-SPDP-003)" do
+    setup = InvoicingSpec.setup
+    invoice = InvoicingSpec.issued(setup)
+    xml = XML.parse(String.new(Api.facturx_xml(InvoicingSpec.actor, invoice.id).content))
+    expected = {"goods" => "B1", "services" => "S1", "mixed" => "M1"}[invoice.operation_category]
+    xpath(xml, "//rsm:ExchangedDocumentContext/ram:BusinessProcessSpecifiedDocumentContextParameter/ram:ID").should eq(expected)
+    # Ordre du schéma : cadre de facturation avant le profil.
+    context = xml.xpath_node("//rsm:ExchangedDocumentContext", {"rsm" => Partiduo::Invoicing::FacturxXml::NS_RSM}) || raise "contexte absent"
+    context.children.select(&.element?).map(&.name).should eq(["BusinessProcessSpecifiedDocumentContextParameter",
+                                                               "GuidelineSpecifiedDocumentContextParameter"])
+    uri = "//ram:SellerTradeParty/ram:URIUniversalCommunication/ram:URIID"
+    xpath(xml, uri).should eq("732829320")
+    (xml.xpath_node(uri, {"ram" => Partiduo::Invoicing::FacturxXml::NS_RAM}) || raise "BT-34 absent")["schemeID"].should eq("0225")
+    pdfa3_failures(pdf(invoice.id)).should eq([] of String)
+  end
+
   it "produit un avoir 381 qui cite la facture d'origine, et une facture d'acompte 386" do
     setup = InvoicingSpec.setup
     invoice = InvoicingSpec.issued(setup)

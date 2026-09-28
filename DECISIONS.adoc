@@ -8006,3 +8006,162 @@ de 0001, déjà commitée) : `teledec_filing.fiscal_year_id` →
 `vat_return_id` reste sans clé étrangère : la déclaration de TVA est une
 table du module Comptabilité, pas du socle, et le dépôt garde son
 document. Spec : `spec/teledec/integrity_spec.cr`.
+
+== Vérification de bout en bout des lots E, G, L et T (V:bout-en-bout, 28 septembre 2026)
+
+=== D-VE-001 — Serveur réel dans le processus de vérification, plateformes simulées à côté
+
+*Contexte.* La vérification demandée passe par une instance provisionnée
+et par l'interface ; les plateformes agréées simulées (SUPER PDP, XP
+Z12-013) et TELEDEC simulé sont des doubles du transport qui vivent dans
+un processus. Le bac à sable autorise désormais l'ouverture d'un port
+local (B-UI-001).
+
+*Choix.* Deux scripts de vérification, un par distribution existante :
+`partiduo-superpdp/scripts/verif_e.cr` (cœur, interface, DOCUMENT, EINV,
+SUPERPDP) et `partiduo-teledec/scripts/verif_t.cr` (cœur, interface,
+TELEDEC). Chacun démarre le vrai serveur de Marten sur `127.0.0.1:<port>`
+dans son propre processus (`Verif.serve`), branche la plateforme simulée
+des specs sur le transport d'EINV (ou `Teledec::Transports.current`), puis
+parcourt l'instance par HTTP comme un navigateur (cookies, jetons CSRF,
+formulaires `multipart/form-data`). `--keep` et `--serve-only` laissent le
+serveur ouvert pour un essai dans un navigateur. La plateforme XP
+Z12-013 simulée accuse d'elle-même les flux déposés (`AutoAckPlatform`),
+TELEDEC simulé accuse réception à la première relève (`AutoAckTeledec`).
+Les réglages de référence (compte par défaut du journal d'achats) passent
+par le contrat quand l'écran n'existe pas dans le parcours ; tout le reste
+passe par les écrans.
+
+*Alternative écartée.* Une distribution de vérification réunissant les
+cinq extensions dans un nouveau dépôt : un dépôt de plus pour deux
+scripts ; ou un serveur de plateforme simulée sur un second port :
+EINV exige HTTPS et vérifie le certificat (ADR-004 D2), il aurait fallu un
+certificat de test et un mode non vérifié.
+
+=== D-VE-002 — Courriel des factures : transport en mémoire pendant la vérification
+
+*Contexte.* L'envoi par courriel exige `PARTIDUO_SMTP_URL` ; sans lui,
+« L'envoi de courriels n'est pas configuré » (comportement voulu).
+
+*Choix.* Sans `PARTIDUO_SMTP_URL`, `verif_e.cr` pose
+`Partiduo::Invoicing::Mail::MemoryTransport` et contrôle le message parti
+(destinataire, sujet, PDF joint). L'adresse d'expédition est saisie par
+l'écran des paramètres de la Facturation, comme le ferait l'utilisateur.
+
+*Alternative écartée.* Un serveur SMTP local : rien de plus vérifié côté
+Partiduo.
+
+=== D-VE-003 — Rejeu contre le vrai bac à sable SUPER PDP : identités fictives posées en base
+
+*Contexte.* Les entreprises fictives du bac à sable (« Burger Queen »
+000000002, « Tricatel » 000000001) ont des numéros hors clé de Luhn que les
+fiches du socle refusent, des adresses d'annuaire `SIREN_SUFFIXE`
+(`315143296_107097`) et SUPER PDP refuse une facture dont le vendeur n'est
+pas l'entreprise de la session (« L'entreprise (000000002) liée à cette
+session ne correspond pas au vendeur de la facture ») ou dont le numéro a
+déjà été déposé par ce vendeur (« La facture est déjà existante »).
+
+*Choix.* Pour ce seul rejeu (`--adapter=sandbox`, instance jetable
+`partiduo_je_sbx`) : le SIREN du dossier est aligné sur le vendeur fictif,
+la fiche client reçoit le SIREN et le suffixe de routage de l'acheteur
+fictif, et le compteur des factures repart d'un nombre tiré de l'heure,
+par SQL. Les identifiants ne sont lus que dans
+`~/.config/partiduo/superpdp-sandbox.env` et ne sont jamais affichés.
+
+*Alternative écartée.* Assouplir le contrôle du SIREN des fiches : il
+protège les vrais dossiers.
+
+=== D-VE-004 — Factur-X : cadre de facturation (BT-23) et adresse électronique du vendeur (BT-34)
+
+*Contexte.* Le vrai bac à sable SUPER PDP a rejeté (213) la première
+facture transmise : « L'adresse électronique du vendeur est manquante
+(Seller.ElectronicAddress) » (B-SPDP-003, jusque-là un avertissement du
+validateur).
+
+*Choix.* `FacturxXml` écrit BT-23
+(`BusinessProcessSpecifiedDocumentContextParameter`, avant le profil,
+ordre du schéma) d'après la catégorie d'opération (`B1` biens, `S1`
+services, `M1` mixte) pour un vendeur français, et BT-34 en schéma `0225`
+avec le SIREN du vendeur (à défaut, son courriel en schéma `EM`). Le
+validateur SUPER PDP rend désormais `is_valid = true`, sans remarque ; la
+facture est déposée (200) par le bac à sable. Spec :
+`spec/invoicing/facturx_spec.cr`. B-SPDP-003 est levé.
+
+*Alternative écartée.* Réécrire BT-34 dans EINV avant le dépôt : le PDF/A-3
+transmis est celui de la Facturation (ADR-006 D5), il faudrait le
+réassembler.
+
+=== D-VE-005 — Pages d'une facture reçue et d'un justificatif : doublon en comptabilité seul
+
+*Contexte.* Une facture reçue par la plateforme, déjà saisie hors
+plateforme, rendait une erreur 500 à l'écran (`/ext/EINV/incoming/<id>`,
+et la pré-comptabilisation refusée aussi) : le gabarit parcourait la liste
+des autres factures reçues, absente (`nil`) quand seul un doublon en
+comptabilité existe. Même défaut dans DOCUMENT (justificatif dont seule une
+écriture fait doublon).
+
+*Choix.* Chaque liste est parcourue sous sa propre condition
+(`incoming_show.html` d'EINV, `document/show.html` de DOCUMENT). Specs :
+`partiduo-einvoicing/spec/ui/einvoicing_ui_spec.cr`,
+`partiduo-document/spec/ui/receipts_spec.cr` (rouges sans la correction).
+
+=== D-VE-006 — Transport d'EINV : réponse tronquée rendue comme plateforme injoignable
+
+*Contexte.* Contre le vrai bac à sable, une réponse coupée (« Unexpected
+end of http request », levée comme `Exception` par le client HTTP de
+Crystal) sortait du transport et rendait une erreur 500 à
+`/ext/EINV/sync`.
+
+*Choix.* `NetTransport` (et le transport par mandataire des specs de
+SUPERPDP) convertit toute exception du réseau en `ConnectorError`
+`einvoicing.errors.transport.unreachable` ; la synchronisation affiche
+l'avertissement et reprend au passage suivant (curseurs enregistrés page
+par page). Non couvert par une spec (il faudrait un serveur TLS de test
+qui coupe la réponse) ; vérifié contre le bac à sable.
+
+=== D-VE-007 — Interface : icônes manquantes, contraste des boutons principaux, tableaux larges
+
+*Contexte.* Vu dans le navigateur : les icônes `plug`, `refresh-cw`,
+`send`, `upload` et `code` des gabarits d'EINV manquaient à la planche
+(cases vides) ; le texte des boutons `is-primary` était presque noir sur
+le bleu pétrole (contraste 2:1) partout, Bulma calculant l'inverse d'après
+sa couleur par défaut ; `.pd-scroll` (maquette) n'était pas défini, d'où
+un défilement horizontal de toute la page au téléphone.
+
+*Choix.* Icônes Lucide 1.48.0 ajoutées et planche régénérée ;
+`--bulma-primary-invert-l` à 100 % au thème clair, 6 % au thème sombre ;
+`.pd-scroll { overflow-x: auto; max-width: 100%; }` dans `app.css`.
+Specs : `spec/ui/assets_spec.cr` (interface) et une règle de conventions
+dans chaque extension (icônes de ses gabarits présentes dans la planche).
+
+*Alternative écartée.* Remplacer les icônes d'EINV par des icônes
+existantes : le sens (brancher, synchroniser, envoyer) se perdait.
+
+=== D-VE-008 — URSSAF : période pas encore commencée « À venir »
+
+*Contexte.* L'écran URSSAF affichait « Période en cours » pour le
+quatrième trimestre le 28 septembre : `declaration` rendait `open` pour
+toute période non échue, commencée ou non.
+
+*Choix.* Statut `upcoming` (« À venir », « Upcoming », « Nog niet
+begonnen ») quand la période n'a pas commencé ; la prochaine déclaration du
+tableau de bord le prend en dernier recours. Contrat
+(`doc/api/micro.adoc`) et spec (`spec/micro/declarations_spec.cr`) mis à
+jour.
+
+*Alternative écartée.* Ne pas afficher les périodes futures : l'échéancier
+de l'année sert à prévoir.
+
+=== D-VE-009 — Remarques de la vérification, non corrigées
+
+* Micro-entreprise : une recette en espèces passe au premier journal
+  financier (`F01`, banque) quand le dossier n'a pas de journal de caisse
+  (`Billing.financial_ledger`, repli voulu) ; le plan FR initial n'en crée
+  pas.
+* Profession libérale : l'écran 2035 invite à « transmettre avec votre
+  outil de télédéclaration » même quand TELEDEC l'a déjà déposée (le
+  module ne connaît pas l'extension, ADR-006 D3) ; un compteur ou un lien
+  d'extension (`PartiduoUi::Extensions`) pourrait l'indiquer.
+* Liasse transmise avant la clôture de l'exercice : avertissement
+  `fiscal_year_open`, non bloquant (D-TDC) — conservé.
+* TELEDEC simulé : accusé daté du 10 mai 2027 (constante du simulateur).

@@ -35,6 +35,7 @@ nl:
       monthly: "Maandelijks"
       quarterly: "Driemaandelijks"
     declaration_statuses:
+      upcoming: "Nog niet begonnen"
       open: "Lopende periode"
       due: "Aan te geven"
       late: "Te laat"

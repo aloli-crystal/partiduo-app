@@ -114,6 +114,8 @@ module Partiduo
         due = due_on(ends_on)
         status = if declared
                    "declared"
+                 elsif today < starts_on
+                   "upcoming"
                  elsif today <= ends_on
                    "open"
                  elsif today <= due

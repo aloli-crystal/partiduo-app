@@ -35,6 +35,7 @@ en:
       monthly: "Monthly"
       quarterly: "Quarterly"
     declaration_statuses:
+      upcoming: "Upcoming"
       open: "Current period"
       due: "To declare"
       late: "Late"

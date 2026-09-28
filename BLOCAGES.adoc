@@ -49,6 +49,8 @@ JavaScriptCore avec un DOM simulé (`spec/opal/build_spec.cr`).
 *Levée.* Autoriser l'écoute locale (`sandbox.network.allowLocalBinding`) puis
 `crystal run src/server.cr` dans `partiduo-ui-bulma`.
 
+*Levé* (jalon F, puis vérification de bout en bout du 28 septembre 2026).
+
 == B-UI-002 — Gems Ruby installées pour une autre version de Ruby (lot P, ui-squelette)
 
 *Constat.* La gem `opal` 1.8.2 est installée dans `~/.gem/ruby/4.0.1`, alors
@@ -532,6 +534,9 @@ le module Facturation, ADR-006 D5).
 mixte `M1`) et BT-34 en schéma `0225` avec le SIREN du vendeur ; relancer la
 suite d'intégration, qui affiche le rapport de validation.
 
+*Levé le 28 septembre 2026* (DECISIONS D-VE-004) : rapport de validation
+`is_valid = true`, aucune remarque.
+
 == B-SPDP-004 — Mode _authorization code_ non essayé contre SUPER PDP (extension SUPERPDP)
 
 *Constat.* Le parcours exige une application OAuth de l'opérateur et une
@@ -684,3 +689,51 @@ par les specs (HTML rendu), pas dans un navigateur ni sur un téléphone.
 
 *Levée.* Table datée des échéances par millésime si besoin ; parcours au
 clavier et sur téléphone, comme B-UI-009.
+
+== Vérification de bout en bout des lots E, G, L et T (28 septembre 2026)
+
+Mises à jour des blocages antérieurs :
+
+* *B-SPDP-003 levé* : BT-23 et BT-34 écrits par la Facturation
+  (DECISIONS D-VE-004) ; validateur SUPER PDP `is_valid = true` sans
+  remarque ; facture de Partiduo déposée (200) par le vrai bac à sable.
+* *B-UI-001 levé* : le serveur écoute sur `127.0.0.1` ; les parcours de
+  `verif_e.cr` et `verif_t.cr` passent par un vrai serveur.
+* *B-JF-001, B-UI-009, B-TDC-003, B-CRIT-004 : levés en partie.* Écrans
+  vus dans le navigateur de l'agent, connecté avec les mots de passe de
+  test des instances locales, en largeur téléphone (375 px) et bureau
+  (1 400 px) : factures émises et reçues d'EINV (bandeau du raccordement,
+  synchronisation au clic, doublon), justificatifs (vignette de la photo),
+  tableau de bord simplifié de la micro-entreprise (jauges, alerte de
+  seuil, « À traiter »), écran TELEDEC, 2035. Trois défauts trouvés et
+  corrigés (D-VE-007). Reste : essai sur un vrai téléphone (appareil
+  photo, clavier décimal), comparaison fine à la maquette, parcours au
+  clavier seul.
+
+== B-VE-001 — Adresse électronique du vendeur : SIREN seul (V:bout-en-bout, cœur)
+
+*Constat.* BT-34 est écrit `0225:<SIREN>` (D-VE-004). Une entreprise dont
+la ligne d'annuaire est plus fine (`SIREN_SIRET`, `SIREN_SUFFIXE`, comme
+les entreprises fictives du bac à sable SUPER PDP : `315143296_107098`) ne
+peut pas l'indiquer : la configuration de la société n'a ni SIRET ni code
+de routage.
+
+*Contournement.* La ligne `SIREN` existe pour toute entreprise inscrite à
+l'annuaire ; le bac à sable a accepté et déposé la facture avec
+`0225:000000002`.
+
+*Levée.* Amendement : champ « adresse électronique de facturation » dans
+la configuration de la société (socle), proposé par SUPERPDP depuis les
+lignes d'annuaire du raccordement.
+
+== B-VE-002 — Serveurs de vérification restés ouverts (V:bout-en-bout)
+
+*Constat.* Les serveurs `verif_t --serve-only` lancés pour l'essai dans le
+navigateur (ports 8130 à 8132) ne peuvent pas être arrêtés depuis une
+autre commande du bac à sable (`kill` : `Operation not permitted`).
+
+*Contournement.* Ils n'écoutent que sur `127.0.0.1` et ne servent que des
+instances de test (`partiduo_je_*`).
+
+*Levée.* `lsof -nP -iTCP:8130-8132 -sTCP:LISTEN` puis `kill <pid>` hors du
+bac à sable.

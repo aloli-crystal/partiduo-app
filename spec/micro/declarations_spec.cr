@@ -14,9 +14,11 @@ end
 
 describe_module "MICRO", Api do
   describe "périodes et échéances" do
-    it "passe d'ouverte à due puis en retard aux bornes exactes" do
+    it "passe d'à venir à ouverte, puis due, puis en retard aux bornes exactes" do
       M.setup
       third = ->(today : String) { Api.declarations(M.system, 2026, M.date(today))[2].status }
+      third.call("2026-06-30").should eq("upcoming")
+      third.call("2026-07-01").should eq("open")
       third.call("2026-09-30").should eq("open")
       third.call("2026-10-01").should eq("due")
       third.call("2026-10-31").should eq("due")

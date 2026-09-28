@@ -35,6 +35,7 @@ fr:
       monthly: "Mensuelle"
       quarterly: "Trimestrielle"
     declaration_statuses:
+      upcoming: "À venir"
       open: "Période en cours"
       due: "À déclarer"
       late: "En retard"

@@ -32,7 +32,8 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |T |Extension `partiduo-teledec` (ADR-007 D4, D5) : liasse, TVA, DAS2, IS, greffe par TELEDEC (API Balance, transport abstrait, simulateur) |*Terminé* contre le simulateur (clôture « Clôture du lot T ») ; adaptateur réel en attente (B-TDC-001)
 |===
 
-*État (28 septembre 2026, clôture du lot T).* Lot en cours : aucun. Les
+*État (28 septembre 2026, vérification de bout en bout des lots E, G, L
+et T : section du même nom).* Lot en cours : aucun. Les
 lots P à 6 du plan, le lot E (justificatifs, facturation électronique,
 SUPER PDP, factures non électroniques), le lot G (micro-entreprise :
 module `micro`, interface simplifiée, section « Clôture du lot G »), le
@@ -1851,6 +1852,99 @@ migrate` sur base vierge (`partiduo_migrate_T`) sans erreur, clés
 étrangères de 0002 présentes. Commits `development` dans `partiduo-teledec`
 et `partiduo-app` (documents).
 
+== Vérification de bout en bout des lots E, G, L et T (28 septembre 2026)
+
+Parcours sur des instances neuves provisionnées par `bin/partiduo-provision`,
+par l'interface servie par un *vrai serveur* sur `127.0.0.1` (B-UI-001
+levé), plateformes simulées dans le même processus (DECISIONS D-VE-001).
+Scripts : `partiduo-superpdp/scripts/verif_e.cr` et
+`partiduo-teledec/scripts/verif_t.cr`.
+
+[cols="2,1,4",options="header"]
+|===
+|Instance |Étapes |Parcours
+
+|`je-spdp` (Comptabilité + Facturation, DOCUMENT, EINV, SUPERPDP), SUPER PDP simulée |47 vertes
+|Raccordement (client credentials) ; facture validée → transmise → *Déposée* (200, puis 201, 202 ; Factur-X acheminé chez le client) ; facture d'achat papier saisie à la main avec sa pièce jointe PDF (« Reçue hors plateforme ») ; deux factures fournisseur reçues : *doublon détecté* avec la facture papier (pré-comptabilisation refusée), l'autre *pré-comptabilisée* (journal d'achats, fichier reçu en pièce jointe) ; encaissement saisi en banque, *lettré* → facture payée → *Encaissée (212)* émise avec son montant ; facture à Jeanne Martin → canal *courriel* proposé, B2C, envoyée par courriel (PDF joint), voie B2C transmise (règle B2C, note BAR, Déposée) ; *justificatif photographié* (JPEG, vignette) → « Saisir l'écriture » → *Rattaché*.
+
+|`je-afnor` (mêmes modules sans SUPERPDP), XP Z12-013 simulée |47 vertes
+|Même parcours par l'adaptateur XP Z12-013 (OAuth 2, flux Factur-X, CDAR 212, flux B2C).
+
+|`je-sbx`, *vrai bac à sable SUPER PDP* |23 vertes
+|Identifiants lus dans `~/.config/partiduo/superpdp-sandbox.env`, jamais affichés ; facture de Partiduo transmise → *Déposée (200)* relue par curseur ; facture de l'acheteur fictif reçue par la synchronisation de l'écran, dans « Justificatifs à traiter » (identités fictives : D-VE-003).
+
+|`je-micro` (micro, Facturation, Comptabilité) |24 vertes
+|Facture en quelques champs, *mention 293 B*, 255 € sans TVA ; écriture de vente générée ; encaissement lettré → *recette au livre* (source `matching:`), sans seconde écriture ; recette et achat saisis → écritures de trésorerie ; périodes passées notées ; *URSSAF* du trimestre : 150 € ventes (18,60 €), 255 € services (54,83 €) ; 2042-C-PRO ; recette de 40 000 € → *seuil de franchise de TVA dépassé* (écran des seuils, tableau de bord, « À traiter »).
+
+|`je-reel` (Comptabilité, Facturation, TELEDEC) |25 vertes
+|Paramètres et identifiants TELEDEC par l'écran ; vente, honoraires d'avocat ; CA3 de septembre enregistrée et close ; *liasse* (2065, 2033), *CA3* et *DAS2* (avocat, 2 400 € TTC) préparées, transmises au TELEDEC simulé, *accusés* relevés, affichés et téléchargés.
+
+|`je-liberal` (liberal, Comptabilité, TELEDEC) |23 vertes
+|Recettes et dépenses *ventilées* par rubrique (part privée du véhicule) ; table de massage de 3 000 € *amortie* (750 € la première année, prorata) ; écritures générées ; *2035* prête (cases 2035-A et 2035-B), édition PDF ; liasse BNC transmise au TELEDEC simulé avec la 2035 du module (empreinte identique), accusée.
+|===
+
+*Navigateur* (panneau de l'agent, 375 px et 1 400 px, connexion avec les
+mots de passe de test des instances) : factures émises et reçues d'EINV,
+synchronisation au clic, doublon affiché, justificatifs, tableau de bord
+simplifié de la micro-entreprise, écran URSSAF, TELEDEC, 2035.
+
+*Corrigé* (DECISIONS D-VE-004 à D-VE-008) :
+
+* Factur-X : BT-23 et BT-34 écrits ; le vrai bac à sable rejetait la
+  facture (213, adresse du vendeur manquante) ; validateur SUPER PDP sans
+  remarque (B-SPDP-003 levé).
+* EINV et DOCUMENT : erreur 500 sur la page d'une facture reçue ou d'un
+  justificatif dont le seul doublon est en comptabilité.
+* EINV : réponse tronquée de la plateforme → erreur 500 de la
+  synchronisation ; désormais « injoignable », rejouée pour une lecture.
+* Interface : cinq icônes absentes de la planche, texte des boutons
+  principaux illisible (contraste 2:1), `.pd-scroll` absent (page qui
+  défilait en largeur au téléphone).
+* Micro-entreprise : période URSSAF future affichée « en cours » →
+  « À venir ».
+
+*Reste* : B-VE-001 (adresse électronique fine du vendeur), essai sur un
+vrai téléphone, D-VE-009 (remarques).
+
+Specs (bases `partiduo_je_test_*`), tout vert : `partiduo-app`
+`scripts/specs-modules.sh --order random` — 1025 + 29 en attente
+(Comptabilité, Analytique, Stock, Suivi), 769 + 58 (Facturation, Stock,
+Suivi), 1088 + 13 (Comptabilité et Facturation), 717 + 72 (micro), 780 + 56
+(micro et Facturation), 1038 + 25 (micro, Facturation et Comptabilité), 701
++ 71 (liberal seul), 959 + 40 (liberal et Comptabilité), puis les trois
+configurations micro relancées après D-VE-008 (mêmes nombres, vertes) ;
+`partiduo-ui-bulma` 333 ; `partiduo-skel` 24 ; `partiduo-document` 71 ;
+`partiduo-einvoicing` 94 ; `partiduo-superpdp` 72 (dont les 5 du vrai bac
+à sable ; un passage coupé par le mandataire réseau puis vert) ;
+`partiduo-teledec` 94 + 1 en attente. `crystal tool format` et Ameba sans
+remarque.
+
+[source,sh]
+----
+# Distributions de vérification
+cd prod-crystal/partiduo/partiduo-superpdp && shards build partiduo-superpdp-manage
+cd ../partiduo-teledec && shards build partiduo-teledec-manage && cd ../partiduo-app
+bin/partiduo-provision --manage ../partiduo-superpdp/bin/partiduo-superpdp-manage \
+  --name "Atelier Brunet SARL" --regime fr --siren 732829320 --vat FR44732829320 \
+  --admin-email admin@je-spdp.test --modules accounting,invoicing --with document,einv,superpdp \
+  --database partiduo_je_spdp je-spdp            # je-afnor : --with document,einv
+bin/partiduo-provision --manage ../partiduo-teledec/bin/partiduo-teledec-manage \
+  --name "Vélos Durand EI" --regime fr --siren 404833048 --admin-email admin@je-micro.test \
+  --modules micro,invoicing,accounting --database partiduo_je_micro je-micro
+#   je-reel : --modules accounting,invoicing --with teledec
+#   je-liberal : --modules liberal,accounting --with teledec
+cd ../partiduo-superpdp
+set -a; . ../partiduo-app/tmp/instances/je-spdp/je-spdp.env; set +a
+MARTEN_ENV=development PARTIDUO_MEDIA_ROOT=$TMPDIR/je-spdp-media crystal run scripts/verif_e.cr -- \
+  --adapter=superpdp --host=je-spdp.partiduo.localhost --email=admin@je-spdp.test \
+  --invitation='<lien>' --port=8120 [--keep]      # --adapter=afnor | sandbox | probe
+cd ../partiduo-teledec
+MARTEN_ENV=development … crystal run scripts/verif_t.cr -- --profile=micro|reel|liberal \
+  --host=je-micro.partiduo.localhost --email=admin@je-micro.test --invitation='<lien>' --port=8130
+# Essai dans un navigateur : --serve-only, puis http://<hôte>:<port>/login
+# (mot de passe : --password, défauts Verif-lotE-Partiduo-2026 et Verif-lotT-Partiduo-2026)
+----
+
 == Prochaines étapes
 
 Liste à l'issue de la critique de complétude et des lots E, G, L et T ;
@@ -1881,7 +1975,8 @@ chaque point renvoie à sa décision ou à son blocage.
   facture de l'interface ; événement du cœur au changement de canal
   (amendement ADR-003 D7, D-EINV-021) ; erreurs de lecture traduites
   (D-EINV-024) ; bac à sable XP Z12-013 réel et schémas CDAR / e-reporting
-  (B-EINV-002, B-EINV-003) ; Factur-X BT-23 et BT-34 (B-SPDP-003) ; mode
+  (B-EINV-002, B-EINV-003) ; adresse électronique fine du vendeur
+  (B-VE-001) ; mode
   _authorization code_ réel (B-SPDP-004) ; pièces jointes orphelines
   (B-UI-008) ; essai de la capture photo sur téléphone (B-UI-001).
 

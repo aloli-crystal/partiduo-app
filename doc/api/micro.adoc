@@ -104,7 +104,8 @@ consigné et ne bloque jamais la Facturation.
   `service_bic`, `bnc`), cotisations sociales, contribution à la formation
   professionnelle et versement libératoire (si l'option est prise) *estimés*
   aux taux en vigueur au début de la période ; `missing_rates` nomme un taux
-  absent (jamais inventé) ; statut `open`, `due`, `late`, `declared`.
+  absent (jamais inventé) ; statut `upcoming` (période pas encore commencée), `open`, `due`, `late`,
+`declared`.
 * `mark_declared(actor, DeclarationInput)` : déclaration faite sur le site de
   l'URSSAF (pas de télétransmission, ADR-007 Questions ouvertes), datée
   après la fin de la période et au plus tard du jour.
