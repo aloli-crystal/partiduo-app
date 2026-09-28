@@ -1995,6 +1995,71 @@ dont 71 verts et 1 en erreur contre le vrai bac à sable (réseau, B-FIN-004) ;
 `crystal tool format` et Ameba sans remarque ; garde-fous ADR-005 D3 verts ;
 `genmigrations` sans écart (cards, invoicing, choruspro, urssaf).
 
+== Copie PDF, nature du client, canal public (C:copie-pdf, 28 septembre 2026)
+
+Reprise d'ADR-004 D9 révisé et d'ADR-006 D5 après la critique finale
+(DECISIONS D-CPY-001 à D-CPY-005) :
+
+* copie PDF déclenchée par l'événement `invoice.platform_deposited`, publié
+  par `partiduo-einvoicing` après un dépôt réussi (plus d'appel à
+  `mark_sent`) ; la Facturation marque envoyé, trace le dépôt, ouvre la
+  période et envoie la copie après la validation ; `mark_sent` seul
+  n'envoie plus de copie (sans plateforme, pas de copie) ; après le dépôt,
+  tout courriel joint la copie (jamais de second original) ; original et
+  empreinte inchangés ; `pdf_copy_status` ;
+* migration cards 0003 : natures initiales des fiches de client selon la
+  règle en place (aller, retour, aller vérifiés sur une base de travail) ;
+* canal `public_portal` (Chorus Pro) au lieu de `chorus_pro`, proposé
+  seulement si `CHORUSPRO` est active (migration invoicing 0004, aller,
+  retour, aller vérifiés sur un document émis ; `partiduo-choruspro` et
+  `partiduo-einvoicing` suivis) ;
+* commande `Cards.create_individual_customer` (saisie express) ;
+* interface : « Copie PDF envoyée le … à … », « Déposée sur la plateforme
+  le … », dernier échec, bouton « Renvoyer la copie » ;
+* `API_VERSION` 0.5.0.
+
+*Vérifications* (bases `partiduo_test_c_copie*`) : `partiduo-app` trois
+configurations du prompt — 1026 + 30 en attente, 781 + 58, 1100 + 13 ;
+`partiduo-ui-bulma` 337 (garde-fou ADR-005 D3 compris) ; `partiduo-einvoicing` 95 ;
+`partiduo-choruspro` 22 ; format et Ameba sans remarque sur les fichiers
+touchés.
+
+== Clôture du lot C — relecture et vérifications (C:final, 28 septembre 2026)
+
+*Lots terminés* : P, 0, 1, 2, F, M, 3, 4, 5, 6, E, G, L, T, critique
+finale et C (copie PDF, nature du client, canal public, saisie express).
+*Lot en cours* : aucun ; la suite est dans « Prochaines étapes ».
+
+Corrections de la relecture (DECISIONS D-CPY-007 à D-CPY-011) :
+
+* `partiduo-einvoicing` : l'événement `invoice.platform_deposited` est
+  publié dans un point de sauvegarde ; un abonné qui lève n'annule plus le
+  dépôt (ligne `submitted`, échec noté, jamais de second dépôt).
+* Copie PDF : abonné tolérant (document introuvable ignoré ; canal autre
+  que `platform` → `platform_deposit_ignored`, ni envoyé ni doublé) ; toute
+  exception de l'envoi après dépôt tracée (`pdf_copy_failed`), jamais
+  propagée ; motifs en clés de traduction avec détail
+  (`PdfCopyStatusView#error_detail`) ; dernier échec comparé par
+  identifiant ; liste `DOCUMENT_EVENT_ACTIONS`.
+* Migration cards 0003 : SIREN tiré du numéro de TVA français (clé de
+  Luhn) pour les fiches de client qui n'en ont pas, retour exact (table
+  `cards_customer_siren_filled`) — amendement D-CPY-008 de D-CPY-002.
+* `partiduo-choruspro` : migration 0002 vide, dépendance à invoicing 0004.
+* Interface : libellés d'historique `platform_deposited` et
+  `platform_deposit_ignored` (fr, en, nl, contrôlés en spec pour toute
+  action) ; motif d'échec traduit avec son détail ; une fois la facture
+  déposée, « Copie PDF » par défaut et « Original archivé (ne pas
+  transmettre) ».
+
+*Vérifications* (bases `partiduo_test_C_final*`) : `partiduo-app`, trois
+configurations du prompt, `--order random` — 1033 + 33 en attente
+(Comptabilité, Analytique, Stock, Suivi), 802 + 58 (Facturation, Stock,
+Suivi), 1121 + 13 (Comptabilité et Facturation) ; `partiduo-ui-bulma` 347 ;
+`partiduo-einvoicing` 96 ; `partiduo-choruspro` 22 ; `crystal tool format`
+et Ameba sans remarque ; garde-fous ADR-005 D3 verts ; `marten migrate` sur
+base vierge (`partiduo_migrate_C`) sans erreur, puis retour de cards 0003
+et nouvel aller.
+
 == Prochaines étapes
 
 Liste à l'issue de la critique de complétude et des lots E, G, L et T ;
@@ -2003,7 +2068,9 @@ chaque point renvoie à sa décision ou à son blocage.
 . *Critique finale* : adaptateurs réels de Chorus Pro (B-FIN-002) et de
   l'API Tierce Déclaration URSSAF (B-FIN-003) ; adresse de livraison et
   conditions de paiement dans l'édition d'une facture (B-FIN-001) ;
-  préciser la nature des fiches clientes reprises (D-FIN-001) ;
+  nature des fiches clientes reprises faite (migration cards 0003,
+  D-CPY-002, D-CPY-008) ; événement `invoice.platform_deposited` à faire
+  adopter dans ADR-003 D7 (D-CPY-001) ;
   `partiduo-admin` (ADR-008, B-FIN-005).
 . *Micro-entreprise (après le lot G)* : vérifier aux sources les taux,
   seuils et cases initiaux (B-MIC-001) ; essai du mode simplifié sur un

@@ -87,6 +87,7 @@ en:
         base:
           in_use: "This card is in use and cannot be deleted; disable it instead."
         category_id:
+          no_customer_category: "No customer card category: create one under “Parties and items”."
           not_found: "This card category does not exist."
           kind_mismatch: "An item cannot become a party, nor a party an item."
         name:

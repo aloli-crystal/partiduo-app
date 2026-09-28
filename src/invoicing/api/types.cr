@@ -25,9 +25,16 @@ module Partiduo
       }
       # Canaux d'émission d'un document fiscal (ADR-004 D9) : plateforme agréée
       # (transmise par une extension, `partiduo-einvoicing`), courriel, papier,
-      # Chorus Pro pour un client public (extension `partiduo-choruspro`,
-      # ADR-004 D9 révisé ; à défaut, remise hors Partiduo puis « envoyé »).
-      ISSUE_CHANNELS = %w[platform email paper chorus_pro]
+      # portail public de facturation (`public_portal`, Chorus Pro) pour un
+      # client public (ADR-004 D9 révisé : proposé quand l'extension
+      # `partiduo-choruspro` est active ; choisi à la main sinon, dépôt hors
+      # Partiduo puis « envoyé »). DECISIONS D-CPY-003.
+      ISSUE_CHANNELS = %w[platform email paper public_portal]
+      # Actions de l'historique d'un document (`DocumentEventView#action`),
+      # liste fermée : l'interface a un libellé pour chacune (D-CPY-007).
+      DOCUMENT_EVENT_ACTIONS = %w[created updated transformed issued accepted refused credited payment
+        payment_removed reminder emailed email_failed channel_changed marked_sent platform_deposited
+        platform_deposit_ignored pdf_copy_sent pdf_copy_failed]
       # Code UNTDID 1001 du document Factur-X (BT-3).
       TYPE_CODES = {"invoice" => "380", "credit_note" => "381", "deposit_invoice" => "386"}
 
@@ -549,13 +556,36 @@ module Partiduo
         drafts : Int32,
         recent_invoices : Array(DocumentSummaryView)
 
+      # État de la copie PDF d'une facture au canal `platform` (ADR-004 D9
+      # révisé, D-CPY-001) : `eligible` (document émis au canal plateforme),
+      # `due` (option du dossier active à la date du jour, client qui
+      # l'accepte et a une adresse électronique), `deposited_at` (dépôt
+      # réussi sur la plateforme), dernière copie envoyée (`sent_at`,
+      # `sent_to`, `sent_count` envois en tout), dernier échec postérieur
+      # (`failed_at` ; `error` : clé(s) de traduction séparées par « , »,
+      # `invoicing.errors.…` ; `error_detail` : détail technique, message du
+      # serveur de courrier ou de la conformité, qui renseigne le paramètre
+      # `%{error}` / `%{detail}` de la clé ; D-CPY-006, D-CPY-007).
+      record PdfCopyStatusView,
+        eligible : Bool,
+        due : Bool,
+        deposited_at : Time?,
+        sent_at : Time?,
+        sent_to : Array(String),
+        sent_count : Int32,
+        failed_at : Time?,
+        error : String,
+        error_detail : String = ""
+
       # Canal proposé pour un client (ADR-004 D9) : `platform` pour un
       # professionnel établi dans le pays du dossier (SIREN ou numéro de TVA),
       # sinon `email` si la fiche a une adresse électronique, `paper` à
       # défaut ; `b2c` pour un client sans SIREN ni numéro de TVA. `reason` :
       # `domestic_business`, `foreign_business`, `private_customer` ou
-      # `public_customer` (Chorus Pro)
-      # (libellé `invoicing.channel_reasons.<reason>`) ; `international` :
+      # `public_customer` (Chorus Pro, canal `public_portal`, extension
+      # `CHORUSPRO` active) ou `public_customer_manual` (client public sans
+      # l'extension : courriel ou papier proposé, dépôt à la main sur le
+      # portail) (libellé `invoicing.channel_reasons.<reason>`) ; `international` :
       # client établi hors du pays du dossier (e-reporting des ventes
       # internationales).
       record ChannelProposalView, channel : String, b2c : Bool, reason : String, international : Bool do

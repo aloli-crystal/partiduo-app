@@ -52,12 +52,13 @@ fr:
       platform: "Plateforme agréée"
       email: "Courriel"
       paper: "Papier"
-      chorus_pro: "Chorus Pro"
+      public_portal: "Chorus Pro"
     channel_reasons:
       domestic_business: "Client professionnel établi dans le pays du dossier : facture électronique par la plateforme agréée"
       foreign_business: "Client professionnel étranger : hors plateforme, e-reporting des ventes internationales"
       private_customer: "Client particulier : hors plateforme, e-reporting B2C"
       public_customer: "Administration publique : facture par Chorus Pro, pas par une plateforme agréée"
+      public_customer_manual: "Administration publique : l'extension Chorus Pro n'est pas active, facture à déposer vous-même sur le portail Chorus Pro"
     links:
       from_quote: "Issu du devis %{number}"
       from_order: "Issu de la commande %{number}"
@@ -293,6 +294,8 @@ fr:
         customer_siren_required: "Le client %{customer} est un professionnel établi en France : indiquez son SIREN sur sa fiche avant d'émettre"
       pdf_copy:
         not_platform: "Seule une facture émise par la plateforme agréée a une copie PDF"
+        render_failed: "Copie PDF non produite (PDF/A-3 non conforme) : %{detail}"
+        internal: "Erreur interne pendant l'envoi de la copie PDF : %{detail}"
       channel:
         not_fiscal: "Seuls une facture, une facture d'acompte ou un avoir ont un canal d'émission"
         already_sent: "Document déjà envoyé : son canal d'émission ne change plus"

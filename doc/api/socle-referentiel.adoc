@@ -92,6 +92,10 @@ retiré est effacé des fiches.
 |`cards.card.write`
 |Publie `card.saved` (`card_id`).
 
+|`create_individual_customer(actor, IndividualCustomerInput) : Result(CardView)`
+|`cards.card.write`
+|Saisie express d'un particulier depuis une facture (ADR-004 D9 révisé) : nom, adresse, courriel facultatif ; catégorie `CUSTOMER` (à défaut la première catégorie de clients), nature `individual` ; sans catégorie de clients : `category_id.no_customer_category` (D-CPY-004).
+
 |`set_card_enabled(actor, id, enabled)`
 |`cards.card.write`
 |`f_enable` ; publie `card.saved`.
@@ -119,7 +123,7 @@ saisi déjà pris est refusé.
 |`vat_number` |compacté ; contrôle FR et BE, forme générique UE sinon ; FR : cohérent avec le SIREN
 |`siren`, `siret` |clé de Luhn (exception La Poste) ; SIREN déduit du SIRET ; SIRET commençant par le SIREN
 |`routing_id` |code de routage de l'annuaire (`[A-Za-z0-9._-]`, 100 car.), exige un SIREN ; `CardView#electronic_address` = `SIREN[_SIRET[_CODE]]`
-|`customer_nature` |client seulement : `individual`, `business`, `public` (`CUSTOMER_NATURES`), vide si pas précisée ; `nil` à la saisie garde la valeur ; `Cards.propose_nature(siren, vat_number)` et `CardView#proposed_nature` proposent (SIREN public : premier chiffre 1 ou 2), `#effective_nature` retient (ADR-004 D9, D-FIN-001)
+|`customer_nature` |client seulement : `individual`, `business`, `public` (`CUSTOMER_NATURES`), vide si pas précisée (fiches créées depuis la migration cards 0003, qui a initialisé les fiches existantes, D-CPY-002) ; `nil` à la saisie garde la valeur ; `Cards.propose_nature(siren, vat_number)` et `CardView#proposed_nature` proposent (SIREN public : premier chiffre 1 ou 2), `#effective_nature` retient (ADR-004 D9, D-FIN-001)
 |`pdf_copy` |client : accepte la copie PDF des factures transmises par la plateforme (oui par défaut ; `nil` garde la valeur) — ADR-004 D9, D-FIN-002
 |`iban`, `bic` |ISO 13616 (clé modulo 97), ISO 9362
 |`address`, `delivery_addresses` |adresse principale et adresses de livraison (20 au plus, la première par défaut) ; pays ISO 3166-1, celui de la société si vide

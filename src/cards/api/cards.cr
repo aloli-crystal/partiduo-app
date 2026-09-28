@@ -29,6 +29,13 @@ module Partiduo
         country_code : String? = nil,
         label : String? = nil
 
+      # Saisie express d'un particulier (`create_individual_customer`) : nom,
+      # adresse principale et courriel facultatifs.
+      record IndividualCustomerInput,
+        name : String,
+        address : AddressInput? = nil,
+        email : String? = nil
+
       # Saisie d'une fiche ; décrit la fiche entière, sauf `code` : `nil` ou
       # vide génère le quick code à la création et le conserve à la
       # modification. `extra` : attributs propres de la catégorie (texte,
@@ -394,6 +401,22 @@ module Partiduo
           card = Partiduo::Cards::CardRules.save(Partiduo::Cards::Card.new, values)
           saved(card, actor)
         end
+      end
+
+      # Saisie express d'un client particulier depuis l'édition d'une facture
+      # (ADR-004 D9 révisé) : fiche de la catégorie `CUSTOMER` (à défaut, la
+      # première catégorie de clients), nature `individual`, nom, adresse et
+      # courriel facultatifs ; mêmes contrôles et même événement
+      # `card.saved` que `create_card`. DECISIONS D-CPY-004.
+      def self.create_individual_customer(actor : Actor, input : IndividualCustomerInput) : Result(CardView)
+        Guard.authorize!(actor, "cards.card.write", module_code: "CARDS")
+        category = Partiduo::Cards::Category.filter(code: "CUSTOMER").first ||
+                   Partiduo::Cards::Category.filter(kind: "customer").order(:name).first
+        unless category
+          return Result(CardView).failure([Partiduo::Cards::CardRules.error("category_id", "no_customer_category")])
+        end
+        create_card(actor, CardInput.new(category_id: category.id!.to_i64, name: input.name,
+          email: input.email.try(&.strip), address: input.address, customer_nature: "individual"))
       end
 
       def self.update_card(actor : Actor, id : Int64, input : CardInput) : Result(CardView)

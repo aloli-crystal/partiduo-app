@@ -87,6 +87,7 @@ nl:
         base:
           in_use: "Deze fiche wordt gebruikt en kan niet worden verwijderd; deactiveer ze."
         category_id:
+          no_customer_category: "Geen categorie voor klantfiches: maak er een aan onder “Relaties en artikelen”."
           not_found: "Deze fichecategorie bestaat niet."
           kind_mismatch: "Een artikel kan geen relatie worden, en omgekeerd."
         name:

@@ -331,9 +331,10 @@ module Partiduo
       end
 
       # Marque envoyé un document émis remis hors du courriel de la
-      # Facturation (papier imprimé, transmission par une extension de
-      # plateforme) : date d'envoi posée, facture à l'état « envoyée », canal
-      # figé. Sans effet sur un document déjà envoyé. Tracé.
+      # Facturation (papier imprimé, dépôt à la main sur un portail) : date
+      # d'envoi posée, facture à l'état « envoyée », canal figé. Sans effet
+      # sur un document déjà envoyé. Tracé. N'envoie pas la copie PDF : elle
+      # suit le dépôt sur la plateforme (`invoice.platform_deposited`).
       def self.mark_sent(actor : Actor, id : Int64) : Result(DocumentView)
         authorize!(actor, SEND)
         Transaction.run do
@@ -362,10 +363,18 @@ module Partiduo
         Partiduo::Invoicing::PdfCopy.due?(Documents.find(id))
       end
 
+      # État de la copie PDF d'un document (prévue, dépôt, dernier envoi,
+      # dernier échec) : « copie PDF envoyée le… » de l'écran.
+      def self.pdf_copy_status(actor : Actor, id : Int64) : PdfCopyStatusView
+        authorize!(actor, READ)
+        Partiduo::Invoicing::PdfCopy.status(Documents.find(id))
+      end
+
       # Envoie (ou renvoie) la copie PDF par courriel, à la demande, même
       # hors de la période de l'option ; tracée comme les autres envois,
-      # sans changer l'état du document. Elle part d'elle-même quand la
-      # facture est marquée envoyée par la plateforme (`mark_sent`).
+      # sans changer l'état du document. Elle part d'elle-même après le
+      # dépôt réussi sur la plateforme (événement `invoice.platform_deposited`
+      # publié par l'extension qui transmet, D-CPY-001).
       def self.send_pdf_copy(actor : Actor, id : Int64, input : SendInput? = nil) : Result(EmailLogView)
         authorize!(actor, SEND)
         # Hors transaction : un échec du transport reste tracé.
@@ -527,7 +536,16 @@ module Partiduo
           return Result(EmailLogView).failure(Documents.error(FieldError::BASE, "mail.draft"))
         end
         view = Documents.view(document)
-        message, errors = mail.compose(view, input) { document_pdf(Actor.system, view.id) }
+        # Facture déposée sur la plateforme : l'original est la facture
+        # électronique ; le courriel joint la copie (jamais de second
+        # original, ADR-004 D9 révisé, D-CPY-001).
+        message, errors = mail.compose(view, input) do
+          if Partiduo::Invoicing::PdfCopy.replaces_original?(document)
+            Partiduo::Invoicing::PdfCopy.file(document)
+          else
+            document_pdf(Actor.system, view.id)
+          end
+        end
         return Result(EmailLogView).failure(errors) unless message
         result = Transaction.run do
           Result(EmailLogView).success(mail.send_and_record(message, view.id, reminder_id, actor))

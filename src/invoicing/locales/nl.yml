@@ -52,12 +52,13 @@ nl:
       platform: "Erkend platform"
       email: "E-mail"
       paper: "Papier"
-      chorus_pro: "Chorus Pro"
+      public_portal: "Chorus Pro"
     channel_reasons:
       domestic_business: "Zakelijke klant gevestigd in het land van het dossier: e-factuur via het erkende platform"
       foreign_business: "Buitenlandse zakelijke klant: buiten het platform, e-reporting van internationale verkopen"
       private_customer: "Particuliere klant: buiten het platform, B2C e-reporting"
       public_customer: "Overheid: factuur via Chorus Pro, niet via een erkend platform"
+      public_customer_manual: "Overheid: de Chorus Pro-extensie is niet actief, laad de factuur zelf op in het Chorus Pro-portaal"
     links:
       from_quote: "Op basis van offerte %{number}"
       from_order: "Op basis van bestelling %{number}"
@@ -293,6 +294,8 @@ nl:
         customer_siren_required: "Klant %{customer} is een in Frankrijk gevestigde onderneming: vul het SIREN-nummer in op de fiche vóór de uitgifte"
       pdf_copy:
         not_platform: "Alleen een factuur verzonden via het erkende platform heeft een pdf-kopie"
+        render_failed: "Pdf-kopie niet aangemaakt (PDF/A-3 niet conform): %{detail}"
+        internal: "Interne fout bij het verzenden van de pdf-kopie: %{detail}"
       channel:
         not_fiscal: "Alleen een factuur, een voorschotfactuur of een creditnota heeft een verzendkanaal"
         already_sent: "Document al verzonden: het verzendkanaal wijzigt niet meer"

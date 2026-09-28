@@ -8316,3 +8316,240 @@ Une base par dépôt, toutes préfixées par la base attribuée
 `_teledec`, `_skel`, `_migrate`, `_cpp`, `_urssaf`, `_mig`) pour que les
 suites tournent en parallèle ; instance de démonstration du parcours au
 navigateur : `partiduo_test_critique_final_demo`.
+
+== Copie PDF, nature du client et canal des clients publics (C:copie-pdf, 28 septembre 2026)
+
+Reprise d'ADR-004 D9 (révisé le 28 septembre 2026) et d'ADR-006 D5 sur ce
+que la critique finale (D-FIN-001, D-FIN-002) avait laissé à l'écart de la
+tâche : déclenchement de la copie par un événement, jamais de second
+original, natures initiales des fiches, canal `public_portal`, commande de
+saisie express, écran de la copie.
+
+=== D-CPY-001 — La copie PDF suit le dépôt sur la plateforme, par un événement
+
+*Contexte.* La copie partait de `mark_sent` au canal `platform`, que
+`partiduo-einvoicing` appelait par le contrat après un dépôt, mais aussi
+qu'un utilisateur déclenche à la main (« Marquer envoyée ») sans
+plateforme. La tâche exige un déclenchement après le dépôt réussi, par un
+événement publié par l'extension, sans appel direct entre modules, et
+aucune copie sans plateforme. Rien n'empêchait par ailleurs d'envoyer par
+courriel le PDF *original* d'une facture déjà remise par la plateforme :
+un second original (CGI art. 283-3).
+
+*Choix.*
+
+* Nouvel événement de la liste fermée `invoice.platform_deposited`
+  (`invoice_id` ; facultatifs `platform_ref`, `connector`), publié par
+  `partiduo-einvoicing` après un dépôt accepté (pas après un rejet 213), à
+  la place de l'appel `Inv.mark_sent`. Le module Facturation s'y abonne
+  (`PdfCopy.on_platform_deposited`) : document marqué envoyé, dépôt tracé
+  (`platform_deposited`), période ouverte pour un an si elle est vide, puis
+  *après la validation* (`Events.after_commit`, effet extérieur) envoi de la
+  copie si elle est prévue. Une seule copie automatique par document (un
+  nouveau dépôt ne la double pas) ; échec tracé, jamais bloquant.
+* `mark_sent` n'envoie plus de copie : sans extension de plateforme, aucune
+  copie ne part d'elle-même (le bouton « Envoyer la copie » reste).
+* Jamais de second original : une fois la facture déposée
+  (`PdfCopy.replaces_original?`), tout courriel de la Facturation qui joint
+  le PDF (envoi, relance) joint la copie ; avant, et pour tout autre canal,
+  l'original. L'original conservé (`pdf_id`) et l'empreinte ne changent
+  pas (vérifié en spec).
+* `pdf_copy_status(actor, id) : PdfCopyStatusView` (prévue, déposée le,
+  dernière copie envoyée le … à …, nombre d'envois, dernier échec) pour
+  l'écran : « Copie PDF envoyée le… », « Renvoyer la copie ».
+* `API_VERSION` 0.5.0 (ajouts, et renommage du canal, D-CPY-003).
+
+*Alternatives écartées.* Garder l'appel `Inv.mark_sent` de l'extension et
+y laisser la copie : couplage par appel, copie envoyée aussi pour un
+« marqué envoyé » à la main. Refuser l'envoi par courriel d'une facture
+déposée : ADR-004 D9 veut le PDF envoyable quel que soit le canal.
+
+*Amendement proposé à ADR-003 D7.* Ajouter `invoice.platform_deposited` à
+la liste et admettre qu'une *extension* publie un événement de la liste
+fermée du cœur quand le cœur s'y abonne (ici la Facturation).
+
+=== D-CPY-002 — Natures initiales des fiches de client (migration cards 0003)
+
+*Contexte.* D-FIN-001 laissait vides les natures des fiches existantes
+(« à préciser »), la proposition tenant lieu de nature. La tâche demande
+une migration qui les initialise selon la règle actuelle.
+
+*Choix.* Migration cards 0003 : toute fiche de catégorie `customer` sans
+nature reçoit celle de `CardRules.propose_nature` (SIREN lu sur la fiche,
+sinon dans un numéro de TVA français ; SIREN commençant par 1 ou 2 →
+`public` ; SIREN ou TVA → `business` ; sinon `individual`), c'est-à-dire
+celle que la règle en place leur prêtait déjà : ni canal, ni B2C, ni
+mention ne changent, mais la nature devient choisie (et le refus « sans
+SIREN » s'applique). Les fiches touchées sont notées dans
+`cards_customer_nature_initialized` pour un retour exact (seules elles
+redeviennent vides). Une fiche créée après la migration sans nature reste
+« à préciser » (proposition affichée, jamais jugée en silence).
+
+*Alternative écartée.* Règle réduite « professionnel si SIREN ou TVA » sans
+la catégorie `public` : elle aurait changé le canal proposé aux clients
+publics déjà connus du dossier.
+
+=== D-CPY-003 — Canal `public_portal` (Chorus Pro), proposé si l'extension est active
+
+*Contexte.* La critique finale avait créé le canal `chorus_pro`, proposé
+à tout client public d'un dossier français. La tâche fixe la valeur
+`public_portal` et ne la propose que si l'extension `CHORUSPRO` est active.
+
+*Choix.* `ISSUE_CHANNELS` = `platform email paper public_portal` (libellé
+« Chorus Pro ») ; migration invoicing 0004 : contrainte et renommage des
+documents existants (le canal n'entre pas dans l'empreinte ; le
+déclencheur d'intangibilité est suspendu le temps du seul `UPDATE`, dans la
+transaction de la migration ; retour symétrique). Proposition :
+`public_portal` (raison `public_customer`) si `CHORUSPRO` est active ;
+sinon courriel ou papier, raison `public_customer_manual` (« facture à
+déposer vous-même sur le portail Chorus Pro »), jamais B2C. Le canal reste
+choisissable à la main sans l'extension. `partiduo-einvoicing` laisse hors
+plateforme `public_portal` et tout client de nature `public` ;
+`partiduo-choruspro` dépose les documents au canal `public_portal` (mis à
+jour avec le cœur). Les lignes `einvoicing_transmission.channel` déjà
+relevées avec `chorus_pro` se recalculent au prochain `refresh!` ; les
+journaux (append-only) gardent l'ancienne valeur.
+
+*Alternative écartée.* Nouvelle migration qui réécrirait 0003 : elle a pu
+tourner sur des bases de démonstration.
+
+=== D-CPY-004 — Saisie express : une commande du contrat du socle
+
+*Contexte.* L'interface choisissait elle-même la catégorie de clients et
+appelait `create_card`.
+
+*Choix.* `Partiduo::Api::Cards.create_individual_customer(actor,
+IndividualCustomerInput)` (nom, adresse, courriel facultatif) : catégorie
+`CUSTOMER`, à défaut la première catégorie de clients, nature
+`individual`, mêmes contrôles et même `card.saved` que `create_card` ;
+sans catégorie de clients : `cards.errors.card.category_id.no_customer_category`.
+L'écran d'édition de la facture l'appelle (HTMX, champ « Client » rempli
+sans quitter l'écran).
+
+=== D-CPY-005 — Bases de test
+
+`partiduo_test_c_copie` (cœur), `partiduo_test_c_copie_ui`,
+`partiduo_test_c_copie_einv`, `partiduo_test_c_copie_cpp` (interface,
+facturation électronique, Chorus Pro) : même préfixe que la base attribuée,
+pour ne pas gêner les agents parallèles.
+
+=== D-CPY-006 — Motif d'échec de la copie PDF : message ou clés de traduction
+
+*Contexte.* Tests du lot C : quand le courriel de la copie ne peut être
+composé (client sans adresse, expéditeur non réglé), la trace
+`pdf_copy_failed` enregistre les clés d'erreur du contrat
+(`invoicing.errors.mail.no_recipient, …`) ; `pdf_copy_status(…).error` les
+rend telles quelles, et l'écran de la facture les affichait brutes. Un échec
+du transport, lui, enregistre le message du serveur de courrier.
+
+*Choix.* Le contrat reste inchangé et documente les deux formes de `error`
+(message du serveur, ou clés séparées par « , »). L'interface
+(`partiduo-ui-bulma`, panneau « Canal d'émission ») traduit chaque partie
+qui a la forme d'une clé et garde le reste tel quel. Spec :
+`spec/ui/pdf_copy_panel_spec.cr`.
+
+*Alternative écartée.* Enregistrer le message traduit dans la trace : il
+serait figé dans la langue de l'utilisateur au moment de l'échec. Ajouter
+un champ `error_keys` à `PdfCopyStatusView` : changement du contrat pour un
+seul écran, possible plus tard sans retour arrière.
+
+== Clôture du lot C — remarques de relecture (C:final, 28 septembre 2026)
+
+=== D-CPY-007 — Le dépôt sur la plateforme ne s'annule jamais pour son abonné ; échecs de la copie en clés
+
+*Contexte.* `partiduo-einvoicing` publiait `invoice.platform_deposited` dans
+la transaction de la transmission, *après* le dépôt accepté par la
+plateforme. Le bus étant synchrone, une exception de l'abonné de la
+Facturation (document introuvable, délai de verrou sur les paramètres,
+règlements) annulait la ligne `submitted` et sa référence : la
+synchronisation suivante redéposait la facture, d'où deux originaux (CGI
+art. 283-3). L'envoi de la copie après la validation n'interceptait que
+`ConformanceError` : une autre exception remontait jusqu'à la transmission,
+qui notait une erreur « internal » sur une ligne déjà déposée. Les motifs
+d'échec enregistrés étaient des messages français en dur.
+
+*Choix.*
+
+* `Einvoicing::Outgoing.notify_deposit` publie l'événement dans un point de
+  sauvegarde (`Partiduo::Api::Transaction.run` imbriqué) entouré d'un
+  `rescue` : seules les écritures des abonnés sont annulées, la ligne reste
+  `submitted` avec sa référence ; l'échec est journalisé et noté sur la
+  ligne (`einvoicing.errors.transmission.deposit_notice`, sans toucher à
+  `attempts`). Spec : abonné qui lève → ligne `submitted`, pas de second
+  dépôt.
+* `PdfCopy.on_platform_deposited` ne lève plus : document introuvable →
+  journal puis retour ; canal autre que `platform` → ni « envoyé » ni
+  copie, anomalie tracée (`platform_deposit_ignored`, détail `channel`).
+* `PdfCopy.send_after_deposit` intercepte toute exception, la journalise et
+  trace `pdf_copy_failed` sans jamais la propager.
+* Trace `pdf_copy_failed` : `error` = clé(s) de traduction
+  (`invoicing.errors.pdf_copy.render_failed`, `…pdf_copy.internal`,
+  `…mail.delivery_failed`, `…mail.not_configured`, ou les clés de
+  composition), `detail` = détail technique. `PdfCopyStatusView` gagne
+  `error_detail` (ajout, valeur par défaut) ; l'interface traduit la clé
+  avec le détail en paramètre (`%{error}`, `%{detail}`) et garde tel quel
+  un ancien message qui n'a pas la forme d'une clé.
+* Dernier échec « effacé » par un envoi réussi : comparaison des
+  identifiants des traces, non de leur horodatage.
+* Liste fermée `Partiduo::Api::Invoicing::DOCUMENT_EVENT_ACTIONS` ; une
+  spec du cœur vérifie que toute action tracée y figure, une spec de
+  l'interface qu'elle a un libellé `ui.invoicing.events.*` en fr, en et nl.
+
+*Alternatives écartées.* Publier l'événement dans un `after_commit` de la
+transmission : la Facturation marquerait l'envoi hors de toute
+transaction et un échec y serait perdu sans trace sur la ligne. Laisser
+l'abonné lever : c'est le défaut relevé.
+
+*Reste (mineur).* `PdfCopy.replaces_original?` refait une requête
+`deposited?` à chaque envoi par courriel : une seule requête indexée par
+envoi, gardée pour la lisibilité.
+
+=== D-CPY-008 — Amendement de D-CPY-002 : SIREN tiré du numéro de TVA français
+
+*Contexte.* La migration cards 0003 pose la nature `business` ou `public`
+sur une fiche qui n'a qu'un numéro de TVA français ; `Issuing.siren_required?`
+ne lit que le SIREN de la fiche : toute facture à ces clients (cas courant
+des fiches reprises de NOALYSS) aurait été refusée dès la migration, alors
+que D-CPY-002 affirmait que rien ne changeait.
+
+*Choix.* La même migration (non encore livrée : modifiée en place) remplit
+aussi `siren` depuis le numéro de TVA français (caractères 5 à 13) pour
+toute fiche de client qui n'en a pas, si ce SIREN passe la clé de Luhn ;
+les fiches touchées sont notées dans `cards_customer_siren_filled` et le
+retour ne vide que leur SIREN. Le SIREN figure ainsi sur la facture
+(mention et Factur-X), ce qu'une lecture dérivée dans `siren_required?`
+n'aurait pas donné.
+
+*Alternative écartée.* Faire lire à `siren_required?` le SIREN dérivé de la
+TVA : la facture passerait sans SIREN du client dans ses mentions ni dans
+le XML.
+
+=== D-CPY-009 — Chorus Pro : dépendance déclarée au canal `public_portal`
+
+Migration `choruspro 0002_public_portal_dependency`, vide, qui déclare
+`depends_on :invoicing, "0004_public_portal_channel"` : une base migrée
+extension seule a toujours la valeur `public_portal`. La 0001, qui a pu
+tourner, n'est pas modifiée.
+
+=== D-CPY-010 — Jamais de second original : l'écran propose la copie une fois la facture déposée
+
+*Contexte.* Après le dépôt, « Télécharger le PDF » rendait l'original
+PDF/A-3 (XML Factur-X embarqué) ; transmis par l'utilisateur au client, il
+aurait fait un second original.
+
+*Choix.* Côté interface : pour un document au canal `platform` dont
+`pdf_copy_status.deposited_at` est posé, l'action par défaut est « Copie
+PDF » ; l'original reste téléchargeable sous le libellé « Original archivé
+(ne pas transmettre) ». Le contrat ne change pas (`document_pdf` et
+`facturx_xml` servent aussi l'archivage et les extensions).
+
+*Alternative écartée.* Indicateur `original_is_electronic` sur
+`DocumentView` : une requête de plus pour chaque vue de document, alors que
+seul cet écran en a besoin et lit déjà `pdf_copy_status`.
+
+=== D-CPY-011 — Bases de la clôture
+
+`partiduo_test_C_final` (cœur), `partiduo_test_C_final_ui`,
+`partiduo_test_C_final_einv`, `partiduo_test_C_final_cpp` (interface,
+facturation électronique, Chorus Pro) ; contrôle des migrations sur base
+vierge : `partiduo_migrate_C`.

@@ -31,6 +31,11 @@ Partiduo::Modules.register do
   # Délettrage, ou extourne d'une écriture lettrée : règlements retirés
   # (`Partiduo::Invoicing::Payments.on_unmatched`, D-2F-003).
   on("payment.unmatched") { |event| Partiduo::Invoicing::Payments.on_unmatched(event) }
+  # Dépôt réussi sur la plateforme agréée (publié par `partiduo-einvoicing`) :
+  # document marqué envoyé, copie PDF envoyée après la validation si elle est
+  # prévue (`Partiduo::Invoicing::PdfCopy.on_platform_deposited`, ADR-004 D9
+  # révisé, D-CPY-001).
+  on("invoice.platform_deposited") { |event| Partiduo::Invoicing::PdfCopy.on_platform_deposited(event) }
 
   menu "INV_TEMPLATES", parent: "SETTINGS", order: 60, route: "invoicing:templates", permission: "invoicing.template.manage"
   menu "INV_SETTINGS", parent: "SETTINGS", order: 61, route: "invoicing:settings", permission: "invoicing.settings.manage"

@@ -10,7 +10,8 @@ module Partiduo
     #
     # Proposition, selon la *nature* du client (ADR-004 D9 révisé : choisie
     # sur la fiche, sinon proposée d'après le SIREN et le numéro de TVA,
-    # DECISIONS D-FIN-001) : administration publique → Chorus Pro ;
+    # DECISIONS D-FIN-001) : administration publique → Chorus Pro (canal
+    # `public_portal`, si l'extension `CHORUSPRO` est active, D-CPY-003) ;
     # professionnel établi dans le pays du dossier → plateforme agréée ;
     # particulier ou client étranger → courriel si la fiche a une adresse
     # électronique, papier sinon. Un particulier est marqué B2C
@@ -19,13 +20,22 @@ module Partiduo
       alias Api = Partiduo::Api::Invoicing
       alias FieldError = Partiduo::Api::FieldError
 
+      # Extension qui dépose les factures au canal `public_portal`.
+      PUBLIC_PORTAL_EXTENSION = "CHORUSPRO"
+
       def self.propose(card : Partiduo::Api::Cards::CardView) : Api::ChannelProposalView
         company_country = Configuration.company.country_code.upcase
         country = (card.address.try(&.country_code).presence || company_country).upcase
         nature = card.effective_nature
         international = country != company_country
         if nature == "public" && !international && company_country == "FR"
-          return Api::ChannelProposalView.new("chorus_pro", false, "public_customer", false)
+          if Partiduo::Modules.active?(PUBLIC_PORTAL_EXTENSION)
+            return Api::ChannelProposalView.new("public_portal", false, "public_customer", false)
+          end
+          # Sans l'extension, le portail n'est pas branché : la facture part
+          # par courriel ou papier et se dépose à la main (D-CPY-003).
+          return Api::ChannelProposalView.new(card.email.strip.empty? ? "paper" : "email", false,
+            "public_customer_manual", false)
         end
         professional = nature != "individual"
         if professional && !international
@@ -118,17 +128,8 @@ module Partiduo
           document.save!
         end
         Documents.log(Documents.id_of(document.id), "marked_sent", actor, "", {"channel" => document.issue_channel.to_s})
-        # Remise par la plateforme : copie PDF par courriel si elle est
-        # prévue (ADR-004 D9, `PdfCopy`) ; son échec est tracé, jamais
-        # bloquant.
-        if document.issue_channel == "platform"
-          PdfCopy.open_period!
-          begin
-            PdfCopy.send!(document, actor)
-          rescue ex : Output::ConformanceError
-            Documents.log(Documents.id_of(document.id), "pdf_copy_failed", actor, "", {"error" => ex.message.to_s})
-          end
-        end
+        # La copie PDF ne part pas d'ici : elle suit le dépôt réussi sur la
+        # plateforme (`invoice.platform_deposited`, `PdfCopy`, D-CPY-001).
         result.success(Documents.view(document))
       end
     end

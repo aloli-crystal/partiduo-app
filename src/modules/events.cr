@@ -28,10 +28,16 @@ module Partiduo
       # Bon de livraison émis (lot 6) : sortie de stock (D-STK-004).
       "delivery_note.issued" => %w[delivery_note_id],
       "payment.recorded"     => %w[payment_id],
-      "payment.matched"      => %w[matching_id],
-      "payment.unmatched"    => %w[matching_id],
-      "card.saved"           => %w[card_id],
-      "period.closed"        => %w[period_id],
+      # Document fiscal déposé avec succès sur la plateforme agréée, publié
+      # par l'extension qui le transmet (`partiduo-einvoicing`) ; la
+      # Facturation le marque envoyé et en double l'envoi de la copie PDF
+      # (ADR-004 D9 révisé, D-CPY-001). Clés facultatives : `platform_ref`,
+      # `connector`.
+      "invoice.platform_deposited" => %w[invoice_id],
+      "payment.matched"            => %w[matching_id],
+      "payment.unmatched"          => %w[matching_id],
+      "card.saved"                 => %w[card_id],
+      "period.closed"              => %w[period_id],
       # Recette ou achat inscrit au registre du module micro-entreprise
       # (ADR-007 D2, D-MIC-002) : la Comptabilité passe l'écriture.
       "micro.receipt.recorded"  => %w[receipt_id],

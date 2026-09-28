@@ -52,12 +52,13 @@ en:
       platform: "Approved platform"
       email: "Email"
       paper: "Paper"
-      chorus_pro: "Chorus Pro"
+      public_portal: "Chorus Pro"
     channel_reasons:
       domestic_business: "Business customer established in the company's country: e-invoice through the approved platform"
       foreign_business: "Foreign business customer: outside the platform, international sales e-reporting"
       private_customer: "Private customer: outside the platform, B2C e-reporting"
       public_customer: "Public administration: invoice through Chorus Pro, not an approved platform"
+      public_customer_manual: "Public administration: the Chorus Pro extension is not active, upload the invoice to the Chorus Pro portal yourself"
     links:
       from_quote: "From quote %{number}"
       from_order: "From order %{number}"
@@ -293,6 +294,8 @@ en:
         customer_siren_required: "Customer %{customer} is a business established in France: enter its SIREN on its card before issuing"
       pdf_copy:
         not_platform: "Only an invoice issued through the approved platform has a PDF copy"
+        render_failed: "PDF copy not produced (non-compliant PDF/A-3): %{detail}"
+        internal: "Internal error while sending the PDF copy: %{detail}"
       channel:
         not_fiscal: "Only an invoice, a deposit invoice or a credit note has an issue channel"
         already_sent: "Document already sent: its issue channel can no longer change"

@@ -265,6 +265,10 @@ obligatoires :
 |`delivery_note.issued` |`delivery_note_id` |Facturation, bon de livraison émis
 (ajouté au lot 6, DECISIONS D-STK-004) ; clés `number`, `issue_date`
 |`payment.recorded` |`payment_id` |Facturation, encaissement saisi
+|`invoice.platform_deposited` |`invoice_id` |Extension de facturation électronique
+(`partiduo-einvoicing`), dépôt réussi sur la plateforme agréée ; clés facultatives
+`platform_ref`, `connector` ; la Facturation marque le document envoyé et envoie la
+copie PDF (ADR-004 D9 révisé, DECISIONS D-CPY-001)
 |`payment.matched` |`matching_id` |Comptabilité, lettrage
 |`payment.unmatched` |`matching_id` |Comptabilité, délettrage ou extourne d'une écriture lettrée
 (ajouté au lot 2F, DECISIONS D-2F-003) ; clés `entry_ids`, `sources`
