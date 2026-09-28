@@ -1061,3 +1061,10 @@ Blocages levés en tout ou partie à la clôture du portage (voir
   le focus (`partiduo-ui-bulma`, jeton `--pd-field-border`, 3:1 au moins).
   Reste le parcours complet au clavier et la comparaison à la maquette de
   tous les écrans.
+* *B-TDC-001 levé* : suite d'intégration `spec/integration/sandbox_spec.cr`
+  lancée par l'utilisateur depuis son poste contre le stage de TELEDEC,
+  5 exemples verts : jeton OAuth2 (et refus d'un secret faux), création de
+  l'entreprise de test, dépôt d'une CA3 en marque blanche avec lien rendu
+  et état `readytobesent`. La liasse est refusée par TELEDEC comme prévu
+  tant que la valeur de `#SOURCE` n'est pas communiquée : B-TDC-004 reste
+  ouvert.
