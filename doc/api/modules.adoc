@@ -265,6 +265,9 @@ obligatoires :
 |`delivery_note.issued` |`delivery_note_id` |Facturation, bon de livraison émis
 (ajouté au lot 6, DECISIONS D-STK-004) ; clés `number`, `issue_date`
 |`payment.recorded` |`payment_id` |Facturation, encaissement saisi
+|`quote.decided` |`quote_id`, `decision`, `customer_card_id` |Facturation, décision du client sur un
+devis envoyé (`decide_quote`) ; `decision` vaut `accepted` ou `refused` ; clé `number` (ajouté par
+ADR-009 D5 pour la relation client, DECISIONS D-INV-018)
 |`invoice.platform_deposited` |`invoice_id` |Extension de facturation électronique
 (`partiduo-einvoicing`), dépôt réussi sur la plateforme agréée ; clés facultatives
 `platform_ref`, `connector` ; la Facturation marque le document envoyé et envoie la

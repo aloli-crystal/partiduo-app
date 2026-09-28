@@ -292,6 +292,8 @@ module Partiduo
       end
 
       # Décision du client sur un devis envoyé : `accepted` ou `refused`.
+      # Publie `quote.decided` dans la transaction (ADR-009 D5) : `quote_id`,
+      # `decision`, `customer_card_id`, `number`.
       def self.decide_quote(actor : Actor, id : Int64, decision : String) : Result(DocumentView)
         authorize!(actor, WRITE)
         Transaction.run do
@@ -305,6 +307,12 @@ module Partiduo
           document.status = decision
           document.save!
           Documents.log(id, decision, actor)
+          Partiduo::Events.publish("quote.decided", {
+            "quote_id"         => id.to_s,
+            "decision"         => decision,
+            "customer_card_id" => document.customer_id.to_s,
+            "number"           => document.number.to_s,
+          }, actor_user_id: actor.user_id)
           Result(DocumentView).success(Documents.view(document))
         end
       end

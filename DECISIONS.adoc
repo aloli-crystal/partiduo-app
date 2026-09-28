@@ -10451,3 +10451,27 @@ cohérents.
 de dépôt) dans le code : le garde-fou ne serait plus un simple `git grep` ;
 ces valeurs passent en paramètre ou en documentation (`auth_header`,
 attribut `:legacy-repo:` du README de `partiduo-migrate`).
+
+== Relation client — amendement du cœur (28 septembre 2026)
+
+=== D-INV-018 — Événement `quote.decided` (amendement de la liste fermée, ADR-003 D7, ADR-009 D5)
+
+*Contexte.* L'extension `partiduo-crm` (ADR-009) fait passer une
+opportunité à « Gagnée » quand le client accepte le devis, et crée une
+activité « relancer » quand il le refuse. `decide_quote` ne publiait aucun
+événement : l'extension aurait dû scruter les devis.
+
+*Choix.* Nouvel événement `quote.decided`, clés obligatoires `quote_id`,
+`decision` (`accepted` ou `refused`) et `customer_card_id` ; clé `number`
+(numéro du devis). Publié par `Partiduo::Api::Invoicing.decide_quote`, par
+`Partiduo::Events.publish`, dans la transaction de la décision, après le
+changement de statut et la trace : un abonné qui échoue annule la
+décision. Non journalisé (`JOURNALED`) : une extension activée plus tard
+n'a pas à rejouer d'anciennes décisions. La transformation d'un devis
+envoyé (qui le rend « accepté » sans décision explicite) ne le publie pas :
+ADR-009 D5 ne vise que la décision du client. Specs :
+`spec/invoicing/documents_spec.cr`, `spec/modules/events_spec.cr`.
+
+*Alternative écartée.* Publier aussi à la transformation : l'abonné de la
+relation client recevrait une « acceptation » pour une commande tirée du
+devis ; `invoice.issued` couvre déjà la suite de la chaîne.

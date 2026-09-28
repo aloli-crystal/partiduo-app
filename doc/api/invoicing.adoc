@@ -352,4 +352,9 @@ transmission le relit par `document` avant d'envoyer)
 
 |`payment.recorded`
 |voir « Règlements »
+
+|`quote.decided` (décision du client sur un devis, `decide_quote`)
+|`quote_id`, `decision` (`accepted` ou `refused`), `customer_card_id`,
+`number` ; publié dans la transaction de la décision (ADR-009 D5,
+D-INV-018)
 |===

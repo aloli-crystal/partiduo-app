@@ -108,6 +108,33 @@ describe_module "INVOICING", "Facturation — documents" do
     Api.decide_quote(InvoicingSpec.actor, other.id, "accepted").error_keys.should eq(["invoicing.errors.quote.not_sent"])
   end
 
+  it "publie quote.decided dans la transaction de la décision (ADR-009 D5)" do
+    setup = InvoicingSpec.setup
+    accepted = InvoicingSpec.issued(setup, "quote", on: "2026-09-10", validity_date: InvoicingSpec.date("2099-01-01"))
+    refused = InvoicingSpec.issued(setup, "quote", on: "2026-09-11", validity_date: InvoicingSpec.date("2099-01-01"))
+    InvoicingSpec.capture("quote.decided") do |events|
+      Api.decide_quote(InvoicingSpec.actor, accepted.id, "accepted").value!.status.should eq("accepted")
+      Api.decide_quote(InvoicingSpec.actor, refused.id, "refused").value!.status.should eq("refused")
+      # Refusée (devis déjà décidé, décision inconnue) : aucun événement.
+      Api.decide_quote(InvoicingSpec.actor, accepted.id, "refused").failure?.should be_true
+      events.map { |event| {event["quote_id"], event["decision"], event["customer_card_id"], event["number"]} }.should eq([
+        {accepted.id.to_s, "accepted", setup.customer.id.to_s, accepted.number.to_s},
+        {refused.id.to_s, "refused", setup.customer.id.to_s, refused.number.to_s},
+      ])
+    end
+
+    # Un abonné qui échoue annule la décision.
+    other = InvoicingSpec.issued(setup, "quote", on: "2026-09-12", validity_date: InvoicingSpec.date("2099-01-01"))
+    manifest = Partiduo::Modules["CORE"]
+    manifest.on("quote.decided") { |_event| raise "refus de l'abonné" }
+    begin
+      expect_raises(Exception, "refus de l'abonné") { Api.decide_quote(InvoicingSpec.actor, other.id, "accepted") }
+    ensure
+      manifest.subscriptions.delete("quote.decided")
+    end
+    Api.document(InvoicingSpec.actor, other.id).status.should eq("sent")
+  end
+
   it "déduit la facture d'acompte de la facture finale" do
     setup = InvoicingSpec.setup
     order = InvoicingSpec.issued(setup, "order", on: "2026-09-01")

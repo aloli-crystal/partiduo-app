@@ -28,6 +28,10 @@ module Partiduo
       # Bon de livraison émis (lot 6) : sortie de stock (D-STK-004).
       "delivery_note.issued" => %w[delivery_note_id],
       "payment.recorded"     => %w[payment_id],
+      # Décision du client sur un devis envoyé (`decide_quote`), publiée pour
+      # la relation client (ADR-009 D5, amendement d'ADR-003 D7) : `decision`
+      # vaut `accepted` ou `refused`.
+      "quote.decided" => %w[quote_id decision customer_card_id],
       # Document fiscal déposé avec succès sur la plateforme agréée, publié
       # par l'extension qui le transmet (`partiduo-einvoicing`) ; la
       # Facturation le marque envoyé et en double l'envoi de la copie PDF
