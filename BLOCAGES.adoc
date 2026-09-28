@@ -906,3 +906,55 @@ tâches.
 
 *Levée.* Essai d'une passkey réelle sur `admin.partiduo.localhost`
 (B-ADM-002).
+
+== Critique de complétude du lot A (A:critique, 28 septembre 2026)
+
+== B-CRA-001 — Le serveur d'hébergement voit les données, par construction
+
+*Constat.* ADR-008 D3 et D4 protègent les dossiers d'une faille de
+l'*administration* ; sur le serveur, le compte des instances (`partiduo`)
+possède toutes les bases, et le compte de l'exécutant (groupe du
+répertoire des sauvegardes) lit chaque `pg_dump` et chaque archive des
+pièces jointes. Une compromission du serveur ou de l'exécutant donne donc
+les comptabilités : aucune tâche ne l'empêche, et la restauration test
+exige de relire les sauvegardes sur place.
+
+*Contournement.* Aucun dans le code : limite assumée, écrite ici pour ne pas
+laisser croire le contraire.
+
+*Levée proposée.* Chiffrer les sauvegardes pour une clé publique dont la
+clé privée n'est pas sur le serveur (`age`), la restauration test se
+faisant alors hors du serveur ou avec une clé de restauration dédiée ; à
+trancher (gestion des clés) avant la mise en production.
+
+== B-CRA-002 — Double validation déclarative pour l'exécutant
+
+*Constat.* `approval_ref` et `approvers` d'une tâche sont des chaînes :
+l'exécutant et l'instance les inscrivent au journal sans pouvoir les
+vérifier. Une administration compromise peut forger un recours d'accès
+(désormais sans effet sur la confidentialité : l'invitation ne va qu'à un
+administrateur existant, et, avec `--mail-command`, par le serveur :
+D-AFN-003, D-CRA-003) ou des tâches qui touchent la disponibilité
+(suspension, archivage, montée de version). La suppression définitive et
+l'effacement d'une archive sont revérifiés par le serveur (D-CRA-007).
+
+*Levée proposée.* Faire signer chaque validation par l'authentificateur du
+validateur (assertion WebAuthn sur la référence et les paramètres) et la
+faire vérifier par l'exécutant avec les clés publiques des
+utilisateurs d'administration, publiées au serveur hors de l'API des
+tâches.
+
+== B-CRA-003 — Remise des invitations par le serveur et cloisonnement non essayés en réel
+
+*Constat.* `--mail-command` est essayé avec un script à la place de
+`sendmail` et à blanc ; aucun MTA réel (pas de serveur Linux, B-ADM-002).
+Sans l'option, le lien passe par l'administration (D-ADM-009). Restent à
+vérifier sur le premier serveur, si l'administration y est hébergée : son
+compte (`partiduo-admin`) n'appartient pas au groupe `partiduo` (fichiers
+d'environnement des instances), et son rôle PostgreSQL ne lit aucune table
+des bases `partiduo_*` (droit `CONNECT` de `PUBLIC` à retirer à la
+création de la base).
+
+*Levée.* Essai d'une création et d'un recours d'accès avec
+`--mail-command "/usr/sbin/sendmail -oi"` sur le premier serveur ; puis
+`REVOKE CONNECT ON DATABASE … FROM PUBLIC` dans `partiduo-provision`.

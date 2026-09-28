@@ -34,7 +34,7 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |K |Extension `partiduo-choruspro` (ADR-004 D9 révisé) : adaptateur PISTE, réaction aux paiements lettrés, relecture (réservation du dépôt, recyclage sur le portail, visibilité, historique) |*Terminé* contre Chorus Pro simulé (sections « Extension CHORUSPRO » et « Clôture du lot K ») ; qualification réelle non essayée (B-FIN-002)
 |H |Extension `partiduo-esalink` (ADR-004 D2 révisé le 28 septembre 2026) : adaptateur EsaLink hérité de l'adaptateur XP Z12-013 d'EINV, points d'extension ajoutés à EINV |*Terminé* contre EsaLink simulée (sections « Extension ESALINK » et « Clôture du lot H ») ; préproduction réelle non essayée (B-ESL-001)
 |U |Extension `partiduo-urssaf` (ADR-007 D7) complétée : télépaiement et mandats SEPA, suivi (paiements, régularisations, anomalies, mandat révoqué depuis l'espace URSSAF), accusés en pièce jointe, OAuth 2, entrée du mode simplifié |*Terminé* contre l'URSSAF simulée (sections « Extension URSSAF — suivi et paiements » et « Clôture du lot U ») ; adaptateur réel en attente (B-FIN-003, B-URS-001)
-|A |Administration du parc (ADR-008) : interface en ligne de commande d'instance (`manage instance`), application `partiduo-admin` (cabinets, rôles, cycle de vie, sauvegardes, mises à jour, supervision) et exécutant `partiduo-agent` ; certificat Let's Encrypt par instance (ADR-001 D2) |*Terminé* (sections « Interface en ligne de commande d'instance », « Administration du parc » et « Clôture du lot A ») ; mode production non essayé sur un serveur réel (B-ADM-002, B-AFN-001)
+|A |Administration du parc (ADR-008) : interface en ligne de commande d'instance (`manage instance`), application `partiduo-admin` (cabinets, rôles, cycle de vie, sauvegardes, mises à jour, supervision) et exécutant `partiduo-agent` ; certificat Let's Encrypt par instance (ADR-001 D2) |*Terminé* (sections « Interface en ligne de commande d'instance », « Administration du parc », « Clôture du lot A » et « Critique de complétude du lot A ») ; mode production non essayé sur un serveur réel (B-ADM-002, B-AFN-001, B-CRA-003)
 |===
 
 *État définitif (28 septembre 2026, critique de complétude finale : section
@@ -2465,6 +2465,57 @@ Specs `partiduo-admin` (base `partiduo_ja_test`, ordre aléatoire) :
 Reste : passkey sur un appareil réel et mode production (B-ABE-001,
 B-ADM-002, B-AFN-001).
 
+== Critique de complétude du lot A (A:critique, 28 septembre 2026)
+
+`partiduo-admin`, `partiduo-agent` et `manage instance` relus contre
+l'ADR-008 (D1 à D5) et l'ADR-002, en supposant l'administration
+compromise : aucun chemin ne doit donner les données comptables d'un
+dossier ni faire exécuter une commande arbitraire sur un serveur.
+
+Vérifié sans écart : liste fermée des 14 types (`Protocol::KINDS`, plan
+par type, refus du reste) ; aucun shell (programmes lancés par argv,
+enveloppes qui valident chaque argument, `sudoers` réduit à deux scripts
+root) ; `manage instance` limité à neuf actions, sans SQL libre ni
+processus lancé, `status` et `backup-plan` sans donnée comptable (ni nom
+déposé des pièces) ; l'administration n'ouvre aucune connexion vers les
+serveurs ni vers les bases des dossiers, n'a aucun compte dans les
+instances ; cookies sans domaine parent (hôte seul) ; `rp.id` de
+l'administration distinct de celui des dossiers ; rôles et niveaux
+ADR-002 (passkey du super-admin, niveau 2 sinon, limitation, codes de
+récupération) ; hôte et base recalculés depuis le sous-domaine
+(D-AFN-004).
+
+Écarts corrigés dans `partiduo-admin` (D-CRA-001 à D-CRA-007) :
+
+* *sauvegarde d'un autre dossier* (bloquant) : une tâche forgée restaurait
+  la sauvegarde du dossier B dans le dossier A ou effaçait celles de B ;
+  chemins bornés à `<backup-dir>/<sous-domaine>/`, vérifiés avant tout
+  geste ;
+* *lien d'invitation* (bloquant) : il transitait par l'administration et
+  ouvre le compte d'administrateur du dossier ; l'exécutant le remet
+  lui-même (`--mail-command`, `--mail-from`), l'administration n'en voit
+  que la trace ;
+* *arguments* : valeurs d'un recours d'accès jamais prises pour des
+  options de `manage instance` ;
+* *pièces jointes* : liste bornée au stockage de l'instance (agent et
+  enveloppe) ;
+* *journal des tâches* : lignes de PostgreSQL qui citent des valeurs
+  retirées ;
+* *durée légale* revérifiée par le serveur (suppression définitive,
+  effacement d'une archive) ;
+* `Approvals.reject` conditionnel (reste de D-AFN-011).
+
+Vérifications : `partiduo-admin` (base `partiduo_test_critique_a`, ordre
+aléatoire) : 139 exemples verts (dont `spec/agent/critique_spec.cr` et
+`spec/admin/critique_spec.cr`), format et Ameba sans remarque.
+`partiduo-app` : documentation seule (`doc/api/instance-cli.adoc`).
+
+Reste (BLOCAGES) : le serveur voit les données par construction
+(B-CRA-001, chiffrement des sauvegardes proposé) ; double validation
+déclarative pour l'exécutant (B-CRA-002, signature proposée) ; remise par
+un vrai MTA et cloisonnement du compte de l'administration à essayer sur
+le premier serveur (B-CRA-003).
+
 == Prochaines étapes
 
 Liste à l'issue de la critique de complétude et des lots E, G, L et T ;
@@ -2492,7 +2543,9 @@ chaque point renvoie à sa décision ou à son blocage.
 . *Administration du parc (après le lot A)* : premier serveur Linux —
   installation de l'exécutant et de ses enveloppes (README de
   `partiduo-admin`), création, montée de version et restauration réelles
-  (B-AFN-001, B-ADM-002) ; `Approvals.reject` conditionnel (D-AFN-011) ;
+  (B-AFN-001, B-ADM-002), avec remise des invitations par le serveur
+  (B-CRA-003) ; chiffrement des sauvegardes (B-CRA-001) et signature des
+  doubles validations (B-CRA-002) à trancher ;
   sous-domaines réservés dans `partiduo-provision` (D-ASP-001) ; bandeau de
   lecture seule dans l'interface (D-CLI-003).
 . *Micro-entreprise (après le lot G)* : vérifier aux sources les taux,

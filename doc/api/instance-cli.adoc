@@ -251,8 +251,11 @@ validation a lieu dans `partiduo-admin`, sa trace est reportée ici.
 
 `usable_admins` : administrateurs actifs, non révoqués, ayant un moyen
 d'authentification (mot de passe ou passkey) *avant* la réémission — à
-consigner dans la tâche. L'exécutant transmet le lien ; le jeton n'est écrit
-nulle part ailleurs que dans la réponse.
+consigner dans la tâche. Le jeton n'est écrit nulle part ailleurs que dans
+la réponse. L'exécutant de `partiduo-admin` remet le lien lui-même par
+courriel quand il est configuré pour (`--mail-command`) : le lien ne quitte
+alors pas le serveur ; sinon il le transmet à l'administration, qui l'envoie
+(D-ADM-009, D-CRA-003).
 
 Journal d'audit de l'instance : `user.invite` (acteur `system`), puis `instance.admin_invitation` (acteur `partiduo-admin`) dont le
 détail JSON porte `email`, `reason`, `approval_ref`, `approvers`, `created`

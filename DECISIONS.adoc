@@ -9901,3 +9901,113 @@ ligne de commande.
 
 *Alternative écartée.* Variable d'environnement : plus facile à oublier
 sur un serveur de production.
+
+== Critique de complétude du lot A (A:critique, 28 septembre 2026)
+
+Comparaison de `partiduo-admin`, `partiduo-agent` et de `manage instance` à
+l'ADR-008 et à l'ADR-002, sous l'hypothèse d'une administration
+*compromise* (ADR-008, « Conséquences positives » : une faille de
+l'interface d'administration ne donne ni la main sur les serveurs ni
+l'accès aux comptabilités). L'exécutant est la frontière : il ne croit de
+l'administration que des valeurs, et revérifie ce qui protège les données.
+
+=== D-CRA-001 — Sauvegardes du dossier seulement
+
+*Contexte.* `guard_backup_path!` n'exigeait qu'un chemin sous
+`--backup-dir` : une tâche forgée `backup.restore` (remplacement ou
+instance neuve), `instance.restore_archive` ou `backup.test_restore` sur
+le dossier A avec une sauvegarde du dossier B restaurait la comptabilité
+de B dans A, lisible par les utilisateurs de A ; `backup.prune` et
+`instance.delete` effaçaient les sauvegardes d'un autre dossier.
+
+*Choix.* Tout chemin reçu (`path`, `media_path`, `paths`, `backups`) doit
+être sous `<backup-dir>/<sous-domaine>/` du dossier de la tâche
+(`Context#own_backup!`, `System#guard_backup_path!(path, slug)`), vérifié
+avant tout geste (la suppression définitive contrôle sa liste avant de
+retirer le service). Spec : `spec/agent/critique_spec.cr`.
+
+*Alternative écartée.* Contrôle dans les enveloppes de sudo : la base ne
+redonne pas le sous-domaine sans ambiguïté (`-` → `_`), et le compte de
+l'exécutant lit déjà les sauvegardes ; la frontière utile est entre
+l'administration et l'exécutant.
+
+=== D-CRA-002 — Valeurs reçues jamais prises pour des options
+
+*Contexte.* L'adresse, le motif, la référence et les validateurs d'un
+recours d'accès étaient passés tels quels à `manage instance admin-invite` :
+une adresse `--list-file=…` ou un motif `--terminate-sessions` était lu
+comme une option.
+
+*Choix.* `Context#value_arg` refuse une valeur qui commence par `-` ou
+contient un retour à la ligne ou un octet nul ; validateurs sans virgule.
+
+=== D-CRA-003 — Lien d'invitation remis par le serveur (amende D-ADM-009)
+
+*Contexte.* D-ADM-009 fait rendre le lien d'invitation (création, recours
+d'accès) à l'administration, qui l'envoie. Qui tient ce lien enrôle une
+passkey sur le compte d'administrateur du dossier
+(`Auth.accept_invitation`) : une faille de l'administration (code ou
+relais de courriel) donnait donc l'accès aux comptabilités, contrairement
+à ADR-008 D3.
+
+*Choix.* Options `--mail-command` (sans shell, message RFC 5322 sur
+l'entrée standard, destinataire en dernier argument, par exemple
+`/usr/sbin/sendmail -oi`) et `--mail-from` de `partiduo-agent` : le
+serveur remet lui-même le courriel (textes fr, en, nl identiques à ceux de
+l'administration, langue du dossier ajoutée aux paramètres des tâches) ; le
+résultat ne porte que `invitation_delivered: "server"`, le journal renvoyé
+ne cite pas le lien. Sans l'option, comportement de D-ADM-009 (avertissement
+au démarrage en production). L'unité `deploy/partiduo-agent.service` active
+l'option. Adresse validée (ni option, ni retour à la ligne).
+
+*Alternative écartée.* Envoi par l'instance (`manage instance
+admin-invite --deliver`) : le transport SMTP vit dans la Facturation
+(`PARTIDUO_SMTP_URL`), le cœur n'en a pas ; l'y ajouter change le contrat
+1.0.0. Proposée pour une version 1.1 du contrat.
+
+=== D-CRA-004 — Liste des pièces jointes bornée au stockage de l'instance
+
+*Contexte.* `tar -C <media> -T <liste>` archivait tout chemin de la liste
+(absolu ou avec `..`) lisible par le compte des instances : fichiers
+d'environnement d'autres instances (`MARTEN_SECRET_KEY`), pièces d'autres
+dossiers.
+
+*Choix.* `System.safe_media_line?` écarte à la fusion des listes toute
+ligne absolue, avec `..`, vide entre deux `/`, commençant par `-` ou avec
+un caractère de contrôle (journalisé) ; l'enveloppe `media-archive` refuse
+une telle liste (code 2).
+
+=== D-CRA-005 — Erreurs de PostgreSQL sans valeurs de la base
+
+*Contexte.* L'erreur d'un outil (`pg_restore`, réponse illisible de
+`manage instance`) remontait jusqu'à 500 caractères de sa sortie d'erreur
+dans le journal de la tâche, visible dans l'administration ; les lignes
+`DETAIL` et `Command was` de PostgreSQL citent des valeurs (libellés,
+montants).
+
+*Choix.* `System.redact_errors` retire les lignes `DETAIL:`, `CONTEXT:`,
+`HINT:`, `QUERY:`, `LINE …`, `Command was:` et les curseurs `^` avant de
+renvoyer l'erreur.
+
+=== D-CRA-006 — Rejet d'une double validation conditionnel (clôt le reste de D-AFN-011)
+
+*Choix.* `Approvals.reject` passe la demande de `pending` à `rejected` par
+une mise à jour conditionnelle : une demande validée entre-temps reste
+validée et le rejet répond « non ». Spec : `spec/admin/critique_spec.cr`.
+
+=== D-CRA-007 — Durée légale revérifiée par l'exécutant
+
+*Contexte.* La durée légale (dix ans) et l'état « archivé » n'étaient
+contrôlés que par l'administration : une tâche `instance.delete` forgée
+supprimait un dossier actif, un `backup.prune` forgé effaçait une archive
+figée.
+
+*Choix.* `Protocol::ARCHIVE_RETENTION_YEARS` (partagé, repris par
+`Config`) et date de prise lue dans le nom du fichier
+(`archive-<horodatage>.dump`) : une suppression définitive exige une
+archive du dossier sur le serveur, la plus récente ayant plus de dix ans ;
+un fichier d'archive dans sa durée légale n'est jamais effacé.
+
+*Alternative écartée.* Faire signer les doubles validations (assertions de
+passkey des deux validateurs vérifiées par l'exécutant) : plus fort, mais
+demande un protocole de plus ; noté en B-CRA-002.
