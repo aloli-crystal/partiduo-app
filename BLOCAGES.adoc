@@ -597,4 +597,46 @@ WCAG 2.2 AA vérifiés par les specs (`spec/ui/micro_spec.cr`,
 (une colonne sous 768 px, cibles de 44 px).
 
 *Levée.* Essai sur un téléphone réel (avec B-UI-001 levé) : saisie d'une
-recette avec photo, facture allégée, déclaration URSSAF notée.
+recette avec photo, facture allégée, déclaration URSSAF notée. Même essai pour le mode simplifié de la profession libérale (lot L) :
+saisie d'une dépense avec rubrique et photo, écran 2035 sur une colonne.
+
+== B-LIB-001 — Lignes et cases de la 2035-A et de la 2035-B non vérifiées au formulaire officiel (L:liberal, module liberal)
+
+*Constat.* La table de correspondance initiale
+(`src/liberal/data/defaults.yml`, millésime 2024, D-LIB-004) a été saisie
+de mémoire, sans accès à impots.gouv.fr ni aux formulaires 2035-A et 2035-B
+(pas d'accès réseau pendant la tâche). Les numéros de ligne 1 à 48 suivent
+l'ordre du formulaire ; plusieurs codes de case (en particulier ceux du
+résultat, de la 2035-B et des charges sociales personnelles) sont
+incertains, et la 2035-B n'a pas de case par total dans le formulaire papier.
+Le code n'en dépend pas : ce sont des données datées par millésime,
+modifiables par `Partiduo::Api::Liberal.set_form_line`.
+
+*Contournement.* Les contrôles de cohérence de la 2035 (`mapped`,
+`mapping_missing`) et l'empreinte rendent visible toute modification ; les
+specs portent sur les montants, pas sur les cases.
+
+*Levée.* Relever lignes et cases de la notice 2035 du millésime et du
+cahier des charges EDI-TDFC (codes des zones), corriger le fichier
+(instances neuves) et les instances existantes (`set_form_line` au millésime
+concerné) ; le refaire à chaque millésime. À coordonner avec
+`partiduo-teledec` (le partenaire EDI attend peut-être ses propres codes).
+
+== B-LIB-002 — Pas d'écran du module liberal dans l'interface (L:liberal, interface)
+
+*Constat.* La tâche portait sur le cœur (`partiduo-app`) : le manifeste
+déclare les routes `liberal:journal`, `liberal:assets`, `liberal:tax_return`,
+`liberal:settings`, qu'aucune application de `partiduo-ui-bulma` ne sert
+encore ; le menu les ignore (`NoReverseMatch` rattrapé par `shell.cr`). Le
+mode simplifié de l'ADR-007 D3 n'est pas étendu au module (vocabulaire
+« recettes », « dépenses », « immobilisations »).
+
+*Levée.* Écrans du livre-journal (saisie au téléphone), des immobilisations,
+des réintégrations, de la table de correspondance et de la 2035 préparée
+dans `partiduo-ui-bulma`, uniquement par `Partiduo::Api::Liberal`, et
+paramétrage comptable (`Api::Accounting.set_liberal_account`).
+
+*Levé le 28 septembre 2026 (L:interface).* Écrans `/liberal/…` et
+`/accounting/liberal-accounts`, mode simplifié du module (D-UI-069 à
+D-UI-073, `spec/ui/liberal_spec.cr`). Reste, comme pour la
+micro-entreprise, l'essai sur un téléphone réel (B-UI-009).

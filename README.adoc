@@ -136,6 +136,7 @@ Référence par domaine (AsciiDoc) :
 * link:doc/api/core-settings.adoc[]
 * link:doc/api/followup.adoc[]
 * link:doc/api/invoicing.adoc[]
+* link:doc/api/liberal.adoc[]
 * link:doc/api/micro.adoc[]
 * link:doc/api/modules.adoc[]
 * link:doc/api/socle-referentiel.adoc[]

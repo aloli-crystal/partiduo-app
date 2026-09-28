@@ -1,0 +1,166 @@
+= Profession libérale : livre-journal, immobilisations, 2035
+:toc: left
+:toc-title: Table des matières
+:toclevels: 3
+:icons: font
+:source-language: crystal
+
+Référence du module officiel `liberal` (ADR-007 D6) : professions libérales
+imposées en BNC au régime de la déclaration contrôlée. Sans équivalent dans
+NOALYSS (le greffon `amortis` a inspiré le registre des immobilisations) :
+les obligations viennent du CGI (art. 93, 96 à 100) et de la notice de la
+2035.
+
+* Contrat : `Partiduo::Api::Liberal` (`src/liberal/api/liberal.cr`, types
+  dans `types.cr`). Module `LIBERAL`, sans dépendance ; toute fonction lève
+  `ModuleDisabled` s'il est inactif, `Forbidden` sans la permission.
+* Tables : `liberal_settings`, `liberal_nature`, `liberal_line`,
+  `liberal_counter`, `liberal_asset`, `liberal_disposal`,
+  `liberal_adjustment`, `liberal_form_line`, `liberal_invoice` (migration
+  liberal 0001) ; côté Comptabilité, `accounting_liberal_account` (migration
+  accounting 0011).
+* Données initiales : `LIBERAL.defaults` (une nature par rubrique dans la
+  langue de l'instance, table de correspondance de
+  `src/liberal/data/defaults.yml`).
+* Instance : `partiduo-provision --modules liberal[,invoicing[,accounting]]`.
+* Specs : `spec/liberal/`, `spec/integration/liberal_spec.cr` ;
+  configurations `liberal` et `liberal,accounting` de
+  `scripts/specs-modules.sh` et de la CI.
+* Décisions : `DECISIONS.adoc`, D-LIB-001 à D-LIB-013 ; blocage B-LIB-001.
+
+== Permissions
+
+[cols="1,3",options="header"]
+|===
+|Permission |Fonctions
+
+|`liberal.register.read` |livre-journal (lecture, totaux, ventilation, éditions), immobilisations, 2035-B, plan d'amortissement, réintégrations et déductions, 2035 préparée et son édition de contrôle, paramètres, natures, table de correspondance
+|`liberal.register.write` |saisie et contre-passation (recettes, dépenses, immobilisations), cessions, requêtes de contrôle, réintégrations et déductions
+|`liberal.settings.write` |paramètres, natures, table de correspondance, chargement des valeurs par défaut, republication
+|===
+
+== Rubriques et natures
+
+Chaque ligne du livre-journal porte une *nature* (paramétrable : code,
+libellé, sens `receipt` ou `expense`) rattachée à une *rubrique* de la
+2035-A, liste fermée dans le code (`HEADINGS`) :
+
+* recettes : `receipts` (ligne 1), `financial_income`, `other_gains` ;
+* déduites des recettes : `disbursements` (débours), `fees_retroceded`
+  (honoraires rétrocédés) ;
+* dépenses : `EXPENSE_LINE_HEADINGS` (achats à pertes diverses, lignes 8 à
+  32) ;
+* hors 2035 (trésorerie seulement) : `contribution`, `loan_received`,
+  `withdrawal`, `loan_repayment`.
+
+La ligne et la case de chaque rubrique ne sont *pas* dans le code : elles
+sont lues dans la table de correspondance du millésime.
+
+== Livre-journal
+
+[cols="2,3",options="header"]
+|===
+|Fonction |Effet
+
+|`lines(actor, JournalQuery)`, `line(actor, id)` |livre-journal chronologique (`LineView`), filtres par dates, sens, nature, rubrique ; page d'au plus `MAX_LIMIT` lignes
+|`check_receipt`, `check_expense` |requêtes de contrôle
+|`record_receipt(actor, LineInput)` |inscrit la recette (`J2026-00001`), publie `liberal.receipt.recorded`
+|`record_expense(actor, LineInput)` |inscrit la dépense ; `nondeductible_amount` : part privée, réintégrée ; publie `liberal.expense.recorded`
+|`reverse_line(actor, ReverseInput)` |contre-passation datée (montants opposés) ; publie l'événement du sens de la ligne
+|`journal_totals(actor, query)` |nombre de lignes, recettes, dépenses, solde (`TotalsView`)
+|`heading_totals(actor, year)` |ventilation de l'année civile par rubrique (`HeadingTotalView`)
+|`export_journal(actor, query, ExportFormat)` |CSV ou PDF/A-2b (`FileView`)
+|===
+
+Une ligne ne se modifie ni ne s'efface (déclencheur `liberal_register_guard`),
+n'entre jamais dans une période close du socle ; une saisie directe n'est pas
+datée dans le futur.
+
+== Immobilisations et amortissements
+
+[cols="2,3",options="header"]
+|===
+|Fonction |Effet
+
+|`assets(actor, year?)`, `asset(actor, id)` |registre (`AssetView`) ; avec `year`, les immobilisations vivantes de la 2035-B de l'année
+|`check_asset`, `record_asset(actor, AssetInput)` |inscrit l'immobilisation (`I2026-00001`) ; publie `liberal.asset.recorded` (`operation` `acquisition`)
+|`reverse_asset(actor, ReverseInput)` |contre-passation, la même année civile que l'acquisition, sans cession (`reversal`)
+|`dispose_asset(actor, DisposalInput)` |cession : date, prix, règlement (`disposal`) ; une par immobilisation
+|`disposal_result(actor, asset_id)` |plus ou moins-value de la cession d'une immobilisation (`DisposalResultView`, `nil` si elle n'est pas cédée), sans calculer la 2035
+|`depreciation(actor, year)` |tableau de la 2035-B (`DepreciationRowView` : antérieurs, dotation, valeur résiduelle)
+|`schedule(actor, id)` |plan d'amortissement (année, annuité)
+|===
+
+Amortissement linéaire seulement (le reste relève de `partiduo-amortis`) :
+annuité = base ÷ durée, prorata temporis sur 360 jours depuis la mise en
+service et jusqu'à la cession, dernière annuité soldant la base (D-LIB-005).
+
+== Réintégrations et déductions
+
+`adjustments(actor, year)`, `add_adjustment(actor, AdjustmentInput)`,
+`delete_adjustment(actor, id)` : divers à réintégrer, divers à déduire,
+quote-part de SCM ou SCP, frais d'établissement, provisions
+(`ADJUSTMENT_KINDS`). Figés dès qu'une période de l'année est close
+(déclencheur `liberal_adjustment_guard`).
+
+== Table de correspondance (datée par millésime)
+
+`form_lines(actor, millesime?)`, `set_form_line(actor, FormLineInput)`,
+`delete_form_line(actor, id)`. Un poste (`ITEMS` : rubriques et totaux
+calculés) se reporte à un formulaire (`2035`, `2035-A`, `2035-B`), une ligne
+et une case, à partir d'un millésime et jusqu'au millésime suivant qui le
+redéfinit. Refus : case déjà prise par un autre poste du même formulaire
+pour l'un des millésimes où la ligne serait en vigueur
+(`form_line.box.taken`) ; création, remplacement ou suppression d'une ligne
+d'un millésime au plus égal à une année close (`form_line.year.closed`,
+D-LIB-010 : la correction passe par une ligne au millésime suivant).
+
+== 2035 préparée
+
+[cols="2,3",options="header"]
+|===
+|Fonction |Effet
+
+|`tax_return(actor, year)` |`TaxReturnView` : identification, postes (`TaxLineView` : formulaire, ligne, case, montant en euros entiers, `mapped`), tableau des immobilisations, cessions, réintégrations et déductions, contrôles (`ControlView`), empreinte SHA-256
+|`export_tax_return(actor, year)` |édition de contrôle PDF/A-2b
+|`republish(actor)` |republie tous les événements (Comptabilité activée plus tard) ; la Comptabilité ne double rien
+|===
+
+`TaxReturnView#ready?` : aucun contrôle bloquant. `#boxes` : montants non
+nuls par formulaire et par case. `#fingerprint` : à comparer au dépôt pour
+vérifier que la déclaration validée n'a pas changé.
+
+*Transmission* : `partiduo-teledec` (ADR-007 D4) lit `tax_return` avec un
+acteur muni de `liberal.register.read`, refuse le dépôt si `ready?` est faux
+et transmet `boxes` avec l'identification (D-LIB-007).
+
+Contrôles : SIREN absent ou mal formé, poste non nul sans ligne ou sans case
+au millésime, deux postes dans la même case d'un formulaire
+(`box_duplicate`), rubrique négative, amortissement au-delà de la base
+(bloquants) ; profession non renseignée, véhicule dont la base dépasse le
+plus bas des plafonds d'amortissement (`vehicle_depreciation_ceiling`,
+D-LIB-012), aucune ligne, année sans exercice ou non close (à vérifier).
+
+== Événements
+
+[cols="1,3",options="header"]
+|===
+|Événement |Charge utile
+
+|`liberal.receipt.recorded` |`receipt_id`, `number`, `date`, `amount` (négatif : contre-passation), `nondeductible_amount`, `nature_code`, `heading`, `heading_label`, `method`, `card_id`, `party_name`, `label`, `reference`, `attachment_id`, `origin`, `source`, `reversal_of_id`
+|`liberal.expense.recorded` |mêmes clés, `expense_id`
+|`liberal.asset.recorded` |`asset_id`, `operation` (`acquisition`, `reversal`, `disposal`), `disposal_id`, `number`, `date`, `amount` (base, ou prix de cession), `category`, `category_label`, `method`, `card_id`, `party_name`, `label`, `reference`, `attachment_id`, `reversal_of_id`
+|===
+
+Abonnés : la Comptabilité (`Partiduo::Accounting::LiberalEntries`) passe
+l'écriture de trésorerie (journal financier du mode de règlement ; compte de
+la nature, de la rubrique ou de la catégorie `asset_<catégorie>`, `disposal`,
+paramétrable par `Api::Accounting.set_liberal_account`, sinon compte du
+régime de `src/accounting/data/liberal_accounts.yml`). Une recette issue de
+la Facturation n'y est pas comptabilisée une seconde fois. Tenue toutes
+taxes comprises (D-LIB-009) : aucune TVA collectée ni déductible, la TVA
+reversée est une charge (6358 en France, 640 en Belgique).
+
+Alimentation par la Facturation : `invoice.issued`, `payment.recorded`,
+`payment.matched` (recette de la nature par défaut, toutes taxes comprises),
+`payment.unmatched` (contre-passation).

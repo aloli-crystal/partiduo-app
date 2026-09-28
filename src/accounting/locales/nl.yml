@@ -9,6 +9,8 @@ nl:
         other: "Niet-voorraadhoudende aankopen van materialen en benodigdheden"
         vat: "Te betalen btw"
         vat_deductible: "Aftrekbare btw"
+    liberal:
+      disposal_account_label: "Opbrengsten uit de realisatie van vaste activa"
     module:
       name: "Boekhouding"
     permissions:
@@ -271,6 +273,11 @@ nl:
         already_posted: "Deze gebeurtenis is al geboekt."
         not_dismissed: "Deze gebeurtenis is niet terzijde gelegd."
         reason_too_long: "Hoogstens %{max} tekens."
+      liberal:
+        no_financial_ledger: "Geen actief financieel dagboek: maak er een aan om het kasboek van het vrij beroep te boeken."
+        no_account: "Geen rekening voor %{key}: stel ze in voor het vrij beroep."
+        key_invalid: "Ongeldige aard, rubriek of categorie (letters, cijfers en _, hoogstens 40 tekens)."
+        not_direct_use: "Rekening %{number} kan niet worden gebruikt bij het boeken."
       micro:
         no_financial_ledger: "Geen actief financieel dagboek: maak er een aan om de registers van de micro-onderneming te boeken."
         no_account: "Geen rekening voor categorie %{category}: stel ze in voor de micro-onderneming."

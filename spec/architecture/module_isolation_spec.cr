@@ -19,6 +19,7 @@ MODULE_NAMESPACES = {
   "stock"      => {"STOCK", "Stock"},
   "followup"   => {"FOLLOWUP", "Followup"},
   "micro"      => {"MICRO", "Micro"},
+  "liberal"    => {"LIBERAL", "Liberal"},
 }
 
 describe "Isolation des modules (ADR-006 D3)" do

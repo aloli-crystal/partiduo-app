@@ -75,4 +75,12 @@ Partiduo::Modules.register do
   # le registre, qui peut republier ses lignes.
   on("micro.receipt.recorded") { |event| Partiduo::Accounting::MicroEntries.on_event(event) }
   on("micro.purchase.recorded") { |event| Partiduo::Accounting::MicroEntries.on_event(event) }
+
+  # Écritures du module liberal (ADR-007 D6) : trésorerie et contrepartie
+  # selon la nature, la rubrique de la 2035-A ou la catégorie
+  # d'immobilisation ; un échec ne bloque pas le livre-journal, qui peut
+  # republier ses lignes.
+  on("liberal.receipt.recorded") { |event| Partiduo::Accounting::LiberalEntries.on_event(event) }
+  on("liberal.expense.recorded") { |event| Partiduo::Accounting::LiberalEntries.on_event(event) }
+  on("liberal.asset.recorded") { |event| Partiduo::Accounting::LiberalEntries.on_event(event) }
 end

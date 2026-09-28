@@ -28,20 +28,20 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |6 |Stock, prévisions budgétaires, suivi (GED : extension `partiduo-document`) |*Terminé* (cœur et interface ; clôture « Clôture du lot 6 ») ; reprise par `partiduo-migrate` reportée
 |E |Justificatifs (`partiduo-document`), facturation électronique (`partiduo-einvoicing`, adaptateurs XP Z12-013 et NOALYSS-PEPPOL), SUPER PDP (`partiduo-superpdp`), factures non électroniques (cœur et interface) |*Terminé* (clôture « Clôture du lot E »)
 |G |Module `micro` (ADR-007 D1, D2) : registres, aide URSSAF, 2042-C-PRO, seuils, partie double par la Comptabilité (cœur) ; interface simplifiée (D3) |*Terminé* (cœur, interface simplifiée, écrans de paramétrage ; clôture « Clôture du lot G »)
+|L |Module `liberal` (ADR-007 D6) : livre-journal, immobilisations, 2035, partie double par la Comptabilité ; interface et mode simplifié |*Terminé* (cœur, interface et mode simplifié ; clôture « Clôture du lot L »)
 |===
 
-*État (27 septembre 2026, clôture du lot G).* Lot en cours : aucun. Les
+*État (28 septembre 2026, clôture du lot L).* Lot en cours : aucun. Les
 lots P à 6 du plan, le lot E (justificatifs, facturation électronique,
-SUPER PDP, factures non électroniques) et le lot G (micro-entreprise :
-module `micro`, interface simplifiée, section « Clôture du lot G ») sont
+SUPER PDP, factures non électroniques), le lot G (micro-entreprise :
+module `micro`, interface simplifiée, section « Clôture du lot G ») et le
+lot L (professions libérales : module `liberal`, 2035, interface
+simplifiée, section « Clôture du lot L ») sont
 terminés, les trois jalons
 vérifiés, et la critique de complétude (section du même nom) a comblé les
 écarts faisables au prompt, aux ADR et à la maquette. Ce qui reste est
 listé dans « Prochaines étapes » et dans BLOCAGES.adoc. Specs :
-`partiduo-app` 1060 exemples (Comptabilité et Facturation), 998 + 22 en
-attente (Comptabilité seule), 741 + 51 (Facturation seule), 690 + 65
-(micro), 752 + 49 (micro et Facturation), 1010 + 18 (micro, Facturation et
-Comptabilité) ; `partiduo-ui-bulma` 309 ; `partiduo-skel` 24 ;
+`partiduo-app` 1025 + 29 en attente (Comptabilité, Analytique, Stock, Suivi), 768 + 58 (Facturation, Stock, Suivi), 1087 + 13 (Comptabilité et Facturation), 717 + 72 (micro), 779 + 56 (micro et Facturation), 1037 + 25 (micro, Facturation et Comptabilité), 701 + 71 (liberal seul), 959 + 40 (liberal et Comptabilité) ; `partiduo-ui-bulma` 332 ; `partiduo-skel` 24 ;
 `partiduo-document` 69 ; `partiduo-einvoicing` 92 ; `partiduo-superpdp` 71
 (dont 5 contre le bac à sable SUPER PDP) ; `partiduo-migrate` 93 ; tous
 verts (extensions et reprise : chiffres de la clôture du lot E).
@@ -1655,6 +1655,122 @@ garde-fous ADR-005 D3 verts ; `marten migrate` sur base vierge
 `genmigrations micro` sans écart. Commits `development` dans
 `partiduo-app` et `partiduo-ui-bulma`.
 
+== Module liberal — ADR-007 D6 (cœur, 28 septembre 2026)
+
+Cœur (`partiduo-app`), module officiel `liberal` sans dépendance (décisions
+D-LIB-001 à D-LIB-008, blocages B-LIB-001 et B-LIB-002, contrat
+link:doc/api/liberal.adoc[]) :
+
+* Application `src/liberal/` : manifeste `LIBERAL` (permissions
+  `liberal.register.read`, `liberal.register.write`,
+  `liberal.settings.write` ; menus Livre-journal, Immobilisations,
+  Déclaration 2035, paramètres), `ModuleDisabled` sur tout le contrat si
+  inactif ; migration liberal 0001 ; jeu de données `LIBERAL.defaults`
+  (une nature par rubrique, table de correspondance au millésime 2024).
+* Livre-journal des recettes et dépenses (comptabilité de trésorerie, TTC),
+  numéroté par année sous verrou, intangible dès l'inscription et fermé aux
+  périodes closes (déclencheur), contre-passation datée ; ventilation par
+  rubrique de la 2035-A, part non déductible réintégrée ; éditions CSV et
+  PDF/A-2b.
+* Registre des immobilisations : acquisition, contre-passation la même
+  année, cession ; amortissement linéaire au prorata sur 360 jours ;
+  tableau de la 2035-B ; plus et moins-values à court et long terme.
+* Réintégrations et déductions de l'année (figées à la clôture).
+* 2035 préparée (`tax_return`) : 2035-A et 2035-B depuis la ventilation,
+  lignes et cases lues dans la table datée par millésime (`set_form_line`),
+  euros entiers, contrôles de cohérence (`ready?`), `boxes`, empreinte
+  SHA-256 pour `partiduo-teledec` ; édition de contrôle PDF/A-2b.
+* Facturation par événements seulement (`invoice.issued`,
+  `payment.recorded`, `payment.matched`, `payment.unmatched`).
+* Événements `liberal.receipt.recorded`, `liberal.expense.recorded`,
+  `liberal.asset.recorded` ; Comptabilité : `LiberalEntries` (écritures de
+  trésorerie, `accounting_liberal_account`, migration accounting 0011,
+  `set_liberal_account`), sans appel entre modules.
+* `partiduo-provision --modules liberal[,invoicing[,accounting]]` ;
+  configurations `liberal` et `liberal,accounting` dans
+  `scripts/specs-modules.sh` et la CI.
+* Specs : `spec/liberal/` (journal 7, immobilisations 5, 2035 5, accès 5),
+  `spec/integration/liberal_spec.cr` (4), `spec/core/provision_command_spec.cr`
+  (+1), événements et isolation mis à jour.
+* Vérifications (base `partiduo_test_l_liberal`, `scripts/specs-modules.sh
+  --order random`, tout vert) : 1011 + 25 en attente (Comptabilité,
+  Analytique, Stock, Suivi), 754 + 54 (Facturation, Stock, Suivi), 1073 + 9
+  (Comptabilité et Facturation), 703 + 68 (micro), 765 + 52 (micro et
+  Facturation), 1023 + 21 (micro, Facturation et Comptabilité), 654 + 71
+  (liberal seul), 912 + 40 (liberal et Comptabilité) ; `crystal tool format` et Ameba sans
+  remarque ; garde-fou ADR-005 D3 vert ; `genmigrations liberal` sans écart
+  (`accounting` : seul l'écart antérieur de D-ED-006) ; retour arrière puis
+  réapplication de liberal 0001 et accounting 0011 ; `partiduo-ui-bulma`
+  compile avec le cœur.
+
+Reste : vérifier lignes et cases au formulaire officiel (B-LIB-001) ;
+transmission par `partiduo-teledec` (D-LIB-007). Les écrans et le mode
+simplifié (B-LIB-002) sont faits : section suivante.
+
+== Interface de la profession libérale — ADR-007 D6 (partiduo-ui-bulma, 28 septembre 2026)
+
+Interface (`partiduo-ui-bulma`, uniquement par `Partiduo::Api`, décisions
+D-UI-069 à D-UI-073, B-LIB-002 levé) :
+
+* Mode simplifié étendu (`src/ui/simple_mode.cr`, `FLAVORS`) : `LIBERAL`
+  actif et lisible → menu Tableau de bord, Recettes, Dépenses,
+  Immobilisations, Factures, 2035, Justificatifs (le livre-journal du
+  manifeste présenté en deux entrées) ; `MICRO` l'emporte si les deux sont
+  actifs ; paramètres du module dans le menu de l'utilisateur.
+* Tableau de bord (`src/ui/liberal_dashboard.cr`) : recettes et dépenses
+  professionnelles de l'année, encaissé du mois, résultat estimé de la
+  2035, factures à encaisser, dépenses par rubrique, dernières lignes,
+  « À traiter » (2035 de l'année écoulée, de janvier à juin).
+* Écrans `/liberal/…` (`src/ui/handlers/liberal/`, gabarits
+  `templates/ui/liberal/`) : livre-journal (tout, recettes, dépenses ;
+  totaux, ventilation par rubrique, éditions CSV et PDF du contrat) ;
+  saisie en quelques champs avec choix de la rubrique, part privée, photo
+  du justificatif ; consultation et annulation datée du jour ; registre des
+  immobilisations (acquisition, plan d'amortissement, annulation, cession) ;
+  2035 (état du dépôt, identification, 2035-A, 2035-B, immobilisations,
+  plus-values, réintégrations et déductions, contrôles, empreinte et
+  montants par case, édition de contrôle PDF) ; paramètres, natures, lignes
+  de la 2035 par millésime, valeurs par défaut, republication ;
+  `/accounting/liberal-accounts` (comptes, Comptabilité active).
+* Libellés fr, en, nl (`ui.liberal.*`) ; styles `pd-gauge-neutral`,
+  `pd-break`, `pd-tax-*` dans `app.css`.
+* Specs : `spec/ui/liberal_spec.cr` (11), `spec/ui/accessibility_spec.cr`
+  (+1, écrans du module).
+* Vérifications (base `partiduo_test_l_ui`) : `partiduo-ui-bulma` 321
+  exemples verts (ordre aléatoire) ; `crystal tool format` et Ameba sans
+  remarque ; garde-fou `Partiduo::Api` vert. Non vu dans un navigateur ni
+  sur un téléphone (B-UI-009). Non commité.
+
+== Clôture du lot L — relecture et vérifications (28 septembre 2026)
+
+Corrections de la relecture (décisions D-LIB-009 à D-LIB-014) :
+
+* Cases en double : `set_form_line` refuse une case déjà prise par un autre
+  poste du même formulaire (millésimes suivants compris,
+  `form_line.box.taken`) ; contrôle bloquant `box_duplicate` dans la 2035 ;
+  contrôles tautologiques `unbalanced` et `result_mismatch` retirés
+  (D-LIB-011).
+* Partie double d'un libéral assujetti : tenue toutes taxes comprises
+  assumée, TVA reversée en charge (6358 en France, 640 en Belgique), aucun
+  mouvement en classe 4 (D-LIB-009, amende D-LIB-003).
+* Table de correspondance figée pour les millésimes couverts par une année
+  close (`form_line.year.closed`, D-LIB-010).
+* Fiche du socle lue avec l'acteur de la commande ; paramètres créés par une
+  écriture seulement, sous verrou ; nature par défaut active exigée
+  (D-LIB-013).
+* Compte de produit de cession à son propre libellé ; requête
+  `Liberal.disposal_result` ; avertissement `vehicle_depreciation_ceiling`
+  (D-LIB-012, D-LIB-014).
+* Interface : « SIREN » traduit, longueurs alignées sur le contrat (255),
+  tableau de bord et fiche d'une cession sans calcul inutile de la 2035.
+
+Vérifications (base `partiduo_test_L_final`, interface
+`partiduo_test_L_final_ui`) : `scripts/specs-modules.sh`, tout vert —
+1025 + 29 en attente (Comptabilité, Analytique, Stock, Suivi), 768 + 58 (Facturation, Stock, Suivi), 1087 + 13 (Comptabilité et Facturation), 717 + 72 (micro), 779 + 56 (micro et Facturation), 1037 + 25 (micro, Facturation et Comptabilité), 701 + 71 (liberal seul), 959 + 40 (liberal et Comptabilité) ; `partiduo-ui-bulma` 332 exemples verts ; `crystal tool format`
+et Ameba sans remarque ; garde-fous ADR-005 D3 verts ; `marten migrate` sur
+base vierge (`partiduo_migrate_L`) sans erreur. Commits `development` dans
+`partiduo-app` et `partiduo-ui-bulma`.
+
 == Prochaines étapes
 
 Liste à l'issue de la critique de complétude, du lot E et du lot G ;
@@ -1662,9 +1778,15 @@ chaque point renvoie à sa décision ou à son blocage.
 
 . *Micro-entreprise (après le lot G)* : vérifier aux sources les taux,
   seuils et cases initiaux (B-MIC-001) ; essai du mode simplifié sur un
-  téléphone (B-UI-009) ; faire adopter l'amendement D-MIC-003 ; module
-  `liberal` (ADR-007 D6) et extension `partiduo-teledec` (D4) ; noter
+  téléphone (B-UI-009, micro et libéral) ; faire adopter l'amendement
+  D-MIC-003 ; extension `partiduo-teledec` (D4) ; noter
   plusieurs déclarations URSSAF passées d'un coup (D-MIC-012).
+. *Professions libérales (après le lot L)* : vérifier au formulaire
+  officiel les lignes et cases de la 2035 (B-LIB-001) ; transmission par
+  `partiduo-teledec` (D-LIB-007) ; plafond d'amortissement des véhicules
+  paramétrable par millésime et réintégration automatique (D-LIB-012) ;
+  ventilation de la TVA pour un libéral assujetti si le besoin se confirme
+  (D-LIB-009) ; essai du mode simplifié sur un téléphone (B-UI-009).
 
 . *Facturation électronique* : écran de saisie libre de l'écriture d'une
   facture reçue dans EINV (D-EINV-025) ; statut de plateforme sur l'écran de
@@ -1714,7 +1836,7 @@ crystal run manage.cr -- migrate                   # base de développement
 # PARTIDUO_TIME_ZONE=Europe/Brussels                # fuseau de l'instance (défaut Europe/Paris)
 createdb --encoding=UTF8 partiduo_test             # une fois
 crystal spec                                       # base partiduo_test
-DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' scripts/specs-modules.sh   # six configurations (ADR-006 D7, ADR-007)
+DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' scripts/specs-modules.sh   # huit configurations (ADR-006 D7, ADR-007)
 crystal tool format src spec && ameba
 crystal run scripts/interface_boundary.cr -- src   # garde-fou ADR-005 D3
 bin/partiduo-provision --help                      # création d'une instance

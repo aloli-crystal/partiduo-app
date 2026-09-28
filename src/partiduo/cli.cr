@@ -18,6 +18,7 @@ require "../modules/migrations/**"
 require "../stock/migrations/**"
 require "../followup/migrations/**"
 require "../micro/migrations/**"
+require "../liberal/migrations/**"
 
 # Commandes de gestion du cœur (`provision`).
 require "../core/commands/**"

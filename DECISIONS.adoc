@@ -20,7 +20,8 @@ l'auteur (agent).
 * Une application Marten par dossier de `src/`, selon l'ADR-001 § Organisation
   du code : `modules`, `auth`, `core`, `cards`, `vat`, `accounting`,
   `invoicing`, `analytic`, `stock`, `followup` (lot 6, D-STK-001,
-  D-FUP-001) et `micro` (ADR-007, D-MIC-001).
+  D-FUP-001), `micro` (ADR-007, D-MIC-001) et `liberal` (ADR-007 D6,
+  D-LIB-001).
 * Espace de noms : `Partiduo::<App>` (`Partiduo::Accounting`,
   `Partiduo::Cards`…). Rien au niveau supérieur, sauf les classes de
   migration, nommées par Marten (`Migration::Accounting::V0001`).
@@ -160,7 +161,9 @@ est interne et peut changer.
   D-STK-004), `payment.recorded` (`payment_id`), `payment.matched`
   (`matching_id`), `card.saved` (`card_id`), `period.closed` (`period_id`),
   `micro.receipt.recorded` (`receipt_id`), `micro.purchase.recorded`
-  (`purchase_id`) (ADR-007 D2, D-MIC-002).
+  (`purchase_id`) (ADR-007 D2, D-MIC-002), `liberal.receipt.recorded`
+  (`receipt_id`), `liberal.expense.recorded` (`expense_id`),
+  `liberal.asset.recorded` (`asset_id`, `operation`) (ADR-007 D6, D-LIB-002).
 ** publication *dans la transaction* de la commande :
    `Partiduo::Events.publish("entry.posted", {"entry_id" => id.to_s}, actor_user_id: actor.user_id)` ;
    hors transaction, `publish` en ouvre une ;
@@ -187,7 +190,7 @@ est interne et peut changer.
   `DATABASE_URL=postgres:///partiduo_test_<agent>?host=/tmp crystal spec`
   (nom contenant `test`, sinon refus). Créer la base une fois :
   `createdb --encoding=UTF8 partiduo_test_<agent>`.
-* Les configurations de modules (ADR-006 D7, ADR-007, D-MIC-008) : `scripts/specs-modules.sh`.
+* Les configurations de modules (ADR-006 D7, ADR-007, D-MIC-008, D-LIB-006) : `scripts/specs-modules.sh`.
 * Avant de rendre la main : `crystal tool format src spec`, `ameba`, specs
   vertes dans les trois configurations.
 
@@ -7257,3 +7260,455 @@ téléphone, et chaque commande a ses propres droits.
 *Choix.* Cœur : `partiduo_test_g_final` ; interface :
 `partiduo_test_g_final_ui` (lancée en parallèle du cœur) ; migrations sur
 base vierge : `partiduo_migrate_g`.
+
+== Module des professions libérales — ADR-007 D6 (28 septembre 2026)
+
+=== D-LIB-001 — Application `liberal/`, module `LIBERAL` sans dépendance, sur le modèle de `micro` (L:liberal, liberal)
+
+*Contexte.* ADR-007 D6 : un module officiel `liberal` « sur le même modèle
+que `micro` » (registres natifs intangibles, alimentation par la
+Facturation, partie double par événements).
+
+*Choix.* Application Marten `src/liberal/` (`Partiduo::Liberal`), manifeste
+`LIBERAL` (`Kind::Module`, aucune dépendance), permissions
+`liberal.register.read`, `liberal.register.write`, `liberal.settings.write`,
+contrat `Partiduo::Api::Liberal` (`doc/api/liberal.adoc`), migration liberal
+0001, jeu de données `LIBERAL.defaults`. Menus : Livre-journal et
+Immobilisations sous `ENTRY`, Déclaration 2035 sous `REPORTS`, paramètres
+sous `SETTINGS`. Comme D-MIC-003 : lignes, immobilisations et cessions
+intangibles *dès leur inscription* (déclencheur), aucune inscription en
+période close, correction par contre-passation datée. Un seul livre-journal
+(table `liberal_line`, sens `receipt` ou `expense`) plutôt que deux
+registres : c'est le document exigé, chronologique, numéroté `J2026-00001`.
+Montants toutes taxes comprises (comptabilité de trésorerie) : la TVA
+reversée est une dépense (rubrique `vat_paid`, ligne 11).
+
+*Alternative écartée.* Réutiliser les tables ou services de `micro` : un
+module ne cite pas un autre (ADR-006 D3), et les deux publics ne se
+recouvrent pas.
+
+=== D-LIB-002 — Trois événements à charge utile complète, non journalisés (L:liberal ; ajout à la liste fermée)
+
+*Contexte.* ADR-007 D6 nomme `liberal.receipt.recorded`,
+`liberal.expense.recorded`, `liberal.asset.recorded`.
+
+*Choix.* Ajout à `Partiduo::Events::SCHEMA` (clés obligatoires
+`receipt_id`, `expense_id`, `asset_id` et `operation`). Charge utile de quoi
+passer l'écriture sans relire le module, y compris le libellé traduit de la
+rubrique ou de la catégorie (`heading_label`, `category_label`), qui sert à
+créer le compte manquant. `liberal.asset.recorded` couvre l'acquisition, la
+contre-passation et la cession (`operation`, `disposal_id`). Non ajoutés à
+`JOURNALED` (comme D-MIC-002) : `Partiduo::Api::Liberal.republish` rejoue.
+
+*Alternative écartée.* Un événement de cession à part : la liste fermée
+nomme trois événements, `operation` suffit.
+
+=== D-LIB-003 — Écritures de trésorerie ; paramétrage dans `accounting_liberal_account` ; inventaire au comptable (L:liberal, comptabilité)
+
+*Contexte.* ADR-007 D6 : « partie double automatique quand la Comptabilité
+est active », sans appel direct. Les clés de `accounting_micro_account`
+sont limitées à 26 caractères et propres au module micro.
+
+*Choix.* `Partiduo::Accounting::LiberalEntries`, abonné aux trois
+événements : écriture au journal financier du mode de règlement ; recette =
+banque au débit, compte de la rubrique au crédit ; dépense = l'inverse ;
+immobilisation = compte d'immobilisation au débit (clé `asset_<catégorie>`) ;
+cession = banque au débit, produit de cession au crédit (clé `disposal`,
+775 en France) ; contre-passation = sens inversés. Compte, par ordre : nature,
+rubrique ou catégorie (`accounting_liberal_account`, migration accounting
+0011, `set_liberal_account`, `liberal_accounts`), puis compte du régime
+(`src/accounting/data/liberal_accounts.yml`), créé au plan s'il manque. Une
+recette issue de la Facturation est ignorée (sa facture et son encaissement
+ont leurs écritures). Les dotations aux amortissements, la sortie de l'actif
+cédé et la part non déductible ne sont pas passées : écritures d'inventaire
+du comptable ou de `partiduo-amortis` ; un compte de liaison automatique
+exigerait un événement de plus (`liberal.depreciation.posted`), non prévu
+par l'ADR.
+
+*Alternative écartée.* Réutiliser `accounting_micro_account` avec un préfixe
+de clé : dépasse la contrainte de 26 caractères et mêle deux paramétrages.
+
+=== D-LIB-004 — Rubriques en code, lignes et cases en données datées ; montants en euros entiers (L:liberal, liberal)
+
+*Contexte.* ADR-007 D6 : « table de correspondance rubrique → ligne datée
+par millésime et paramétrable, jamais écrite en dur ».
+
+*Choix.* Les *rubriques* sont une liste fermée du contrat (`HEADINGS`,
+`COMPUTED_ITEMS` pour les totaux et le résultat) : elles portent les règles
+de calcul (ce qui s'ajoute, se déduit, est hors 2035). La *ligne*, la *case*
+et le *formulaire* de chaque poste sont des données : table
+`liberal_form_line` (millésime d'effet, poste, formulaire, ligne, case),
+valeurs initiales au millésime 2024 dans `src/liberal/data/defaults.yml`
+(à vérifier, B-LIB-001), modifiables par `set_form_line`. La ligne d'un
+poste pour une année est celle du millésime le plus récent au plus tard égal
+à l'année. Chaque rubrique est arrondie à l'euro (arrondi commercial) et les
+totaux se calculent sur les montants arrondis, comme sur le formulaire.
+Un poste non nul sans ligne au millésime bloque la déclaration
+(`mapping_missing`).
+
+*Alternative écartée.* Rubriques elles-mêmes en données : il faudrait alors
+paramétrer aussi leurs règles de calcul, sans gain tant que la structure de
+la 2035-A ne change pas ; un changement de structure est une évolution du
+module.
+
+=== D-LIB-005 — Amortissement linéaire au prorata sur 360 jours ; plus-values à court et long terme (L:liberal, liberal)
+
+*Contexte.* ADR-007 D6 : « l'amortissement se limite ici au linéaire ».
+Le greffon NOALYSS `amortis` répartit la base en annuités égales avec un
+prorata de première année saisi (jours ÷ 365).
+
+*Choix.* Annuité = base ÷ durée ; première année au prorata des jours depuis
+la mise en service, sur une année de 360 jours (mois de 30 jours, usage
+fiscal) ; année de cession jusqu'à la date de cession ; chaque annuité
+arrondie au centime, la dernière solde la base. Terrains et clientèle :
+durée 0 imposée. Plus ou moins-value = prix − valeur résiduelle ; détention
+de moins de deux ans : court terme ; au-delà, pour un bien amortissable,
+plus-value à court terme à hauteur des amortissements et à long terme
+au-delà, moins-value à court terme ; bien non amortissable : long terme.
+Contre-passation d'une immobilisation la même année civile seulement (avant
+qu'elle compte dans une 2035), jamais après sa cession ; ensuite on la cède.
+Une cession ne se contre-passe pas (à faire par le comptable, cas rare).
+
+*Alternative écartée.* Prorata en jours réels sur 365 comme `amortis` :
+l'administration admet les deux, le 360 jours est l'usage des liasses.
+
+=== D-LIB-006 — Deux configurations de specs de plus : `liberal`, `liberal,accounting` (L:liberal)
+
+*Contexte.* ADR-007 (Conséquences) : configurations « `micro` et `liberal`,
+seuls ou avec `accounting` ».
+
+*Choix.* `scripts/specs-modules.sh` et la matrice de la CI ajoutent `liberal`
+et `liberal,accounting`. Les specs du module (`spec/liberal/`) sont en
+`describe_module "LIBERAL"` ; celles de bout en bout
+(`spec/integration/liberal_spec.cr`) forcent leur configuration, y compris
+`liberal,invoicing` et `liberal,invoicing,accounting`.
+
+*Alternative écartée.* Ajouter `liberal,invoicing` à la matrice : couvert
+par les specs d'intégration, qui forcent la configuration dans toutes les
+exécutions.
+
+=== D-LIB-007 — La 2035 préparée est une requête ; empreinte pour la transmission (L:liberal, liberal ; pour `partiduo-teledec`)
+
+*Contexte.* « Exposez la 2035 préparée par `Partiduo::Api` pour que
+`partiduo-teledec` la transmette. » ADR-007 D4 prévoit la formule *API
+Balance* pour la liasse d'une entreprise en Comptabilité ; un libéral sans
+Comptabilité n'a pas de balance.
+
+*Choix.* `Partiduo::Api::Liberal.tax_return(actor, year)` calcule à la
+demande un `TaxReturnView` (identification, postes avec formulaire, ligne,
+case, montant en euros ; tableau des immobilisations ; cessions ;
+réintégrations ; contrôles ; `ready?` ; `boxes` par formulaire et case ;
+empreinte SHA-256). `partiduo-teledec` le lit avec `liberal.register.read`,
+refuse de transmettre si `ready?` est faux, et garde l'empreinte de la
+version validée pour détecter un changement avant dépôt. Rien n'est figé en
+base.
+
+*Alternative écartée.* Une commande « préparer » qui fige la déclaration :
+un état de plus à maintenir ; l'intangibilité du livre-journal après
+clôture et l'empreinte suffisent.
+
+=== D-LIB-008 — Réintégrations et déductions : part non déductible à la ligne, divers à l'année (L:liberal, liberal)
+
+*Contexte.* ADR-007 D6 : ventilation « avec les réintégrations et
+déductions diverses ».
+
+*Choix.* Une dépense peut porter une part non déductible
+(`nondeductible_amount`, usage privé d'un véhicule ou d'un téléphone),
+réintégrée automatiquement ligne 36 ; les autres ajustements de l'année
+(divers à réintégrer ou à déduire, quote-part de SCM ou SCP, frais
+d'établissement, provisions) sont des lignes `liberal_adjustment` hors
+livre-journal, libres tant que l'année n'a pas de période close, figées
+ensuite (déclencheur). Les recettes issues de la Facturation vont à la
+nature par défaut des paramètres (`RECEIPTS`), toutes taxes comprises, sans
+ventilation par article : un libéral n'a qu'une rubrique de recettes.
+
+*Alternative écartée.* Ajustements saisis comme lignes du livre-journal :
+ils ne sont pas des mouvements de trésorerie.
+
+== Interface de la profession libérale — ADR-007 D6 (L:interface, 28 septembre 2026)
+
+=== D-UI-069 — Mode simplifié étendu au module `liberal` ; la micro-entreprise l'emporte (L:interface, interface)
+
+*Contexte.* ADR-007 D6 : « mode simplifié de l'interface (ADR-007 D3), avec
+un vocabulaire adapté (« recettes », « dépenses », « immobilisations ») ».
+D-UI-061 ne l'offrait que pour `MICRO`.
+
+*Choix.* `PartiduoUi::SimpleMode` décrit les modules qui offrent le mode
+(`FLAVORS` : module, permission de lecture, menu réduit, route et
+permission des paramètres). Le mode est offert si l'un d'eux est actif et
+lisible ; mêmes règles de choix (membre : toujours ; comptable : par le
+cookie). `SimpleMode.mode(request)` rend le module retenu, tableau de bord
+et menu en dépendent. Les deux modules actifs à la fois : `MICRO`
+l'emporte (ordre de `FLAVORS`) ; les écrans du module libéral restent
+joignables par le menu complet ou leur adresse. En mode simplifié libéral,
+« Nouvelle facture » mène au formulaire habituel (la facture allégée de
+D-UI-066 suppose la franchise du module micro). Le libellé des paramètres
+du menu de l'utilisateur vient du module (`Shell#settings_label`).
+
+*Alternative écartée.* Un mode simplifié propre au module libéral, avec son
+cookie et son handler de bascule : double emploi, et un comptable aurait
+deux bascules.
+
+=== D-UI-070 — Menu réduit : le livre-journal unique présenté en « Recettes » et « Dépenses » (L:interface, interface)
+
+*Contexte.* Le manifeste `LIBERAL` déclare un seul menu `LIBERAL_JOURNAL`
+(D-LIB-001 : un seul livre-journal), la tâche demande « Recettes » et
+« Dépenses » ; les menus sont un choix d'interface (D-UI-062).
+
+*Choix.* Une entrée du menu réduit peut porter une route servie par
+l'interface à la place de celle du manifeste (`SimpleMode::Entry#route`) :
+`LIBERAL_JOURNAL` donne « Recettes » (`liberal:receipts`) et « Dépenses »
+(`liberal:expenses`), filtres par sens du même livre-journal ; la présence
+du code dans le menu de l'utilisateur garde le contrôle des droits. Menu :
+Tableau de bord, Recettes, Dépenses, Immobilisations, Factures, 2035,
+Justificatifs. Le menu complet garde « Livre-journal » (`/liberal/journal`,
+les deux sens, solde).
+
+*Alternative écartée.* Ajouter `LIBERAL_RECEIPTS` et `LIBERAL_EXPENSES` au
+manifeste du cœur : modifie le cœur pour un choix de présentation.
+
+=== D-UI-071 — Saisie : la rubrique choisie par la nature ; part privée sous « Plus de détails » (L:interface, interface)
+
+*Choix.* Comme D-UI-064 : montant, date du jour, rubrique, règlement, nom,
+photo ; désignation, pièce et, pour une dépense, part privée
+(`nondeductible_amount`) sous « Plus de détails ». Le champ « Rubrique »
+propose les *natures* actives du sens (une par rubrique par défaut, libellé
+de la rubrique), rubriques de la 2035 d'abord, celles hors 2035 (apports,
+emprunts, prélèvements) ensuite ; une aide rappelle qu'un bien durable va
+aux immobilisations. Recette : nature par défaut des paramètres. Montants
+toutes taxes comprises (comptabilité de trésorerie, D-LIB-001) : aucun
+champ de TVA. Immobilisation : même gabarit (`ui/liberal/entry.html`),
+sans « Enregistrer et en saisir une autre » ; durée proposée 3 ans, 0 pour
+un bien non amortissable ; cession par un écran à part (date, prix,
+règlement, pièce), annulation proposée l'année de l'acquisition seulement
+(le contrat vérifie).
+
+*Alternative écartée.* Choisir la rubrique puis la nature : deux listes
+pour un seul choix, la nature portant déjà la rubrique.
+
+=== D-UI-072 — Écran 2035 : état du dépôt en tête, postes non nuls, empreinte à relire (L:interface, interface)
+
+*Contexte.* « Écran 2035 (2035-A, 2035-B, contrôles, préparation du
+dépôt) » ; D-LIB-007 : la 2035 préparée est une requête, rien n'est figé.
+
+*Choix.* `/liberal/tax-return?year=` (onglets des trois dernières années) :
+bandeau « prête à être déposée » ou « à corriger avant le dépôt » avec les
+contrôles bloquants ; identification ; 2035-A et 2035-B (ligne, poste,
+case, euros entiers ; postes non nuls, plus les totaux des recettes, des
+dépenses et le bénéfice toujours affichés, pour la lisibilité au
+téléphone ; poste sans ligne au millésime marqué) ; tableau des
+immobilisations et amortissements ; plus et moins-values ; réintégrations
+et déductions (ajout sous l'écran, retrait par ligne tant que l'année est
+ouverte ; refus réaffiché avec l'erreur sous son champ) ; contrôles ;
+« Préparation du dépôt » : état, empreinte SHA-256 de la version affichée
+et montants par formulaire et case (`boxes`, ce que transmettra
+`partiduo-teledec`). Édition de contrôle PDF par `?format=pdf`. Aucun
+bouton « déposer » : la transmission relève de `partiduo-teledec` (ADR-007
+D4), non livrée.
+
+*Alternative écartée.* Afficher toutes les lignes du formulaire, nulles
+comprises : une cinquantaine de lignes vides au téléphone.
+
+=== D-UI-073 — Paramétrage de la profession libérale et comptes (L:interface, interface)
+
+*Choix.* « Paramètres de la profession libérale » (`/liberal/settings`,
+route du manifeste) : profession, début d'activité, nature des factures
+encaissées ; liens vers « Natures » (liste, création, modification ; la
+rubrique est choisie dans la liste fermée du contrat), « Lignes de la
+2035 » (`/liberal/form-lines?millesime=` : lignes en vigueur pour un
+millésime, définition et suppression, B-LIB-001), « Charger les valeurs
+par défaut » (`load_defaults` dans la langue de l'utilisateur),
+« Republier vers la Comptabilité » et « Comptes de la profession
+libérale » (`/accounting/liberal-accounts` : clés = rubriques, catégories
+`asset_<catégorie>`, `disposal`, codes de nature) quand la Comptabilité est
+active. Toutes ces commandes exigent `liberal.settings.write` (ou les
+droits de la Comptabilité) ; le contrat vérifie de nouveau.
+
+*Alternative écartée.* Réintégrations et déductions dans les paramètres :
+elles relèvent de l'année déclarée, donc de l'écran 2035.
+
+=== D-TST-L-UI-001 — Base de test de l'interface du lot L (L:interface, tests)
+
+*Choix.* `partiduo_test_l_ui` ; `CRYSTAL_CACHE_DIR` propre à l'exécution.
+
+=== D-TST-L-001 — Pas de part non déductible sur une rubrique hors 2035 (L:tests, liberal)
+
+*Contexte.* Une part non déductible saisie sur un prélèvement de l'exploitant
+ou un remboursement d'emprunt était réintégrée à la 2035-A alors que ces
+sommes n'y sont jamais déduites : le bénéfice aurait été majoré à tort.
+
+*Choix.* `Registers.line_errors` refuse cette part
+(`liberal.errors.line.nondeductible.excluded`) sur les rubriques
+`EXCLUDED_HEADINGS`. Spec : `spec/liberal/rules_spec.cr`.
+
+*Alternative écartée.* L'accepter et l'ignorer au calcul : une donnée saisie
+et sans effet trompe l'utilisateur.
+
+=== D-TST-L-002 — Un poste situé sans case bloque le dépôt (L:tests, liberal)
+
+*Contexte.* Une ligne de la table de correspondance sans case (`box` vide)
+laissait `ready?` vrai alors que `boxes`, lu par `partiduo-teledec`, n'aurait
+pas transmis le montant.
+
+*Choix.* Contrôle bloquant `liberal.controls.box_missing` pour tout poste non
+nul situé sans case ; `boxes` ne publie que les cases non vides et non
+nulles. Spec : `spec/liberal/rules_spec.cr`.
+
+*Alternative écartée.* Avertissement seulement : la déclaration transmise
+serait incomplète sans que rien ne l'empêche.
+
+=== D-TST-L-003 — Base et cas limites des tests du lot L (L:tests)
+
+*Choix.* Base `partiduo_test_l_specs` (cœur et interface, exécutions
+successives, `CRYSTAL_CACHE_DIR` propre). Specs ajoutées :
+`spec/integration/liberal_feeds_spec.cr` (nature par défaut et repli,
+règlement jamais bloqué, facture émise avant l'activation, idempotence d'une
+référence, arrondi, mode inconnu ramené à `other`, avoirs non relevés),
+`spec/liberal/extras_spec.cr` (pièce jointe d'un autre, données par défaut
+en anglais, republication et charge utile de `liberal.asset.recorded`),
+`partiduo-ui-bulma/spec/ui/liberal_rules_spec.cr` (permissions à l'écran,
+module inactif, identifiants inconnus, refus, annulations, années, ajustements
+d'une année close).
+
+=== D-TST-L-UI-002 — Cession et paramètres refusés : réponse 422 (L:tests, interface)
+
+*Contexte.* Tous les formulaires des écrans libéraux répondent 422 quand la
+saisie est refusée, sauf la cession d'une immobilisation et les paramètres,
+qui répondaient 200 avec les erreurs.
+
+*Choix.* `LiberalAssetDisposeHandler#post` et `LiberalSettingsHandler#post`
+répondent 422 (paramètre `status` de `form_page`). Spec :
+`partiduo-ui-bulma/spec/ui/liberal_rules_spec.cr`.
+
+*Alternative écartée.* Garder 200 : incohérent avec les autres écrans et
+avec les outils qui distinguent un refus d'un affichage.
+
+== Relecture de clôture du lot L (28 septembre 2026)
+
+=== D-LIB-009 — Tenue toutes taxes comprises assumée ; TVA reversée en charge (L:clôture, comptabilité ; amende D-LIB-003, « D-LIB-003 bis »)
+
+*Contexte.* Pour un libéral assujetti à la TVA, la partie double automatique
+passait les recettes TTC en 706, sans TVA collectée, et la TVA reversée
+(rubrique `vat_paid`) au débit du 44551 (451 en Belgique) : un solde
+débiteur jamais soldé en classe 4, et le module TVA ne voyait aucune TVA
+collectée. D-LIB-003 ne traitait pas ce point, contrairement à D-MIC-013.
+
+*Choix.* Première option de la relecture : la Comptabilité d'un libéral reste
+une tenue en recettes-dépenses *toutes taxes comprises*, comme le
+livre-journal (D-LIB-001). La TVA reversée est une charge : compte par défaut
+6358 en France (créé au libellé de la rubrique s'il manque), 640 en
+Belgique ; jamais un compte de TVA de classe 4. Les déclarations de TVA d'un
+libéral assujetti ne sont donc pas alimentées par ces écritures : elles se
+préparent hors de ce flux (ou par le comptable, qui peut paramétrer d'autres
+comptes par nature ou rubrique). Spec :
+`spec/integration/liberal_spec.cr` (« tenue toutes taxes comprises »,
+aucun mouvement en classe 4).
+
+*Alternative écartée.* Ventiler la TVA dans la charge utile (taux ou montant
+à la ligne) et passer 44571/44566 : champ de plus à la saisie simplifiée,
+cas minoritaire (la plupart des professions de santé sont exonérées) ;
+à reprendre par un lot dédié si le besoin se confirme.
+
+=== D-LIB-010 — Table de correspondance figée pour les millésimes clos (L:clôture, liberal)
+
+*Contexte.* `set_form_line` et `delete_form_line` modifiaient sans
+restriction une ligne d'un millésime déjà couvert par une période close ;
+la ligne en vigueur étant celle du millésime le plus récent au plus tard
+égal à l'année, cela changeait rétroactivement les cases et l'empreinte des
+2035 déjà déposées.
+
+*Choix.* Refus `liberal.errors.form_line.year.closed` pour la création, le
+remplacement ou la suppression d'une ligne dont le millésime est au plus égal
+à la dernière année couverte par une période close du socle
+(`FormLines.closed_through` : année de fin la plus tardive des périodes
+closes, même sémantique de chevauchement que `Adjustments.closed?`). Un
+millésime passé se corrige par une nouvelle ligne au millésime suivant.
+`load_defaults` n'est pas restreint : il ne crée que des lignes absentes
+(jamais ne modifie) et reste nécessaire à une instance reprise avec des
+années déjà closes ; ce cas est laissé au jugement de l'administrateur.
+Pas de déclencheur SQL : la règle dépend des périodes du socle.
+
+*Alternative écartée.* Un déclencheur sur `liberal_form_line` : il devrait
+lire les périodes du socle, contraire à ADR-006 D3 (le module ne lit le
+socle que par le contrat).
+
+=== D-LIB-011 — Cases en double refusées ; contrôles tautologiques retirés (L:clôture, liberal)
+
+*Contexte.* Deux postes d'un même formulaire pouvaient recevoir la même
+case : `TaxReturnView#boxes` n'en gardait qu'un, sans avertissement, alors
+que `ready?` restait vrai. Les contrôles `unbalanced` (ventilation contre
+trésorerie, sur la même table et la même période) et `result_mismatch`
+(identité recalculée) ne pouvaient jamais échouer.
+
+*Choix.* `FormLines.errors` refuse une case déjà prise par un autre poste du
+même formulaire pour l'un des millésimes où la ligne saisie sera en vigueur
+(le sien et les millésimes suivants de la table tant que le poste n'y est
+pas redéfini) : `liberal.errors.form_line.box.taken`. Filet de sécurité
+dans la 2035 (table modifiée hors du contrat ou avant cette règle) :
+contrôle bloquant `liberal.controls.box_duplicate`. `unbalanced` et
+`result_mismatch` sont retirés ; `no_receipts` se déduit de la ventilation
+(plus de requête de totaux). Les autres contrôles proposés par la relecture
+ne sont pas retenus : la rubrique d'une ligne est copiée de sa nature à
+l'inscription et figée ensuite (déclencheur, `update_nature` refuse le
+changement de rubrique d'une nature employée) ; une nature désactivée
+employée dans l'année est un cas normal (désactivée après usage) ;
+`assets_year_depreciation` est par construction égal à `depreciation`.
+Specs : `spec/liberal/rules_spec.cr` (« relecture de clôture »).
+
+*Alternative écartée.* Garder les deux contrôles « par précaution » : ils
+donnent une fausse assurance.
+
+=== D-LIB-012 — Plafond d'amortissement des véhicules : avertissement seulement (L:clôture, liberal)
+
+*Contexte.* L'amortissement d'un véhicule de tourisme au-delà du plafond
+fiscal n'est pas déductible ; le module le déduisait entièrement ligne 41.
+
+*Choix.* Avertissement `liberal.controls.vehicle_depreciation_ceiling` pour
+toute immobilisation de catégorie `vehicle` amortie dans l'année dont la base
+dépasse 9 900 €, le plus bas des plafonds (émissions supérieures à 160 g de
+CO2 par km ; les autres sont 18 300, 20 300 et 30 000 €) : le module ne
+connaît pas les émissions. La fraction excédentaire se réintègre à la main
+par un ajustement `reintegration` de l'année. *Limite connue* : pas de
+réintégration automatique ; plus tard, un plafond paramétrable par millésime
+et par tranche d'émissions (champ de l'immobilisation), comme la table de
+correspondance.
+
+*Alternative écartée.* Réintégration automatique au plafond général de
+18 300 € : fausse pour les véhicules peu ou très émetteurs.
+
+=== D-LIB-013 — Fiche lue avec l'acteur ; paramètres créés par une écriture seulement (L:clôture, liberal)
+
+*Contexte.* `party_errors` lisait la fiche du socle avec `Actor.system` : un
+acteur sans `cards.card.read` pouvait sonder l'existence des fiches et en
+faire recopier le nom. `Registers.settings` créait la ligne de paramètres
+lors d'une lecture, sans verrou ; `update_settings` acceptait une nature par
+défaut désactivée.
+
+*Choix.* La fiche est lue avec l'acteur de la commande ; `NotFound` et
+`AccessDenied` donnent la même erreur `line.card.unknown`. Les inscriptions
+issues des événements (`Feeds`) passent `system`. Le nom de la fiche est
+ensuite recopié par `system`, le contrôle ayant déjà eu lieu avec l'acteur.
+Paramètres : `Registers.settings?` (lecture, `nil` sans ligne ; la vue rend
+des valeurs vides) et `Registers.settings!` (écriture, création sous verrou
+consultatif de transaction `liberal_settings`), appelés par
+`update_settings` et `load_defaults`. `update_settings` exige une nature de
+recette active. La permission `cards.card.read` est ajoutée à l'acteur des
+specs du module (un utilisateur réel la tient de son rôle).
+
+*Alternative écartée.* Créer la ligne dans la migration : les specs et une
+remise à zéro vident la table, les écritures doivent de toute façon savoir
+la créer.
+
+=== D-LIB-014 — Compte de cession à son propre libellé ; plus-value d'une seule cession (L:clôture, comptabilité, interface)
+
+*Choix.* Un compte de produit de cession absent du plan (775, 763) est créé
+au libellé `accounting.liberal.disposal_account_label` (« Produits des
+cessions d'éléments d'actif »), non à celui de la catégorie de
+l'immobilisation cédée. Nouvelle requête `Liberal.disposal_result(actor,
+asset_id)` (plus ou moins-value d'une cession, `nil` sans cession) : la
+fiche d'une immobilisation cédée ne calcule plus toute la 2035. Tableau de
+bord : la 2035 de l'année précédente n'est calculée que si le livre-journal
+de cette année a des lignes. Interface : libellé « SIREN » traduit
+(`ui.liberal.tax_return.siren`) ; longueurs maximales à l'écran alignées sur
+le contrat (255 pour la désignation, le tiers et le libellé d'un
+ajustement).

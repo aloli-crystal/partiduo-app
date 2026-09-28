@@ -1,0 +1,246 @@
+nl:
+  liberal:
+    module:
+      name: "Vrij beroep (2035)"
+    permissions:
+      register:
+        read: "Kasboek, vaste activa en aangifte 2035 raadplegen"
+        write: "Ontvangsten, uitgaven en vaste activa boeken en tegenboeken, bijtellingen en aftrekken noteren"
+      settings:
+        write: "Vrij beroep instellen (aarden, regels van de 2035)"
+    menu:
+      liberal_journal: "Kasboek"
+      liberal_assets: "Vaste activa"
+      liberal_tax_return: "Aangifte 2035"
+      liberal_settings: "Vrij beroep"
+    kinds:
+      receipt: "Ontvangst"
+      expense: "Uitgave"
+    headings:
+      receipts: "Geïnde ontvangsten"
+      financial_income: "Financiële opbrengsten"
+      other_gains: "Diverse winsten"
+      contribution: "Persoonlijke inbreng (buiten 2035)"
+      loan_received: "Ontvangen lening (buiten 2035)"
+      disbursements: "Voorschotten betaald voor rekening van klanten"
+      fees_retroceded: "Doorgestorte honoraria"
+      purchases: "Aankopen"
+      salaries: "Nettolonen en voordelen in natura"
+      staff_social_charges: "Sociale lasten op lonen"
+      vat_paid: "Betaalde btw"
+      cet: "Territoriale economische bijdrage"
+      other_taxes: "Andere belastingen"
+      deductible_csg: "Aftrekbare CSG"
+      rent: "Huur en huurlasten"
+      equipment_rental: "Huur van materieel en meubilair"
+      maintenance: "Onderhoud en herstellingen"
+      temporary_staff: "Uitzendkrachten"
+      small_tools: "Klein gereedschap"
+      utilities: "Verwarming, water, gas, elektriciteit"
+      fees: "Honoraria die geen doorstortingen zijn"
+      insurance: "Verzekeringspremies"
+      vehicle: "Voertuigkosten"
+      travel: "Andere verplaatsingskosten"
+      personal_social_mandatory: "Verplichte persoonlijke sociale bijdragen"
+      personal_social_optional: "Facultatieve persoonlijke sociale bijdragen"
+      reception: "Receptie-, representatie- en congreskosten"
+      office: "Kantoorbenodigdheden, documentatie, briefwisseling en telefoon"
+      legal_costs: "Akte- en geschilkosten"
+      professional_dues: "Vakbonds- en beroepsbijdragen"
+      other_management: "Andere diverse beheerskosten"
+      financial_costs: "Financiële kosten"
+      other_losses: "Diverse verliezen"
+      withdrawal: "Persoonlijke opname (buiten 2035)"
+      loan_repayment: "Aflossing van leningskapitaal (buiten 2035)"
+    items:
+      net_receipts: "Netto ontvangsten"
+      total_receipts: "Totaal ontvangsten"
+      total_expenses: "Totaal uitgaven"
+      excess: "Overschot"
+      short_term_gains: "Meerwaarden op korte termijn"
+      reintegrations: "Diverse bijtellingen"
+      scm_profit: "Winstaandeel SCM of SCP"
+      total_additions: "Totaal bij te tellen regels"
+      shortfall: "Tekort"
+      establishment_costs: "Oprichtingskosten"
+      depreciation: "Afschrijvingen"
+      provision: "Voorzieningen"
+      short_term_losses: "Minderwaarden op korte termijn"
+      deductions: "Diverse aftrekken"
+      scm_loss: "Verliesaandeel SCM of SCP"
+      total_subtractions: "Totaal af te trekken regels"
+      profit: "Winst"
+      loss: "Verlies"
+      assets_cost: "Vaste activa: aanschaffingswaarde"
+      assets_prior_depreciation: "Vorige afschrijvingen"
+      assets_year_depreciation: "Afschrijvingen van het jaar"
+      disposals_price: "Verkoopprijs van vaste activa"
+      long_term_gains: "Meerwaarden op lange termijn"
+      long_term_losses: "Minderwaarden op lange termijn"
+    asset_categories:
+      intangible: "Immaterieel vast actief"
+      goodwill: "Cliënteel, presentatierecht"
+      land: "Grond"
+      building: "Gebouw"
+      fittings: "Inrichting en installaties"
+      equipment: "Beroepsmaterieel"
+      vehicle: "Voertuig"
+      office: "Kantoor- en computermaterieel"
+      furniture: "Meubilair"
+      other: "Ander vast actief"
+    adjustment_kinds:
+      reintegration: "Diverse bijtelling"
+      deduction: "Diverse aftrek"
+      scm_profit: "Winstaandeel SCM of SCP"
+      scm_loss: "Verliesaandeel SCM of SCP"
+      establishment_costs: "Oprichtingskosten"
+      provision: "Voorziening"
+    methods:
+      transfer: "Overschrijving"
+      card: "Bankkaart"
+      cheque: "Cheque"
+      cash: "Contant"
+      direct_debit: "Domiciliëring"
+      other: "Andere"
+    severities:
+      error: "Blokkerend"
+      warning: "Na te kijken"
+    controls:
+      siren_missing: "Het SIREN van de onderneming ontbreekt of is ongeldig: de 2035 kan niet worden ingediend"
+      profession_missing: "Uitgeoefend beroep niet ingevuld"
+      mapping_missing: "„%{item}” heeft geen regel in de tabel van %{year}"
+      box_missing: "„%{item}” heeft geen vak in de tabel van %{year}: het zou niet worden ingediend"
+      heading_negative: "Rubriek „%{heading}” is negatief"
+      box_duplicate: "De posten %{items} worden in hetzelfde vak %{box} van formulier %{form} overgenomen: slechts één zou worden verzonden"
+      vehicle_depreciation_ceiling: "Voertuig %{number}: de basis overschrijdt %{ceiling} €, het laagste afschrijvingsplafond voor personenwagens (9 900 tot 30 000 € naargelang de CO2-uitstoot). Voeg het meerdere toe via een aanpassing"
+      asset_over_depreciated: "Vast actief %{number} boven zijn basis afgeschreven"
+      no_receipts: "Geen kasboekregel voor het jaar"
+      no_fiscal_year: "Geen boekjaar van het dossier dekt %{year}"
+      year_open: "Het jaar %{year} is niet afgesloten: de aangifte kan nog wijzigen"
+    reversal_label: "Annulering van %{number}"
+    export:
+      filename:
+        journal: "kasboek"
+        tax_return: "2035-controle-%{year}"
+    columns:
+      number: "Nr."
+      date: "Datum"
+      kind: "Soort"
+      party: "Klant of leverancier"
+      label: "Omschrijving"
+      heading: "Rubriek"
+      method: "Betaling"
+      reference: "Stuk"
+      amount: "Bedrag"
+      nondeductible: "Niet aftrekbaar"
+      form: "Formulier"
+      line: "Regel"
+      box: "Vak"
+      item: "Post"
+      category: "Categorie"
+      acquired_on: "Aanschaf"
+      service_on: "Ingebruikname"
+      rate: "Percentage"
+      prior: "Vorige afschr."
+      year_amount: "Afschrijving"
+      net_value: "Restwaarde"
+      price: "Verkoopprijs"
+      gain: "Meer- of minderwaarde"
+      short_term: "Korte termijn"
+      long_term: "Lange termijn"
+      severity: "Niveau"
+      control: "Controle"
+    reports:
+      journal: "Kasboek van ontvangsten en uitgaven"
+      tax_return: "Aangifte 2035 van de inkomsten %{year} — controle-uitdraai"
+      period: "Van %{from} tot %{to}"
+      total: "Totaal"
+      total_receipts: "Totaal ontvangsten"
+      total_expenses: "Totaal uitgaven"
+      balance: "Saldo"
+      identity: "%{name} — SIREN %{siren}"
+      profession: "Beroep: %{profession}"
+      fingerprint: "Vingerafdruk: %{fingerprint}"
+      form: "Formulier %{form}"
+      assets: "Vaste activa en afschrijvingen"
+      disposals: "Meer- en minderwaarden"
+      adjustments: "Bijtellingen en aftrekken"
+      controls: "Samenhangcontroles"
+      no_control: "Geen afwijking"
+      page: "Pagina %{page} van %{count}"
+    errors:
+      line:
+        nature:
+          unknown: "Onbekende aard"
+          disabled: "Deze aard wordt niet meer gebruikt"
+        amount:
+          not_positive: "Het bedrag moet positief zijn"
+          scale: "Het bedrag wordt in centen uitgedrukt"
+        nondeductible:
+          receipt: "Een ontvangst heeft geen niet-aftrekbaar deel"
+          invalid: "Ongeldig niet-aftrekbaar deel (positief, in centen)"
+          exceeds: "Het niet-aftrekbare deel mag het bedrag niet overschrijden"
+          excluded: "Een rubriek buiten de 2035 heeft geen niet-aftrekbaar deel"
+        method:
+          invalid: "Onbekende betaalwijze"
+        card:
+          unknown: "Onbekende fiche"
+        attachment:
+          unknown: "Onbekende bijlage"
+        date:
+          future: "Toekomstige datum: boek alleen een uitgevoerde verrichting"
+          closed_period: "De periode van deze datum is afgesloten: corrigeer met een tegenboeking in een open periode"
+        reversal:
+          is_reversal: "Een tegenboeking wordt niet tegengeboekt"
+          already: "Deze regel is al tegengeboekt"
+          before_line: "De tegenboeking kan de regel niet voorafgaan"
+        too_long: "Hoogstens %{max} tekens"
+      nature:
+        in_use: "Aard al gebruikt: alleen de omschrijving en de activering wijzigen"
+        code:
+          invalid: "Code in hoofdletters, cijfers en _, hoogstens 32 tekens"
+          taken: "Code al in gebruik"
+        label:
+          blank: "Geef een omschrijving op"
+        kind:
+          invalid: "Onbekende soort"
+        heading:
+          invalid: "Rubriek past niet bij de soort"
+      asset:
+        label:
+          blank: "Geef een omschrijving op"
+        category:
+          invalid: "Onbekende categorie van vast actief"
+        service_before_acquisition: "De ingebruikname kan de aanschaf niet voorafgaan"
+        duration:
+          invalid: "Afschrijvingsduur van 0 tot 50 jaar"
+          not_depreciable: "Deze categorie wordt niet afgeschreven: duur 0"
+        reversal:
+          disposed: "Vast actief verkocht: het wordt niet meer tegengeboekt"
+          other_year: "Een vast actief wordt alleen in het jaar van aanschaf tegengeboekt; daarna verkopen"
+      disposal:
+        asset:
+          unknown: "Onbekend of geannuleerd vast actief"
+          already: "Vast actief al verkocht"
+        before_acquisition: "De verkoop kan de aanschaf niet voorafgaan"
+        price:
+          invalid: "Ongeldige prijs (nul of positief, in centen)"
+      adjustment:
+        year:
+          invalid: "Ongeldig jaar"
+          closed: "Dit jaar heeft een afgesloten periode"
+        kind:
+          invalid: "Onbekende soort"
+        label:
+          blank: "Geef een omschrijving op"
+      form_line:
+        year:
+          closed: "Vastgelegd jaar: een afgesloten jaar gebruikt het; voeg een regel toe voor het volgende jaar"
+        box:
+          taken: "Vak al gebruikt door „%{item}” in dit formulier"
+        item:
+          unknown: "Onbekende post"
+        form:
+          unknown: "Onbekend formulier (2035, 2035-A, 2035-B)"
+        millesime:
+          invalid: "Ongeldig aanslagjaar"

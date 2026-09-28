@@ -46,6 +46,7 @@ Société :
 Modules et extensions :
   --modules LISTE         modules activés (défaut : accounting,invoicing)
                           micro-entrepreneur : micro[,invoicing[,accounting]]
+                          profession libérale (2035) : liberal[,invoicing[,accounting]]
   --with LISTE            extensions activées (einvoicing,sepa…)
 
 Base et service :

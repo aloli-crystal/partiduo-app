@@ -1,0 +1,113 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Jeu de données initial du module liberal (ADR-007 D6) : ce sont des
+# *données*, modifiables par l'administrateur
+# (`Partiduo::Api::Liberal.set_form_line`, `create_nature`) et à mettre à jour
+# à chaque millésime. Le code ne lit la correspondance que dans la table
+# `liberal_form_line`.
+#
+# form_lines : poste (rubrique de la 2035-A ou total calculé) → formulaire,
+# ligne et case, en vigueur à partir du millésime `millesime` (année des
+# revenus déclarés). Lignes et cases relevées de mémoire le 27 septembre 2026
+# d'après la 2035-A et la 2035-B des revenus 2024 et 2025, sans accès au
+# formulaire officiel : à vérifier sur impots.gouv.fr avant tout dépôt
+# (BLOCAGES B-LIB-001, DECISIONS D-LIB-004).
+#
+# natures : une nature par rubrique, libellé dans la langue de l'instance
+# (`liberal.headings.<rubrique>`).
+form_lines:
+  # 2035-A — recettes
+  - {millesime: 2024, item: receipts, form: 2035-A, line: "1", box: AA}
+  - {millesime: 2024, item: disbursements, form: 2035-A, line: "2", box: AB}
+  - {millesime: 2024, item: fees_retroceded, form: 2035-A, line: "3", box: AC}
+  - {millesime: 2024, item: net_receipts, form: 2035-A, line: "4", box: AD}
+  - {millesime: 2024, item: financial_income, form: 2035-A, line: "5", box: AE}
+  - {millesime: 2024, item: other_gains, form: 2035-A, line: "6", box: AF}
+  - {millesime: 2024, item: total_receipts, form: 2035-A, line: "7", box: AG}
+  # 2035-A — dépenses
+  - {millesime: 2024, item: purchases, form: 2035-A, line: "8", box: BA}
+  - {millesime: 2024, item: salaries, form: 2035-A, line: "9", box: BB}
+  - {millesime: 2024, item: staff_social_charges, form: 2035-A, line: "10", box: BC}
+  - {millesime: 2024, item: vat_paid, form: 2035-A, line: "11", box: BD}
+  - {millesime: 2024, item: cet, form: 2035-A, line: "12", box: JY}
+  - {millesime: 2024, item: other_taxes, form: 2035-A, line: "13", box: BS}
+  - {millesime: 2024, item: deductible_csg, form: 2035-A, line: "14", box: BV}
+  - {millesime: 2024, item: rent, form: 2035-A, line: "15", box: BF}
+  - {millesime: 2024, item: equipment_rental, form: 2035-A, line: "16", box: BG}
+  - {millesime: 2024, item: maintenance, form: 2035-A, line: "17", box: BH}
+  - {millesime: 2024, item: temporary_staff, form: 2035-A, line: "18", box: BJ}
+  - {millesime: 2024, item: small_tools, form: 2035-A, line: "19", box: BK}
+  - {millesime: 2024, item: utilities, form: 2035-A, line: "20", box: BL}
+  - {millesime: 2024, item: fees, form: 2035-A, line: "21", box: BM}
+  - {millesime: 2024, item: insurance, form: 2035-A, line: "22", box: BN}
+  - {millesime: 2024, item: vehicle, form: 2035-A, line: "23", box: BP}
+  - {millesime: 2024, item: travel, form: 2035-A, line: "24", box: BQ}
+  - {millesime: 2024, item: personal_social_mandatory, form: 2035-A, line: "25", box: BT}
+  - {millesime: 2024, item: personal_social_optional, form: 2035-A, line: "25", box: BU}
+  - {millesime: 2024, item: reception, form: 2035-A, line: "26", box: BW}
+  - {millesime: 2024, item: office, form: 2035-A, line: "27", box: BX}
+  - {millesime: 2024, item: legal_costs, form: 2035-A, line: "28", box: BY}
+  - {millesime: 2024, item: professional_dues, form: 2035-A, line: "29", box: BZ}
+  - {millesime: 2024, item: other_management, form: 2035-A, line: "30", box: CB}
+  - {millesime: 2024, item: financial_costs, form: 2035-A, line: "31", box: CC}
+  - {millesime: 2024, item: other_losses, form: 2035-A, line: "32", box: CD}
+  - {millesime: 2024, item: total_expenses, form: 2035-A, line: "33", box: BR}
+  # 2035-A — résultat
+  - {millesime: 2024, item: excess, form: 2035-A, line: "34", box: CE}
+  - {millesime: 2024, item: short_term_gains, form: 2035-A, line: "35", box: CF}
+  - {millesime: 2024, item: reintegrations, form: 2035-A, line: "36", box: CG}
+  - {millesime: 2024, item: scm_profit, form: 2035-A, line: "37", box: CL}
+  - {millesime: 2024, item: total_additions, form: 2035-A, line: "38", box: CM}
+  - {millesime: 2024, item: shortfall, form: 2035-A, line: "39", box: CN}
+  - {millesime: 2024, item: establishment_costs, form: 2035-A, line: "40", box: CP}
+  - {millesime: 2024, item: depreciation, form: 2035-A, line: "41", box: CH}
+  - {millesime: 2024, item: provision, form: 2035-A, line: "42", box: CK}
+  - {millesime: 2024, item: short_term_losses, form: 2035-A, line: "43", box: CR}
+  - {millesime: 2024, item: deductions, form: 2035-A, line: "44", box: CS}
+  - {millesime: 2024, item: scm_loss, form: 2035-A, line: "45", box: CT}
+  - {millesime: 2024, item: total_subtractions, form: 2035-A, line: "46", box: CU}
+  - {millesime: 2024, item: profit, form: 2035-A, line: "47", box: CP1}
+  - {millesime: 2024, item: loss, form: 2035-A, line: "48", box: CR1}
+  # 2035-B — immobilisations, amortissements, plus et moins-values
+  - {millesime: 2024, item: assets_cost, form: 2035-B, line: "I", box: DA}
+  - {millesime: 2024, item: assets_prior_depreciation, form: 2035-B, line: "I", box: DB}
+  - {millesime: 2024, item: assets_year_depreciation, form: 2035-B, line: "I", box: DC}
+  - {millesime: 2024, item: disposals_price, form: 2035-B, line: "III", box: DD}
+  - {millesime: 2024, item: long_term_gains, form: 2035-B, line: "III", box: DE}
+  - {millesime: 2024, item: long_term_losses, form: 2035-B, line: "III", box: DF}
+natures:
+  - {kind: receipt, heading: receipts}
+  - {kind: receipt, heading: financial_income}
+  - {kind: receipt, heading: other_gains}
+  - {kind: receipt, heading: contribution}
+  - {kind: receipt, heading: loan_received}
+  - {kind: expense, heading: disbursements}
+  - {kind: expense, heading: fees_retroceded}
+  - {kind: expense, heading: purchases}
+  - {kind: expense, heading: salaries}
+  - {kind: expense, heading: staff_social_charges}
+  - {kind: expense, heading: vat_paid}
+  - {kind: expense, heading: cet}
+  - {kind: expense, heading: other_taxes}
+  - {kind: expense, heading: deductible_csg}
+  - {kind: expense, heading: rent}
+  - {kind: expense, heading: equipment_rental}
+  - {kind: expense, heading: maintenance}
+  - {kind: expense, heading: temporary_staff}
+  - {kind: expense, heading: small_tools}
+  - {kind: expense, heading: utilities}
+  - {kind: expense, heading: fees}
+  - {kind: expense, heading: insurance}
+  - {kind: expense, heading: vehicle}
+  - {kind: expense, heading: travel}
+  - {kind: expense, heading: personal_social_mandatory}
+  - {kind: expense, heading: personal_social_optional}
+  - {kind: expense, heading: reception}
+  - {kind: expense, heading: office}
+  - {kind: expense, heading: legal_costs}
+  - {kind: expense, heading: professional_dues}
+  - {kind: expense, heading: other_management}
+  - {kind: expense, heading: financial_costs}
+  - {kind: expense, heading: other_losses}
+  - {kind: expense, heading: withdrawal}
+  - {kind: expense, heading: loan_repayment}

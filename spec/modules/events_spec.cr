@@ -21,10 +21,11 @@ def with_subscriber(& : String, Array(Partiduo::Events::Event) ->) : Nil
 end
 
 describe Partiduo::Events do
-  it "couvre la liste fermée de l'ADR-003 D7 et de l'ADR-006 D3 (plus payment.unmatched, D-2F-003, delivery_note.issued, D-STK-004, et les registres micro, ADR-007 D2)" do
+  it "couvre la liste fermée de l'ADR-003 D7 et de l'ADR-006 D3 (plus payment.unmatched, D-2F-003, delivery_note.issued, D-STK-004, et les registres micro et liberal, ADR-007 D2, D6)" do
     Partiduo::Events::NAMES.sort.should eq(%w[
       card.saved credit_note.issued delivery_note.issued entry.cancelled entry.posted
-      invoice.issued micro.purchase.recorded micro.receipt.recorded payment.matched payment.recorded
+      invoice.issued liberal.asset.recorded liberal.expense.recorded liberal.receipt.recorded
+      micro.purchase.recorded micro.receipt.recorded payment.matched payment.recorded
       payment.unmatched period.closed
     ])
   end

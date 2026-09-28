@@ -36,6 +36,12 @@ module Partiduo
       # (ADR-007 D2, D-MIC-002) : la Comptabilité passe l'écriture.
       "micro.receipt.recorded"  => %w[receipt_id],
       "micro.purchase.recorded" => %w[purchase_id],
+      # Recette, dépense ou immobilisation inscrite par le module des
+      # professions libérales (ADR-007 D6, D-LIB-002) : la Comptabilité passe
+      # l'écriture.
+      "liberal.receipt.recorded" => %w[receipt_id],
+      "liberal.expense.recorded" => %w[expense_id],
+      "liberal.asset.recorded"   => %w[asset_id operation],
     }
 
     NAMES = SCHEMA.keys

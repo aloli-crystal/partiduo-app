@@ -44,6 +44,21 @@ describe Partiduo::Core::Commands::Provision do
     end
   end
 
+  it "provisionne un professionnel libéral : liberal, Facturation, Comptabilité (ADR-007 D6)" do
+    {"liberal", "liberal,invoicing", "liberal,invoicing,accounting"}.each do |modules|
+      Partiduo::Core::Settings.all.delete
+      with_active_modules(modules) do
+        code, output, _ = run_provision("--name=Jeanne Martin EI", "--regime=fr", "--domain=jeanne.partiduo.localhost",
+          "--modules=#{modules}")
+        code.should eq(0)
+        output.should contain("LIBERAL")
+        Partiduo::Api::Liberal.natures(Partiduo::Api::Actor.system, "receipt").size.should eq(5)
+        Partiduo::Api::Liberal.form_lines(Partiduo::Api::Actor.system, 2026).size.should eq(Partiduo::Api::Liberal::ITEMS.size)
+        Partiduo::Modules.active?("ACCOUNTING").should eq(modules.includes?("accounting"))
+      end
+    end
+  end
+
   it "affiche le lien d'invitation de l'administrateur (D-J1-001)" do
     code, output, _ = run_provision(
       "--name=Exemple SARL", "--regime=fr", "--domain=exemple.partiduo.localhost", "--admin-email=patron@exemple.test",

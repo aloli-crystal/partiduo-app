@@ -31,5 +31,6 @@ require "./analytic/app"
 require "./stock/app"
 require "./followup/app"
 require "./micro/app"
+require "./liberal/app"
 
 require "./partiduo/settings"

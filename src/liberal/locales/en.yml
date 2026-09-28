@@ -1,0 +1,246 @@
+en:
+  liberal:
+    module:
+      name: "Liberal profession (2035)"
+    permissions:
+      register:
+        read: "View the cash book, fixed assets and the 2035 return"
+        write: "Record and reverse receipts, expenses and fixed assets, note add-backs and deductions"
+      settings:
+        write: "Configure the liberal profession (natures, 2035 lines)"
+    menu:
+      liberal_journal: "Cash book"
+      liberal_assets: "Fixed assets"
+      liberal_tax_return: "2035 return"
+      liberal_settings: "Liberal profession"
+    kinds:
+      receipt: "Receipt"
+      expense: "Expense"
+    headings:
+      receipts: "Receipts collected"
+      financial_income: "Financial income"
+      other_gains: "Other gains"
+      contribution: "Personal contribution (outside 2035)"
+      loan_received: "Loan received (outside 2035)"
+      disbursements: "Disbursements paid on behalf of clients"
+      fees_retroceded: "Fees passed on"
+      purchases: "Purchases"
+      salaries: "Net salaries and benefits in kind"
+      staff_social_charges: "Social charges on salaries"
+      vat_paid: "VAT paid"
+      cet: "Territorial economic contribution"
+      other_taxes: "Other taxes"
+      deductible_csg: "Deductible CSG"
+      rent: "Rent and service charges"
+      equipment_rental: "Equipment and furniture rental"
+      maintenance: "Maintenance and repairs"
+      temporary_staff: "Temporary staff"
+      small_tools: "Small tools"
+      utilities: "Heating, water, gas, electricity"
+      fees: "Fees other than fees passed on"
+      insurance: "Insurance premiums"
+      vehicle: "Vehicle expenses"
+      travel: "Other travel expenses"
+      personal_social_mandatory: "Mandatory personal social contributions"
+      personal_social_optional: "Optional personal social contributions"
+      reception: "Reception, entertainment and conference expenses"
+      office: "Office supplies, documentation, postage and telephone"
+      legal_costs: "Deeds and litigation costs"
+      professional_dues: "Union and professional dues"
+      other_management: "Other management expenses"
+      financial_costs: "Financial expenses"
+      other_losses: "Other losses"
+      withdrawal: "Personal withdrawal (outside 2035)"
+      loan_repayment: "Loan principal repayment (outside 2035)"
+    items:
+      net_receipts: "Net receipts"
+      total_receipts: "Total receipts"
+      total_expenses: "Total expenses"
+      excess: "Surplus"
+      short_term_gains: "Short-term capital gains"
+      reintegrations: "Sundry add-backs"
+      scm_profit: "Share of SCM or SCP profit"
+      total_additions: "Total of lines to add"
+      shortfall: "Shortfall"
+      establishment_costs: "Start-up costs"
+      depreciation: "Depreciation charge"
+      provision: "Provisions"
+      short_term_losses: "Short-term capital losses"
+      deductions: "Sundry deductions"
+      scm_loss: "Share of SCM or SCP loss"
+      total_subtractions: "Total of lines to deduct"
+      profit: "Profit"
+      loss: "Loss"
+      assets_cost: "Fixed assets: original cost"
+      assets_prior_depreciation: "Prior depreciation"
+      assets_year_depreciation: "Depreciation for the year"
+      disposals_price: "Disposal price of fixed assets"
+      long_term_gains: "Long-term capital gains"
+      long_term_losses: "Long-term capital losses"
+    asset_categories:
+      intangible: "Intangible asset"
+      goodwill: "Clientele, right of presentation"
+      land: "Land"
+      building: "Building"
+      fittings: "Fixtures and fittings"
+      equipment: "Professional equipment"
+      vehicle: "Vehicle"
+      office: "Office and IT equipment"
+      furniture: "Furniture"
+      other: "Other fixed asset"
+    adjustment_kinds:
+      reintegration: "Sundry add-back"
+      deduction: "Sundry deduction"
+      scm_profit: "Share of SCM or SCP profit"
+      scm_loss: "Share of SCM or SCP loss"
+      establishment_costs: "Start-up costs"
+      provision: "Provision"
+    methods:
+      transfer: "Bank transfer"
+      card: "Card"
+      cheque: "Cheque"
+      cash: "Cash"
+      direct_debit: "Direct debit"
+      other: "Other"
+    severities:
+      error: "Blocking"
+      warning: "To check"
+    controls:
+      siren_missing: "The company SIREN is missing or malformed: the 2035 cannot be filed"
+      profession_missing: "Profession not filled in"
+      mapping_missing: "“%{item}” has no line in the %{year} table"
+      box_missing: "“%{item}” has no box in the %{year} table: it would not be filed"
+      heading_negative: "Heading “%{heading}” is negative"
+      box_duplicate: "Items %{items} are reported in the same box %{box} of form %{form}: only one would be filed"
+      vehicle_depreciation_ceiling: "Vehicle %{number}: its cost exceeds %{ceiling} €, the lowest depreciation ceiling for passenger cars (9,900 to 30,000 € depending on CO2 emissions). Add back the excess with an adjustment"
+      asset_over_depreciated: "Fixed asset %{number} depreciated beyond its cost"
+      no_receipts: "No cash book line for the year"
+      no_fiscal_year: "No financial year of the file covers %{year}"
+      year_open: "Year %{year} is not closed: the return may still change"
+    reversal_label: "Cancellation of %{number}"
+    export:
+      filename:
+        journal: "cash-book"
+        tax_return: "2035-check-%{year}"
+    columns:
+      number: "No."
+      date: "Date"
+      kind: "Type"
+      party: "Customer or supplier"
+      label: "Description"
+      heading: "Heading"
+      method: "Payment"
+      reference: "Voucher"
+      amount: "Amount"
+      nondeductible: "Non-deductible"
+      form: "Form"
+      line: "Line"
+      box: "Box"
+      item: "Item"
+      category: "Category"
+      acquired_on: "Acquired"
+      service_on: "In service"
+      rate: "Rate %"
+      prior: "Prior depr."
+      year_amount: "Charge"
+      net_value: "Net book value"
+      price: "Disposal price"
+      gain: "Gain or loss"
+      short_term: "Short term"
+      long_term: "Long term"
+      severity: "Level"
+      control: "Check"
+    reports:
+      journal: "Cash book of receipts and expenses"
+      tax_return: "2035 return for %{year} income — check report"
+      period: "From %{from} to %{to}"
+      total: "Total"
+      total_receipts: "Total receipts"
+      total_expenses: "Total expenses"
+      balance: "Balance"
+      identity: "%{name} — SIREN %{siren}"
+      profession: "Profession: %{profession}"
+      fingerprint: "Fingerprint: %{fingerprint}"
+      form: "Form %{form}"
+      assets: "Fixed assets and depreciation"
+      disposals: "Capital gains and losses"
+      adjustments: "Add-backs and deductions"
+      controls: "Consistency checks"
+      no_control: "No issue"
+      page: "Page %{page} of %{count}"
+    errors:
+      line:
+        nature:
+          unknown: "Unknown nature"
+          disabled: "This nature is no longer used"
+        amount:
+          not_positive: "The amount must be positive"
+          scale: "The amount is expressed in cents"
+        nondeductible:
+          receipt: "A receipt has no non-deductible share"
+          invalid: "Invalid non-deductible share (positive, in cents)"
+          exceeds: "The non-deductible share cannot exceed the amount"
+          excluded: "A heading outside the 2035 has no non-deductible share"
+        method:
+          invalid: "Unknown payment method"
+        card:
+          unknown: "Unknown card"
+        attachment:
+          unknown: "Unknown attachment"
+        date:
+          future: "Future date: only record a completed transaction"
+          closed_period: "This date's period is closed: correct with a reversal in an open period"
+        reversal:
+          is_reversal: "A reversal cannot be reversed"
+          already: "This line has already been reversed"
+          before_line: "The reversal cannot precede the line"
+        too_long: "%{max} characters at most"
+      nature:
+        in_use: "Nature already used: only the label and activation can change"
+        code:
+          invalid: "Code in capitals, digits and _, 32 characters at most"
+          taken: "Code already taken"
+        label:
+          blank: "Enter a label"
+        kind:
+          invalid: "Unknown type"
+        heading:
+          invalid: "Heading incompatible with the type"
+      asset:
+        label:
+          blank: "Enter a description"
+        category:
+          invalid: "Unknown fixed asset category"
+        service_before_acquisition: "Commissioning cannot precede acquisition"
+        duration:
+          invalid: "Depreciation period from 0 to 50 years"
+          not_depreciable: "This category is not depreciated: period 0"
+        reversal:
+          disposed: "Asset disposed of: it can no longer be reversed"
+          other_year: "A fixed asset can only be reversed in its acquisition year; afterwards, dispose of it"
+      disposal:
+        asset:
+          unknown: "Unknown or cancelled fixed asset"
+          already: "Fixed asset already disposed of"
+        before_acquisition: "The disposal cannot precede the acquisition"
+        price:
+          invalid: "Invalid price (zero or positive, in cents)"
+      adjustment:
+        year:
+          invalid: "Invalid year"
+          closed: "This year has a closed period"
+        kind:
+          invalid: "Unknown kind"
+        label:
+          blank: "Enter a label"
+      form_line:
+        year:
+          closed: "Frozen year: a closed year uses it; add a line for the following year"
+        box:
+          taken: "Box already used by “%{item}” on this form"
+        item:
+          unknown: "Unknown item"
+        form:
+          unknown: "Unknown form (2035, 2035-A, 2035-B)"
+        millesime:
+          invalid: "Invalid tax year"

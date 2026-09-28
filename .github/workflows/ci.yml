@@ -52,6 +52,11 @@ jobs:
             modules: micro,invoicing
           - configuration: micro-facturation-et-comptabilite
             modules: micro,invoicing,accounting
+          # Module des professions libérales (ADR-007 D6, D-LIB-006).
+          - configuration: liberal-seul
+            modules: liberal
+          - configuration: liberal-et-comptabilite
+            modules: liberal,accounting
     services:
       postgres:
         image: postgres:18

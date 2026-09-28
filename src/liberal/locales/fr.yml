@@ -1,0 +1,246 @@
+fr:
+  liberal:
+    module:
+      name: "Profession libérale (2035)"
+    permissions:
+      register:
+        read: "Consulter le livre-journal, les immobilisations et la 2035"
+        write: "Saisir et contre-passer recettes, dépenses et immobilisations, noter réintégrations et déductions"
+      settings:
+        write: "Paramétrer la profession libérale (natures, lignes de la 2035)"
+    menu:
+      liberal_journal: "Livre-journal"
+      liberal_assets: "Immobilisations"
+      liberal_tax_return: "Déclaration 2035"
+      liberal_settings: "Profession libérale"
+    kinds:
+      receipt: "Recette"
+      expense: "Dépense"
+    headings:
+      receipts: "Recettes encaissées"
+      financial_income: "Produits financiers"
+      other_gains: "Gains divers"
+      contribution: "Apport personnel (hors 2035)"
+      loan_received: "Emprunt reçu (hors 2035)"
+      disbursements: "Débours payés pour le compte des clients"
+      fees_retroceded: "Honoraires rétrocédés"
+      purchases: "Achats"
+      salaries: "Salaires nets et avantages en nature"
+      staff_social_charges: "Charges sociales sur salaires"
+      vat_paid: "TVA payée"
+      cet: "Contribution économique territoriale"
+      other_taxes: "Autres impôts"
+      deductible_csg: "CSG déductible"
+      rent: "Loyers et charges locatives"
+      equipment_rental: "Location de matériel et de mobilier"
+      maintenance: "Entretien et réparations"
+      temporary_staff: "Personnel intérimaire"
+      small_tools: "Petit outillage"
+      utilities: "Chauffage, eau, gaz, électricité"
+      fees: "Honoraires ne constituant pas des rétrocessions"
+      insurance: "Primes d'assurance"
+      vehicle: "Frais de véhicules"
+      travel: "Autres frais de déplacement"
+      personal_social_mandatory: "Charges sociales personnelles obligatoires"
+      personal_social_optional: "Charges sociales personnelles facultatives"
+      reception: "Frais de réception, de représentation et de congrès"
+      office: "Fournitures de bureau, documentation, correspondance et téléphone"
+      legal_costs: "Frais d'actes et de contentieux"
+      professional_dues: "Cotisations syndicales et professionnelles"
+      other_management: "Autres frais divers de gestion"
+      financial_costs: "Frais financiers"
+      other_losses: "Pertes diverses"
+      withdrawal: "Prélèvement personnel (hors 2035)"
+      loan_repayment: "Remboursement du capital d'un emprunt (hors 2035)"
+    items:
+      net_receipts: "Montant net des recettes"
+      total_receipts: "Total des recettes"
+      total_expenses: "Total des dépenses"
+      excess: "Excédent"
+      short_term_gains: "Plus-values à court terme"
+      reintegrations: "Divers à réintégrer"
+      scm_profit: "Bénéfice de SCM ou de SCP"
+      total_additions: "Total des lignes à ajouter"
+      shortfall: "Insuffisance"
+      establishment_costs: "Frais d'établissement"
+      depreciation: "Dotation aux amortissements"
+      provision: "Provisions"
+      short_term_losses: "Moins-values à court terme"
+      deductions: "Divers à déduire"
+      scm_loss: "Déficit de SCM ou de SCP"
+      total_subtractions: "Total des lignes à déduire"
+      profit: "Bénéfice"
+      loss: "Déficit"
+      assets_cost: "Immobilisations : valeur d'origine"
+      assets_prior_depreciation: "Amortissements antérieurs"
+      assets_year_depreciation: "Amortissements de l'année"
+      disposals_price: "Prix de cession des immobilisations"
+      long_term_gains: "Plus-values à long terme"
+      long_term_losses: "Moins-values à long terme"
+    asset_categories:
+      intangible: "Immobilisation incorporelle"
+      goodwill: "Clientèle, droit de présentation"
+      land: "Terrain"
+      building: "Construction"
+      fittings: "Agencements et installations"
+      equipment: "Matériel professionnel"
+      vehicle: "Véhicule"
+      office: "Matériel de bureau et informatique"
+      furniture: "Mobilier"
+      other: "Autre immobilisation"
+    adjustment_kinds:
+      reintegration: "Divers à réintégrer"
+      deduction: "Divers à déduire"
+      scm_profit: "Bénéfice de SCM ou de SCP"
+      scm_loss: "Déficit de SCM ou de SCP"
+      establishment_costs: "Frais d'établissement"
+      provision: "Provision"
+    methods:
+      transfer: "Virement"
+      card: "Carte bancaire"
+      cheque: "Chèque"
+      cash: "Espèces"
+      direct_debit: "Prélèvement"
+      other: "Autre"
+    severities:
+      error: "Bloquant"
+      warning: "À vérifier"
+    controls:
+      siren_missing: "Le SIREN de la société manque ou est mal formé : la 2035 ne peut être transmise"
+      profession_missing: "Profession exercée non renseignée"
+      mapping_missing: "« %{item} » n'a pas de ligne dans la table du millésime %{year}"
+      box_missing: "« %{item} » n'a pas de case dans la table du millésime %{year} : il ne serait pas transmis"
+      heading_negative: "La rubrique « %{heading} » est négative"
+      box_duplicate: "Les postes %{items} sont reportés à la même case %{box} du formulaire %{form} : un seul serait transmis"
+      vehicle_depreciation_ceiling: "Véhicule %{number} : sa base dépasse %{ceiling} €, le plus bas des plafonds d'amortissement des véhicules de tourisme (9 900 à 30 000 € selon les émissions de CO2). Réintégrez la part excédentaire par un ajustement"
+      asset_over_depreciated: "Immobilisation %{number} amortie au-delà de sa base"
+      no_receipts: "Aucune ligne au livre-journal pour l'année"
+      no_fiscal_year: "Aucun exercice du dossier ne couvre %{year}"
+      year_open: "L'année %{year} n'est pas close : la déclaration peut encore changer"
+    reversal_label: "Annulation de %{number}"
+    export:
+      filename:
+        journal: "livre-journal"
+        tax_return: "2035-controle-%{year}"
+    columns:
+      number: "N°"
+      date: "Date"
+      kind: "Sens"
+      party: "Client ou fournisseur"
+      label: "Désignation"
+      heading: "Rubrique"
+      method: "Règlement"
+      reference: "Pièce"
+      amount: "Montant"
+      nondeductible: "Non déductible"
+      form: "Formulaire"
+      line: "Ligne"
+      box: "Case"
+      item: "Poste"
+      category: "Catégorie"
+      acquired_on: "Acquisition"
+      service_on: "Mise en service"
+      rate: "Taux %"
+      prior: "Amort. antérieurs"
+      year_amount: "Dotation"
+      net_value: "Valeur résiduelle"
+      price: "Prix de cession"
+      gain: "Plus ou moins-value"
+      short_term: "Court terme"
+      long_term: "Long terme"
+      severity: "Niveau"
+      control: "Contrôle"
+    reports:
+      journal: "Livre-journal des recettes et des dépenses"
+      tax_return: "Déclaration 2035 des revenus %{year} — édition de contrôle"
+      period: "Du %{from} au %{to}"
+      total: "Total"
+      total_receipts: "Total des recettes"
+      total_expenses: "Total des dépenses"
+      balance: "Solde"
+      identity: "%{name} — SIREN %{siren}"
+      profession: "Profession : %{profession}"
+      fingerprint: "Empreinte : %{fingerprint}"
+      form: "Formulaire %{form}"
+      assets: "Immobilisations et amortissements"
+      disposals: "Plus et moins-values"
+      adjustments: "Réintégrations et déductions"
+      controls: "Contrôles de cohérence"
+      no_control: "Aucune anomalie"
+      page: "Page %{page} sur %{count}"
+    errors:
+      line:
+        nature:
+          unknown: "Nature inconnue"
+          disabled: "Cette nature n'est plus utilisée"
+        amount:
+          not_positive: "Le montant doit être positif"
+          scale: "Le montant s'exprime au centime"
+        nondeductible:
+          receipt: "Une recette n'a pas de part non déductible"
+          invalid: "Part non déductible invalide (positive, au centime)"
+          exceeds: "La part non déductible ne peut dépasser le montant"
+          excluded: "Une rubrique hors 2035 n'a pas de part non déductible"
+        method:
+          invalid: "Mode de règlement inconnu"
+        card:
+          unknown: "Fiche inconnue"
+        attachment:
+          unknown: "Pièce jointe inconnue"
+        date:
+          future: "Date à venir : n'inscrire qu'une opération faite"
+          closed_period: "La période de cette date est close : corriger par une contre-passation dans une période ouverte"
+        reversal:
+          is_reversal: "Une contre-passation ne se contre-passe pas"
+          already: "Cette ligne est déjà contre-passée"
+          before_line: "La contre-passation ne peut précéder la ligne"
+        too_long: "%{max} caractères au plus"
+      nature:
+        in_use: "Nature déjà employée : seuls le libellé et l'activation changent"
+        code:
+          invalid: "Code en majuscules, chiffres et _, 32 caractères au plus"
+          taken: "Code déjà pris"
+        label:
+          blank: "Indiquer un libellé"
+        kind:
+          invalid: "Sens inconnu"
+        heading:
+          invalid: "Rubrique incompatible avec le sens"
+      asset:
+        label:
+          blank: "Indiquer une désignation"
+        category:
+          invalid: "Catégorie d'immobilisation inconnue"
+        service_before_acquisition: "La mise en service ne peut précéder l'acquisition"
+        duration:
+          invalid: "Durée d'amortissement de 0 à 50 ans"
+          not_depreciable: "Cette catégorie ne s'amortit pas : durée 0"
+        reversal:
+          disposed: "Immobilisation cédée : elle ne se contre-passe plus"
+          other_year: "Une immobilisation ne se contre-passe que l'année de son acquisition ; ensuite, la céder"
+      disposal:
+        asset:
+          unknown: "Immobilisation inconnue ou annulée"
+          already: "Immobilisation déjà cédée"
+        before_acquisition: "La cession ne peut précéder l'acquisition"
+        price:
+          invalid: "Prix invalide (positif ou nul, au centime)"
+      adjustment:
+        year:
+          invalid: "Année invalide"
+          closed: "Cette année compte une période close"
+        kind:
+          invalid: "Sorte inconnue"
+        label:
+          blank: "Indiquer un libellé"
+      form_line:
+        year:
+          closed: "Millésime figé : une année close l'emploie ; ajoutez une ligne au millésime suivant"
+        box:
+          taken: "Case déjà prise par « %{item} » dans ce formulaire"
+        item:
+          unknown: "Poste inconnu"
+        form:
+          unknown: "Formulaire inconnu (2035, 2035-A, 2035-B)"
+        millesime:
+          invalid: "Millésime invalide"

@@ -9,6 +9,8 @@ en:
         other: "Non-stock purchases of materials and supplies"
         vat: "Output VAT"
         vat_deductible: "Deductible VAT on other goods and services"
+    liberal:
+      disposal_account_label: "Proceeds from disposal of assets"
     module:
       name: "Accounting"
     permissions:
@@ -271,6 +273,11 @@ en:
         already_posted: "This event is already posted."
         not_dismissed: "This event is not dismissed."
         reason_too_long: "%{max} characters at most."
+      liberal:
+        no_financial_ledger: "No active financial journal: create one to post the liberal profession cash book."
+        no_account: "No account for %{key}: configure it for the liberal profession."
+        key_invalid: "Invalid nature, heading or category (letters, digits and _, 40 characters at most)."
+        not_direct_use: "Account %{number} cannot be used in entries."
       micro:
         no_financial_ledger: "No active financial ledger: create one to post the micro-business registers."
         no_account: "No account for category %{category}: set it for the micro-business."
