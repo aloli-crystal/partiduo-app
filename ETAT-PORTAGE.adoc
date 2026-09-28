@@ -2620,6 +2620,12 @@ Vérifications :
 * `partiduo-app` : documentation seule (DECISIONS, BLOCAGES, état) ; pas
   de code touché, specs du cœur non relancées.
 
+== Livrable final (28 septembre 2026)
+
+Synthèse de relecture : `partiduo-docs/LIVRABLE.adoc` (dépôts, lots,
+commandes, reste à faire, suites proposées). Les douze CI GitHub sont vertes ;
+blocages levés à cette occasion : BLOCAGES.adoc, section « Livrable final ».
+
 == Prochaines étapes
 
 Liste à l'issue de la critique de complétude et des lots E, G, L et T ;
