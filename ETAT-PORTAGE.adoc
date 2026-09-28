@@ -2384,8 +2384,9 @@ restauration de l'archive, recours d'accès (trace
 
 Reste : mode production non essayé (B-ADM-002) ; restauration « instance
 neuve » en production à installer à la main (D-ADM-013) ; montée de version
-en mode local non essayée faute de second binaire de version ; entrée
-courante du menu non marquée (`aria-current`).
+en mode local non essayée faute de second binaire de version (essayée à
+blanc avec retour arrière, voir « Vérification de bout en bout du lot A ») ;
+entrée courante du menu non marquée (`aria-current`).
 
 == Clôture du lot A — relecture et vérifications (A:final, 28 septembre 2026)
 
@@ -2427,6 +2428,42 @@ deux dépôts ; format vérifié.
 Reste : essai du mode production sur un serveur Linux (sudo, systemd,
 certbot, nginx : B-AFN-001, B-ADM-002) ; `Approvals.reject` à rendre
 conditionnel (D-AFN-011).
+
+== Vérification de bout en bout du lot A (A:bout-en-bout, 28 septembre 2026)
+
+`partiduo-admin` compilé et servi sur `http://admin.partiduo.localhost:8231`
+(base `partiduo_admin_ja`), parcouru au navigateur (Chromium piloté,
+authentificateur WebAuthn virtuel), deux exécutants compilés : `local-1` en
+mode `local` contre `bin/partiduo-provision` et un `partiduo-manage`
+compilé (bases `partiduo_adm_*`), `blanc-1` en mode `dry-run`.
+
+[cols="3,1",options="header"]
+|===
+|Étape |Résultat
+
+|Amorçage : `bootstrap` affiche le lien, second appel refusé ; passkey enregistrée puis session élevée au niveau 3 ; reconnexion par passkey |vérifié
+|Cabinets (2), admins de cabinet (2), gestionnaire invité par l'admin de cabinet (rôles limités à son cabinet) ; mot de passe + TOTP + codes de récupération ; connexion mot de passe puis code |vérifié après correction (D-ABE-001)
+|Donneurs d'ordre, serveurs (jeton affiché une fois), versions `0.1.0` (défaut) et `0.2.0` |vérifié
+|Gestionnaire : ne voit que le dossier confié (liste, tâches) ; 403 sur l'autre dossier, sa tâche, le journal d'audit, les utilisateurs |vérifié
+|Dossier FR `boulangerie-martin`, modules `accounting,invoicing`, tâche `instance.create` exécutée par l'agent local : base créée, 34 migrations, société, modules actifs, invitation de l'administrateur envoyée par courriel et retirée du résultat |vérifié
+|Activation d'`analytic` par le gestionnaire : trace `instance.module.enable` dans l'instance |vérifié
+|Sauvegarde manuelle (`pg_dump`, liste et archive des pièces), restauration test (base temporaire créée, relue, supprimée) |vérifié
+|Montée de version à blanc de `garage-petit` avec `--fail-on "instance migrate"` : sauvegarde préalable, bascule, échec simulé, retour arrière (version, base restaurée, service relancé), dossier resté en 0.1.0 ; seconde montée réussie en 0.2.0 |vérifié (D-ABE-004)
+|Archivage : lecture seule posée sur la base, archive figée vérifiée, conservation jusqu'au 2036-09-28 ; suppression demandée aussitôt : refusée (« durée légale… non écoulée ») ; restauration de l'archive |vérifié
+|Recours d'accès demandé par le gestionnaire, validé par l'admin de cabinet : `approval.request`, `approval.approve` (réf. `DV-…`) et `task.succeeded` au journal de l'admin ; `instance.admin_invitation` (motif, réf., deux validateurs) au journal de l'instance ; nouvelle invitation envoyée |vérifié
+|Supervision par `schedule` : dernier contact et disque des serveurs, service et base par dossier ; service arrêté simulé → alerte au tableau de bord, aux alertes et sur la fiche, levée au relevé suivant |vérifié après traduction (D-ABE-002)
+|Écrans à 1 400 px et 800 px |vus
+|===
+
+Corrigé dans `partiduo-admin` : bouton d'activation TOTP jamais affiché
+(bloquant) et autres chaînes vides vraies dans les gabarits (D-ABE-001) ;
+états et planification traduits (D-ABE-002) ; confirmation du nouveau jeton
+et icône (D-ABE-003) ; option `--fail-on` de l'exécutant (D-ABE-004).
+Specs `partiduo-admin` (base `partiduo_ja_test`, ordre aléatoire) :
+124 exemples verts ; format et Ameba sans remarque.
+
+Reste : passkey sur un appareil réel et mode production (B-ABE-001,
+B-ADM-002, B-AFN-001).
 
 == Prochaines étapes
 

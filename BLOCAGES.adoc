@@ -893,3 +893,16 @@ d'une instance n'ont pas été essayés faute de serveur Linux. Contournement :
 specs des argv produits par `ProductionSystem` et des refus des
 enveloppes ; essai à faire sur le premier serveur (B-ADM-002).
 
+
+== B-ABE-001 — Passkey essayée avec l'authentificateur virtuel de Chromium (A:bout-en-bout)
+
+*Constat.* L'enrôlement et la connexion du super-admin par passkey ont été
+vérifiés au navigateur avec l'authentificateur virtuel du protocole
+DevTools (`WebAuthn.addVirtualAuthenticator`, CTAP2, vérification de
+l'utilisateur simulée), pas avec un appareil réel. Le mode production de
+l'exécutant reste non essayé (B-ADM-002, B-AFN-001). Le bac à sable refuse
+`pkill` ; les serveurs de vérification ont été arrêtés par l'outil de
+tâches.
+
+*Levée.* Essai d'une passkey réelle sur `admin.partiduo.localhost`
+(B-ADM-002).

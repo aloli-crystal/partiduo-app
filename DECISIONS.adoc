@@ -9843,3 +9843,61 @@ serveur.
 
 *Alternative écartée.* Codes stables traduits par l'admin : changement du
 protocole de l'exécutant pour un texte que seuls les exploitants lisent.
+
+== Vérification de bout en bout du lot A (A:bout-en-bout, 28 septembre 2026)
+
+Parcours complet de `partiduo-admin` au navigateur (base `partiduo_admin_ja`,
+port 8231, `admin.partiduo.localhost`) avec deux exécutants : `local`
+(dossiers `partiduo_adm_*`) et `dry-run`. Préfixe `D-ABE-`. Code dans
+`../partiduo-admin`.
+
+=== D-ABE-001 — Une chaîne vide est vraie dans un gabarit de Marten
+
+*Contexte.* `Marten::Template::Value#truthy?` ne tient pour faux que `nil`,
+`false` et `0`. L'écran « Sécurité du compte » recevait `totp_secret => ""`
+sans secret en attente : `{% elsif totp_secret %}` était vrai, le bouton
+« Activer une application d'authentification » ne s'affichait jamais et un
+admin de cabinet ou un gestionnaire invité ne pouvait pas atteindre le
+niveau 2 par l'écran (bloquant). Même piège, sans gravité, pour l'aide et
+`aria-describedby` des champs, l'erreur d'une tâche, l'adresse d'une double
+validation, le SIREN d'un donneur d'ordre et le chemin d'une sauvegarde.
+
+*Choix.* Valeurs `nil` plutôt que `""` côté Crystal (`totp_secret`,
+`FormField#help`, `FormField#describedby`, `Approval#param_email`,
+`Task#error_text`) ; comparaison explicite `!= ""` dans les gabarits pour
+les champs de modèle non nuls. Spec :
+`spec/admin/end_to_end_fixes_spec.cr`.
+
+*Alternative écartée.* Filtre de gabarit « présent » : une règle de plus à
+retenir, pour le même effet.
+
+=== D-ABE-002 — États de supervision et planification traduits
+
+*Choix.* `Dossier#schedule_key`, `#service_state_key`, `#database_state_key`
+et `Alert#detail_text` : la fiche d'un dossier et les alertes affichaient
+`daily`, `running`, `ok`, `stopped` en anglais. Nouvelles clés
+`admin.health.states.*` (fr, en, nl). La valeur stockée reste le code
+technique.
+
+=== D-ABE-003 — Nouveau jeton d'exécutant confirmé
+
+*Contexte.* Un seul clic sur « Nouveau jeton » annulait le jeton de
+l'exécutant du serveur (constaté pendant la vérification : jeton de
+`local-1` remplacé par erreur).
+
+*Choix.* Formulaire en `hx-boost` avec `hx-confirm` (texte traduit) ;
+sans JavaScript, le formulaire reste un POST ordinaire. Icône vide
+(`<link rel="icon" href="data:,">`) : plus d'erreur 404 `favicon.ico` dans la
+console.
+
+=== D-ABE-004 — `partiduo-agent --fail-on`, à blanc seulement
+
+*Contexte.* La montée de version « à blanc avec retour arrière simulé »
+n'était possible que dans les specs (`Config#fail_on`), sans option de
+ligne de commande.
+
+*Choix.* Option `--fail-on TEXTE`, refusée hors du mode `dry-run`
+(`ArgumentError`) : jamais d'échec provoqué sur un vrai système.
+
+*Alternative écartée.* Variable d'environnement : plus facile à oublier
+sur un serveur de production.
