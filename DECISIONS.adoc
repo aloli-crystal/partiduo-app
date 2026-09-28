@@ -10120,3 +10120,41 @@ script de démonstration, variables, clés de traduction, données écrites).
 
 *Alternative écartée.* Garder `--noalyss` comme alias de `--legacy-db` :
 contraire à la règle (option de ligne de commande).
+
+=== D-NOM-002 — Conventions de nommage sans le logiciel d'origine (tous les dépôts)
+
+*Contexte.* D-NOM-001 fixe la règle pour `partiduo-app` ; elle vaut pour
+tous les dépôts `partiduo-*` (sauf `partiduo-docs`, qui est de la
+documentation). Les renommages traversent les dépôts (reprise, adaptateur de
+facturation électronique, extensions et leur interface) et doivent rester
+cohérents.
+
+*Choix.*
+
+* Vocabulaire : la source de la reprise est la « base d'origine » (anglais
+  `legacy`) ; l'application PHP est « l'application d'origine » ; une règle
+  reprise est dite « reprise de l'application d'origine », ou simplement
+  énoncée. Les références de fichiers PHP utiles vont ici, pas dans le code.
+* Identifiants : `legacy` pour tout ce qui désignait la source
+  (`PartiduoMigrate::Legacy`, `--legacy-db`, `scripts/legacy-demo`,
+  `LEGACY_DEMO_URL`, `LEGACY_DEMO_DB`, `LEGACY_APP`, `chart_from_legacy.cr`) ;
+  l'adaptateur belge porte le nom du réseau et du pays (`PEPPOL_BE`,
+  « Peppol Belgique »), avec migration des données déjà enregistrées.
+* Libellés d'écran (locales fr, en, nl) : la mention est retirée ;
+  l'attribution reste dans les README.
+* Pas d'alias vers les anciens noms (options, codes, variables) : l'ancien
+  nom resterait dans le code.
+* Garde-fou dans chaque dépôt : étape du job de format de la CI,
+  `git grep -il <nom> -- . ':!*.adoc' ':!*.md'`, qui échoue sur toute
+  occurrence (le motif est écrit en classe de caractères ou en chaîne
+  concaténée pour que le fichier de CI ne se signale pas lui-même), et même
+  contrôle dans la spec d'architecture du dépôt quand il en a une. Les noms
+  de fichiers suivis sont aussi vérifiés au contrôle final (`git ls-files`).
+* Les entrées antérieures de DECISIONS, ETAT-PORTAGE et BLOCAGES ne sont pas
+  réécrites : elles gardent les noms d'alors, la correspondance est donnée en
+  D-NOM-MIG, D-EINV-028 et dans ETAT-PORTAGE (section N:nom).
+
+*Alternative écartée.* Une liste d'exceptions (en-têtes de protocole, URL
+de dépôt) dans le code : le garde-fou ne serait plus un simple `git grep` ;
+ces valeurs passent en paramètre ou en documentation (`auth_header`,
+attribut `:legacy-repo:` du README de `partiduo-migrate`).

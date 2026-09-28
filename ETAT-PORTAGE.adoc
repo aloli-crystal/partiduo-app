@@ -21,12 +21,12 @@ P → 0 → 1 → (2 et F en parallèle) → M → 3 → 4 → 5 → 6.
 |1 |Référentiel : tiers, articles, TVA, devises, exercices et périodes, pièces jointes ; plan comptable, journaux ; écrans ; `partiduo-skel` |*Terminé*
 |2 |Écritures, consultation, lettrage |*Terminé* (clôture commune « Clôture du lot 2F »)
 |F |Module Facturation |*Terminé* (clôture commune « Clôture du lot 2F »)
-|M |`partiduo-migrate` |*Terminé* (FEC et base NOALYSS ; analytique en annexe jusqu'au lot 5 ; clôture « Clôture du lot M »)
+|M |`partiduo-migrate` |*Terminé* (FEC et base d'origine NOALYSS ; analytique en annexe jusqu'au lot 5 ; clôture « Clôture du lot M »)
 |3 |Éditions : balances, grand livre, journaux, bilan et compte de résultat FR/BE, rapports personnalisés, FEC, exports CSV et PDF ; écrans ; réconciliation de `partiduo-migrate` par les éditions |*Terminé* (clôture « Clôture du lot 3 »)
 |4 |TVA : déclarations BE (grilles, listing, relevé intracommunautaire, Intervat) et FR (CA3, CA12), liquidation |*Terminé* (clôture « Clôture du lot 4 »)
 |5 |Analytique : plans, postes, groupes, clés de répartition, ventilation des écritures, opérations diverses, balances et historiques |*Terminé* (cœur et interface ; clôture « Clôture du lot 5 ») ; reprise analytique par `partiduo-migrate` reportée (B-MIG-001)
 |6 |Stock, prévisions budgétaires, suivi (GED : extension `partiduo-document`) |*Terminé* (cœur et interface ; clôture « Clôture du lot 6 ») ; reprise par `partiduo-migrate` reportée
-|E |Justificatifs (`partiduo-document`), facturation électronique (`partiduo-einvoicing`, adaptateurs XP Z12-013 et NOALYSS-PEPPOL), SUPER PDP (`partiduo-superpdp`), factures non électroniques (cœur et interface) |*Terminé* (clôture « Clôture du lot E »)
+|E |Justificatifs (`partiduo-document`), facturation électronique (`partiduo-einvoicing`, adaptateurs XP Z12-013 et Peppol Belgique `PEPPOL_BE`, ex-NOALYSS-PEPPOL), SUPER PDP (`partiduo-superpdp`), factures non électroniques (cœur et interface) |*Terminé* (clôture « Clôture du lot E »)
 |G |Module `micro` (ADR-007 D1, D2) : registres, aide URSSAF, 2042-C-PRO, seuils, partie double par la Comptabilité (cœur) ; interface simplifiée (D3) |*Terminé* (cœur, interface simplifiée, écrans de paramétrage ; clôture « Clôture du lot G »)
 |L |Module `liberal` (ADR-007 D6) : livre-journal, immobilisations, 2035, partie double par la Comptabilité ; interface et mode simplifié |*Terminé* (cœur, interface et mode simplifié ; clôture « Clôture du lot L »)
 |T |Extension `partiduo-teledec` (ADR-007 D4, D5) : liasse, TVA, DAS2, IS, greffe par TELEDEC (API Balance, transport abstrait, simulateur) |*Terminé* contre le simulateur (clôture « Clôture du lot T ») ; adaptateur réel en attente (B-TDC-001)
@@ -2516,6 +2516,38 @@ déclarative pour l'exécutant (B-CRA-002, signature proposée) ; remise par
 un vrai MTA et cloisonnement du compte de l'administration à essayer sur
 le premier serveur (B-CRA-003).
 
+== Aucune mention du logiciel d'origine dans le code (N:nom, 28 septembre 2026)
+
+Règle posée par Philippe le 28 septembre 2026 (D-NOM-001, conventions en
+D-NOM-002) : le nom NOALYSS n'apparaît plus que dans les fichiers `*.adoc` et
+`*.md` (attribution exigée par la licence). Un commit « refactor: aucune
+mention du logiciel d'origine dans le code » par dépôt, branche
+`development`, rien de poussé :
+
+[cols="2,1,5",options="header"]
+|===
+|Dépôt |Commit |Changements
+|`partiduo-app` |`28c3a62` |`scripts/chart_from_legacy.cr` (ex-`chart_from_noalyss.cr`), en-têtes de `chart_be.yml` / `chart_fr.yml` régénérés, commentaires reformulés, `shard.yml` ; spec `spec/architecture/origin_name_spec.cr`
+|`partiduo-migrate` |`82ec8ab` |`PartiduoMigrate::Legacy`, `--legacy-db` (plus de `--noalyss`), `scripts/legacy-demo`, `LEGACY_DEMO_URL`, `LEGACY_DEMO_DB`, `LEGACY_APP`, base `partiduo_legacy_demo`, source `legacy:<jr_id>` (D-NOM-MIG)
+|`partiduo-einvoicing` |`708c610` |adaptateur `PEPPOL_BE` (« Peppol Belgique », `Connectors::PeppolBe`), paramètre `auth_header`, migration `0003_peppol_be_adapter` des raccordements et factures (D-EINV-028)
+|`partiduo-ui-bulma` |`5fb60e4` |commentaires et libellés
+|`partiduo-document` |`6bb87ad` |commentaires, `shard.yml`
+|`partiduo-skel` |`2f03ff0` |commentaires, `shard.yml`
+|`partiduo-choruspro` |`4b39fa4` |un commentaire de spec
+|`partiduo-superpdp`, `partiduo-esalink`, `partiduo-teledec`, `partiduo-urssaf`, `partiduo-admin` |`62c3e3e`, `d8a4ace`, `9dc239b`, `7684c16`, `f4aa58f` |aucune mention à retirer ; garde-fou seul
+|===
+
+Garde-fou dans chaque dépôt : étape du job de format de la CI qui échoue si
+`git grep -il` trouve le nom hors `*.adoc` et `*.md` (motif écrit de façon à
+ne pas se trouver lui-même), et même contrôle en spec d'architecture.
+Contrôle final (tous les dépôts `partiduo-*` sauf `partiduo-docs`) : aucune
+occurrence dans le contenu suivi ni dans les noms de fichiers ; renommages
+croisés cohérents (aucun autre dépôt n'utilise `--noalyss`, `NOALYSS_PEPPOL`
+ni `chart_from_noalyss`). Les sections plus anciennes de ce fichier gardent
+les noms d'alors (`--noalyss`, `scripts/noalyss-demo`,
+`partiduo_noalyss_demo`, `noalyss_<ad_id>`) : lire `--legacy-db`,
+`scripts/legacy-demo`, `partiduo_legacy_demo`, `legacy_<ad_id>`.
+
 == Prochaines étapes
 
 Liste à l'issue de la critique de complétude et des lots E, G, L et T ;
@@ -2696,7 +2728,7 @@ Reprise (`partiduo-migrate`) :
 ----
 cd prod-crystal/partiduo/partiduo-migrate
 SKIP_MARTEN_CLI_PRECOMPILATION=1 shards install && shards build partiduo-migrate
-scripts/noalyss-demo                               # base NOALYSS de démonstration
+LEGACY_APP=…/noalyss-app scripts/legacy-demo      # base d'origine de démonstration
 DATABASE_URL='postgres:///partiduo_test_<agent>?host=/tmp' crystal spec
 DATABASE_URL='postgres:///partiduo_<dossier>?host=/tmp' bin/partiduo-migrate import \
   --fec demo/732829320FEC20241231.txt --report rapport/ [--locale en|nl] [--dry-run]
