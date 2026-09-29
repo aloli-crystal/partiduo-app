@@ -10475,3 +10475,93 @@ ADR-009 D5 ne vise que la décision du client. Specs :
 *Alternative écartée.* Publier aussi à la transformation : l'abonné de la
 relation client recevrait une « acceptation » pour une commande tirée du
 devis ; `invoice.issued` couvre déjà la suite de la chaîne.
+
+== Points d'accroche des extensions CRM et MODELES (29 septembre 2026)
+
+Les extensions `partiduo-crm` (ADR-009) et `partiduo-modeles` (ADR-010)
+contournaient l'absence de points d'accroche dans l'interface commune et le
+socle (blocages B-CRM-001, B-CRM-002, B-MOD-001, B-MOD-002, B-MOD-004 de
+leurs `doc/ETAT.adoc`). Les points d'accroche sont ajoutés, les
+contournements retirés.
+
+=== D-HOOK-001 — Tuiles d'extension sur les tableaux de bord (partiduo-ui-bulma)
+
+*Choix.* `PartiduoUi::Extensions.tile(code) { |actor, fmt| Array(Dashboard::Tile) }`,
+dans le style de `counter`. `Dashboard#build`, `MicroDashboard#build` et
+`LiberalDashboard#build` ajoutent, après les tuiles des modules,
+`Extensions.tiles(actor, fmt, active)` : le bloc n'est appelé que si le code
+figure parmi les pièces actives ; `AccessDenied` et `NotFound` sont ignorés
+comme pour `counts`. Plusieurs déclarations sont admises, dans leur ordre ; le
+code est contrôlé comme au montage. Specs :
+`partiduo-ui-bulma/spec/ui/extension_hooks_spec.cr` (extension factice UITEST).
+
+*Alternative écartée.* Compléter `Dashboard#build` depuis l'extension
+(`previous_def`, contournement du CRM) : fragile, et sans effet sur les
+tableaux de bord simplifiés.
+
+=== D-HOOK-002 — Actions et fichiers d'extension sur la fiche d'un document (partiduo-ui-bulma)
+
+*Choix.* `PartiduoUi::Extensions.document_links(code) { |actor, document| Array(DocumentLink) }`
+avec `record DocumentLink, label, url, kind = "action"` (`action` : bouton
+vers un écran de l'extension ; `file` : fichier produit, à télécharger ;
+autre nature : `ArgumentError`). `DocumentHandler` (fiche
+`/invoicing/documents/<id>`) rend un panneau par extension active qui rend
+au moins un lien : `aside` relié à son titre `h2` (nom de l'extension),
+listes, boutons et liens de 44 px, propriétés CSS logiques, couleurs des
+jetons du thème (clair et sombre), sous-titre « Fichiers produits » (fr, en,
+nl). Refus et objet introuvable ignorés : pas de panneau.
+
+*Alternative écartée.* Un registre `document_action(code, label, route,
+permission)` (demande de B-MOD-002) : il ne permet pas de lister des
+fichiers propres au document (B-MOD-004) ; le bloc lit le contrat de
+l'extension, qui contrôle lui-même ses droits.
+
+=== D-HOOK-003 — ODT et DOCX au socle des pièces jointes
+
+*Choix.* `Partiduo::Core::Attachments::TYPES` admet
+`application/vnd.oasis.opendocument.text` (`.odt`) et
+`application/vnd.openxmlformats-officedocument.wordprocessingml.document`
+(`.docx`), dans les limites communes (20 Mio). Signature
+(`signature_matches?`) :
+
+* ODT : en-tête local ZIP `PK\x03\x04`, première entrée nommée `mimetype`,
+  non compressée, de valeur exacte le type (OpenDocument 1.3, partie 3) ;
+* DOCX : en-tête ZIP, répertoire central lisible (`Compress::Zip::File`,
+  contenu des entrées non décompressé), entrées `[Content_Types].xml` et
+  `word/document.xml` ; archive tronquée ou mal formée : refus.
+
+Le contrôle des images passe dans `Attachments.image?` (complexité). Specs :
+`spec/core/attachments_spec.cr` ; documentation :
+`doc/api/socle-referentiel.adoc`.
+
+*Hors du champ.* `text/markdown` et `text/asciidoc`, aussi demandés par
+B-MOD-001 : MODELES conserve le texte sous `text/plain` en gardant le type
+réel, sans perte ; à ajouter quand un besoin d'affichage l'exigera.
+
+=== D-HOOK-004 — MODELES conserve tous ses fichiers par le socle
+
+*Choix.* Modèles, rendus et PDF de MODELES sont des pièces jointes du socle ;
+le stockage à part (`storage_name`, dossier `modeles/`) est retiré de la
+migration 0001 et du code, sans reprise (dépôt neuf, pas de données de
+production). Un dépôt refusé par le socle (archive mal formée) est rendu en
+erreurs du socle sous `content`, sans rien créer. Détail :
+`partiduo-modeles/doc/ETAT.adoc` D-MOD-005 révisée.
+
+=== D-HOOK-005 — Usage des points d'accroche par les extensions
+
+* CRM : tuile « Commercial » par `Extensions.tile` (`ui/bulma/dashboard_tile.cr`),
+  désormais aussi sur les tableaux de bord simplifiés (D-CRM-017).
+* MODELES : panneau de la fiche d'un document par `Extensions.document_links`
+  (`ui/bulma/document_links.cr`) : « Rendre avec un modèle » vers
+  `/ext/MODELES/documents/<id>` et dix derniers rendus conservés (D-MOD-016).
+  La liste des documents de l'extension reste servie, mais n'est plus
+  annoncée par la page des modèles.
+
+=== D-HOOK-006 — Icônes ajoutées à la planche commune
+
+*Choix.* `kanban`, `phone`, `mail`, `arrow-left`, `arrow-right` ajoutées à
+`partiduo-ui-bulma/icons/lucide/` (Lucide 1.48.0, licence ISC, version et
+famille de la planche), planche régénérée par `scripts/icon_sprite.cr`. Le
+CRM les utilise (pipeline, flèches des cartes, « Appeler », « Écrire »,
+nature des activités ; D-CRM-018). Une icône qui manque à une extension
+s'ajoute à la planche commune, jamais dans l'extension.
