@@ -2626,6 +2626,32 @@ Synthèse de relecture : `partiduo-docs/LIVRABLE.adoc` (dépôts, lots,
 commandes, reste à faire, suites proposées). Les douze CI GitHub sont vertes ;
 blocages levés à cette occasion : BLOCAGES.adoc, section « Livrable final ».
 
+== Travaux reportés réalisés (R5, 29 septembre 2026)
+
+Décisions D-R5-001 à D-R5-017 (DECISIONS, section « Travaux reportés »),
+un commit par sujet et par dépôt :
+
+. Fournisseur personne physique (cards 0004) et DAS2 `AE_3036_*`/`AI`
+  (`partiduo-teledec`).
+. Conditions de paiement par document (invoicing 0005), adresse de
+  livraison à l'édition ; `API_VERSION` 0.6.0.
+. TVA au prorata des encaissements, annexe 3310-A ; EDI-TVA : B-R5-001.
+. `Api::Core.table_pdf` (rendu `Core::TableOutput`), PDF depuis chaque
+  liste.
+. OpenID Connect intégré, écrans des fournisseurs d'identité, connexion
+  fédérée.
+. `partiduo-migrate` : analytique, relevés, stock, prévisions, suivi ;
+  droits par dépôt (stock 0002), actions réservées à un profil
+  (followup 0002).
+. `doc/amont/` : reproductions et tickets (Crystal, Marten,
+  `pdf-validate`).
+
+Vérifications : `crystal spec` 1 146 exemples verts, huit configurations de
+`scripts/specs-modules.sh` vertes ; `partiduo-ui-bulma` 373, `partiduo-migrate`
+96, `partiduo-teledec` 184 exemples verts, en ordre aléatoire ; Ameba sans
+remarque, garde-fous verts ; écrans vus dans le navigateur sur une
+instance de vérification (`r5demo`, supprimée ensuite).
+
 == Prochaines étapes
 
 Liste à l'issue de la critique de complétude et des lots E, G, L et T ;
@@ -2691,11 +2717,8 @@ chaque point renvoie à sa décision ou à son blocage.
   _authorization code_ réel (B-SPDP-004) ; pièces jointes orphelines
   (B-UI-008) ; essai de la capture photo sur téléphone (B-UI-001).
 
-. *Reprises par `partiduo-migrate`* : analytique (B-MIG-001 : ventiler avant
-  de clore les périodes reprises), stock, prévisions, suivi, numéros de
-  relevé des journaux financiers (B-CRIT-003), avec les avertissements de
-  B-SEC-001 ; puis droits par dépôt (D-STK-006) et visibilité des actions
-  par groupe (D-FUP-001).
+. *Reprises par `partiduo-migrate`* : faites (R5) ; écritures d'ouverture
+  reprises comme écritures ordinaires.
 . *Interface* : export PDF depuis chaque liste par un service neutre du
   contrat (B-CRIT-001) ; fournisseurs d'identité, connexion fédérée et dépôt
   des pièces jointes (B-CRIT-002) ; actions liées sur un document de la
