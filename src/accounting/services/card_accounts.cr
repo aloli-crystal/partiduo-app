@@ -65,7 +65,19 @@ module Partiduo
       # `account_insert` à l'enregistrement d'une fiche d'origine. Une catégorie
       # sans paramétrage, ou un compte impossible à déterminer, laisse la fiche
       # sans compte : l'enregistrement de la fiche n'échoue jamais pour cela.
-      def self.on_card_saved(card_id : Int64) : Nil
+      #
+      # `requested` (clé `account` de l'événement, fiche créée avec son compte,
+      # D-MIG-006) : ce compte est rattaché selon les règles
+      # d'`assign_card_account` ; s'il ne peut l'être, l'abonné refuse
+      # (`Partiduo::Events::Refused`) et la fiche n'est pas créée.
+      def self.on_card_saved(card_id : Int64, requested : String? = nil) : Nil
+        if requested
+          card = card(Partiduo::Api::Actor.system, card_id) || return
+          account, errors = resolve(card, requested)
+          raise Partiduo::Events::Refused.new(errors) if account.nil? || !errors.empty?
+          link(card_id, account)
+          return
+        end
         return if CardAccount.filter(card_id: card_id).exists?
         card = card(Partiduo::Api::Actor.system, card_id) || return
         account, errors = resolve(card, nil)

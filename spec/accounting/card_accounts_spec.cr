@@ -33,6 +33,11 @@ describe "Rattachement fiche → compte : module inactif (ADR-006 D2)" do
       expect_raises(Partiduo::Api::ModuleDisabled) { Api.card_account(system, 1_i64) }
       expect_raises(Partiduo::Api::ModuleDisabled) { assign(1_i64) }
       create_card("CUSTOMER", "Dupont SA")
+      # Un compte demandé sans Comptabilité : refus, rien n'est créé (D-MIG-006).
+      input = Cards::CardInput.new(category_id: category_id("CUSTOMER"), name: "Durand")
+      Cards.create_card(system, input, account: "4119").error_keys
+        .should eq(["cards.errors.card.account.no_accounting"])
+      Cards.count_cards(system).should eq(1)
     end
     Partiduo::Accounting::CardAccount.all.count.should eq(0)
   end
@@ -130,6 +135,46 @@ describe_module "ACCOUNTING", "Rattachement fiche → compte (account_insert)" d
     Api.set_card_category_account(system, Api::CardCategoryAccountInput.new(contact, "61")).value!.create_account
       .should be_false
     Api.set_card_category_account(system, Api::CardCategoryAccountInput.new(contact)).value!.base_account.should be_nil
+  end
+
+  it "crée une fiche avec son compte en une commande, sans compte calculé (D-MIG-006)" do
+    AccountingSpec.load("fr")
+    input = Cards::CardInput.new(category_id: category_id("CUSTOMER"), name: "Aubépine")
+    ReferentialSpec.capture_events("card.saved") do |events|
+      card = Cards.create_card(system, input, account: " 4119 ").value!
+      events.map(&.["account"]?).should eq(["4119"])
+      account_of(card.id).should eq("4119")
+    end
+    created = Api.account(system, "4119")
+    created.label.should eq("Aubépine")
+    created.parent_number.should eq("410") # sous le compte de base de la catégorie
+    # Le compte calculé (account_compute) n'a jamais été créé.
+    Partiduo::Accounting::Account.filter(number: "4100002").exists?.should be_false
+
+    # Compte existant d'usage direct : rattaché tel quel.
+    other = Cards.create_card(system, Cards::CardInput.new(category_id: category_id("CUSTOMER"), name: "Dune"),
+      account: "4100001").value!
+    account_of(other.id).should eq("4100001")
+    # Compte vide : comme sans compte (compte calculé).
+    third = Cards.create_card(system, Cards::CardInput.new(category_id: category_id("CUSTOMER"), name: "Lande"),
+      account: " ").value!
+    account_of(third.id).should eq("4100002")
+  end
+
+  it "ne crée pas la fiche dont le compte demandé est refusé ; exige le droit du plan comptable" do
+    AccountingSpec.load("fr")
+    before = Cards.count_cards(system)
+    input = Cards::CardInput.new(category_id: category_id("CUSTOMER"), name: "Refusée")
+    Cards.create_card(system, input, account: "51").error_keys
+      .should eq(["accounting.errors.card_account.account.not_direct_use"])
+    Cards.count_cards(system).should eq(before)
+    Partiduo::Accounting::Account.filter(number: "4100002").exists?.should be_false
+
+    expect_raises(Partiduo::Api::Forbidden) do
+      Cards.create_card(actor_with("cards.card.write"), input, account: "4119")
+    end
+    Cards.create_card(actor_with("cards.card.write", "accounting.account.write"), input, account: "4119")
+      .value!.name.should eq("Refusée")
   end
 
   it "exige les droits du plan comptable" do

@@ -40,8 +40,10 @@ module Partiduo
       "invoice.platform_deposited" => %w[invoice_id],
       "payment.matched"            => %w[matching_id],
       "payment.unmatched"          => %w[matching_id],
-      "card.saved"                 => %w[card_id],
-      "period.closed"              => %w[period_id],
+      # Clé facultative `account` : compte demandé à la création de la fiche
+      # (`Cards.create_card(…, account:)`, D-MIG-006).
+      "card.saved"    => %w[card_id],
+      "period.closed" => %w[period_id],
       # Recette ou achat inscrit au registre du module micro-entreprise
       # (ADR-007 D2, D-MIC-002) : la Comptabilité passe l'écriture.
       "micro.receipt.recorded"  => %w[receipt_id],

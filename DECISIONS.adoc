@@ -3277,6 +3277,26 @@ présente dans l'instance (BANQUE du jeu initial) est conservée telle quelle.
 compte en une commande : proposé ici comme amélioration (`CardInput.account`
 ou `create_card(…, account:)`), non appliqué (hors périmètre du lot M).
 
+*Amendement adopté le 29 septembre 2026.* Le contrat du socle crée une
+fiche avec son compte en une commande : `Cards.create_card(actor, input,
+account: "411AUBEPINE")`. Paramètre de `create_card` plutôt que champ de
+`CardInput` : `CardInput` décrit la fiche entière et sert aussi à
+`update_card` et à `CardView#to_input`, alors que le compte appartient à la
+Comptabilité et ne se demande qu'à la création (ensuite :
+`assign_card_account`). Le compte voyage dans la clé facultative `account`
+de `card.saved` ; l'abonné de la Comptabilité (`CardAccounts.on_card_saved`)
+le rattache selon les règles d'`assign_card_account` (compte existant
+d'usage direct, sinon créé sous le compte de base de la catégorie, au nom
+de la fiche) *au lieu* du compte calculé, qui n'est donc jamais créé ; s'il
+ne le peut pas, il lève `Partiduo::Events::Refused` : `create_card` rend
+l'échec avec ses erreurs et rien n'est créé. Un compte demandé exige la
+Comptabilité active (sinon `cards.errors.card.account.no_accounting`) et le
+droit `accounting.account.write` (sinon `Forbidden`). Compte vide : comme
+sans compte. La reprise l'utilise : le contournement « compte calculé
+remplacé puis effacé » (instantané du plan, `delete_account`) est retiré ;
+un compte refusé est consigné (`card_account`) et la fiche créée sans lui,
+avec le compte que prévoit sa catégorie.
+
 === D-MIG-007 — Fiches NOALYSS : catégories, attributs, valeurs refusées (lot M, migrate)
 
 *Contexte.* NOALYSS décrit une fiche par des attributs (`fiche_detail`,

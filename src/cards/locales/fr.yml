@@ -89,6 +89,8 @@ fr:
       card:
         base:
           in_use: "Cette fiche est utilisée et ne peut être supprimée ; désactivez-la."
+        account:
+          no_accounting: "Un compte ne peut être demandé pour la fiche que si la Comptabilité est active."
         category_id:
           no_customer_category: "Aucune catégorie de fiches de clients : créez-en une dans « Tiers et articles »."
           not_found: "Cette catégorie de fiche n'existe pas."

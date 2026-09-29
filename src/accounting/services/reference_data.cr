@@ -102,19 +102,12 @@ module Partiduo
       # et l'insertion échoue sur la contrainte, ce qui signale l'anomalie.
       private def self.bank_card(actor : Partiduo::Api::Actor, account : Account) : Int64?
         category = Partiduo::Api::Cards.category_by_code(actor, "BANK") || return
+        # Fiche créée avec le compte du plan, en une commande (D-MIG-006) :
+        # aucun compte calculé sous le compte de base de la catégorie.
         result = Partiduo::Api::Cards.create_card(actor, Partiduo::Api::Cards::CardInput.new(
-          category_id: category.id, name: I18n.t("accounting.initial_data.bank_card")))
+          category_id: category.id, name: I18n.t("accounting.initial_data.bank_card")), account: account.number)
         raise ArgumentError.new("fiche Banque refusée : #{result.error_keys.join(", ")}") if result.failure?
-        card_id = result.value!.id
-        # L'abonné de `card.saved` a pu calculer un compte sous le compte de
-        # base de la catégorie : la fiche prend le compte du plan, et le
-        # compte calculé, neuf et inutilisé, disparaît.
-        computed = CardAccount.filter(card_id: card_id).first.try(&.account)
-        CardAccounts.link(card_id, account)
-        if computed && computed.pk != account.pk && !CardAccount.filter(account_id: computed.pk).exists?
-          computed.delete
-        end
-        card_id
+        result.value!.id
       end
     end
   end

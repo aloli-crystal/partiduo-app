@@ -89,6 +89,8 @@ nl:
       card:
         base:
           in_use: "Deze fiche wordt gebruikt en kan niet worden verwijderd; deactiveer ze."
+        account:
+          no_accounting: "Een rekening kan alleen voor de fiche worden gevraagd als de Boekhouding actief is."
         category_id:
           no_customer_category: "Geen categorie voor klantfiches: maak er een aan onder “Relaties en artikelen”."
           not_found: "Deze fichecategorie bestaat niet."

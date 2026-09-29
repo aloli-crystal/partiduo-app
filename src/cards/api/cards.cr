@@ -422,15 +422,34 @@ module Partiduo
         errors.empty? ? Result(Nil).success(nil) : Result(Nil).failure(errors)
       end
 
-      def self.create_card(actor : Actor, input : CardInput) : Result(CardView)
+      # Crée une fiche. `account` (numéro de compte, facultatif) : la fiche
+      # est créée *avec* ce compte, en une seule commande (D-MIG-006,
+      # amendement adopté) — l'abonné `card.saved` de la Comptabilité le
+      # rattache (compte existant d'usage direct, ou créé sous le compte de
+      # base de la catégorie) au lieu du compte que la catégorie prévoit ;
+      # s'il le refuse, rien n'est créé et l'échec porte ses erreurs.
+      # Demander un compte exige la Comptabilité active et le droit
+      # `accounting.account.write` (celui d'`assign_card_account`).
+      def self.create_card(actor : Actor, input : CardInput, account : String? = nil) : Result(CardView)
         Guard.authorize!(actor, "cards.card.write", module_code: "CARDS")
+        account = account.try(&.strip).presence
+        if account
+          unless Partiduo::Events.subscribers("card.saved").includes?("ACCOUNTING")
+            return Result(CardView).failure([Partiduo::Cards::CardRules.error("account", "no_accounting")])
+          end
+          raise Forbidden.new("accounting.account.write") unless actor.can?("accounting.account.write")
+        end
         Transaction.run do
           lock_codes
           values, errors = Partiduo::Cards::CardRules.check(input)
           next Result(CardView).failure(errors) if values.nil? || !errors.empty?
 
           card = Partiduo::Cards::CardRules.save(Partiduo::Cards::Card.new, values)
-          saved(card, actor)
+          begin
+            saved(card, actor, account)
+          rescue ex : Partiduo::Events::Refused
+            Result(CardView).failure(ex.errors)
+          end
         end
       end
 
@@ -497,8 +516,12 @@ module Partiduo
 
       # --- Interne ---------------------------------------------------------------
 
-      private def self.saved(card : Partiduo::Cards::Card, actor : Actor) : Result(CardView)
-        Partiduo::Events.publish("card.saved", {"card_id" => card.id!.to_i64.to_s}, actor_user_id: actor.user_id)
+      # Publie `card.saved` ; `account` (création seulement) : compte demandé,
+      # clé facultative `account` de la charge utile.
+      private def self.saved(card : Partiduo::Cards::Card, actor : Actor, account : String? = nil) : Result(CardView)
+        payload = {"card_id" => card.id!.to_i64.to_s}
+        payload["account"] = account if account
+        Partiduo::Events.publish("card.saved", payload, actor_user_id: actor.user_id)
         Result(CardView).success(card_views([card]).first)
       end
 

@@ -89,6 +89,8 @@ en:
       card:
         base:
           in_use: "This card is in use and cannot be deleted; disable it instead."
+        account:
+          no_accounting: "An account can only be requested for the card when Accounting is active."
         category_id:
           no_customer_category: "No customer card category: create one under “Parties and items”."
           not_found: "This card category does not exist."

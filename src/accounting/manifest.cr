@@ -61,7 +61,9 @@ Partiduo::Modules.register do
   menu "ACC_CLOSING", parent: "SETTINGS", order: 25, route: "accounting:closing", permission: "accounting.period.close"
 
   # Une fiche neuve reçoit le compte que prévoit sa catégorie (D-ACC-006).
-  on("card.saved") { |event| Partiduo::Accounting::CardAccounts.on_card_saved(event["card_id"].to_i64) }
+  on("card.saved") do |event|
+    Partiduo::Accounting::CardAccounts.on_card_saved(event["card_id"].to_i64, event["account"]?.presence)
+  end
 
   # Écritures issues de la Facturation (ADR-006 D3, D-INT-001) : vente,
   # avoir lettré avec sa facture, encaissement. Un échec ne bloque pas la
