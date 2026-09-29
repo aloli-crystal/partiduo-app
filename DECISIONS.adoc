@@ -424,6 +424,10 @@ blanche de composition : `require "partiduo"`, `require "partiduo/cli"`,
 (`Partiduo::Api::Distribution.apply_settings`, `.installed_apps`,
 `.locales`, `.domain`) pour réduire la liste blanche à `require`.
 
+*Amendement adopté le 29 septembre 2026.* ADR-005 D3 admet
+`Partiduo::Api::Distribution` au contrat ; reste à l'écrire, puis à réduire
+la liste blanche du garde-fou à `require`.
+
 === D-015 — Fichiers statiques de partiduo-ui-bulma (lot P, ui-squelette)
 
 *Contexte.* ADR-005 D5, D7 : Bulma 1.x, HTMX 2.x, un seul jeu d'icônes SVG,
@@ -2974,7 +2978,8 @@ tableau de bord.
 *Choix.* Nouvel événement `payment.unmatched` (clé obligatoire
 `matching_id` ; `entry_ids`, `sources`), ajouté à
 `Partiduo::Events::SCHEMA` — *proposition d'amendement de l'ADR-003 D7*, la
-liste fermée s'étend d'un événement nécessaire à la Facturation.
+liste fermée s'étend d'un événement nécessaire à la Facturation
+(*amendement adopté le 29 septembre 2026*).
 `Matchings.unmatch!` le publie quand le lettrage défait réunissait une ligne
 d'un journal financier et une ligne d'un journal d'achats ou de ventes ;
 `unmatch` et l'extourne (`Reversals.match_pairs!`) passent par lui. Abonné
@@ -5048,6 +5053,9 @@ lui, se range dans les rubriques existantes (Saisie, Consultation,
 Éditions, Référentiel). *Amendement proposé* : ajouter « Suivi » à la liste
 d'ADR-005.
 
+*Amendement adopté le 29 septembre 2026.* La rubrique « Suivi » (`FOLLOW_UP`) entre dans la
+liste d'ADR-005.
+
 *Alternative écartée.* Ranger le suivi sous Consultation : ses écrans
 créent et modifient.
 
@@ -5201,6 +5209,9 @@ une pièce en `depends_on_any` peut lire le *contrat* de cette pièce
 (`Partiduo::Api::<Pièce>`), en lecture seule et seulement depuis l'abonné
 d'un événement que cette pièce publie (la pièce est alors active) ». Les ADR
 ne sont pas modifiés ; l'amendement attend sa validation.
+
+*Amendement adopté le 29 septembre 2026.* ADR-006 D3 est complété comme ci-dessus ; la
+liste `DEPENDS_ON_ANY_READERS` reste la garde de son étendue.
 
 *Choix appliqué.* `spec/architecture/module_isolation_spec.cr` n'admet plus
 les pièces `depends_on_any` que dans la liste `DEPENDS_ON_ANY_READERS`,
@@ -7821,6 +7832,10 @@ d'une déclaration préparée par un module (`Partiduo::Api::TaxForms`,
 alimenté par `liberal`), sans lien direct entre modules. Non appliqué :
 les ADR font foi ; la voie (a) est la plus simple à ajouter au registre.
 
+*Amendement adopté le 29 septembre 2026.* Voie (a) : dépendance optionnelle déclarée au
+manifeste (`optional_depends_on "LIBERAL"`, ADR-003 et ADR-006 D3), à
+ajouter au registre des modules.
+
 === D-TDC-003 — Balance transmise : tous les journaux, avant l'écriture de clôture (T:teledec)
 
 *Contexte.* Formule API Balance : TELEDEC remplit bilan et compte de
@@ -8716,6 +8731,9 @@ déposée : ADR-004 D9 veut le PDF envoyable quel que soit le canal.
 la liste et admettre qu'une *extension* publie un événement de la liste
 fermée du cœur quand le cœur s'y abonne (ici la Facturation).
 
+*Amendement adopté le 29 septembre 2026.* `invoice.platform_deposited` entre dans la liste
+fermée d'ADR-003 D7, publiable par une extension.
+
 === D-CPY-002 — Natures initiales des fiches de client (migration cards 0003)
 
 *Contexte.* D-FIN-001 laissait vides les natures des fiches existantes
@@ -9478,6 +9496,9 @@ Spec : utilisateur aux droits URSSAF seuls.
 *Alternative écartée.* Garder l'acteur système et documenter
 l'élargissement : les permissions de l'extension étendraient en silence
 celles du module.
+
+*Amendement adopté le 29 septembre 2026.* ADR-007 D7 le dit (partiduo-docs) : l'extension
+URSSAF exige les droits du module `micro`.
 
 === D-URS-011 — Détails neutres, traduits à l'affichage ; relevé réservé à la transmission
 

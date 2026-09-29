@@ -2662,8 +2662,8 @@ chaque point renvoie à sa décision ou à son blocage.
   dès la souscription (B-URS-001, B-FIN-003), en vérifiant qu'il est
   idempotent sur la référence (D-URS-008) et rend le payé par déclaration
   (D-URS-009) ; recherche d'un paiement par référence si l'API la permet
-  (`payment_unknown`) ; faire adopter l'amendement D-URS-010 (droits
-  `micro`) ; relancer la CI GitHub du dépôt pour archiver un journal vert.
+  (`payment_unknown`) ; amendement D-URS-010 (droits `micro`) adopté le
+  29 septembre 2026 ; relancer la CI GitHub du dépôt pour archiver un journal vert.
 . *EsaLink (après le lot H)* : essai contre la préproduction (identifiants
   à fournir), adresse de production, adresse d'authentification et tri de
   la recherche à confirmer (B-ESL-001, D-ESL-002, D-ESL-003).
@@ -2675,8 +2675,8 @@ chaque point renvoie à sa décision ou à son blocage.
   B-URS-001) ; adresse de livraison et
   conditions de paiement dans l'édition d'une facture (B-FIN-001) ;
   nature des fiches clientes reprises faite (migration cards 0003,
-  D-CPY-002, D-CPY-008) ; événement `invoice.platform_deposited` à faire
-  adopter dans ADR-003 D7 (D-CPY-001).
+  D-CPY-002, D-CPY-008) ; événement `invoice.platform_deposited` adopté
+  dans ADR-003 D7 le 29 septembre 2026 (D-CPY-001).
 . *Administration du parc (après le lot A)* : premier serveur Linux —
   installation de l'exécutant et de ses enveloppes (README de
   `partiduo-admin`), création, montée de version et restauration réelles
@@ -2728,14 +2728,33 @@ chaque point renvoie à sa décision ou à son blocage.
   et comparaison visuelle à la maquette aux trois tailles (B-CRIT-004,
   B-JF-001, B-UI-007) ; passkeys sur un appareil réel (B-AUTH-003) ;
   première exécution de la CI des quatre dépôts une fois publiés (B-002).
-. *Amendements à faire adopter* : ADR-006 D3 (D-STK-001), ADR-005 rubrique
-  `FOLLOW_UP` (D-FUP-002), ADR-003 D7 `payment.unmatched` (D-2F-003),
-  ADR-005 D3 `Partiduo::Api::Distribution` (D-014), `create_card` avec
-  compte (D-MIG-006), comptes 120 / 129 au plan FR initial (D-CLO-003),
-  dépendance optionnelle déclarée `optional_depends_on "LIBERAL"` pour
-  TELEDEC (ADR-003, ADR-006 D3 ; D-TDC-002) et `depends_on_any` pour un
-  libéral sans Comptabilité (ADR-007 D4), ADR-003 D7 `micro.*.updated`,
-  `micro.*.deleted` et refus motivé d'un abonné (D-MIC2-003).
+. *Amendements à faire adopter* (état au 29 septembre 2026) :
+** ADOPTÉ le 29 septembre 2026 — ADR-006 D3, lecture du contrat d'une pièce
+   `depends_on_any` (D-STK-001).
+** ADOPTÉ le 29 septembre 2026 — ADR-005, rubrique `FOLLOW_UP` (D-FUP-002).
+** ADOPTÉ le 29 septembre 2026 — ADR-003 D7, `payment.unmatched` (D-2F-003).
+** ADOPTÉ le 29 septembre 2026 — ADR-005 D3, `Partiduo::Api::Distribution`
+   (D-014) ; reste à écrire.
+** ADOPTÉ le 29 septembre 2026 — `create_card` avec compte (D-MIG-006) ;
+   appliqué (`create_card(…, account:)`), la reprise l'utilise.
+** ADOPTÉ le 29 septembre 2026 — comptes 120 / 129 au plan FR initial
+   (D-CLO-003) ; appliqué, migration accounting 0012 pour les instances
+   existantes.
+** ADOPTÉ le 29 septembre 2026 — dépendance optionnelle déclarée
+   `optional_depends_on "LIBERAL"` pour TELEDEC (ADR-003, ADR-006 D3 ;
+   D-TDC-002) ; reste à ajouter au registre des modules.
+** ADOPTÉ le 29 septembre 2026 — `depends_on_any` pour un libéral sans
+   Comptabilité (ADR-007 D4, D-TDC2-001 à 005) ; déjà porté dans l'ADR.
+** ADOPTÉ le 29 septembre 2026 — droits du module `micro` exigés par
+   l'extension URSSAF (D-URS-010) ; ADR-007 D7 amendé.
+** ADOPTÉ le 29 septembre 2026 — ADR-003 D7, événement
+   `invoice.platform_deposited` publié par une extension (D-CPY-001).
+** REFUSÉ le 29 septembre 2026 — registres micro intangibles dès
+   l'inscription (D-MIC-003) ; déjà retiré, remplacé par D-MIC2-001.
+** EN ATTENTE — ADR-003 D7 : événements `micro.receipt.updated`,
+   `micro.receipt.deleted`, `micro.purchase.updated`,
+   `micro.purchase.deleted` et refus motivé d'un abonné
+   (`Partiduo::Events::Refused`) (D-MIC2-003).
 . *Contrat* : `limit` / `offset` pour `general_ledger` et `journals`, comptes
   des rubriques d'un état (D-UI-036) ; lecture des fiches en bloc (D-STK-013) ;
   livraison par ligne (D-STK-010).
