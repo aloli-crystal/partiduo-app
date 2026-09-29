@@ -242,8 +242,14 @@ devise de tenue ne se modifie pas.
 |`store_attachment(actor, AttachmentInput(filename, content_type, io))`
 |`core.attachment.write`
 |Types admis (`Partiduo::Core::Attachments::TYPES` : PDF, PNG, JPEG, WebP,
-HEIC, TIFF, XML, texte, CSV), signature du contenu contrôlée, 20 Mio au plus,
-empreinte SHA-256.
+HEIC, TIFF, XML, texte, CSV, documents ODT et DOCX), signature du contenu
+contrôlée, 20 Mio au plus, empreinte SHA-256. ODT
+(`application/vnd.oasis.opendocument.text`) : archive ZIP (`PK\x03\x04`)
+dont la première entrée est `mimetype`, non compressée, de valeur exacte ce
+type. DOCX
+(`application/vnd.openxmlformats-officedocument.wordprocessingml.document`) :
+archive ZIP lisible qui contient `[Content_Types].xml` et `word/document.xml`
+(DECISIONS D-HOOK-003).
 
 |`attachment(actor, id)`, `attachment_content(actor, id) : Bytes`
 |`core.attachment.read`
