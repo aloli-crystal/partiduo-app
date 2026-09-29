@@ -18,11 +18,13 @@ private DOCX_TYPE = Partiduo::Core::Attachments::DOCX
 
 # Archive ZIP construite par la bibliothèque standard : `entries` dans
 # l'ordre, `mimetype` écrit sans compression (comme l'exige OpenDocument).
+# L'heure des entrées est fixée : deux archives construites de part et
+# d'autre d'une seconde restent identiques octet pour octet.
 private def zip(entries : Array({String, String}), stored : Array(String) = ["mimetype"]) : String
   io = IO::Memory.new
   Compress::Zip::Writer.open(io) do |writer|
     entries.each do |name, body|
-      entry = Compress::Zip::Writer::Entry.new(name)
+      entry = Compress::Zip::Writer::Entry.new(name, time: Time.utc(2026, 1, 1))
       if stored.includes?(name)
         entry.compression_method = Compress::Zip::CompressionMethod::STORED
         entry.crc32 = Digest::CRC32.checksum(body)
@@ -85,10 +87,11 @@ describe "Partiduo::Api::Core — pièces jointes (ADR-006 D1)" do
   end
 
   it "accepte un document ODT dont l'entrée mimetype vient en premier, non compressée" do
-    view = store(odt, "facture.odt", ODT_TYPE).value!
+    content = odt
+    view = store(content, "facture.odt", ODT_TYPE).value!
     view.content_type.should eq(ODT_TYPE)
     Partiduo::Core::Attachment.get!(id: view.id).storage_name!.should end_with(".odt")
-    Api.attachment_content(writer, view.id).should eq(odt.to_slice)
+    Api.attachment_content(writer, view.id).should eq(content.to_slice)
   end
 
   it "refuse un faux ODT : autre type, mimetype absent, déplacé ou compressé, archive tronquée" do
