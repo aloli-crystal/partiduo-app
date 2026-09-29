@@ -11757,3 +11757,27 @@ chaque ligne.
 
 *Choix.* `partiduo_test_mic2_app` (cœur, huit configurations),
 `partiduo_test_mic2_ui`, `partiduo_test_mic2_urssaf`, supprimées à la fin.
+
+=== D-UI-074 — Listes au téléphone et étiquette neutre en thème sombre (finitions du 29 septembre 2026, interface)
+
+*Contexte.* Au téléphone (375 px), dans les registres micro, l'en-tête
+« Actions » était coupé : les libellés de pied (« Dont Prestations de
+services commerciales ou artisanales ») occupaient la colonne des dates,
+en police à chasse fixe et sans retour à la ligne (`td.pd-mono`), et le
+tableau débordait de 400 px. L'étiquette « annulée » d'une ligne
+contre-passée (`tag is-light`, sans couleur) gardait le fond clair de
+Bulma et héritait la couleur du texte : 1,1:1 à 2,3:1 en thème sombre.
+
+*Choix.* Au téléphone : marges de cellule réduites (`.3rem`), en-têtes
+sans interlettrage, chiffres et codes à `.8rem`, libellés de pied repliés
+(police courante, césure), cadenas d'une ligne intangible masqué (le texte
+pour lecteurs d'écran reste, l'état de la période est dans l'en-tête du
+groupe) ; les six registres de la démonstration tiennent en 341 px.
+Étiquette neutre : jetons `--pd-tag-bg` / `--pd-tag-ink` dans les trois
+blocs de `theme.css` (8,8:1 en clair, 9,6:1 en sombre), appliqués à tout
+`tag is-light` sans couleur — registres micro et libéraux, en-têtes de
+période, et les écrans des extensions qui l'emploient (DOCUMENT, EINV,
+Chorus Pro, MODELES). Les étiquettes colorées `is-* is-light` passaient
+déjà (4,8:1 au moins). Spec de contraste dans
+`spec/ui/accessibility_spec.cr`, comme pour `--pd-field-border` ; vérifié
+dans le navigateur intégré (thème sombre, 375 px).
