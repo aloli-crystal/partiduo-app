@@ -80,6 +80,7 @@ PG_SOCKET="/var/run/postgresql"
 PG_OWNER="partiduo"
 INVENTORY="$APP_ROOT/deploy/inventory"
 DISTRIBUTION_DIR="$APP_ROOT/../partiduo-ui-bulma"
+MODELES_DIR="$APP_ROOT/../partiduo-modeles"
 ARCHIVE_DIR="$APP_ROOT/tmp/releases"
 KEEP_RELEASES=5
 SUDO="sudo"
@@ -93,6 +94,7 @@ ACME_STAGING=0
 # la distribution et les archives par rapport à partiduo-app.
 case "$INVENTORY" in /*) ;; *) INVENTORY="$(CDPATH= cd -- "$(dirname -- "$CONFIG")" && pwd)/$INVENTORY" ;; esac
 case "$DISTRIBUTION_DIR" in /*) ;; *) DISTRIBUTION_DIR="$APP_ROOT/$DISTRIBUTION_DIR" ;; esac
+case "$MODELES_DIR" in /* | "") ;; *) MODELES_DIR="$APP_ROOT/$MODELES_DIR" ;; esac
 case "$ARCHIVE_DIR" in /*) ;; *) ARCHIVE_DIR="$APP_ROOT/$ARCHIVE_DIR" ;; esac
 
 # --- Exécution -----------------------------------------------------------------
@@ -173,6 +175,15 @@ cmd_build() {
   local_run "cp '$DISTRIBUTION_DIR/bin/partiduo-ui-manage' '$stage/bin/partiduo-manage'"
   local_run "cd '$DISTRIBUTION_DIR' && MARTEN_ENV=production PARTIDUO_ASSETS_ROOT='$stage/assets' bin/partiduo-ui-manage collectassets --no-input"
   local_run "cp '$APP_ROOT/bin/partiduo-provision' '$stage/bin/' && cp -R '$APP_ROOT/deploy/templates' '$stage/deploy/'"
+  # Convertisseur PDF de l'extension MODELES, à côté de partiduo-server (où
+  # `PARTIDUO_MODELES_PDF=auto` le cherche), avec ses polices : leur chemin
+  # est fixé à la compilation, l'exécutable les cherche donc aussi dans
+  # share/ de l'archive (partiduo-modeles, D-MOD-017).
+  if [ -n "$MODELES_DIR" ]; then
+    local_run "cd '$MODELES_DIR' && shards build --release --production partiduo-modeles-pdf"
+    local_run "cp '$MODELES_DIR/bin/partiduo-modeles-pdf' '$stage/bin/'"
+    local_run "mkdir -p '$stage/share/partiduo-modeles-pdf' && cp -R '$MODELES_DIR/lib/asciicrystal-pdf/data/fonts' '$stage/share/partiduo-modeles-pdf/'"
+  fi
   local_run "echo '$version' > '$stage/VERSION'"
   local_run "tar -C '$ARCHIVE_DIR' -czf '$(archive "$version")' 'partiduo-$version'"
 }

@@ -20,6 +20,9 @@ INVENTORY=inventory
 
 # Dépôt qui compose la distribution (interface + cœur + extensions).
 DISTRIBUTION_DIR=../partiduo-ui-bulma
+# Dépôt de l'extension MODELES : `build` en construit le convertisseur PDF
+# partiduo-modeles-pdf, livré dans bin/ avec ses polices (vide : sauté).
+MODELES_DIR=../partiduo-modeles
 ARCHIVE_DIR=tmp/releases
 KEEP_RELEASES=5
 

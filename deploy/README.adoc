@@ -130,13 +130,22 @@ deploy/bin/partiduo-fleet upgrade 0.2.0 --all        # le reste
 deploy/bin/partiduo-fleet status
 ----
 
+`build` construit aussi, depuis `MODELES_DIR` (défaut `../partiduo-modeles`,
+vide pour sauter l'étape), le convertisseur PDF de l'extension MODELES,
+`partiduo-modeles-pdf`, copié dans `bin/` à côté de `partiduo-server` (où
+`PARTIDUO_MODELES_PDF=auto` le cherche), et ses polices dans
+`share/partiduo-modeles-pdf/fonts/` : asciicrystal-pdf fixe leur chemin à la
+compilation, et retomberait sans rien dire sur les polices standard du PDF.
+
 === Arborescence sur un serveur
 
 [source]
 ----
 /opt/partiduo/
 ├── releases/<version>/      # bin/partiduo-server, bin/partiduo-manage,
-│                            # bin/partiduo-provision, assets/, deploy/templates/
+│                            # bin/partiduo-provision, bin/partiduo-modeles-pdf,
+│                            # assets/, deploy/templates/,
+│                            # share/partiduo-modeles-pdf/fonts/
 ├── current -> releases/<v>  # version des nouvelles instances
 └── instances/<dossier>/
     ├── release -> ../../releases/<v>           # version de CETTE instance
