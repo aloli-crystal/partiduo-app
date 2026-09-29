@@ -131,7 +131,7 @@ describe "Registre : dépendances par le contrat (ADR-003 D2)" do
       expect_raises(Partiduo::Api::ModuleDisabled) { Partiduo::Api::Accounting.chart(Partiduo::Api::Actor.system) }
 
       Partiduo::Api::Modules.activate(modules_admin, "ACCOUNTING").success?.should be_true
-      Partiduo::Api::Accounting.chart(Partiduo::Api::Actor.system).size.should eq(167) # rien n'a été supprimé
+      Partiduo::Api::Accounting.chart(Partiduo::Api::Actor.system).size.should eq(169) # rien n'a été supprimé
     end
   end
 end

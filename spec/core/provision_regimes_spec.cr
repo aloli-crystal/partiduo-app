@@ -107,9 +107,39 @@ end
 describe_module "ACCOUNTING", "Provisionnement : plan comptable selon le régime" do
   it "charge le PCG français (mod2) avec l'instance française" do
     provision_instance
-    Partiduo::Api::Accounting.chart(system).size.should eq(167)
+    Partiduo::Api::Accounting.chart(system).size.should eq(169)
     Partiduo::Api::Accounting.ledgers(system).map(&.code).should eq(%w[A01 F01 O01 V01])
     Partiduo::Api::Accounting.default_account(system, "customer").try(&.number).should eq("410")
+  end
+
+  it "ajoute 120 et 129 à une instance française qui ne les a pas, et à elle seule (migration 0012, D-CLO-003)" do
+    provision_instance
+    accounts = Partiduo::Api::Accounting
+    numbers = -> { accounts.chart(system).map(&.account.number) }
+    %w[120 129].each { |number| accounts.delete_account(system, accounts.account(system, number).id).value! }
+    numbers.call.should_not contain("120")
+
+    exec = ->(sql : String) { Marten::DB::Connection.default.open(&.exec(sql)) }
+    exec.call(Migration::Accounting::V0012::FORWARD)
+    profit = accounts.account(system, "120")
+    {profit.label, profit.parent_number, profit.kind, profit.direct_use}
+      .should eq({"Résultat de l'exercice (bénéfice)", "12", Partiduo::Api::Accounting::AccountKind::Liability, true})
+    accounts.account(system, "129").label.should eq("Résultat de l'exercice (perte)")
+    exec.call(Migration::Accounting::V0012::FORWARD) # rejouée : rien de plus
+    numbers.call.size.should eq(169)
+
+    # Retour : les comptes ajoutés disparaissent ; un compte déjà présent reste.
+    exec.call(Migration::Accounting::V0012::BACKWARD)
+    numbers.call.should_not contain("120")
+    numbers.call.size.should eq(167)
+    exec.call(Migration::Accounting::V0012::BACKWARD)
+    numbers.call.should contain("108")
+  end
+
+  it "n'ajoute pas 120 ni 129 au PCMN d'une instance belge (migration 0012)" do
+    provision_instance(be_settings)
+    Marten::DB::Connection.default.open(&.exec(Migration::Accounting::V0012::FORWARD))
+    Partiduo::Api::Accounting.chart(system).size.should eq(504)
   end
 
   it "charge le PCMN belge (mod1) avec l'instance belge, journaux dans la langue du dossier" do

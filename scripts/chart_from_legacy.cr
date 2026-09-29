@@ -54,6 +54,10 @@ FR_ADDITIONS = [
   # (lot 4, D-TVA-005).
   Account.new("44581", "Acomptes - Régime simplifié d'imposition", "445", "asset", true),
   Account.new("44583", "Remboursement de taxes sur le chiffre d'affaires demandé", "445", "asset", true),
+  # Comptes de résultat de la clôture d'exercice : bénéfice, perte
+  # (D-CLO-002, amendement D-CLO-003).
+  Account.new("120", "Résultat de l'exercice (bénéfice)", "12", "liability", true),
+  Account.new("129", "Résultat de l'exercice (perte)", "12", "liability", true),
 ]
 
 # PCMN : « Réductions de valeur actées » (classes 2 à 5) en déduction d'actif.

@@ -24,8 +24,6 @@ end
 private def book_2025 : Partiduo::Api::Cards::CardView
   EntrySpec.setup(year: 2025)
   ReferentialSpec.fiscal_year(2026)
-  AccountingSpec.create_account("120", "Résultat de l'exercice (bénéfice)", "12")
-  AccountingSpec.create_account("129", "Résultat de l'exercice (perte)", "12")
   supplier = EntrySpec.card("SUPPLIER", "Fournisseur Durand")
   EntrySpec.post_misc([EntrySpec.debit("510001", "10000"), EntrySpec.credit("101", "10000")], "2025-01-02")
   EntrySpec.post_misc([EntrySpec.debit("510001", "1500"), EntrySpec.credit("706", "1500")], "2025-06-10")
@@ -101,8 +99,20 @@ describe_module "ACCOUNTING", "Fin d'exercice : clôture et réouverture" do
     Api.post_opening_entry(system, input(2026)).success?.should be_true
   end
 
+  it "trouve 120 et 129 dans le plan FR initial (amendement D-CLO-003)" do
+    EntrySpec.setup(year: 2025)
+    EntrySpec.post_misc([EntrySpec.debit("646", "250"), EntrySpec.credit("510001", "250")], "2025-03-01")
+    proposal = Api.closing_proposal(system, year(2025).id)
+    {proposal.profit_account, proposal.loss_account}.should eq({"120", "129"})
+    proposal.lines.last.account_label.should eq("Résultat de l'exercice (perte)")
+    proposal.result_account_missing.should be_false
+    Api.post_closing_entry(system, input(2025)).success?.should be_true
+  end
+
   it "signale un compte de résultat absent et une perte au compte de perte" do
     EntrySpec.setup(year: 2025)
+    # Compte retiré du plan (instance antérieure à l'amendement D-CLO-003).
+    Api.delete_account(system, Api.account(system, "129").id).success?.should be_true
     EntrySpec.post_misc([EntrySpec.debit("646", "250"), EntrySpec.credit("510001", "250")], "2025-03-01")
     proposal = Api.closing_proposal(system, year(2025).id)
     proposal.lines.last.should eq(Api::ClosingLineView.new(account: "129", account_label: "", card_id: nil, card_code: nil,

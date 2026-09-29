@@ -5511,6 +5511,21 @@ jeu de données livré pour un besoin couvert par un lien de création.
 Proposer l'ajout de `120` et `129` au plan FR initial à la prochaine révision
 du jeu de données (compteur des specs de provisionnement à relever).
 
+*Amendement adopté le 29 septembre 2026.* `120` « Résultat de l'exercice
+(bénéfice) » et `129` « Résultat de l'exercice (perte) », sous `12`, passif,
+d'usage direct, entrent au plan FR initial (`chart_fr.yml`, 169 comptes, et
+`FR_ADDITIONS` de `scripts/chart_from_legacy.cr` pour qu'une nouvelle
+extraction les garde). Libellés en français seulement, comme tout le plan
+initial : le libellé d'un compte est une donnée du dossier, enregistrée au
+chargement, non une traduction de l'interface. La clôture (D-CLO-002) ne
+créait pas ces comptes à la volée — elle signalait leur absence
+(`result_account_missing`) et l'interface proposait de les créer — : elle
+est inchangée et les trouve désormais ; le signalement reste pour une
+instance qui les a retirés ou un autre compte choisi. Migration de données
+`accounting` 0012 : une instance française déjà provisionnée (régime `fr`,
+plan chargé) reçoit les comptes qui lui manquent, sous `12` (à défaut `1`) ;
+retour : seuls les comptes ajoutés et non cités sont effacés.
+
 === D-REC-001 — Rapprochement bancaire : relevés en table, écritures qui les citent (critique ; ADR-006 D1)
 
 *Contexte.* ADR-006 D1 range le rapprochement dans la Comptabilité ; rien ne
