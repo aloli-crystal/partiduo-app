@@ -13,8 +13,12 @@ module Partiduo
       LINE_KINDS           = %w[item free note title subtotal]
       DISCOUNT_KINDS       = %w[none percent amount]
       OPERATION_CATEGORIES = %w[goods services mixed]
-      PAYMENT_METHODS      = %w[transfer card cheque cash direct_debit other]
-      QUOTE_DECISIONS      = %w[accepted refused]
+      # Conditions de paiement d'un document : jours nets, jours fin de mois,
+      # à réception. Sans condition, l'échéance suit le délai des paramètres.
+      PAYMENT_TERMS    = %w[net end_of_month on_receipt]
+      MAX_PAYMENT_DAYS = 365
+      PAYMENT_METHODS  = %w[transfer card cheque cash direct_debit other]
+      QUOTE_DECISIONS  = %w[accepted refused]
       # Transformations admises : nature source → natures produites.
       TRANSFORMATIONS = {
         "quote"           => %w[order delivery_note invoice deposit_invoice],
@@ -83,7 +87,14 @@ module Partiduo
       #   (`ISSUE_CHANNELS`) ; `nil` garde celui du brouillon pour le même
       #   client, sinon reprend la proposition (`propose_channel`) ; refusé
       #   pour un devis, une commande ou un bon de livraison ;
-      # * `b2c` : marquage B2C pour l'e-reporting ; `nil` : même règle.
+      # * `b2c` : marquage B2C pour l'e-reporting ; `nil` : même règle ;
+      # * `payment_terms` (`PAYMENT_TERMS`) et `payment_terms_days` (0 à 365) :
+      #   conditions de paiement du document, reprises dans les mentions et
+      #   Factur-X ; l'échéance non saisie en découle à l'émission. `nil` :
+      #   délai des paramètres (jours nets, sans mention particulière) ;
+      #   `on_receipt` n'a pas de délai ;
+      # * `delivery_address` : une adresse vide (ni ligne ni ville) n'en
+      #   donne aucune (même adresse que la facturation).
       record DocumentInput,
         kind : String,
         customer_card_id : Int64,
@@ -105,7 +116,9 @@ module Partiduo
         deposit_ids : Array(Int64) = [] of Int64,
         credited_document_id : Int64? = nil,
         issue_channel : String? = nil,
-        b2c : Bool? = nil
+        b2c : Bool? = nil,
+        payment_terms : String? = nil,
+        payment_terms_days : Int32? = nil
 
       # Transformation d'un document émis en document suivant (lignes
       # recopiées, lien conservé). `deposit_percent` : pourcentage de la
@@ -343,7 +356,9 @@ module Partiduo
         created_at : Time,
         updated_at : Time,
         issue_channel : String = "",
-        b2c : Bool = false do
+        b2c : Bool = false,
+        payment_terms : String = "",
+        payment_terms_days : Int32? = nil do
         def draft? : Bool
           number.nil?
         end

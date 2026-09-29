@@ -10610,6 +10610,49 @@ manquante (`das2_birth_date`), nature du fournisseur non précisée
 dépôt affiche l'identité déclarée. La forme exacte de `AI` et des
 répétitions reste à confirmer sur le stage (B-TDC-004).
 
+=== D-R5-003 — Conditions de paiement par document (invoicing)
+
+*Contexte.* La maquette « Nouvelle facture » a un champ « Conditions »
+(30 jours, 45 jours fin de mois, à réception) ; l'échéance ne suivait que
+le délai des paramètres (BLOCAGES B-FIN-001).
+
+*Choix.* Migration invoicing `0005` : `payment_terms` (`net`,
+`end_of_month`, `on_receipt` ; vide) et `payment_terms_days` (vide : délai
+des paramètres), gardés par une contrainte. Échéance non saisie calculée à
+l'émission (`PaymentTerms.due_date`) ; « fin de mois » : date d'émission
+plus le délai, portée à la fin de son mois (lecture courante de « 45 jours
+fin de mois »).
+Mention `payment.terms.<code>` sur facture, acompte, devis et commande, et
+donc dans la description des conditions de paiement de Factur-X (le XML
+reprend déjà les mentions `payment.*`). Sans condition choisie : aucune
+mention nouvelle, les documents existants et leurs empreintes ne changent
+pas. Reprises par une transformation. `API_VERSION` 0.6.0 (ajouts au
+contrat des travaux reportés).
+
+*Alternative écartée.* Une liste de conditions paramétrable par dossier :
+aucune demande ; les préréglages de l'interface couvrent la maquette et un
+délai libre reste possible par le contrat. « Fin de mois, puis délai » :
+lecture minoritaire, écartée.
+
+=== D-R5-004 — Adresse de livraison et conditions à l'édition d'une facture (interface)
+
+*Choix.* L'édition d'un document propose « Conditions » (paramètres, à
+réception, 15, 30, 45, 60 jours, 30 et 45 jours fin de mois, et la valeur
+du document si elle n'y est pas ; absente d'un avoir et d'un bon de
+livraison) et « Adresse de livraison » : celle de la fiche par défaut,
+aucune, l'une des adresses de livraison du client, ou une autre saisie
+(adresse, code postal, ville, pays). La liste est rechargée par HTMX au
+changement du client (`invoicing:document_delivery`) ; sans JavaScript, la
+page rechargée la recalcule. Un brouillon relu retrouve son choix (adresse
+de la fiche reconnue, sinon « autre » prérempli). Le contrat accepte déjà
+une adresse vide pour « aucune » ; une transformation garde désormais
+l'absence d'adresse du document d'origine au lieu de reprendre celle de la
+fiche.
+
+*Alternative écartée.* Champ libre unique (maquette) : l'adresse de
+Factur-X (`ShipToTradeParty`) est structurée ; un champ libre ne se
+découpe pas sûrement.
+
 == Valeurs officielles vérifiées (29 septembre 2026)
 
 Vérification aux sources officielles des valeurs fiscales et sociales des

@@ -52,7 +52,9 @@ module Partiduo
         deductions : Array(Api::DeductionView),
         structured_reference : String,
         settings : Api::SettingsView,
-        currency_code : String
+        currency_code : String,
+        payment_terms : String = "",
+        payment_terms_days : Int32 = 30
 
       def self.iso(date : Time?) : String
         date.try(&.to_s("%Y-%m-%d")) || ""
@@ -92,6 +94,7 @@ module Partiduo
         if context.kind == "quote" && context.validity_date
           add.call("quote.validity", {"date" => iso(context.validity_date)})
         end
+        terms_mention(context, add) if context.kind.in?("quote", "order")
       end
 
       private def self.fiscal_mentions(context : Context, add) : Nil
@@ -143,6 +146,7 @@ module Partiduo
       private def self.payment_mentions(context : Context, add) : Nil
         settings = context.settings
         add.call("dates.due", {"date" => iso(context.due_date)}) if context.due_date
+        terms_mention(context, add)
         unless context.structured_reference.empty?
           add.call("payment.structured_reference", {"reference" => context.structured_reference})
         end
@@ -162,6 +166,13 @@ module Partiduo
         end
         if context.customer.professional?
           add.call("payment.indemnity", {"amount" => amount(INDEMNITY), "currency" => "EUR"})
+        end
+      end
+
+      # Conditions de paiement choisies sur le document (D-R5-003).
+      private def self.terms_mention(context : Context, add) : Nil
+        PaymentTerms.mention(context.payment_terms, context.payment_terms_days).try do |(code, params)|
+          add.call(code, params)
         end
       end
 

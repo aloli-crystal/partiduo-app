@@ -121,6 +121,10 @@ nl:
         invoice: "Voorschotfactuur"
         deducted: "Voorschot %{number} afgetrokken: %{amount} %{currency}"
       payment:
+        terms:
+          net: "Betalingsvoorwaarden: %{days} dagen netto vanaf de factuurdatum"
+          end_of_month: "Betalingsvoorwaarden: %{days} dagen einde maand"
+          on_receipt: "Betalingsvoorwaarden: bij ontvangst van de factuur"
         structured_reference: "Gestructureerde mededeling: %{reference}"
         bank: "Betaling per overschrijving: IBAN %{iban} — BIC %{bic}"
         early_discount: "Korting voor vroegtijdige betaling: %{rate} % bij betaling binnen %{days} dagen"
@@ -223,6 +227,11 @@ nl:
           invalid: "Niet-ondersteunde taal"
         layout:
           not_found: "Opmaaksjabloon niet gevonden"
+        payment_terms:
+          invalid: "Onbekende betalingsvoorwaarden"
+        payment_terms_days:
+          range: "Geef een termijn tussen 0 en %{max} dagen"
+          on_receipt: "Betaling bij ontvangst heeft geen termijn"
         due_date:
           before_issue: "De vervaldag ligt vóór de uitreikingsdatum"
         validity_date:

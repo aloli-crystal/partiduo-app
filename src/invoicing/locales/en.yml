@@ -121,6 +121,10 @@ en:
         invoice: "Deposit invoice"
         deducted: "Deposit %{number} deducted: %{amount} %{currency}"
       payment:
+        terms:
+          net: "Payment terms: %{days} days net from the invoice date"
+          end_of_month: "Payment terms: %{days} days end of month"
+          on_receipt: "Payment terms: due on receipt of the invoice"
         structured_reference: "Structured reference: %{reference}"
         bank: "Payment by bank transfer: IBAN %{iban} — BIC %{bic}"
         early_discount: "Early payment discount: %{rate}% for payment within %{days} days"
@@ -223,6 +227,11 @@ en:
           invalid: "Unsupported language"
         layout:
           not_found: "Layout not found"
+        payment_terms:
+          invalid: "Unknown payment terms"
+        payment_terms_days:
+          range: "Enter a period between 0 and %{max} days"
+          on_receipt: "Payment on receipt has no period"
         due_date:
           before_issue: "The due date is before the issue date"
         validity_date:

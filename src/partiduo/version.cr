@@ -6,7 +6,7 @@ module Partiduo
 
   # Version du contrat `Partiduo::Api` (ADR-003 D6, ADR-005 D1). Elle suit le
   # versionnage sémantique : toute rupture du contrat incrémente la majeure.
-  API_VERSION = "0.5.0"
+  API_VERSION = "0.6.0"
 end
 
 module Partiduo

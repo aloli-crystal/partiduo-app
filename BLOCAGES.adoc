@@ -879,6 +879,11 @@ replié en deux rangs vers 1 100 px (boutons « Appliquer » sans JavaScript).
 *Levée.* Choix de l'adresse parmi celles de la fiche (HTMX au changement de
 client) et conditions de paiement par document (contrat : `DocumentInput`).
 
+*Levé le 29 septembre 2026* : conditions de paiement par document
+(D-R5-003) et choix de l'adresse de livraison à l'édition (D-R5-004). La
+TVA sur les débits reste celle des paramètres ; lignes et repli de
+l'en-tête inchangés (vérification visuelle, B-CRIT-004).
+
 == B-FIN-002 — Adaptateur réel de Chorus Pro (PISTE) écrit, non essayé
 
 *Constat.* `partiduo-choruspro` est écrit contre `Choruspro::Transport` et

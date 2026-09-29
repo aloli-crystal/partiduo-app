@@ -134,7 +134,26 @@ dates et montants selon la langue du document. Codes :
 * paiement : `payment.structured_reference` (BE), `payment.bank`,
   `payment.early_discount` ou `payment.no_early_discount`,
   `payment.late_penalties` ou `payment.late_penalties_legal.<régime>`,
-  `payment.indemnity` (40 €, client professionnel : SIREN ou numéro de TVA).
+  `payment.indemnity` (40 €, client professionnel : SIREN ou numéro de TVA),
+  `payment.terms.<net|end_of_month|on_receipt>` (conditions choisies sur le
+  document, paramètre `days` ; aussi sur un devis ou une commande).
+
+== Conditions de paiement et adresse de livraison
+
+* `DocumentInput#payment_terms` (`PAYMENT_TERMS` : `net`, `end_of_month`,
+  `on_receipt`) et `#payment_terms_days` (0 à `MAX_PAYMENT_DAYS`, 365) ;
+  `nil` : délai des paramètres, sans mention particulière. Échéance non
+  saisie calculée à l'émission : émission + délai (`net`), émission + délai portée à la
+  fin de son mois (`end_of_month`), émission (`on_receipt`). Refus :
+  `document.payment_terms.invalid`, `document.payment_terms_days.range`,
+  `document.payment_terms_days.on_receipt`. Reprises par une
+  transformation ; décrites dans `ram:SpecifiedTradePaymentTerms/ram:Description`
+  de Factur-X. `DocumentView#payment_terms`, `#payment_terms_days`.
+* `DocumentInput#delivery_address` : `nil` reprend la première adresse de
+  livraison de la fiche ; une adresse vide (ni ligne ni ville) n'en donne
+  aucune ; sinon l'adresse donnée (pays de la société si vide). Une
+  transformation reprend l'adresse du document d'origine, ou son absence.
+* Migration invoicing 0005 (D-R5-003, D-R5-004).
 
 == PDF/A-3 Factur-X
 
@@ -298,7 +317,7 @@ aucune extension de facturation électronique (D-INV-016).
    l'état du document ; hors canal `platform` : `pdf_copy.not_platform`.
 * Migrations : cards 0002 (`customer_nature`, `pdf_copy`), cards 0003
   (natures initiales), invoicing 0003 (colonnes de la copie), invoicing
-  0004 (`public_portal`). `API_VERSION` 0.5.0.
+  0004 (`public_portal`). `API_VERSION` 0.5.0 (0.6.0 depuis les travaux reportés du 29 septembre 2026).
 
 == Transmission au comptable (Facturation seule)
 

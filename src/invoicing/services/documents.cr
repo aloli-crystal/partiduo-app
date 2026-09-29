@@ -61,6 +61,7 @@ module Partiduo
         errors.concat(credit_errors(input, current))
         errors.concat(deposit_errors(input, current))
         errors.concat(Channels.input_errors(input))
+        errors.concat(PaymentTerms.errors(input))
         lines = resolve_lines(input, errors)
         if errors.empty?
           totals = Calculator.compute(lines.map(&.data), input.global_discount_kind, input.global_discount_value)
@@ -358,17 +359,9 @@ module Partiduo
         document.global_discount_value = input.global_discount_value
         document.credited_id = input.credited_document_id
         document.vat_on_debits = settings.vat_on_debits
-        address = if given = input.delivery_address
-                    if given.line1.to_s.empty? && given.city.to_s.empty?
-                      nil
-                    else
-                      Api::AddressView.new(given.line1.to_s, given.line2.to_s, given.postcode.to_s, given.city.to_s,
-                        given.country_code.presence || Configuration.company.country_code)
-                    end
-                  elsif default = customer.default_delivery_address
-                    Api::AddressView.new(default.line1, default.line2, default.postcode, default.city, default.country_code)
-                  end
-        document.delivery_address = address.try { |value| Configuration.address_json(value) }
+        document.payment_terms = input.payment_terms.presence || ""
+        document.payment_terms_days = input.payment_terms_days
+        document.delivery_address = delivery_address(input, customer).try { |value| Configuration.address_json(value) }
 
         totals = Calculator.compute(lines.map(&.data), input.global_discount_kind, input.global_discount_value)
         store_totals(document, totals)
@@ -394,6 +387,18 @@ module Partiduo
           DepositDeduction.create!(invoice_id: document_id, deposit_id: deposit_id, amount: deposit.total_gross!)
         end
         document
+      end
+
+      # Adresse de livraison : celle donnée (vide : aucune), sinon la première
+      # adresse de livraison de la fiche.
+      private def self.delivery_address(input : Api::DocumentInput, customer) : Api::AddressView?
+        if given = input.delivery_address
+          return if given.line1.to_s.empty? && given.city.to_s.empty?
+          Api::AddressView.new(given.line1.to_s, given.line2.to_s, given.postcode.to_s, given.city.to_s,
+            given.country_code.presence || Configuration.company.country_code)
+        elsif default = customer.default_delivery_address
+          Api::AddressView.new(default.line1, default.line2, default.postcode, default.city, default.country_code)
+        end
       end
 
       def self.store_totals(document : Document, totals : Calculator::Totals) : Nil
@@ -492,7 +497,8 @@ module Partiduo
           vat_on_debits: document.vat_on_debits!, delivery_address: Configuration.address_from_json(document.delivery_address),
           vat_breakdown: breakdown, credited_number: credited.try(&.number), credited_date: credited.try(&.issue_date),
           deductions: deductions, structured_reference: structured_reference, settings: Configuration.settings,
-          currency_code: document.currency_code!,
+          currency_code: document.currency_code!, payment_terms: document.payment_terms.to_s,
+          payment_terms_days: PaymentTerms.days(document),
         )
       end
 
@@ -565,6 +571,7 @@ module Partiduo
           pdf_attachment_id: document.pdf_id.try { |pdf_id| id_of(pdf_id) }, sent_at: document.sent_at,
           created_at: document.created_at!, updated_at: document.updated_at!,
           issue_channel: document.issue_channel.to_s, b2c: document.b2c!,
+          payment_terms: document.payment_terms.to_s, payment_terms_days: document.payment_terms_days.try(&.to_i32),
         )
       end
 
@@ -585,10 +592,12 @@ module Partiduo
                       else
                         lines.map { |line| line_input(line) }
                       end
+        # Adresse de livraison du document d'origine, ou aucune (adresse vide)
+        # s'il n'en avait pas : la fiche ne la réimpose pas.
         delivery = Configuration.address_from_json(source.delivery_address).try do |address|
           Partiduo::Api::Cards::AddressInput.new(line1: address.line1, line2: address.line2, postcode: address.postcode,
             city: address.city, country_code: address.country_code)
-        end
+        end || Partiduo::Api::Cards::AddressInput.new
         document_input = Api::DocumentInput.new(
           kind: input.kind, customer_card_id: id_of(source.customer_id), lines: line_inputs,
           currency_code: source.currency_code, operation_category: source.operation_category.presence,
@@ -598,6 +607,7 @@ module Partiduo
           locale: source.locale, layout_id: source.layout_id.try { |layout_id| id_of(layout_id) },
           deposit_ids: input.kind == "invoice" ? open_deposits(source) : [] of Int64,
           credited_document_id: input.kind == "credit_note" ? source_id : nil,
+          payment_terms: source.payment_terms.presence, payment_terms_days: source.payment_terms_days.try(&.to_i32),
         ).copy_with(**Channels.inherited(source, input.kind))
         {document_input, errors}
       end

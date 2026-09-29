@@ -140,7 +140,7 @@ module Partiduo
         document.issue_date = issue_date
         document.delivery_date ||= issue_date
         if document.due_date.nil? && kind.in?("invoice", "deposit_invoice")
-          document.due_date = issue_date + settings.payment_terms_days.days
+          document.due_date = PaymentTerms.due_date(document, issue_date)
         end
         if document.validity_date.nil? && kind == "quote"
           document.validity_date = issue_date + settings.quote_validity_days.days

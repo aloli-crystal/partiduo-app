@@ -150,7 +150,7 @@ base.*
 
 [source,json]
 ----
-{"version":"0.1.0","api_version":"0.5.0","contract":"1.0.0",
+{"version":"0.1.0","api_version":"0.6.0","contract":"1.0.0",
  "pieces":[{"code":"CORE","kind":"socle","version":"0.1.0"}, …]}
 ----
 

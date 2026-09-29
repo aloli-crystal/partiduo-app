@@ -121,6 +121,10 @@ fr:
         invoice: "Facture d'acompte"
         deducted: "Acompte %{number} déduit : %{amount} %{currency}"
       payment:
+        terms:
+          net: "Conditions de paiement : %{days} jours nets à compter de la date de la facture"
+          end_of_month: "Conditions de paiement : %{days} jours fin de mois"
+          on_receipt: "Conditions de paiement : à réception de la facture"
         structured_reference: "Communication structurée : %{reference}"
         bank: "Règlement par virement : IBAN %{iban} — BIC %{bic}"
         early_discount: "Escompte pour paiement anticipé : %{rate} % pour un règlement sous %{days} jours"
@@ -223,6 +227,11 @@ fr:
           invalid: "Langue non prise en charge"
         layout:
           not_found: "Modèle de mise en page introuvable"
+        payment_terms:
+          invalid: "Conditions de paiement inconnues"
+        payment_terms_days:
+          range: "Indiquez un délai entre 0 et %{max} jours"
+          on_receipt: "Un paiement à réception n'a pas de délai"
         due_date:
           before_issue: "L'échéance précède la date d'émission"
         validity_date:

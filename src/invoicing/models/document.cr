@@ -74,6 +74,11 @@ module Partiduo
       # modifiables jusqu'à l'envoi (`sent_at`), même après l'émission.
       field :issue_channel, :string, max_size: 16, blank: true, default: ""
       field :b2c, :bool, default: false
+      # Conditions de paiement du document (migration `0005`) : `net`,
+      # `end_of_month`, `on_receipt` ; vide : délai des paramètres.
+      # `payment_terms_days` vide : délai des paramètres.
+      field :payment_terms, :string, max_size: 16, blank: true, default: ""
+      field :payment_terms_days, :int, null: true, blank: true
 
       with_timestamp_fields
 
