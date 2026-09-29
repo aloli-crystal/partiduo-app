@@ -7758,7 +7758,9 @@ bloque la transmission (`teledec.controls.liberal_not_ready`).
 
 *Amendement proposé (ADR-007 D4).* `depends_on_any ["ACCOUNTING",
 "LIBERAL"]` pour servir un libéral sans Comptabilité (2035 seule, sans
-balance). Non appliqué : l'ADR fait foi.
+balance). Non appliqué : l'ADR fait foi. *Amendement adopté le 29 septembre 2026*
+(décision de l'utilisateur) : `depends_on_any "ACCOUNTING", "LIBERAL"`,
+ADR-007 D4 amendé ; voir D-TDC2-001 à D-TDC2-005.
 
 *Écart signalé (relecture du lot T).* `Teledec::Builder` appelle
 directement `Partiduo::Api::Liberal.tax_return` : c'est un appel de module
@@ -11260,3 +11262,108 @@ suppression définitive et recours d'accès dans les deux modes, bascules,
 `spec/agent/dual_approval_spec.cr` (concordance du mode et des personnes,
 marque de l'instance, durée légale inchangée). Base
 `partiduo_admin_test_val2` ; 195 exemples verts.
+
+== TELEDEC pour un libéral sans Comptabilité (29 septembre 2026)
+
+Décision de l'utilisateur du 29 septembre 2026 : l'amendement proposé dans
+D-TDC-002 est adopté. `partiduo-teledec` dépend de la Comptabilité *ou* du
+module `liberal`, pour qu'un professionnel libéral qui ne tient que son
+livre-journal télétransmette sa 2035. ADR-007 D4 est amendé en
+conséquence.
+
+=== D-TDC2-001 — `depends_on_any "ACCOUNTING", "LIBERAL"` (T:teledec ; ADR-003 D2, ADR-007 D4)
+
+*Choix.* Le manifeste de TELEDEC déclare `depends_on_any "ACCOUNTING",
+"LIBERAL"` (même forme que le module Stock) et plus aucun `depends_on`.
+Le registre active TELEDEC dès que l'une des deux pièces est active et
+refuse de désactiver la dernière des deux tant que TELEDEC l'est
+(`Partiduo::Modules.dependents`). Le choix des sources est rassemblé dans
+`Teledec::Sources` : `accounting?`, `liberal?` (par
+`Partiduo::Api::Modules.get`, acteur système), régime retenu
+(`tax_system` : celui des paramètres ; sans la Comptabilité et sans
+régime choisi, `bnc`), sortes proposées (`kinds`) et régimes proposés
+(`tax_systems`). `SettingsView` expose `accounting`, `kinds` et
+`tax_systems` à l'interface.
+
+*Conséquence.* L'écart signalé dans D-TDC-002 (lecture de
+`Partiduo::Api::Liberal` sans dépendance déclarée) est levé pour la
+configuration sans Comptabilité, où `LIBERAL` est une dépendance déclarée ;
+avec la Comptabilité, la lecture reste gardée par
+`Partiduo::Api::Modules.get("LIBERAL")`.
+
+=== D-TDC2-002 — 2035 sans balance, depuis la 2035 préparée par `liberal` (T:teledec ; D-LIB-007)
+
+*Choix.* Sans la Comptabilité, la liasse d'un régime BNC (formulaire
+`2035`) est construite sans balance ni balance N-1 : cases et empreinte
+de `Partiduo::Api::Liberal.tax_return` (euros entiers, comme avec la
+Comptabilité), `details.source = "liberal"` (affiché « 2035 du module
+Profession libérale (sans balance) »). Contrôles : 2035 de `liberal` non
+prête (`teledec.controls.liberal_not_ready`, bloquant), exercice du socle
+non clos (avertissement) ; pas de contrôle de balance. Le document part
+par l'API Balance avec l'identification et le bloc `zones_formulaires`
+seuls, sans ligne de balance ; la vérification (`check`) et la
+transmission relisent la 2035 et comparent l'empreinte comme pour toute
+liasse.
+
+*Incertitude.* L'acceptation par TELEDEC d'une liasse sans ligne de
+balance n'est pas vérifiée (le TELEDEC simulé l'admet dès qu'elle porte
+des zones) : à essayer sur le stage avec les autres points de B-TDC-004.
+Repli inchangé : noter l'issue d'un dépôt fait sur le site de TELEDEC,
+avec l'édition de contrôle de la 2035 du module `liberal`.
+
+*Alternative écartée.* Fabriquer une balance à partir de la 2035 (comptes
+fictifs par rubrique) : une comptabilité inventée, que TELEDEC
+ventilerait de nouveau dans les cases déjà fournies.
+
+=== D-TDC2-003 — Refus sans la Comptabilité, sans aucune lecture de la Comptabilité (T:teledec)
+
+*Choix.* Sans la Comptabilité, toute autre déclaration (balance, liasses
+BIC, IS et SCI, TVA CA3 et CA12, DAS2, relevés 2571 et 2572, greffe) est
+refusée :
+
+* `prepare`, `check` et `transmit` : échec de base
+  `teledec.errors.accounting_required` (« Cette déclaration nécessite le
+  module Comptabilité… »), rendu par `Teledec::Builder` avant toute
+  lecture ; un dépôt de TVA ou de DAS2 préparé quand la Comptabilité était
+  active ne se contrôle ni ne se transmet plus, mais son suivi (`refresh`,
+  rappels, issue notée à la main) continue, faute de lecture comptable ;
+* `balance_file` : `Teledec::Api::AccountingRequired`, sous-classe de
+  `ModuleDisabled` (l'interface répond comme pour un module inactif), clé
+  `teledec.errors.accounting_required` ;
+* `update_settings` : régime autre que `bnc` refusé sur `tax_system` ; un
+  régime non BNC enregistré quand la Comptabilité était active ne produit
+  plus d'échéance et sa liasse est refusée ;
+* `schedule` : la liasse seule, sans lecture des déclarations de TVA.
+
+Droits : la 2035 exige `teledec.return.prepare` et `liberal.register.read`
+(garde du module `LIBERAL`) ; aucune garde de la Comptabilité n'est citée.
+Chaque appel de `Partiduo::Api::Accounting` (balance, écritures de
+clôture, déclarations de TVA, écritures de la DAS2) n'est atteint que si
+`Sources.accounting?` est vrai ; les specs le vérifient par construction,
+ce contrat levant `ModuleDisabled` quand la Comptabilité est inactive.
+
+=== D-TDC2-004 — Écran : la 2035 seule (T:teledec ; ADR-005 D4)
+
+*Choix.* Sans la Comptabilité, l'écran « Télédéclarations » affiche un avis
+(`data-teledec-liberal-only`) qui dit que seule la liasse 2035 est
+proposée et que les autres déclarations nécessitent le module
+Comptabilité ; ni régime de TVA, ni échéances de TVA, DAS2, IS ou greffe,
+ni export de la balance, et la formule rappelle l'envoi sans balance. Les
+paramètres ne proposent que le régime BNC et masquent TVA, greffe et
+DAS2 (valeurs enregistrées gardées telles quelles).
+
+=== D-TDC2-005 — Avec la Comptabilité : comportement inchangé (T:teledec)
+
+*Choix.* Comptabilité active, avec ou sans `liberal` : mêmes sortes, mêmes
+droits (`accounting.report.read`, `accounting.vat.declare`), même
+document ; la 2035 joint la balance et, si `liberal` est actif, ses cases
+(D-TDC-002). `partiduo-demo` (dossier `liberal` avec la Comptabilité) est
+inchangé.
+
+*Vérification.* `partiduo-teledec` : `spec/teledec/liberal_only_spec.cr`
+(dépendance, activation et désactivation, paramètres et échéances, 2035
+sans balance, 2035 non prête, refus traduits, régime non BNC, export de la
+balance, droits, contrôle et transmission au TELEDEC simulé, Comptabilité
+avec et sans `liberal`) et `spec/ui/teledec_ui_liberal_spec.cr` (écran et
+paramètres) ; suite complète verte en ordre aléatoire, Ameba sans
+remarque ; `partiduo-demo` : spec verte. Base `partiduo_test_tdc2_*`.
