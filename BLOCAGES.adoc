@@ -410,6 +410,13 @@ et bouton de connexion fédérée sur `/login` ; champ de dépôt d'une pièce
 jointe sur la saisie et le rapprochement (multipart, contrôle du contenu par
 le socle).
 
+*Levé en partie le 29 septembre 2026* : écrans « Fournisseurs d'identité »
+(SAML 2.0 et OpenID Connect, niveau, activation), identités fédérées des
+utilisateurs, boutons de connexion fédérée et points de retour (D-R5-009,
+D-R5-010). Reste le dépôt d'une pièce jointe sur la saisie et le
+rapprochement, hors des travaux reportés ; la connexion fédérée reste à
+essayer contre un vrai fournisseur (réseau).
+
 == B-CRIT-003 — Reprises restantes par `partiduo-migrate` (critique de complétude)
 
 *Constat.* `partiduo-migrate` ne reprend ni l'analytique (B-MIG-001), ni le

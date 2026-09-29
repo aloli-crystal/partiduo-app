@@ -1091,6 +1091,8 @@ l'identifiant de requête, ACS exempté de CSRF, contrôlé par `InResponseTo`).
 
 *Alternative écartée.* Livrer l'ACS sans l'avoir essayé contre un IdP.
 
+*Révision (29 septembre 2026).* Connexion fédérée câblée : D-R5-010.
+
 === D-UI-012 — Icônes ajoutées au jeu Lucide (lot 0, interface)
 
 *Choix.* `key-round`, `shield-check`, `lock`, `log-in`, `smartphone`, `clock`
@@ -10732,6 +10734,55 @@ PDF.
 *Alternative écartée.* Un PDF par module métier (comme les éditions) :
 autant d'exports à écrire et à maintenir que de listes, pour un rendu
 identique ; un rendu PDF dans l'interface : contraire à ADR-005 D3.
+
+=== D-R5-009 — OpenID Connect intégré au cœur (auth)
+
+*Contexte.* ADR-002 prévoyait OIDC « pluggable, implémenté après le
+noyau » ; les écrans des fournisseurs (B-CRIT-002) doivent offrir SAML et
+OIDC.
+
+*Choix.* `Partiduo::Auth::OidcAdapter`, enregistré sous `oidc` : flux
+« authorization code » d'un client confidentiel (`client_secret_post`),
+PKCE S256 et `nonce` ; `state`, vérificateur et `nonce` gardés côté serveur
+dans la valeur du défi de connexion (jamais dans le navigateur) ; jeton
+d'identité vérifié par `jose` (RS256/384/512, clé du `jwks_uri` choisie par
+`kid`), émetteur, audience et `azp`, `exp`/`iat` à ±60 s, `nonce` en temps
+constant ; identité = `sub` (ou la revendication choisie), rattachée par
+l'administrateur (autorisation locale, pas d'auto-provisionnement).
+Transport HTTP remplaçable (specs : fournisseur simulé). Adresses HTTPS
+exigées, HTTP admis pour `localhost` et `*.localhost` seulement. Contrat
+étendu pour les écrans : `identity_provider_kinds` (paramètres décrits par
+chaque adaptateur, `Federation::SettingField` : obligatoire, secret, sur
+plusieurs lignes), `identity_provider(code)` sans les secrets ; un secret
+envoyé vide garde la valeur enregistrée ; type d'un fournisseur figé.
+L'adaptateur fictif des specs SAML prend le type `fake_oidc`.
+
+*Alternative écartée.* Découverte automatique
+(`.well-known/openid-configuration`) : un appel réseau de plus à
+l'enregistrement, et des points de terminaison qui changeraient sans
+l'administrateur ; les champs se copient depuis ce document. Essai contre un
+vrai fournisseur : impossible ici (réseau), à faire au déploiement.
+
+=== D-R5-010 — Écrans des fournisseurs d'identité et connexion fédérée (interface)
+
+*Contexte.* D-UI-011 reportait la connexion fédérée ; B-CRIT-002.
+
+*Choix.* « Fournisseurs d'identité » (depuis la liste des utilisateurs,
+permission `auth.providers.manage`) : liste, création par type, formulaire
+tiré de la description du type (secret en champ mot de passe, jamais
+réaffiché ; certificat sur plusieurs lignes), niveau reconnu (1 à 3),
+activation, adresse de retour à déclarer chez le fournisseur. Identités
+fédérées sur la fiche d'un utilisateur (rattacher, détacher). Écran de
+connexion : un bouton par fournisseur actif quand la politique du dossier
+admet la méthode. Départ `/login/federated/<code>` (identifiant de requête
+en cookie `HttpOnly`, `SameSite=None; Secure` pour SAML en HTTPS, `Lax`
+sinon ; page demandée gardée) ; retour OIDC en `GET …/callback`, réponse
+SAML en `POST …/acs`, exempté de CSRF (contrôlé par le cœur : signature,
+`InResponseTo`, usage unique). D-UI-011 est ainsi levée.
+
+*Alternative écartée.* Formulaires propres à SAML et à OIDC dans
+l'interface : un nouveau type demanderait un nouvel écran ; la description
+par l'adaptateur suffit.
 
 == Valeurs officielles vérifiées (29 septembre 2026)
 

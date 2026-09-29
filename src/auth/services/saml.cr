@@ -48,6 +48,17 @@ module Partiduo
         "saml"
       end
 
+      def settings_schema : Array(Federation::SettingField)
+        [
+          Federation::SettingField.new("idp_entity_id", required: true),
+          Federation::SettingField.new("idp_sso_service_url", required: true),
+          Federation::SettingField.new("idp_cert", required: true, multiline: true),
+          Federation::SettingField.new("sp_entity_id", required: true),
+          Federation::SettingField.new("assertion_consumer_service_url", required: true),
+          Federation::SettingField.new("name_identifier_format"),
+        ]
+      end
+
       def validate_settings(settings : Hash(String, String)) : Array(Partiduo::Api::FieldError)
         errors = REQUIRED.compact_map do |key|
           next if settings[key]?.presence

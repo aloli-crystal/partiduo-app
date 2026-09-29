@@ -46,6 +46,11 @@ module Partiduo
       # requête à retrouver dans la réponse (anti-rejeu, `InResponseTo`).
       record Start, redirect_url : String, request_id : String
 
+      # Paramètre d'un type de fournisseur, pour les écrans : obligatoire,
+      # secret (jamais réaffiché, gardé s'il est laissé vide), sur plusieurs
+      # lignes (certificat). Libellé : `auth.provider_settings.<clé>`.
+      record SettingField, key : String, required : Bool = false, secret : Bool = false, multiline : Bool = false
+
       # Échec d'une connexion fédérée ; `key` est une clé i18n.
       class Error < Exception
         getter key : String
@@ -57,6 +62,12 @@ module Partiduo
 
       abstract class Adapter
         abstract def kind : String
+
+        # Paramètres du type, dans l'ordre d'affichage (vide : saisie libre
+        # par le contrat seulement).
+        def settings_schema : Array(SettingField)
+          [] of SettingField
+        end
 
         # Clés i18n des paramètres manquants ou invalides (`settings.<clé>`).
         abstract def validate_settings(settings : Hash(String, String)) : Array(Partiduo::Api::FieldError)

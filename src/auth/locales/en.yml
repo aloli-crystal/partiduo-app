@@ -35,6 +35,25 @@ en:
       totp: "Turn on an authenticator app to reach level 2."
       passkey: "Register a passkey to reach level 3."
       recovery_codes: "Generate recovery codes: you will need them if you lose your device."
+    provider_kinds:
+      saml: "SAML 2.0"
+      oidc: "OpenID Connect"
+    provider_settings:
+      idp_entity_id: "Provider entity ID"
+      idp_sso_service_url: "Provider single sign-on (SSO) URL"
+      idp_cert: "Provider signing certificate (PEM)"
+      sp_entity_id: "Entity ID of this company file"
+      assertion_consumer_service_url: "Return URL (ACS) of this company file"
+      name_identifier_format: "NameID format (optional)"
+      issuer: "Issuer"
+      authorization_endpoint: "Authorization endpoint"
+      token_endpoint: "Token endpoint"
+      jwks_uri: "Public keys URL (JWKS)"
+      client_id: "Client ID"
+      client_secret: "Client secret"
+      redirect_uri: "Return URL of this company file"
+      scopes: "Scopes (optional, “openid email” by default)"
+      subject_claim: "Identifier claim (optional, “sub” by default)"
     errors:
       elevation_required: "This operation requires an additional check of your identity."
       password:
@@ -73,6 +92,8 @@ en:
         signature: "The identity provider's signature is invalid."
         unsupported: "This kind of identity provider is not supported."
         unknown_identity: "This identity has no access to this ledger file."
+        denied: "The identity provider refused the sign-in."
+        unreachable: "The identity provider does not respond; try again later."
         subject_required: "Enter the person's identifier at the provider."
         subject_taken: "This identity is already linked to a user."
       token:
@@ -102,3 +123,6 @@ en:
         code_invalid: "Invalid code (lowercase letters, digits, - and _)."
         level_invalid: "Invalid level (1 to 3)."
         kind_unsupported: "Unsupported provider type."
+        kind_immutable: "The type of an existing provider cannot change."
+        url: "HTTPS URL expected (HTTP only for localhost)."
+        openid_scope: "Scopes must include “openid”."

@@ -301,10 +301,44 @@ module Partiduo
         Partiduo::Auth::IdentityProvider.all.order(:code).map { |provider| provider_view(provider) }
       end
 
-      # Crée ou met à jour (par `code`) un fournisseur d'identité.
+      # Types de fournisseurs enregistrés et leurs paramètres (écrans).
+      def self.identity_provider_kinds(actor : Actor) : Array(ProviderKindView)
+        Guard.authorize!(actor, "auth.providers.manage", module_code: "AUTH")
+        Partiduo::Auth::Federation.kinds.sort.compact_map do |kind|
+          adapter = Partiduo::Auth::Federation.adapter(kind) || next
+          fields = adapter.settings_schema.map do |field|
+            ProviderSettingView.new(field.key, field.required, field.secret, field.multiline)
+          end
+          ProviderKindView.new(kind, fields)
+        end
+      end
+
+      # Un fournisseur, pour le modifier : les secrets ne sont jamais rendus.
+      def self.identity_provider(actor : Actor, code : String) : IdentityProviderDetailView
+        Guard.authorize!(actor, "auth.providers.manage", module_code: "AUTH")
+        provider = Partiduo::Auth::IdentityProvider.filter(code: code).first || raise NotFound.new("identity_provider", code)
+        settings = Partiduo::Auth::Federation.settings_of(provider)
+        secrets = secret_keys(provider.kind.to_s)
+        IdentityProviderDetailView.new(
+          code: provider.code.to_s, kind: provider.kind.to_s, name: provider.name.to_s,
+          level: (provider.level || 2).to_i32, active: provider.active == true,
+          settings: settings.reject { |key, _| secrets.includes?(key) },
+          secrets_set: secrets.select { |key| settings[key]?.presence },
+          linked_identities: Partiduo::Auth::FederatedIdentity.filter(provider: provider.code).count.to_i32,
+        )
+      end
+
+      # Crée ou met à jour (par `code`) un fournisseur d'identité. Un
+      # paramètre secret laissé vide garde la valeur enregistrée (il n'est
+      # jamais réaffiché) ; le type d'un fournisseur existant ne change pas.
       def self.save_identity_provider(actor : Actor, input : IdentityProviderInput) : Result(IdentityProviderView)
         Guard.authorize!(actor, "auth.providers.manage", module_code: "AUTH")
+        existing = Partiduo::Auth::IdentityProvider.filter(code: input.code).first
+        input = input.copy_with(settings: kept_secrets(input, existing)) if existing
         errors = [] of FieldError
+        if existing && existing.kind != input.kind
+          errors << FieldError.new("kind", "auth.errors.provider.kind_immutable")
+        end
         errors << FieldError.new("code", "auth.errors.provider.code_invalid") unless input.code.matches?(CODE_FORMAT)
         errors << FieldError.new("name", "auth.errors.provider.required") if input.name.strip.empty?
         errors << FieldError.new("level", "auth.errors.provider.level_invalid") unless 1 <= input.level <= 3
@@ -327,6 +361,23 @@ module Partiduo
           Partiduo::Auth::Audit.record_for(actor, "provider.save", "ADMIN", detail: input.code)
           Result(IdentityProviderView).success(provider_view(provider))
         end
+      end
+
+      private def self.secret_keys(kind : String) : Array(String)
+        Partiduo::Auth::Federation.adapter(kind).try(&.settings_schema.select(&.secret).map(&.key)) || [] of String
+      end
+
+      # Paramètres saisis, secrets vides remplacés par ceux enregistrés ;
+      # valeurs saisies nettoyées des espaces (sauf sur plusieurs lignes).
+      private def self.kept_secrets(input : IdentityProviderInput, existing : Partiduo::Auth::IdentityProvider) : Hash(String, String)
+        stored = Partiduo::Auth::Federation.settings_of(existing)
+        settings = input.settings.dup
+        secret_keys(input.kind).each do |key|
+          if settings[key]?.to_s.strip.empty? && (value = stored[key]?.presence)
+            settings[key] = value
+          end
+        end
+        settings
       end
 
       # --- Journal d'audit ---------------------------------------------------------

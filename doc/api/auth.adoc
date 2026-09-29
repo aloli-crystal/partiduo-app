@@ -55,7 +55,9 @@ requêtes simultanées).
 (`partiduo.localhost`). Jamais seule : codes de récupération générés.
 
 |Fédération (D3)
-|SAML intégré, OIDC par la même interface d'adaptateur. Identité
+|SAML et OpenID Connect intégrés (OIDC : code d'autorisation, PKCE S256,
+`nonce`, jeton d'identité RS256 vérifié par la clé publiée, D-R5-009) ;
+d'autres types par la même interface d'adaptateur. Identité
 (`provider` + `subject`) rattachée par la société ; pas d'auto-provisionnement.
 SAML : confirmation `bearer` de l'assertion signée (requête, destinataire,
 échéance) et identifiant d'assertion à usage unique (D-AUTH-014).
@@ -151,8 +153,10 @@ start = Partiduo::Api::Auth.begin_federated_login(anonymous, "idp")
 Partiduo::Api::Auth.login_federated(anonymous, "idp", start.request_id, {"SAMLResponse" => form_value}, context)
 ----
 
-Un adaptateur (OIDC…) s'ajoute par `Partiduo::Auth::Federation.register` :
-voir `src/auth/services/federation.cr`.
+Réponse OIDC : `{"code" => …, "state" => …}` (ou `"error"`) au lieu de
+`SAMLResponse`. Un autre type s'ajoute par `Partiduo::Auth::Federation.register`
+(voir `src/auth/services/federation.cr`) ; `settings_schema` décrit ses
+paramètres aux écrans.
 
 === Invitation, remise à zéro, déblocage
 
@@ -235,9 +239,9 @@ Chaque fonction prend l'acteur en premier argument, sauf `actor(jeton)` et
 |`auth.profiles.manage`
 |`ProfileView`, `Result`
 
-|`identity_providers`, `save_identity_provider`
+|`identity_providers`, `save_identity_provider`, `identity_provider(code)`, `identity_provider_kinds`
 |`auth.providers.manage`
-|`IdentityProviderView`, `Result`
+|`IdentityProviderView`, `Result`, `IdentityProviderDetailView` (sans secret : `secrets_set`), `ProviderKindView` (paramètres : obligatoire, secret, sur plusieurs lignes)
 
 |`audit_events(actor, AuditQuery)`
 |`auth.audit.view`
@@ -271,3 +275,11 @@ Fournisseur SAML (`save_identity_provider`, `kind: "saml"`) : `settings` avec
 `idp_entity_id`, `idp_sso_service_url`, `idp_cert` (PEM), `sp_entity_id`,
 `assertion_consumer_service_url`, et facultativement `name_identifier_format` ;
 `level` (1 à 3, 2 par défaut) : niveau reconnu à ce fournisseur.
+
+Fournisseur OpenID Connect (`kind: "oidc"`) : `issuer`,
+`authorization_endpoint`, `token_endpoint`, `jwks_uri`, `client_id`,
+`client_secret` (secret), `redirect_uri`, et facultativement `scopes`
+(`openid email` par défaut, `openid` exigé) et `subject_claim` (`sub`). Adresses
+en HTTPS (HTTP pour `localhost`, `*.localhost`). Un paramètre secret n'est
+jamais rendu par `identity_provider` et se garde s'il est envoyé vide ; le
+type d'un fournisseur existant ne change pas (`provider.kind_immutable`).

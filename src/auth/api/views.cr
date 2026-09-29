@@ -157,6 +157,33 @@ module Partiduo
 
       record IdentityProviderView, code : String, kind : String, name : String, level : Int32, active : Bool
 
+      # Paramètre d'un type de fournisseur (écrans) : libellé
+      # `auth.provider_settings.<key>` ; un secret n'est jamais réaffiché.
+      record ProviderSettingView, key : String, required : Bool, secret : Bool, multiline : Bool do
+        def label_key : String
+          "auth.provider_settings.#{key}"
+        end
+      end
+
+      # Type de fournisseur enregistré (`saml`, `oidc`…) et ses paramètres.
+      record ProviderKindView, kind : String, settings : Array(ProviderSettingView) do
+        def label_key : String
+          "auth.provider_kinds.#{kind}"
+        end
+      end
+
+      # Fournisseur à modifier : paramètres *sans* les secrets (`secrets_set` :
+      # clés secrètes enregistrées), identités rattachées.
+      record IdentityProviderDetailView,
+        code : String,
+        kind : String,
+        name : String,
+        level : Int32,
+        active : Bool,
+        settings : Hash(String, String),
+        secrets_set : Array(String),
+        linked_identities : Int32
+
       record FederatedIdentityView, id : Int64, provider : String, subject : String, last_used_at : Time?
 
       # Jeton à transmettre hors bande (courriel), en clair une seule fois.

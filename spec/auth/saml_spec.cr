@@ -187,9 +187,10 @@ describe "SAML intégré (ADR-002 D3 : authentification fédérée, autorisation
 end
 
 # Fournisseur OIDC fictif : prouve que l'interface est pluggable.
+# Type fictif, distinct de l'adaptateur OIDC du cœur (enregistré sous `oidc`).
 class FakeOidcAdapter < Partiduo::Auth::Federation::Adapter
   def kind : String
-    "oidc"
+    "fake_oidc"
   end
 
   def validate_settings(settings : Hash(String, String)) : Array(Partiduo::Api::FieldError)
@@ -210,8 +211,8 @@ end
 describe "Interface pluggable des fournisseurs d'identité (OIDC)" do
   it "accepte un type enregistré par Federation.register" do
     Partiduo::Auth::Federation.register(FakeOidcAdapter.new)
-    Partiduo::Auth::Federation.kinds.should contain("oidc")
-    input = Partiduo::Api::Auth::IdentityProviderInput.new(code: "oidc", kind: "oidc", name: "OIDC",
+    Partiduo::Auth::Federation.kinds.should contain("fake_oidc")
+    input = Partiduo::Api::Auth::IdentityProviderInput.new(code: "oidc", kind: "fake_oidc", name: "OIDC",
       settings: {"issuer" => "https://oidc.example.test"})
     Partiduo::Api::Auth.save_identity_provider(AuthSpec.system, input).success?.should be_true
     created = AuthSpec.create_user

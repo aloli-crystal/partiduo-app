@@ -35,6 +35,25 @@ fr:
       totp: "Activez une application d'authentification pour atteindre le niveau 2."
       passkey: "Enregistrez une clé d'accès (passkey) pour atteindre le niveau 3."
       recovery_codes: "Générez des codes de récupération : ils vous serviront si vous perdez votre appareil."
+    provider_kinds:
+      saml: "SAML 2.0"
+      oidc: "OpenID Connect"
+    provider_settings:
+      idp_entity_id: "Identifiant (entity ID) du fournisseur"
+      idp_sso_service_url: "Adresse de connexion unique (SSO) du fournisseur"
+      idp_cert: "Certificat de signature du fournisseur (PEM)"
+      sp_entity_id: "Identifiant (entity ID) de ce dossier"
+      assertion_consumer_service_url: "Adresse de retour (ACS) de ce dossier"
+      name_identifier_format: "Format du NameID (facultatif)"
+      issuer: "Émetteur (issuer)"
+      authorization_endpoint: "Point d'autorisation"
+      token_endpoint: "Point de jeton"
+      jwks_uri: "Adresse des clés publiques (JWKS)"
+      client_id: "Identifiant du client"
+      client_secret: "Secret du client"
+      redirect_uri: "Adresse de retour de ce dossier"
+      scopes: "Portées (facultatif, « openid email » par défaut)"
+      subject_claim: "Revendication de l'identifiant (facultatif, « sub » par défaut)"
     errors:
       elevation_required: "Cette opération demande une vérification supplémentaire de votre identité."
       password:
@@ -73,6 +92,8 @@ fr:
         signature: "La signature du fournisseur d'identité est invalide."
         unsupported: "Ce type de fournisseur d'identité n'est pas pris en charge."
         unknown_identity: "Cette identité n'a pas d'accès à ce dossier."
+        denied: "Le fournisseur d'identité a refusé la connexion."
+        unreachable: "Le fournisseur d'identité ne répond pas ; réessayez plus tard."
         subject_required: "Saisissez l'identifiant de la personne chez le fournisseur."
         subject_taken: "Cette identité est déjà rattachée à un utilisateur."
       token:
@@ -102,3 +123,6 @@ fr:
         code_invalid: "Code invalide (minuscules, chiffres, - et _)."
         level_invalid: "Niveau invalide (1 à 3)."
         kind_unsupported: "Type de fournisseur non pris en charge."
+        kind_immutable: "Le type d'un fournisseur existant ne change pas."
+        url: "Adresse HTTPS attendue (HTTP seulement pour localhost)."
+        openid_scope: "Les portées doivent comprendre « openid »."

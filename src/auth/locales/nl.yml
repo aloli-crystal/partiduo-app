@@ -35,6 +35,25 @@ nl:
       totp: "Activeer een authenticatie-app om niveau 2 te bereiken."
       passkey: "Registreer een toegangssleutel (passkey) om niveau 3 te bereiken."
       recovery_codes: "Genereer herstelcodes: u hebt ze nodig als u uw toestel verliest."
+    provider_kinds:
+      saml: "SAML 2.0"
+      oidc: "OpenID Connect"
+    provider_settings:
+      idp_entity_id: "Entity-ID van de provider"
+      idp_sso_service_url: "Single sign-on-adres (SSO) van de provider"
+      idp_cert: "Ondertekeningscertificaat van de provider (PEM)"
+      sp_entity_id: "Entity-ID van dit dossier"
+      assertion_consumer_service_url: "Terugkeeradres (ACS) van dit dossier"
+      name_identifier_format: "NameID-formaat (optioneel)"
+      issuer: "Uitgever (issuer)"
+      authorization_endpoint: "Autorisatie-eindpunt"
+      token_endpoint: "Token-eindpunt"
+      jwks_uri: "Adres van de publieke sleutels (JWKS)"
+      client_id: "Client-ID"
+      client_secret: "Clientgeheim"
+      redirect_uri: "Terugkeeradres van dit dossier"
+      scopes: "Scopes (optioneel, standaard „openid email”)"
+      subject_claim: "Claim van de identificatie (optioneel, standaard „sub”)"
     errors:
       elevation_required: "Voor deze handeling is een bijkomende controle van uw identiteit nodig."
       password:
@@ -73,6 +92,8 @@ nl:
         signature: "De handtekening van de identiteitsprovider is ongeldig."
         unsupported: "Dit type identiteitsprovider wordt niet ondersteund."
         unknown_identity: "Deze identiteit heeft geen toegang tot dit dossier."
+        denied: "De identiteitsprovider heeft de aanmelding geweigerd."
+        unreachable: "De identiteitsprovider antwoordt niet; probeer het later opnieuw."
         subject_required: "Voer de identificatie van de persoon bij de provider in."
         subject_taken: "Deze identiteit is al aan een gebruiker gekoppeld."
       token:
@@ -102,3 +123,6 @@ nl:
         code_invalid: "Ongeldige code (kleine letters, cijfers, - en _)."
         level_invalid: "Ongeldig niveau (1 tot 3)."
         kind_unsupported: "Niet-ondersteund type provider."
+        kind_immutable: "Het type van een bestaande provider verandert niet."
+        url: "HTTPS-adres verwacht (HTTP alleen voor localhost)."
+        openid_scope: "De scopes moeten „openid” bevatten."
