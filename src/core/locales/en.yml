@@ -247,6 +247,8 @@ en:
         read_only_mode: "Unknown read-only mode: %{mode} (on, off or status)."
         approval_missing: "The dual-approval reference is required (--approval-ref)."
         approvers: "Two distinct people must have approved (--approvers a,b)."
+        approvers_single: "Single-person approval: exactly one name is expected (--approval-mode single --approvers a)."
+        approval_mode: "Unknown approval mode: %{mode} (single or dual)."
         not_provisioned: "The instance is not provisioned (no company)."
         not_admin: "%{email} has an account without the administrator profile: only the company can grant it."
         revoked: "The company revoked access for %{email}: the platform does not reopen it."

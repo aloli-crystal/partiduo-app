@@ -15,5 +15,5 @@ module Partiduo
   # par l'exécutant de partiduo-admin. Versionnage sémantique : retirer ou
   # renommer une action, une clé JSON ou un code de sortie incrémente la
   # majeure ; en ajouter incrémente la mineure.
-  INSTANCE_CLI_VERSION = "1.0.0"
+  INSTANCE_CLI_VERSION = "1.1.0"
 end

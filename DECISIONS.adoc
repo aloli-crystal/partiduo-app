@@ -11273,6 +11273,17 @@ personnes » au journal de la tâche. Recours d'accès à une personne :
 le journal du dossier dit ainsi qu'il n'y a pas eu de seconde personne
 (B-VAL2-001).
 
+*Révision du 29 septembre 2026 (B-VAL2-001 levé).* Le contrat d'instance
+passe en 1.1.0 (ajout compatible) : `admin-invite --approval-mode
+single|dual` (défaut `dual`), un seul nom exigé en mode `single`, deux
+distincts en mode `dual` ; le mode est rendu (`approval_mode`) et inscrit au
+détail de `instance.admin_invitation`. L'exécutant lit la version du
+contrat (`version`) : à partir de 1.1.0, il passe `--approval-mode` et le
+seul nom ; la marque `validation-une-personne` est retirée. Instance en
+1.0.0 : validation à deux transmise sans l'option (repli consigné au
+journal de la tâche) ; validation à une personne refusée avant tout geste
+(`refused`, « exige le contrat 1.1.0 »), jamais de faux second nom.
+
 === D-VAL2-006 — Changer le réglage avec des demandes en attente
 
 *Choix.* Le mode d'une demande est lu à la décision, non figé à la

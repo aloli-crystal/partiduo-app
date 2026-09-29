@@ -1178,6 +1178,11 @@ dossier le dit, mais la marque occupe la place d'une personne.
 dans l'audit de l'instance ; l'exécutant l'utilise quand la version du
 contrat le permet.
 
+*Levé* (29 septembre 2026) : contrat 1.1.0, `--approval-mode single|dual`,
+mode au journal d'audit de l'instance ; l'exécutant de `partiduo-admin`
+passe le mode et le seul nom, refuse proprement la validation à une
+personne sur une instance restée en 1.0.0 (D-VAL2-005 révisé).
+
 == B-CRA-003 — Remise des invitations par le serveur et cloisonnement non essayés en réel
 
 *Constat.* `--mail-command` est essayé avec un script à la place de

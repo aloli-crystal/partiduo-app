@@ -220,6 +220,8 @@ describe "manage instance (ADR-008 D4, doc/api/instance-cli.adoc)" do
     detail["approval_ref"].should eq("VAL-2026-001")
     detail["approvers"].should eq("admin@cabinet.example,super@aloli.example")
     detail["task"].should eq("T-9")
+    detail["approval_mode"].should eq("dual") # défaut du contrat 1.1.0
+    run.data["approval_mode"].should eq("dual")
     audit_events("user.invite").size.should eq(1)
 
     # Adresse inconnue : la plateforme ne crée pas d'administrateur (D-AFN-003).
@@ -254,6 +256,32 @@ describe "manage instance (ADR-008 D4, doc/api/instance-cli.adoc)" do
     again.code.should eq(4)
     again.error["reason"].should eq("instance.admin_invitation.revoked")
     audit_events("instance.admin_invitation").should be_empty
+  end
+
+  it "accepte un seul validateur en mode single et trace le mode (contrat 1.1.0, B-VAL2-001)" do
+    provision_instance(admin_email: "patron@exemple.test")
+    run = cli("admin-invite", "patron@exemple.test", "--reason", "passkey perdue", "--approval-ref", "DV-7",
+      "--approval-mode", "single", "--approvers", "seule@cabinet.example")
+    run.code.should eq(0)
+    run.json["contract"].should eq("1.1.0")
+    run.data["approval_mode"].should eq("single")
+    detail = JSON.parse(audit_events("instance.admin_invitation").last.detail.to_s)
+    detail["approvers"].should eq("seule@cabinet.example")
+    detail["approval_mode"].should eq("single")
+
+    # Deux noms en mode single, un seul en mode dual, mode inconnu : refus
+    # d'usage, rien n'est émis.
+    two = cli("admin-invite", "patron@exemple.test", "--reason", "r", "--approval-ref", "V",
+      "--approval-mode", "single", "--approvers", "a,b")
+    {two.code, two.error["reason"]}.should eq({2, "usage.approvers_single"})
+    one = cli("admin-invite", "patron@exemple.test", "--reason", "r", "--approval-ref", "V",
+      "--approval-mode", "dual", "--approvers", "a")
+    {one.code, one.error["reason"]}.should eq({2, "usage.approvers"})
+    unknown = cli("admin-invite", "patron@exemple.test", "--reason", "r", "--approval-ref", "V",
+      "--approval-mode", "aucune", "--approvers", "a")
+    {unknown.code, unknown.error["reason"]}.should eq({2, "usage.approval_mode"})
+    unknown.error["message"].as_s.should contain("aucune")
+    audit_events("instance.admin_invitation").size.should eq(1)
   end
 
   it "refuse la réémission sur une instance non provisionnée" do

@@ -10,11 +10,17 @@ Contrat entre une instance Partiduo et l'*exécutant* de `partiduo-admin`
 traduit en appels, sans jamais entrer dans les données comptables du dossier
 (ADR-008 D3).
 
-*Version du contrat : 1.0.0* (`Partiduo::INSTANCE_CLI_VERSION`, rendue dans
+*Version du contrat : 1.1.0* (`Partiduo::INSTANCE_CLI_VERSION`, rendue dans
 chaque réponse). Versionnage sémantique, comme `Partiduo::Api` : retirer ou
 renommer une action, une option, une clé JSON, un code d'erreur ou un code de
 sortie incrémente la majeure ; en ajouter incrémente la mineure. L'exécutant
 vérifie la majeure avant tout geste (`version`).
+
+Historique : 1.0.0 (D-CLI-001 à D-CLI-005) ; 1.1.0 (29 septembre 2026,
+B-VAL2-001) — option `--approval-mode single|dual` d'`admin-invite`, clé
+`approval_mode` de sa réponse et du détail de sa trace, raisons d'erreur
+`usage.approval_mode` et `usage.approvers_single`. Ajouts seulement : un
+appel 1.0.0 (sans l'option) garde son sens, deux personnes distinctes.
 
 == Appel
 
@@ -64,9 +70,16 @@ au journal d'audit
 |`admin-invite` (obligatoire)
 |référence de la double validation dans `partiduo-admin`
 
+|`--approval-mode single\|dual`
+|`admin-invite` (1.1.0)
+|mode de validation : `dual` (défaut), deux personnes distinctes ; `single`,
+une seule personne, ré-authentifiée et confirmant seule dans `partiduo-admin`
+(D-VAL2-004)
+
 |`--approvers A,B`
 |`admin-invite` (obligatoire)
-|les deux personnes (distinctes) qui ont validé
+|les personnes qui ont validé : deux distinctes en mode `dual`, exactement
+une en mode `single`
 
 |`--check`
 |`migrations`
@@ -97,13 +110,13 @@ rien sur la sortie d'erreur. Les clés sont stables et toujours présentes
 .Succès
 [source,json]
 ----
-{"contract":"1.0.0","action":"enable","ok":true,"data":{"code":"FOLLOWUP","kind":"module","active":true,"data":"kept"}}
+{"contract":"1.1.0","action":"enable","ok":true,"data":{"code":"FOLLOWUP","kind":"module","active":true,"data":"kept"}}
 ----
 
 .Échec
 [source,json]
 ----
-{"contract":"1.0.0","action":"disable","ok":false,
+{"contract":"1.1.0","action":"disable","ok":false,
  "error":{"code":"refused","reason":"modules.errors.activation.required_by",
           "message":"ANALYTIC requiert ACCOUNTING : désactivez d'abord ANALYTIC.",
           "details":[{"field":"code","key":"modules.errors.activation.required_by","message":"…"}]}}
@@ -150,7 +163,7 @@ base.*
 
 [source,json]
 ----
-{"version":"0.1.0","api_version":"0.6.0","contract":"1.0.0",
+{"version":"0.1.0","api_version":"0.6.0","contract":"1.1.0",
  "pieces":[{"code":"CORE","kind":"socle","version":"0.1.0"}, …]}
 ----
 
@@ -225,8 +238,11 @@ journal d'audit. Poser un état déjà posé ne crée pas de nouvelle entrée.
 
 Recours d'accès (ADR-008 D3) : réémet l'invitation d'administrateur quand la
 société a perdu tout accès administrateur. `--reason`, `--approval-ref` et
-`--approvers` (deux personnes distinctes) sont obligatoires : la double
-validation a lieu dans `partiduo-admin`, sa trace est reportée ici.
+`--approvers` sont obligatoires : la validation a lieu dans
+`partiduo-admin`, sa trace est reportée ici. Mode (`--approval-mode`,
+1.1.0) : `dual` par défaut, deux personnes distinctes (sinon 2,
+`usage.approvers`) ; `single`, un seul nom (sinon 2,
+`usage.approvers_single`) ; autre valeur : 2, `usage.approval_mode`.
 
 * Adresse d'un administrateur existant (profil administrateur) : nouvelle
   invitation (`user_created` vaut toujours `false`, clé gardée pour la
@@ -246,7 +262,7 @@ validation a lieu dans `partiduo-admin`, sa trace est reportée ici.
 ----
 {"email":"patron@exemple.fr","user_created":false,"token":"…",
  "url":"https://exemple.partiduo.app/invitation/…","expires_at":"2026-10-05T12:31:13Z",
- "usable_admins":0}
+ "usable_admins":0,"approval_mode":"dual"}
 ----
 
 `usable_admins` : administrateurs actifs, non révoqués, ayant un moyen
@@ -258,8 +274,8 @@ alors pas le serveur ; sinon il le transmet à l'administration, qui l'envoie
 (D-ADM-009, D-CRA-003).
 
 Journal d'audit de l'instance : `user.invite` (acteur `system`), puis `instance.admin_invitation` (acteur `partiduo-admin`) dont le
-détail JSON porte `email`, `reason`, `approval_ref`, `approvers`, `created`
-(toujours `false`),
+détail JSON porte `email`, `reason`, `approval_ref`, `approvers`,
+`approval_mode` (1.1.0), `created` (toujours `false`),
 `task`, `requested_by`. Les deux dans une même transaction.
 
 === `backup-plan`

@@ -23,6 +23,9 @@ module Partiduo
 
         ACTIONS = %w[version status migrations migrate enable disable read-only admin-invite backup-plan]
 
+        # Modes de validation d'`admin-invite` (contrat 1.1.0, B-VAL2-001).
+        APPROVAL_MODES = %w[single dual]
+
         # Codes d'erreur du contrat et codes de sortie associés.
         EXIT_CODES = {
           "internal"             => 1,
@@ -40,6 +43,7 @@ module Partiduo
         @reason : String? = nil
         @approval_ref : String? = nil
         @approvers = [] of String
+        @approval_mode = "dual"
         @task : String? = nil
         @requested_by : String? = nil
         @list_file : String? = nil
@@ -55,8 +59,11 @@ module Partiduo
           on_option_with_arg("approval-ref", "ref", "référence de la double validation (admin-invite)") do |value|
             @approval_ref = value
           end
-          on_option_with_arg("approvers", "list", "les deux personnes qui ont validé, séparées par des virgules") do |value|
+          on_option_with_arg("approvers", "list", "les personnes qui ont validé, séparées par des virgules") do |value|
             @approvers = value.split(',').map(&.strip).reject(&.empty?)
+          end
+          on_option_with_arg("approval-mode", "mode", "admin-invite : single (une personne) ou dual (deux, défaut)") do |value|
+            @approval_mode = value.strip
           end
           on_option_with_arg("task", "id", "identifiant de la tâche de partiduo-admin (journal d'audit)") do |value|
             @task = value
@@ -275,7 +282,8 @@ module Partiduo
         end
 
         # Recours d'accès (ADR-008 D3) : nouvelle invitation d'administrateur,
-        # après double validation dans partiduo-admin, tracée ici.
+        # après validation dans partiduo-admin — par une personne ou par deux
+        # (`--approval-mode`, D-VAL2-004) —, tracée ici avec son mode.
         private def admin_invite(email : String) : Hash(String, JSON::Any)
           prepare_database
           require_writable!
@@ -284,8 +292,18 @@ module Partiduo
                    raise usage("usage.reason_missing", I18n.t("core.instance_cli.errors.reason_missing"))
           reference = @approval_ref.try(&.strip).presence ||
                       raise usage("usage.approval_missing", I18n.t("core.instance_cli.errors.approval_missing"))
+          mode = @approval_mode
+          unless APPROVAL_MODES.includes?(mode)
+            raise usage("usage.approval_mode", I18n.t("core.instance_cli.errors.approval_mode", mode: mode))
+          end
           approvers = @approvers.map(&.downcase).uniq!
-          if approvers.size < 2
+          # Contrat 1.1.0 (B-VAL2-001) : `single`, une seule personne a
+          # validé (ré-authentifiée dans partiduo-admin, D-VAL2-004) et un
+          # seul nom est attendu ; `dual`, deux personnes distinctes.
+          if mode == "single" && @approvers.size != 1
+            raise usage("usage.approvers_single", I18n.t("core.instance_cli.errors.approvers_single"))
+          end
+          if mode == "dual" && approvers.size < 2
             raise usage("usage.approvers", I18n.t("core.instance_cli.errors.approvers"))
           end
           settings = settings_row ||
@@ -297,11 +315,12 @@ module Partiduo
           Marten::DB::Connection.default.transaction do
             issued = AdminInvitation.issue(email)
             audit("instance.admin_invitation", {
-              "email"        => issued.email,
-              "reason"       => reason,
-              "approval_ref" => reference,
-              "approvers"    => approvers.join(","),
-              "created"      => issued.created.to_s,
+              "email"         => issued.email,
+              "reason"        => reason,
+              "approval_ref"  => reference,
+              "approvers"     => approvers.join(","),
+              "approval_mode" => mode,
+              "created"       => issued.created.to_s,
             })
             outcome = issued
           end
@@ -313,6 +332,7 @@ module Partiduo
             "url"           => "https://#{host}/invitation/#{invitation.token}",
             "expires_at"    => invitation.expires_at.to_utc.to_rfc3339,
             "usable_admins" => invitation.usable_admins.to_i64,
+            "approval_mode" => mode,
           })
         end
 

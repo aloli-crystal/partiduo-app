@@ -247,6 +247,8 @@ nl:
         read_only_mode: "Onbekende alleen-lezenmodus: %{mode} (on, off of status)."
         approval_missing: "De referentie van de dubbele goedkeuring is verplicht (--approval-ref)."
         approvers: "Twee verschillende personen moeten hebben goedgekeurd (--approvers a,b)."
+        approvers_single: "Goedkeuring door één persoon: precies één naam wordt verwacht (--approval-mode single --approvers a)."
+        approval_mode: "Onbekende goedkeuringsmodus: %{mode} (single of dual)."
         not_provisioned: "De instantie is niet ingericht (geen onderneming)."
         not_admin: "%{email} heeft een account zonder beheerdersprofiel: alleen de onderneming kan die rechten geven."
         revoked: "De onderneming heeft de toegang van %{email} ingetrokken: het platform heropent die niet."

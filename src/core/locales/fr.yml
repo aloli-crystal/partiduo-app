@@ -247,6 +247,8 @@ fr:
         read_only_mode: "Mode de lecture seule inconnu : %{mode} (on, off ou status)."
         approval_missing: "La référence de la double validation est obligatoire (--approval-ref)."
         approvers: "Deux personnes distinctes doivent avoir validé (--approvers a,b)."
+        approvers_single: "Validation à une personne : un seul nom est attendu (--approval-mode single --approvers a)."
+        approval_mode: "Mode de validation inconnu : %{mode} (single ou dual)."
         not_provisioned: "L'instance n'est pas provisionnée (aucune société)."
         not_admin: "%{email} a un compte sans profil administrateur : la société seule peut lui en donner les droits."
         revoked: "L'accès de %{email} a été révoqué par la société : la plateforme ne le rouvre pas."
