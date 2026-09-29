@@ -10609,3 +10609,112 @@ manquante (`das2_birth_date`), nature du fournisseur non précisée
 (`das2_nature_unset`, déclaré en raison sociale comme avant). L'écran du
 dépôt affiche l'identité déclarée. La forme exacte de `AI` et des
 répétitions reste à confirmer sur le stage (B-TDC-004).
+
+== Valeurs officielles vérifiées (29 septembre 2026)
+
+Vérification aux sources officielles des valeurs fiscales et sociales des
+modules micro et liberal (BLOCAGES B-MIC-001, B-LIB-001, point 2035 de
+B-TDC-004). Tableau des valeurs et des sources :
+`doc/sources-officielles.adoc` ; chaque valeur est aussi sourcée en
+commentaire des fichiers de données.
+
+=== D-VAL-001 — Taux de cotisations des micro-entrepreneurs
+
+*Choix.* Taux globaux de l'art. D613-4 du code de la sécurité sociale
+(Légifrance, versions successives) : ventes 12,3 %, prestations BIC 21,2 %
+(en vigueur depuis décembre 2022 : date d'effet des données avancée de
+2024-07-01 à 2024-01-01, début de la période couverte), BNC du régime
+général 23,1 % (1er juillet 2024), 24,6 % (2025), *25,6 %* (2026, décret
+n° 2025-943 du 8 septembre 2025, confirmé par urssaf.fr le 30 janvier 2026)
+au lieu des 26,1 % du calendrier initial, que la page d'actualité de
+autoentrepreneur.urssaf.fr (juillet 2024) affiche encore. Les instances
+existantes sont corrigées par la migration `micro/0002_official_values`,
+seulement si la ligne est restée à la valeur livrée ; son retour la
+rétablit.
+
+*Alternative écartée.* Garder 26,1 % en citant la page de juillet 2024 :
+elle est antérieure au décret qui fait foi.
+
+=== D-VAL-002 — CFP des prestations BIC au taux des artisans
+
+*Choix.* 0,1 % (commerce), 0,3 % (artisanat), 0,2 % (libéral),
+service-public.gouv.fr F23459. Le module ne distingue pas le commerçant de
+l'artisan parmi les prestataires BIC : `rate.cfp.service_bic` garde le taux
+des artisans (0,3 %), le plus élevé, ce qui surestime la provision d'un
+commerçant prestataire ; celui-ci le règle à 0,1 % par `set_parameter`.
+
+=== D-VAL-003 — Cipav, meublés classés, taxes pour frais de chambre : relevés, non modélisés
+
+*Choix.* Ces valeurs sont vérifiées et consignées (Cipav 23,2 % depuis le
+1er juillet 2024, meublés de tourisme classés 6 %, taxes pour frais de CCI
+0,015 % / 0,044 % / 0,007 % et de CMA 0,22 % / 0,48 % hors Alsace-Moselle)
+mais aucune catégorie ni aucun code de paramètre n'est ajouté : les trois
+catégories du module (`RECEIPT_CATEGORIES`) portent l'interface, les
+contrôles de base et l'extension URSSAF. Un libéral de la Cipav saisit
+23,2 % comme taux `bnc` de son instance. Les ajouter est une évolution du
+module (catégorie, écrans, déclaration), pas une correction de données.
+
+=== D-VAL-004 — Seuils et cases de la 2042-C-PRO confirmés
+
+*Choix.* Franchise en base 85 000 / 37 500 €, majorés 93 500 / 41 250 €
+(art. 293 B du CGI rétabli par la loi n° 2025-1044, service-public F21746) ;
+régime micro 188 700 / 77 700 € jusqu'en 2025 puis 203 100 / 83 600 € pour
+2026 à 2028 (BOI-BAREME-000044) ; cases 5KO, 5KP, 5HQ et, avec versement
+libératoire, 5TA, 5TB, 5TE (impots.gouv.fr). Le module suppose des revenus
+professionnels : les cases des revenus non professionnels (5NO, 5NP…) ne
+sont pas proposées. La recodification de la franchise au 1er janvier 2027
+(ordonnance n° 2025-1247) sera à suivre.
+
+=== D-VAL-005 — Seuil d'alerte : choix de Partiduo
+
+*Choix.* `alert.ratio` (80 %) n'est pas une valeur officielle ; il reste
+dans les données, signalé comme tel.
+
+=== D-VAL-006 — Cases de la 2035 : codes des zones EDI de TELEDEC
+
+*Choix.* La colonne `box` de la table de correspondance porte le code de
+zone que `partiduo-teledec` transmet (`<case>_<formulaire>`), relevé dans
+les spécifications de TELEDEC (2035, 2035A, 2035B, millésimes 2025 et 2026,
+identiques), et non la lettre du formulaire papier, qui en diffère pour la
+CET (papier JY, EDI BE), les cotisations syndicales (BY / EM), les contrats
+Madelin (BZ / AW), les redevances de collaboration (BW / EA) et l'immobilisé
+(DA / GJ), et qui n'existe pas pour les sous-lignes 17 à 24 et 26 à 30. Les
+lignes sont celles des formulaires officiels 2035-A-SD et 2035-B-SD des
+revenus 2024 et 2025 (mêmes numéros). Millésime de la table : 2024.
+`partiduo-teledec` vérifie par une spec que toute case livrée existe dans
+les formulaires de TELEDEC.
+
+*Alternative écartée.* Lettre papier dans `box` et table de passage vers
+l'EDI dans `partiduo-teledec` : deux tables à tenir par millésime pour une
+seule information, et des sous-lignes sans lettre.
+
+=== D-VAL-007 — Sous-totaux de la 2035-A calculés
+
+*Choix.* Les totaux « travaux, fournitures et services extérieurs » (BH,
+lignes 17 à 22), « transports et déplacements » (BJ, 23 et 24), « charges
+sociales personnelles » (BK, 25) et « frais divers de gestion » (BM, 27 à
+30) deviennent des postes calculés (`Api::Liberal::SUBTOTALS`), transmis
+avec leurs sous-lignes. Le total des dépenses (BR) reste la somme des
+rubriques : il ne compte pas les sous-totaux.
+
+=== D-VAL-008 — Résultat à la 2035-B, provisions, tableaux de la 2035
+
+*Choix.* La détermination du résultat est à la 2035-B, lignes 34 à 47
+(CA à CR), et non à la 2035-A. Les provisions (sorte d'ajustement
+`provision`) n'ont pas de ligne à la 2035-B : elles entrent dans les divers
+à déduire (ligne 43, CL), le poste `provision` en garde le détail sans case
+(résultat inchangé). Les tableaux I (immobilisations) et II (plus et
+moins-values) de la 2035 n'ont pas de code de zone chez TELEDEC : leurs
+postes y sont rattachés sans case et un avertissement (`box_manual`)
+rappelle de les reporter à la main ; le montant des immobilisations va en
+GJ de la 2035-A (papier DA), les plus-values à long terme en FJ de la 2035.
+
+=== D-VAL-009 — Correction des instances existantes de liberal
+
+*Choix.* Migration `liberal/0002_official_form_lines` : si le millésime
+2024 n'est pas figé (aucune période close en 2024 ou après, D-LIB-010), ses
+lignes restées à la valeur livrée sont corrigées et les sous-totaux
+ajoutés ; s'il est figé mais pas 2025, les lignes corrigées sont ajoutées au
+millésime 2025 (les 2035 déposées gardent leurs cases) ; sinon rien. Une
+ligne changée par l'administrateur n'est jamais touchée. Retour sans effet :
+les anciennes cases étaient fausses.

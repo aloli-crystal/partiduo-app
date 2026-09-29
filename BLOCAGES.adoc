@@ -588,6 +588,24 @@ corriger le fichier (instances neuves) et les instances existantes
 l'interface) ; refaire cette vérification à chaque loi de
 financement et loi de finances.
 
+*Levé le 29 septembre 2026 (vérification des valeurs officielles).* Chaque
+valeur de `src/micro/data/parameters.yml` est sourcée (Légifrance, urssaf.fr,
+autoentrepreneur.urssaf.fr, impots.gouv.fr, service-public.gouv.fr, BOFiP)
+en commentaire et dans `doc/sources-officielles.adoc` (DECISIONS D-VAL-001 à
+D-VAL-005). Corrigé : taux BNC au 1er janvier 2026, 26,1 % → 25,6 % (art.
+D613-4 CSS, décret n° 2025-943) ; date d'effet du taux des prestations BIC,
+2024-07-01 → 2024-01-01. Confirmés : 12,3 %, 21,2 %, 23,1 %, 24,6 % ; CFP
+0,1/0,3/0,2 % ; versement libératoire 1/1,7/2,2 % ; franchise en base
+85 000/37 500 € (majorés 93 500/41 250 €) ; régime micro 188 700/77 700 €
+puis 203 100/83 600 € ; cases 5KO, 5KP, 5HQ, 5TA, 5TB, 5TE. Instances
+existantes corrigées par la migration `micro/0002_official_values` (valeurs
+restées à la valeur livrée seulement). *Restes* : catégories Cipav (23,2 %)
+et meublés de tourisme classés (6 %), taxes pour frais de chambre (CCI,
+CMA) et revenus non professionnels de la 2042-C-PRO non modélisés
+(D-VAL-003, D-VAL-004) ; CFP de `service_bic` au taux des artisans
+(D-VAL-002). La vérification reste à refaire à chaque loi de financement,
+loi de finances et révision triennale des seuils.
+
 == B-UI-009 — Mode simplifié non essayé sur un téléphone ni dans un navigateur (G:interface-simplifiee, interface)
 
 *Constat.* Le volet du navigateur a refusé d'ouvrir les pages du mode
@@ -626,6 +644,25 @@ cahier des charges EDI-TDFC (codes des zones), corriger le fichier
 (instances neuves) et les instances existantes (`set_form_line` au millésime
 concerné) ; le refaire à chaque millésime. À coordonner avec
 `partiduo-teledec` (le partenaire EDI attend peut-être ses propres codes).
+
+*Levé le 29 septembre 2026 (vérification des valeurs officielles).* Lignes
+relevées sur les formulaires officiels 2035-A-SD et 2035-B-SD des revenus
+2024 et 2025 (impots.gouv.fr, cerfa n° 15945*07 et *08, mêmes lignes) ;
+cases alignées sur les codes des zones EDI des spécifications de TELEDEC
+(2035, 2035A, 2035B, millésimes 2025 et 2026), transmis tels quels
+(DECISIONS D-VAL-006 à D-VAL-009, `doc/sources-officielles.adoc`).
+Corrections : détermination du résultat déplacée de la 2035-A (lignes 34
+à 48 inventées) vers la 2035-B (lignes 34 à 47, CA à CR) ; sous-lignes des
+dépenses aux codes EB à EN, GF, EJ ; sous-totaux BH, BJ, BK, BM ajoutés
+(postes calculés) ; immobilisations : montant en GJ de la 2035-A (papier
+DA), plus-values à long terme en FJ de la 2035, tableaux I et II de la 2035
+sans code de zone (avertissement `box_manual`) ; provisions comprises dans
+les divers à déduire. Instances existantes : migration
+`liberal/0002_official_form_lines` (millésime 2024 corrigé s'il n'est pas
+figé, sinon lignes ajoutées au millésime 2025). *Restes* : redevances de
+collaboration (EA) et cotisations Madelin (AW) non distinguées ; bénéfice
+et déficit de la page 1 de la 2035 (FG, FH) non transmis ; zone CA absente
+de la liste des champs de TELEDEC : à confirmer sur le stage (B-TDC-004).
 
 == B-LIB-002 — Pas d'écran du module liberal dans l'interface (L:liberal, interface)
 
@@ -752,6 +789,12 @@ laissent des incertitudes ; l'adaptateur retient l'option la plus simple
   `BL`/`EE`, honoraires `BM`/`EF`, assurances `BN`/`EG`, déplacements
   `BQ`/`EJ`, fournitures `BX`/`EK`, actes `BY`/`EL`, cotisations `BZ`/`EM`,
   frais divers `CB`/`EN`…) : à corriger dans les données de `liberal`.
+  *Levé en partie le 29 septembre 2026* (B-LIB-001, D-VAL-006) : la table
+  de `liberal` reporte aux codes EDI de TELEDEC (spec
+  `spec/teledec/liasse_2035_spec.cr` de `partiduo-teledec` : toute case
+  livrée appartient aux formulaires 2035, 2035A, 2035B de TELEDEC). Reste :
+  forme du bloc et zone `CA` (absente de la liste des champs de TELEDEC)
+  à essayer sur le stage.
 . *`CompleteWithErrors`.* Compris comme « traitée par la DGFiP avec
   erreurs » (rejet) ; `CompleteWithWarnings` comme accusé.
 . *Rappels.* Acceptation d'un `auth.url` portant le jeton en paramètre, et

@@ -55,6 +55,10 @@ nl:
     items:
       net_receipts: "Netto ontvangsten"
       total_receipts: "Totaal ontvangsten"
+      works_total: "Totaal werken, leveringen en diensten van derden"
+      transport_total: "Totaal vervoer en verplaatsingen"
+      personal_social_total: "Persoonlijke sociale bijdragen"
+      management_total: "Totaal diverse beheerskosten"
       total_expenses: "Totaal uitgaven"
       excess: "Overschot"
       short_term_gains: "Meerwaarden op korte termijn"
@@ -110,6 +114,7 @@ nl:
       profession_missing: "Uitgeoefend beroep niet ingevuld"
       mapping_missing: "„%{item}” heeft geen regel in de tabel van %{year}"
       box_missing: "„%{item}” heeft geen vak in de tabel van %{year}: het zou niet worden ingediend"
+      box_manual: "„%{item}” (%{year}) heeft geen ingediend vak: handmatig invullen in tabel %{line} van de 2035"
       heading_negative: "Rubriek „%{heading}” is negatief"
       box_duplicate: "De posten %{items} worden in hetzelfde vak %{box} van formulier %{form} overgenomen: slechts één zou worden verzonden"
       vehicle_depreciation_ceiling: "Voertuig %{number}: de basis overschrijdt %{ceiling} €, het laagste afschrijvingsplafond voor personenwagens (9 900 tot 30 000 € naargelang de CO2-uitstoot). Voeg het meerdere toe via een aanpassing"

@@ -27,8 +27,8 @@ describe_module "MICRO", Api do
     third.turnover_of("service_bic").should eq(M.d("2000"))
     third.turnover_of("bnc").should eq(M.d("1000"))
     bnc = third.contributions.find! { |row| row.category == "bnc" }
-    bnc.social_rate.should eq(M.d("26.1"))
-    bnc.social.should eq(M.d("261"))
+    bnc.social_rate.should eq(M.d("25.6"))
+    bnc.social.should eq(M.d("256"))
     bnc.cfp.should eq(M.d("2"))
     bnc.flat_tax.should eq(M.d("0"))
     sale = third.contributions.find! { |row| row.category == "sale_bic" }

@@ -13,7 +13,7 @@ describe_module "MICRO", Api do
     Api.natures(M.system, "receipt").map(&.category).sort!.should eq(%w[bnc sale_bic service_bic])
     Api.natures(M.system, "purchase").map(&.category).sort!.should eq(%w[goods other])
     Api.parameter_value(M.system, "rate.social.bnc", M.date("2025-06-30")).should eq(M.d("24.6"))
-    Api.parameter_value(M.system, "rate.social.bnc", M.date("2026-01-01")).should eq(M.d("26.1"))
+    Api.parameter_value(M.system, "rate.social.bnc", M.date("2026-01-01")).should eq(M.d("25.6"))
     Api.settings(M.system).default_nature_id.should eq(M.nature("SALE").id)
     # Un second chargement ne crée rien.
     Api.load_defaults(M.system).should eq(0)

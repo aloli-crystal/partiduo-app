@@ -55,6 +55,10 @@ fr:
     items:
       net_receipts: "Montant net des recettes"
       total_receipts: "Total des recettes"
+      works_total: "Total travaux, fournitures et services extérieurs"
+      transport_total: "Total transports et déplacements"
+      personal_social_total: "Charges sociales personnelles"
+      management_total: "Total frais divers de gestion"
       total_expenses: "Total des dépenses"
       excess: "Excédent"
       short_term_gains: "Plus-values à court terme"
@@ -110,6 +114,7 @@ fr:
       profession_missing: "Profession exercée non renseignée"
       mapping_missing: "« %{item} » n'a pas de ligne dans la table du millésime %{year}"
       box_missing: "« %{item} » n'a pas de case dans la table du millésime %{year} : il ne serait pas transmis"
+      box_manual: "« %{item} » (%{year}) n'a pas de case transmise : à reporter à la main au tableau %{line} de la 2035"
       heading_negative: "La rubrique « %{heading} » est négative"
       box_duplicate: "Les postes %{items} sont reportés à la même case %{box} du formulaire %{form} : un seul serait transmis"
       vehicle_depreciation_ceiling: "Véhicule %{number} : sa base dépasse %{ceiling} €, le plus bas des plafonds d'amortissement des véhicules de tourisme (9 900 à 30 000 € selon les émissions de CO2). Réintégrez la part excédentaire par un ajustement"

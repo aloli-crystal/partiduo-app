@@ -16,7 +16,11 @@ describe_module "LIBERAL", Api do
     L.nature("RENT").label.should eq("Loyers et charges locatives")
     lines = Api.form_lines(L.system, 2026)
     lines.find!(&.item.==("receipts")).line.should eq("1")
-    lines.find!(&.item.==("depreciation")).form.should eq("2035-A")
+    lines.find!(&.item.==("depreciation")).form.should eq("2035-B")
+    # Codes des zones EDI de la 2035-A 2026 (DECISIONS D-VAL-006).
+    {"cet" => "BE", "maintenance" => "EB", "works_total" => "BH", "profit" => "CP"}.each do |item, box|
+      {item, lines.find!(&.item.==(item)).box}.should eq({item, box})
+    end
     Api.settings(L.system).default_nature_id.should eq(L.nature("RECEIPTS").id)
     Api.load_defaults(L.system).should eq(0)
   end

@@ -41,10 +41,20 @@ module Partiduo
 
       FORMS = %w[2035 2035-A 2035-B]
 
+      # Sous-totaux de la 2035-A : poste calculé → rubriques qui le composent
+      # (cases BH, BJ, BK et BM du formulaire).
+      SUBTOTALS = {
+        "works_total"           => %w[maintenance temporary_staff small_tools utilities fees insurance],
+        "transport_total"       => %w[vehicle travel],
+        "personal_social_total" => %w[personal_social_mandatory personal_social_optional],
+        "management_total"      => %w[office legal_costs professional_dues other_management],
+      }
+
       # Postes calculés de la 2035-A et de la 2035-B (totaux, résultat,
-      # amortissements, plus-values), en plus des rubriques.
+      # amortissements, plus-values), en plus des rubriques. Les sous-totaux
+      # de la 2035-A (`SUBTOTALS`) ont leur propre case (DECISIONS D-VAL-007).
       COMPUTED_ITEMS = %w[
-        net_receipts total_receipts total_expenses excess short_term_gains reintegrations scm_profit total_additions
+        net_receipts total_receipts works_total transport_total personal_social_total management_total total_expenses excess short_term_gains reintegrations scm_profit total_additions
         shortfall establishment_costs depreciation provision short_term_losses deductions scm_loss total_subtractions
         profit loss long_term_gains long_term_losses assets_cost assets_prior_depreciation assets_year_depreciation
         disposals_price

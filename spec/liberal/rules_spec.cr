@@ -273,7 +273,7 @@ describe_module "LIBERAL", Api do
       {
         "receipts" => "1001", "other_gains" => "400", "total_receipts" => "1401", "total_expenses" => "3000",
         "excess" => "0", "shortfall" => "1599", "reintegrations" => "10", "scm_profit" => "300",
-        "total_additions" => "310", "deductions" => "100", "scm_loss" => "40", "establishment_costs" => "50",
+        "total_additions" => "310", "deductions" => "120", "scm_loss" => "40", "establishment_costs" => "50",
         "provision" => "20", "total_subtractions" => "1809", "profit" => "0", "loss" => "1499",
       }.each { |item, amount| {item, view.amount(item)}.should eq({item, L.d(amount)}) }
       view.lines.map(&.item).should_not contain("loan_received")

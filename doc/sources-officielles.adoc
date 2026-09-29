@@ -1,0 +1,248 @@
+= Valeurs fiscales et sociales : sources officielles
+:toc:
+
+Valeurs codées dans les jeux de données initiaux de Partiduo
+(`src/micro/data/parameters.yml`, `src/liberal/data/defaults.yml`),
+vérifiées le 29 septembre 2026 aux sources officielles (DECISIONS D-VAL-001
+à D-VAL-009). Chaque valeur est aussi sourcée en commentaire du fichier de
+données. Une valeur qu'aucune source officielle ne confirme est marquée
+« à vérifier » avec la raison. À refaire à chaque loi de financement de la
+sécurité sociale, loi de finances, revalorisation triennale des seuils et
+nouveau millésime de la 2035.
+
+== Sources consultées
+
+Toutes consultées le 29 septembre 2026.
+
+[cols="1,5",options="header"]
+|===
+|Repère |Source
+
+|[[S1]] S1
+|Légifrance, code de la sécurité sociale, art. D613-4 (taux globaux du
+régime micro-social), versions en vigueur du 10/12/2022 au 01/06/2024, du
+01/06/2024 au 31/12/2025 et depuis le 01/01/2026 (décret n° 2025-943 du
+8 septembre 2025) —
+https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000046714712
+
+|[[S2]] S2
+|Légifrance, décret n° 2025-943 du 8 septembre 2025 modifiant les taux
+globaux de cotisations des micro-entrepreneurs (entrée en vigueur le
+1er janvier 2026) — https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000052211971
+
+|[[S3]] S3
+|urssaf.fr, « Évolution des taux de cotisations sociales des
+auto-entrepreneurs », mis à jour le 30 janvier 2026 —
+https://www.urssaf.fr/accueil/actualites/taux-cotisations-autoentrepeneur.html
+
+|[[S4]] S4
+|autoentrepreneur.urssaf.fr, « L'essentiel du statut » (plafonds de chiffre
+d'affaires 2026) —
+https://www.autoentrepreneur.urssaf.fr/portail/accueil/sinformer-sur-le-statut/lessentiel-du-statut.html
+
+|[[S5]] S5
+|entreprendre.service-public.gouv.fr, fiche F23459 « Contribution à la
+formation professionnelle (CFP) des entrepreneurs individuels », vérifiée
+le 1er janvier 2026 — https://entreprendre.service-public.gouv.fr/vosdroits/F23459
+
+|[[S6]] S6
+|Légifrance, code général des impôts, art. 151-0 (versement libératoire),
+version en vigueur depuis le 19 juin 2025 —
+https://www.legifrance.gouv.fr/codes/section_lc/LEGITEXT000006069577/LEGISCTA000022850373
+
+|[[S7]] S7
+|Légifrance, code général des impôts, art. 293 B (franchise en base),
+version en vigueur du 1er mars 2025 au 1er janvier 2027 (loi n° 2025-127
+du 14 février 2025, loi n° 2025-1044 du 3 novembre 2025 ; abrogé et
+recodifié par l'ordonnance n° 2025-1247 au 1er janvier 2027) —
+https://www.legifrance.gouv.fr/codes/id/LEGISCTA000006162567/
+
+|[[S8]] S8
+|entreprendre.service-public.gouv.fr, fiche F21746 « Franchise en base de
+TVA », vérifiée le 1er janvier 2026 —
+https://entreprendre.service-public.gouv.fr/vosdroits/F21746
+
+|[[S9]] S9
+|BOFiP, BOI-BAREME-000044 du 19 août 2026, seuils des régimes d'imposition
+BIC et BNC (année 2025 ; années 2026 à 2028) —
+https://bofip.impots.gouv.fr/bofip/14069-PGP.html/identifiant=BOI-BAREME-000044-20260819
+
+|[[S10]] S10
+|entreprendre.service-public.gouv.fr, fiche F32353 « Quelles conséquences
+pour un micro-entrepreneur qui dépasse les seuils de chiffre
+d'affaires ? », vérifiée le 21 février 2026 —
+https://entreprendre.service-public.gouv.fr/vosdroits/F32353
+
+|[[S11]] S11
+|impots.gouv.fr, « Comment déclarer les revenus provenant de mon activité
+de micro-entrepreneur ? » (cases de la 2042-C-PRO, taux du versement
+libératoire) —
+https://www.impots.gouv.fr/particulier/questions/comment-declarer-les-revenus-provenant-de-mon-activite-dauto-entrepreneur
+
+|[[S12]] S12
+|entreprendre.service-public.gouv.fr, fiche F37483 « Taxes pour frais de
+chambre consulaire du micro-entrepreneur », vérifiée le 24 décembre 2025 —
+https://entreprendre.service-public.gouv.fr/vosdroits/F37483
+
+|[[S13]] S13
+|BOFiP, BOI-BAREME-000036 du 1er juillet 2026 et son actualité du même jour
+(franchise en base : loi n° 2023-1322 de finances pour 2024, art. 82 ; loi
+n° 2025-1044, art. 1) — https://bofip.impots.gouv.fr/bofip/9368-PGP.html
+
+|[[S14]] S14
+|impots.gouv.fr, formulaires n° 2035-SD, 2035-A-SD et 2035-B-SD (cerfa
+n° 15945*08), revenus 2025 —
+https://www.impots.gouv.fr/sites/default/files/formulaires/2035-sd/2026/2035-sd_5382.pdf,
+https://www.impots.gouv.fr/sites/default/files/formulaires/2035-sd/2026/2035-sd_5384.pdf ;
+notice n° 2035-NOT-SD 2026 :
+https://www.impots.gouv.fr/sites/default/files/formulaires/2035-sd/2026/2035-sd_5385.pdf
+
+|[[S15]] S15
+|impots.gouv.fr, formulaire n° 2035-A-SD et 2035-B-SD (cerfa n° 15945*07),
+revenus 2024 —
+https://www.impots.gouv.fr/sites/default/files/formulaires/2035-sd/2025/2035-sd_4983.pdf
+
+|[[S16]] S16
+|Spécifications des formulaires de TELEDEC (partenaire EDI), 2035, 2035A,
+2035B, millésimes 2024 à 2026, feuilles « Template » et « Champs »,
+relevées le 28 septembre 2026 dans
+`partiduo/.teledec-doc/FORMULAIRES-TELEDEC.adoc` et
+`.teledec-doc/formulaires/texte/` (documentation partenaire, non publique)
+|===
+
+== Micro-entreprise (module micro)
+
+[cols="3,2,2,2,3",options="header"]
+|===
+|Code |Valeur |Date d'effet |Source |Note
+
+|`rate.social.sale_bic` |12,3 % |2024-01-01 (en vigueur depuis le 10/12/2022) |<<S1>> |inchangé en 2026
+|`rate.social.service_bic` |21,2 % |2024-01-01 (en vigueur depuis le 10/12/2022) |<<S1>> |date d'effet corrigée : 2024-07-01 → 2024-01-01
+|`rate.social.bnc` |23,1 % |2024-07-01 |<<S3>> |
+|`rate.social.bnc` |24,6 % |2025-01-01 |<<S1>>, <<S3>> |
+|`rate.social.bnc` |25,6 % |2026-01-01 |<<S1>>, <<S2>>, <<S3>> |*corrigé* : 26,1 % → 25,6 % (décret n° 2025-943)
+|`rate.cfp.sale_bic` |0,1 % |2024-01-01 |<<S5>> |activité commerciale
+|`rate.cfp.service_bic` |0,3 % |2024-01-01 |<<S5>> |activité artisanale ; un commerçant prestataire paie 0,1 % (D-VAL-002)
+|`rate.cfp.bnc` |0,2 % |2024-01-01 |<<S5>> |activité libérale
+|`rate.flat_tax.sale_bic` |1 % |2024-01-01 |<<S6>>, <<S11>> |
+|`rate.flat_tax.service_bic` |1,7 % |2024-01-01 |<<S6>>, <<S11>> |
+|`rate.flat_tax.bnc` |2,2 % |2024-01-01 |<<S6>>, <<S11>> |
+|`threshold.vat.goods` |85 000 € |2025-01-01 |<<S7>>, <<S8>>, <<S13>> |
+|`threshold.vat.services` |37 500 € |2025-01-01 |<<S7>>, <<S8>>, <<S13>> |
+|`threshold.vat_tolerance.goods` |93 500 € |2025-01-01 |<<S7>>, <<S8>> |
+|`threshold.vat_tolerance.services` |41 250 € |2025-01-01 |<<S7>>, <<S8>> |
+|`threshold.micro.goods` |188 700 € |2023-01-01 |<<S9>>, <<S10>> |jusqu'en 2025
+|`threshold.micro.services` |77 700 € |2023-01-01 |<<S9>>, <<S11>> |jusqu'en 2025
+|`threshold.micro.goods` |203 100 € |2026-01-01 |<<S4>>, <<S9>>, <<S10>> |années 2026 à 2028
+|`threshold.micro.services` |83 600 € |2026-01-01 |<<S4>>, <<S9>>, <<S10>> |années 2026 à 2028
+|`alert.ratio` |80 % |2020-01-01 |— |choix de Partiduo, pas une valeur officielle
+|`box.sale_bic` |5KO |2020-01-01 |<<S11>> |revenus professionnels
+|`box.service_bic` |5KP |2020-01-01 |<<S11>> |revenus professionnels
+|`box.bnc` |5HQ |2020-01-01 |<<S11>> |revenus professionnels
+|`box.flat_tax.sale_bic` |5TA |2020-01-01 |<<S11>> |
+|`box.flat_tax.service_bic` |5TB |2020-01-01 |<<S11>> |
+|`box.flat_tax.bnc` |5TE |2020-01-01 |<<S11>> |
+|===
+
+Valeurs vérifiées mais non modélisées (D-VAL-003) :
+
+[cols="3,2,2,2",options="header"]
+|===
+|Valeur |Taux |Date d'effet |Source
+
+|Cotisations, libéraux affiliés à la Cipav |23,2 % (21,2 % auparavant) |2024-07-01 |<<S1>>, <<S3>>
+|Cotisations, meublés de tourisme classés |6 % |en vigueur au 01/01/2026 |<<S1>>
+|Taxe pour frais de CCI, prestations de services |0,044 % |en vigueur au 24/12/2025 |<<S12>>
+|Taxe pour frais de CCI, ventes |0,015 % |en vigueur au 24/12/2025 |<<S12>>
+|Taxe pour frais de CCI, artisans en double immatriculation |0,007 % |en vigueur au 24/12/2025 |<<S12>>
+|Taxe pour frais de CMA, prestations / achat-vente (hors Alsace-Moselle) |0,48 % / 0,22 % |en vigueur au 24/12/2025 |<<S12>>
+|Taxe pour frais de CMA, prestations / achat-vente (Alsace) |0,65 % / 0,29 % |en vigueur au 24/12/2025 |<<S12>>
+|Taxe pour frais de CMA, prestations / achat-vente (Moselle) |0,83 % / 0,37 % |en vigueur au 24/12/2025 |<<S12>>
+|Franchise en base, avocats, auteurs, artistes-interprètes |50 000 € / 35 000 € (majorés 55 000 € / 38 500 €) |2025-03-01 |<<S7>>
+|===
+
+== Profession libérale (module liberal, 2035)
+
+Lignes : formulaires officiels (<<S14>>, <<S15>> : mêmes numéros pour les
+revenus 2024 et 2025). Cases : codes des zones EDI de TELEDEC (<<S16>>,
+identiques aux millésimes 2025 et 2026), transmis par `partiduo-teledec`
+sous la forme `<case>_<formulaire>` ; la lettre du formulaire papier est
+indiquée quand elle diffère. Millésime de la table : 2024 (revenus 2024 et
+suivants).
+
+[cols="3,1,1,1,1,2",options="header"]
+|===
+|Poste |Formulaire |Ligne |Case (EDI) |Papier |Note
+
+|`assets_cost` |2035-A |cadre 1 |GJ |DA |ex-2035-B DA
+|`receipts` |2035-A |1 |AA |AA |
+|`disbursements` |2035-A |2 |AB |AB |
+|`fees_retroceded` |2035-A |3 |AC |AC |
+|`net_receipts` |2035-A |4 |AD |AD |
+|`financial_income` |2035-A |5 |AE |AE |
+|`other_gains` |2035-A |6 |AF |AF |
+|`total_receipts` |2035-A |7 |AG |AG |
+|`purchases` |2035-A |8 |BA |BA |
+|`salaries` |2035-A |9 |BB |BB |
+|`staff_social_charges` |2035-A |10 |BC |BC |
+|`vat_paid` |2035-A |11 |BD |BD |
+|`cet` |2035-A |12 |BE |JY |corrigé : JY → BE
+|`other_taxes` |2035-A |13 |BS |BS |
+|`deductible_csg` |2035-A |14 |BV |BV |
+|`rent` |2035-A |15 |BF |BF |
+|`equipment_rental` |2035-A |16 |BG |BG |« dont redevances de collaboration » (EA, papier BW) non distingué
+|`maintenance` |2035-A |17 |EB |— |corrigé : BH → EB
+|`temporary_staff` |2035-A |18 |EC |— |corrigé : BJ → EC
+|`small_tools` |2035-A |19 |ED |— |corrigé : BK → ED
+|`utilities` |2035-A |20 |EE |— |corrigé : BL → EE
+|`fees` |2035-A |21 |EF |— |corrigé : BM → EF
+|`insurance` |2035-A |22 |EG |— |corrigé : BN → EG
+|`works_total` |2035-A |17 à 22 |BH |BH |nouveau sous-total
+|`vehicle` |2035-A |23 |GF |— |corrigé : BP → GF
+|`travel` |2035-A |24 |EJ |— |corrigé : BQ → EJ
+|`transport_total` |2035-A |23 et 24 |BJ |BJ |nouveau sous-total
+|`personal_social_mandatory` |2035-A |25 |BT |BT |
+|`personal_social_optional` |2035-A |25 |BU |BU |« facultatives aux nouveaux PER » ; Madelin (AW, papier BZ) non distingué
+|`personal_social_total` |2035-A |25 |BK |BK |nouveau sous-total
+|`reception` |2035-A |26 |BL |— |corrigé : BW → BL
+|`office` |2035-A |27 |EK |— |corrigé : BX → EK
+|`legal_costs` |2035-A |28 |EL |— |corrigé : BY → EL
+|`professional_dues` |2035-A |29 |EM |BY |corrigé : BZ → EM
+|`other_management` |2035-A |30 |EN |— |corrigé : CB → EN
+|`management_total` |2035-A |27 à 30 |BM |BM |nouveau sous-total
+|`financial_costs` |2035-A |31 |BN |BN |corrigé : CC → BN
+|`other_losses` |2035-A |32 |BP |BP |corrigé : CD → BP
+|`total_expenses` |2035-A |33 |BR |BR |
+|`excess` |2035-B |34 |CA |CA |corrigé : 2035-A CE → 2035-B CA
+|`short_term_gains` |2035-B |35 |CB |CB |corrigé
+|`reintegrations` |2035-B |36 |CC |CC |corrigé
+|`scm_profit` |2035-B |37 |CD |CD |corrigé
+|`total_additions` |2035-B |38 |CE |CE |corrigé
+|`shortfall` |2035-B |39 |CF |CF |corrigé
+|`establishment_costs` |2035-B |40 |CG |CG |corrigé
+|`depreciation` |2035-B |41 |CH |CH |corrigé (formulaire)
+|`short_term_losses` |2035-B |42 |CK |CK |corrigé
+|`deductions` |2035-B |43 |CL |CL |corrigé ; comprend les provisions
+|`provision` |2035-B |43 |— |— |pas de ligne : compris dans CL (D-VAL-008)
+|`scm_loss` |2035-B |44 |CM |CM |corrigé
+|`total_subtractions` |2035-B |45 |CN |CN |corrigé
+|`profit` |2035-B |46 |CP |CP |corrigé : CP1 → CP
+|`loss` |2035-B |47 |CR |CR |corrigé : CR1 → CR
+|`long_term_gains` |2035 |cadre 2 |FJ |— |plus-values à long terme imposables à 12,8 %
+|`assets_prior_depreciation` |2035 |tableau I |— |— |sans code de zone : à la main
+|`assets_year_depreciation` |2035 |tableau I |— |— |sans code de zone ; même montant que CH
+|`disposals_price` |2035 |tableau II |— |— |sans code de zone : à la main
+|`long_term_losses` |2035 |tableau II |— |— |sans code de zone : à la main
+|===
+
+== À vérifier
+
+* *Zone `CA` de la 2035B (excédent).* Présente au modèle de TELEDEC
+  (« Template ») mais absente de sa liste des champs, aux millésimes 2025
+  et 2026 : transmise quand même, à confirmer sur le stage (B-TDC-004).
+* *Forme du bloc `zones_formulaires` de la liasse* (`"2035A": {"AA_2035A":
+  …}`) : non confirmée par TELEDEC (B-TDC-004).
+* *Tableaux I et II de la 2035 et bénéfice de la page 1 (FG/FH).* Aucun
+  code de zone pour les tableaux dans les spécifications de TELEDEC ; FG et
+  FH (report des lignes 46 et 47) ne sont pas transmis, TELEDEC les
+  reprenant peut-être de la 2035-B : à confirmer.

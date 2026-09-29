@@ -145,7 +145,7 @@ module Partiduo
         ]
         form_headers = %w[form line box item amount].map { |key| I18n.t("liberal.columns.#{key}") }
         writer = Writer.new(document, title, form_headers, FORM_WEIGHTS, [4])
-        %w[2035-A 2035-B].each_with_index do |form, index|
+        %w[2035-A 2035-B 2035].each_with_index do |form, index|
           rows = view.form(form).map do |line|
             [line.form, line.line, line.box, I18n.t(line.item_key), amount(line.amount, decimals: false)]
           end

@@ -16,15 +16,29 @@ module Partiduo
     module TaxReturn
       alias Api = Partiduo::Api::Liberal
 
-      # Postes dans l'ordre des formulaires.
-      ORDER = %w[receipts disbursements fees_retroceded net_receipts financial_income other_gains total_receipts] +
-              Api::EXPENSE_LINE_HEADINGS +
+      # Postes dans l'ordre des formulaires : chaque sous-total de la 2035-A
+      # suit la dernière rubrique qui le compose.
+      EXPENSE_ORDER = Api::EXPENSE_LINE_HEADINGS.flat_map do |heading|
+        [heading] + Api::SUBTOTALS.select { |_, parts| parts.last == heading }.keys
+      end
+      ORDER = %w[assets_cost receipts disbursements fees_retroceded net_receipts financial_income other_gains
+        total_receipts] + EXPENSE_ORDER +
               %w[
                 total_expenses excess short_term_gains reintegrations scm_profit total_additions shortfall
-                establishment_costs depreciation provision short_term_losses deductions scm_loss total_subtractions
-                profit loss assets_cost assets_prior_depreciation assets_year_depreciation disposals_price
-                long_term_gains long_term_losses
+                establishment_costs depreciation short_term_losses deductions provision scm_loss total_subtractions
+                profit loss long_term_gains assets_prior_depreciation assets_year_depreciation disposals_price
+                long_term_losses
               ]
+
+      # Postes de la 2035-B (détermination du résultat) et des tableaux de la
+      # 2035 : formulaire affiché d'un poste sans ligne au millésime.
+      RESULT_ITEMS = %w[excess short_term_gains reintegrations scm_profit total_additions shortfall establishment_costs
+        depreciation short_term_losses deductions provision scm_loss total_subtractions profit loss]
+      # Postes de détail déjà compris dans une case transmise : sans case
+      # propre, ils ne sont pas signalés.
+      INCLUDED_ITEMS = %w[provision]
+      TABLE_ITEMS    = %w[assets_prior_depreciation assets_year_depreciation disposals_price long_term_gains
+        long_term_losses]
 
       # Plus bas des plafonds d'amortissement des véhicules de tourisme
       # (émissions supérieures à 160 g de CO2 par km) ; les autres sont 18 300,
@@ -61,8 +75,8 @@ module Partiduo
       end
 
       private def self.default_form(item : String) : String
-        item.in?(%w[assets_cost assets_prior_depreciation assets_year_depreciation disposals_price long_term_gains
-          long_term_losses]) ? "2035-B" : "2035-A"
+        return "2035" if TABLE_ITEMS.includes?(item)
+        RESULT_ITEMS.includes?(item) ? "2035-B" : "2035-A"
       end
 
       # Montants de chaque poste, en euros entiers.
@@ -80,6 +94,7 @@ module Partiduo
 
         values["net_receipts"] = values["receipts"] - values["disbursements"] - values["fees_retroceded"]
         values["total_receipts"] = values["net_receipts"] + values["financial_income"] + values["other_gains"]
+        Api::SUBTOTALS.each { |item, parts| values[item] = parts.sum(zero) { |heading| values[heading] } }
         values["total_expenses"] = Api::EXPENSE_LINE_HEADINGS.sum(zero) { |heading| values[heading] }
         difference = values["total_receipts"] - values["total_expenses"]
         values["excess"] = difference > 0 ? difference : zero
@@ -90,13 +105,16 @@ module Partiduo
         values["long_term_gains"] = euros(disposals.map(&.long_term).select(&.>(0)).sum(zero))
         values["long_term_losses"] = euros(-disposals.map(&.long_term).select(&.<(0)).sum(zero))
         values["reintegrations"] = euros(by_kind["reintegration"] + nondeductible)
-        values["deductions"] = euros(by_kind["deduction"])
+        # Les provisions n'ont pas de ligne à la 2035-B : elles entrent dans
+        # les divers à déduire (ligne 43, CL) ; le poste `provision` en garde
+        # le détail, sans case (DECISIONS D-VAL-008).
+        values["deductions"] = euros(by_kind["deduction"]) + euros(by_kind["provision"])
         %w[scm_profit scm_loss establishment_costs provision].each { |kind| values[kind] = euros(by_kind[kind]) }
         values["depreciation"] = euros(rows.sum(zero, &.year_amount))
 
         values["total_additions"] = %w[excess short_term_gains reintegrations scm_profit].sum(zero) { |item| values[item] }
-        values["total_subtractions"] = %w[shortfall establishment_costs depreciation provision short_term_losses
-          deductions scm_loss].sum(zero) { |item| values[item] }
+        values["total_subtractions"] = %w[shortfall establishment_costs depreciation short_term_losses deductions
+          scm_loss].sum(zero) { |item| values[item] }
         result = values["total_additions"] - values["total_subtractions"]
         values["profit"] = result > 0 ? result : zero
         values["loss"] = result < 0 ? -result : zero
@@ -136,6 +154,20 @@ module Partiduo
         controls
       end
 
+      # Contrôle d'un poste non nul : sans ligne, sans case, ou à reporter à
+      # la main ; `nil` si rien à signaler.
+      def self.line_control(line : Api::TaxLineView, year : Int32) : Api::ControlView?
+        return if line.amount.zero?
+        params = {"item" => I18n.t(line.item_key), "year" => year.to_s}
+        return control("mapping_missing", "error", params) unless line.mapped
+        return unless line.box.strip.empty?
+        return if INCLUDED_ITEMS.includes?(line.item)
+        if line.form == "2035" && !line.line.strip.empty?
+          return control("box_manual", "warning", params.merge({"line" => line.line.strip}))
+        end
+        control("box_missing", "error", params)
+      end
+
       # Postes sans ligne ou sans case, cases en double, rubriques négatives,
       # amortissements, plafond des véhicules (DECISIONS D-LIB-011).
       def self.amount_controls(year : Int32, totals : Hash(String, Api::HeadingTotalView),
@@ -143,15 +175,10 @@ module Partiduo
         controls = [] of Api::ControlView
         # Une ligne non nulle sans ligne de formulaire au millésime.
         # Une ligne située sans case ne serait pas transmise (`boxes`,
-        # DECISIONS D-TST-L-002).
-        lines.each do |line|
-          next if line.amount.zero?
-          if !line.mapped
-            controls << control("mapping_missing", "error", {"item" => I18n.t(line.item_key), "year" => year.to_s})
-          elsif line.box.strip.empty?
-            controls << control("box_missing", "error", {"item" => I18n.t(line.item_key), "year" => year.to_s})
-          end
-        end
+        # DECISIONS D-TST-L-002), sauf aux tableaux I et II de la 2035, qui
+        # n'ont pas de code de zone : ils se reportent à la main
+        # (avertissement, DECISIONS D-VAL-008).
+        lines.each { |line| line_control(line, year).try { |found| controls << found } }
 
         # Rubrique négative : contre-passations supérieures aux lignes.
         totals.each_value do |total|

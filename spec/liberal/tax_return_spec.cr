@@ -45,12 +45,20 @@ describe_module "LIBERAL", Api do
     {receipts.form, receipts.line, receipts.box, receipts.mapped}.should eq({"2035-A", "1", "AA", true})
     view.lines.map(&.item).should_not contain("withdrawal")
     view.boxes["2035-A"]["AA"].should eq(L.d("60000"))
-    view.boxes["2035-B"]["DC"].should eq(L.d("750"))
+    view.boxes["2035-B"]["CH"].should eq(L.d("750"))
+    view.boxes["2035-A"]["GJ"].should eq(L.d("3000"))
+    view.boxes["2035-A"]["BJ"].should eq(L.d("4000"))
+    view.boxes["2035-A"]["BK"].should eq(L.d("12001"))
+    view.boxes["2035-A"]["BM"].should eq(L.d("850"))
+    view.boxes["2035-A"]["EK"].should eq(L.d("850"))
+    view.boxes["2035-B"]["CP"].should eq(L.d("29418"))
+    view.boxes.has_key?("2035").should be_false
     view.identity.siren.should eq("732829320")
     view.identity.profession.should eq("Masseur-kinésithérapeute")
     view.assets.size.should eq(1)
     view.adjustments.map(&.kind).should eq(%w[deduction reintegration])
-    view.controls.map(&.key).should eq(["liberal.controls.year_open"])
+    # Amortissements de l'année : tableau I de la 2035, sans code de zone.
+    view.controls.map(&.key).should eq(%w[liberal.controls.box_manual liberal.controls.year_open])
     view.ready?.should be_true
     view.fingerprint.size.should eq(64)
   end
@@ -104,7 +112,7 @@ describe_module "LIBERAL", Api do
       Partiduo::Liberal::Adjustment.get!(id: adjustment.id).delete
     end
     view = Api.tax_return(L.system, 2026)
-    view.controls.should be_empty
+    view.controls.map(&.key).should eq(["liberal.controls.box_manual"])
     view.amount("profit").should eq(L.d("29418"))
   end
 

@@ -55,6 +55,10 @@ en:
     items:
       net_receipts: "Net receipts"
       total_receipts: "Total receipts"
+      works_total: "Total work, supplies and external services"
+      transport_total: "Total transport and travel"
+      personal_social_total: "Personal social contributions"
+      management_total: "Total sundry management costs"
       total_expenses: "Total expenses"
       excess: "Surplus"
       short_term_gains: "Short-term capital gains"
@@ -110,6 +114,7 @@ en:
       profession_missing: "Profession not filled in"
       mapping_missing: "“%{item}” has no line in the %{year} table"
       box_missing: "“%{item}” has no box in the %{year} table: it would not be filed"
+      box_manual: "“%{item}” (%{year}) has no filed box: enter it by hand in table %{line} of the 2035"
       heading_negative: "Heading “%{heading}” is negative"
       box_duplicate: "Items %{items} are reported in the same box %{box} of form %{form}: only one would be filed"
       vehicle_depreciation_ceiling: "Vehicle %{number}: its cost exceeds %{ceiling} €, the lowest depreciation ceiling for passenger cars (9,900 to 30,000 € depending on CO2 emissions). Add back the excess with an adjustment"

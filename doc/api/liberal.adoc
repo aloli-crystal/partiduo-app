@@ -115,6 +115,14 @@ pour l'un des millésimes où la ligne serait en vigueur
 d'un millésime au plus égal à une année close (`form_line.year.closed`,
 D-LIB-010 : la correction passe par une ligne au millésime suivant).
 
+Cases : codes des zones EDI transmis à TELEDEC (`<case>_<formulaire>`),
+vérifiés aux formulaires officiels et aux spécifications de TELEDEC le
+29 septembre 2026 (`doc/sources-officielles.adoc`, D-VAL-006). Les
+sous-totaux de la 2035-A (`SUBTOTALS` : BH, BJ, BK, BM) sont des postes
+calculés ; les provisions sont comprises dans les divers à déduire (CL) ; les
+tableaux I et II de la 2035, sans code de zone, sont signalés à reporter à la
+main (contrôle `box_manual`, avertissement).
+
 == 2035 préparée
 
 [cols="2,3",options="header"]
