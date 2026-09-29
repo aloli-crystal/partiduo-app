@@ -389,6 +389,10 @@ de `pdf-a` hors du contrat (ADR-005 D3).
 `Accounting::ReportOutput`) puis le lien PDF au pied de `ui/_table.html`
 (`Table#pdf`, déjà prévu).
 
+*Levé le 29 septembre 2026* : `Partiduo::Api::Core.table_pdf` sur le rendu
+déplacé au socle (`Core::TableOutput`), lien « Export PDF » au pied des
+listes et dans l'en-tête des éditions sans PDF du cœur (D-R5-008).
+
 == B-CRIT-002 — Écrans restants : fournisseurs d'identité, connexion fédérée, pièces jointes (critique de complétude)
 
 *Constat.* Le contrat expose `save_identity_provider`,

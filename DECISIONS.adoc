@@ -10708,6 +10708,31 @@ suffit à reporter chaque ligne à la main.
 
 *Choix.* Pas d'export EDI-TVA : BLOCAGES B-R5-001.
 
+=== D-R5-008 — Export PDF depuis chaque liste : service neutre du socle (core, interface)
+
+*Contexte.* ADR-005 D5 demande « export CSV et PDF depuis chaque liste » ;
+seules les éditions de la Comptabilité produisaient un PDF, et
+l'interface ne peut pas dépendre de `pdf-a` (ADR-005 D3) (B-CRIT-001).
+
+*Choix.* Le rendu tableau → CSV / PDF/A-2b passe de la Comptabilité au
+socle (`Partiduo::Core::TableOutput`) ; `Accounting::ReportOutput` en
+garde les noms et y délègue, sans changement de sortie (pied numéroté sous
+la clé `core.exports.page`). Contrat `Partiduo::Api::Core.table_pdf` :
+cellules *texte* déjà mises en forme par l'interface (langue, pays,
+étiquettes), aucune donnée lue, bornes de taille contrôlées, nom de
+fichier assaini. Interface : `format=pdf` servi par le même chemin que
+`format=csv` (`export_response`) — toutes les lignes filtrées et triées,
+pas la seule page ; lien « Export PDF » au pied de chaque liste
+(`Table#pdf`, posé par `prepare`) ; éditions sans PDF du cœur (analytique,
+stock, prévisions, extrait de compte, suivi) : PDF de leurs tableaux,
+section après section, liens dans l'en-tête ; historique analytique et
+mouvements de stock relus en entier (limite du contrat, 10 000) pour le
+PDF.
+
+*Alternative écartée.* Un PDF par module métier (comme les éditions) :
+autant d'exports à écrire et à maintenir que de listes, pour un rendu
+identique ; un rendu PDF dans l'interface : contraire à ADR-005 D3.
+
 == Valeurs officielles vérifiées (29 septembre 2026)
 
 Vérification aux sources officielles des valeurs fiscales et sociales des

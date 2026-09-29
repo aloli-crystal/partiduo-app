@@ -78,7 +78,18 @@ en:
         other: "%{count} minutes"
     currencies:
       eur: "Euro"
+    exports:
+      page: "Page %{page} of %{count}"
     errors:
+      table:
+        title:
+          blank: "The exported table needs a title."
+        columns:
+          count: "The exported table needs between 1 and %{max} columns."
+          column: "Unrecognised column in the exported table."
+        rows:
+          count: "The exported table cannot exceed %{max} rows."
+          row: "Unrecognised row in the exported table."
       settings:
         company_name:
           blank: "The company name is required."

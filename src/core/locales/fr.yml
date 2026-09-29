@@ -78,7 +78,18 @@ fr:
         other: "%{count} minutes"
     currencies:
       eur: "Euro"
+    exports:
+      page: "Page %{page} sur %{count}"
     errors:
+      table:
+        title:
+          blank: "Le tableau exporté doit avoir un titre."
+        columns:
+          count: "Le tableau exporté doit avoir entre 1 et %{max} colonnes."
+          column: "Colonne du tableau exporté non reconnue."
+        rows:
+          count: "Le tableau exporté ne peut dépasser %{max} lignes."
+          row: "Ligne du tableau exporté non reconnue."
       settings:
         company_name:
           blank: "La raison sociale est obligatoire."

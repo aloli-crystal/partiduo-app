@@ -78,7 +78,18 @@ nl:
         other: "%{count} minuten"
     currencies:
       eur: "Euro"
+    exports:
+      page: "Pagina %{page} van %{count}"
     errors:
+      table:
+        title:
+          blank: "De geëxporteerde tabel heeft een titel nodig."
+        columns:
+          count: "De geëxporteerde tabel heeft tussen 1 en %{max} kolommen nodig."
+          column: "Onbekende kolom in de geëxporteerde tabel."
+        rows:
+          count: "De geëxporteerde tabel mag niet meer dan %{max} regels tellen."
+          row: "Onbekende regel in de geëxporteerde tabel."
       settings:
         company_name:
           blank: "De firmanaam is verplicht."

@@ -90,6 +90,26 @@ niveaux : `core.settings.tax_regimes.*`, `locales.*`, `auth_methods.*`,
 En base : ligne unique (index `core_settings_single_row` sur `(true)`),
 régime, niveau et capital contraints par `CHECK`.
 
+== Tableau en PDF (`table_pdf`)
+
+`Partiduo::Api::Core.table_pdf(actor, TableInput) : Result(FileView)` rend en
+PDF/A-2b un tableau déjà mis en forme par l'appelant (listes de l'interface,
+ADR-005 D5, B-CRIT-001) : aucune donnée n'est lue, tout utilisateur
+authentifié au niveau exigé peut l'appeler.
+
+* `TableInput` : `name` (nom du fichier, assaini), `title`, `columns`
+  (`TableColumnInput` : `title`, `kind` `text`/`amount`/`date`/`number`,
+  `weight` 0,2 à 10), `rows` (`TableRowInput` : `cells` texte, `style`
+  `line`/`heading`/`subtotal`/`total`, `indent` 0 à 10), `subtitle`,
+  `landscape` (`nil` : paysage au-delà de six colonnes). 30 colonnes, 20 000
+  lignes et 500 caractères par cellule au plus.
+* Refus : `core.errors.table.title.blank`, `.columns.count`,
+  `.columns.column`, `.rows.count`, `.rows.row`.
+* Rendu commun avec les éditions de la Comptabilité
+  (`Partiduo::Core::TableOutput`) : en-tête de la société, titre,
+  sous-titres, pied numéroté (`core.exports.page`), polices DejaVu
+  embarquées (D-R5-008).
+
 == Jeu de données initial
 
 Chaque pièce (socle, module, extension) déclare ses chargeurs ; seuls ceux des
