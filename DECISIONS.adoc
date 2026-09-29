@@ -11130,3 +11130,133 @@ légale revérifiée par le serveur (D-CRA-007).
 après, mode effectif), `backup_key.deposit` (empreinte, empreinte
 précédente, taille), `backup.restore` et `backup.test_restore` (mode de la
 sauvegarde, clé fournie ou non) ; jamais une clé de données.
+
+== Validation à deux au choix (29 septembre 2026)
+
+Décision de l'utilisateur : la double validation des opérations sensibles
+(ADR-008 D3 et D5 : recours d'accès, suppression définitive) devient un
+*réglage*. Dans la majorité des cas il n'y a pas de cabinet, ou une seule
+personne gère tous ses dossiers ; partiduo-admin crée soit des gestionnaires
+de dossiers indépendants, soit des cabinets de plusieurs collaborateurs.
+Code dans `../partiduo-admin` (migration `0004_dual_approval`, service
+`ApprovalMode`, specs `spec/admin/dual_approval_spec.cr` et
+`spec/agent/dual_approval_spec.cr`) ; procédure dans son README
+(« Validation à deux au choix »).
+
+=== D-VAL2-001 — Réglage « validation à deux » par structure
+
+*Contexte.* Le code n'appliquait la double validation qu'à deux tâches,
+`instance.admin_invite` et `instance.delete` (`Approvals`,
+`Tasks::DOUBLE_VALIDATION`) ; aucune autre action (suspension, archivage,
+montée de version, restauration) n'en demandait.
+
+*Choix.* `admin_firm.dual_approval` (défaut faux) règle ces deux
+opérations pour tous les dossiers de la structure : `single` (une
+personne) ou `dual` (deux personnes). Réglé par l'admin de la structure ;
+le super-admin règle le parc sans cabinet (D-VAL2-002) et consulte les
+autres sans les changer. Défaut : une personne pour toute nouvelle
+structure — gestionnaire indépendant, cabinet d'une personne ; pour un
+cabinet d'au moins deux personnes habilitées, la validation à deux est
+*proposée* (bandeau), jamais activée d'office. Reprise : un cabinet qui
+comptait déjà deux admins actifs reste à deux personnes (comportement
+antérieur), les autres passent à une personne. Journal d'audit
+`dual_approval.change` (avant, après, équipe, demandes en attente).
+
+*Alternative écartée.* Un réglage par dossier : la question est celle de
+l'équipe, pas du dossier.
+
+=== D-VAL2-002 — Structures : cabinet, gestionnaire indépendant, parc sans cabinet
+
+*Choix.* `admin_firm.kind` : `cabinet`, `independent` (une seule personne
+active, admin de sa structure, affichée « Gestionnaire indépendant » ;
+inviter une seconde personne est refusé : une équipe, c'est un cabinet) ou
+`fleet` (un seul, index unique partiel) : les dossiers « sans cabinet »
+gérés directement par le super-admin, qui y garde la main avec le même
+réglage. Les écrans disent « structure » là où ils disaient « cabinet ».
+
+*Alternative écartée.* Rendre `admin_dossier.firm_id` facultatif : la
+portée des droits, des donneurs d'ordre et du journal d'audit repose sur
+lui ; le parc était déjà « lui-même un cabinet ».
+
+=== D-VAL2-003 — Deux personnes habilitées au moins, désactivation d'office
+
+*Choix.* Personnes habilitées : les admins actifs de la structure (ceux qui
+peuvent valider) ; pour le parc sans cabinet, les super-admins actifs en
+plus. Un gestionnaire de dossiers ne compte pas. Activer la validation à
+deux sous deux personnes est refusé (bouton désactivé et refus du serveur).
+Si l'équipe retombe à une personne, le réglage repasse à « une personne »
+par une mise à jour conditionnelle (une seule trace) : à la désactivation
+d'un compte et à chaque planification (`schedule`), avec
+`dual_approval.auto_off` (acteur `system`) au journal d'audit.
+
+=== D-VAL2-004 — Protection de repli à une personne
+
+*Choix.* Le demandeur confirme seul sa demande, sur la page « Confirmer
+seul », si la structure est à une personne *et* s'il est lui-même habilité
+à valider (admin de la structure ou super-admin ; la demande d'un
+gestionnaire de dossiers attend un admin). Il faut :
+
+* une *authentification forte récente* : `admin_session.strong_auth_at`,
+  posée à la connexion au niveau exigé du rôle, à l'élévation par passkey
+  (mécanisme existant, `ElevateHandler`) et par une ré-authentification
+  TOTP (`/reauth/totp`, limitation des tentatives de la connexion, codes de
+  récupération refusés), datant de moins de cinq minutes
+  (`Config::REAUTH_WINDOW`) et au niveau exigé (passkey pour le
+  super-admin) ;
+* une *confirmation explicite* : le sous-domaine du dossier retapé pour une
+  suppression définitive, une case cochée pour un recours d'accès ;
+* les *mêmes contrôles* que la validation à deux : état du dossier et durée
+  légale recontrôlés à la décision, revérifiés par l'exécutant
+  (D-CRA-007) ; décision atomique (D-AFN-010) ; tâche jamais rejouée.
+
+Journal d'audit : `approval.request` (mode), `approval.confirm_alone`,
+`auth.reauth`. *Délai de rétractation* : aucun n'était prévu ; la tâche
+reste annulable tant que l'exécutant ne l'a pas prise, et la suppression
+définitive n'intervient qu'après dix ans d'archive.
+
+*Alternative écartée.* Un délai d'attente imposé : il n'existait pas et
+n'ajoute rien à une décision déjà confirmée après ré-authentification.
+
+=== D-VAL2-005 — Mode transmis à l'exécutant (API 1.2.0)
+
+*Choix.* Paramètre `approval_mode` (`single` ou `dual`) des tâches
+`instance.delete` et `instance.admin_invite`, affiché dans la tâche.
+L'exécutant exige un seul nom en mode `single`, deux noms distincts en mode
+`dual` (mode absent : `dual`, administration antérieure), refuse tout autre
+mode avant tout geste et écrit « validation à une personne » ou « à deux
+personnes » au journal de la tâche. Recours d'accès à une personne :
+`manage instance admin-invite --approvers <nom>,validation-une-personne`
+(`Protocol::SINGLE_APPROVER_MARK`), le contrat 1.0.0 exigeant deux noms ;
+le journal du dossier dit ainsi qu'il n'y a pas eu de seconde personne
+(B-VAL2-001).
+
+=== D-VAL2-006 — Changer le réglage avec des demandes en attente
+
+*Choix.* Le mode d'une demande est lu à la décision, non figé à la
+demande (`admin_approval.mode` : celui de la demande, puis celui de la
+décision). Passer à deux personnes : une demande en attente le reste et
+attend une autre personne (le demandeur ne peut plus la confirmer seul).
+Revenir à une personne (réglage ou équipe réduite) : son demandeur peut la
+confirmer seul après ré-authentification. La validation par une autre
+personne habilitée reste possible dans les deux modes.
+
+=== D-VAL2-007 — Écrans
+
+*Choix.* « Validation à deux » (réglage, personnes habilitées, protections
+de chaque mode, demandes en attente) ; « Confirmer seul » ; colonne
+« Validation » de la liste des opérations sensibles et bouton
+« Confirmer » ; mode dans la fiche du dossier et dans la tâche ; nature et
+mode dans la liste des structures. fr, en, nl ; conventions CSS de
+partiduo-ui-bulma (`pd-choice`, pastilles `pd-mode`), thème sombre,
+375 px sans défilement horizontal ; vérifiés dans le navigateur intégré.
+
+=== D-VAL2-008 — Specs
+
+*Choix.* `spec/admin/dual_approval_spec.cr` (défauts, activation refusée
+sous deux, désactivation d'office à la désactivation d'un compte et à la
+planification, droits, parc sans cabinet, gestionnaire indépendant,
+suppression définitive et recours d'accès dans les deux modes, bascules,
+équipe réduite, ré-authentification, écrans dans les trois langues) et
+`spec/agent/dual_approval_spec.cr` (concordance du mode et des personnes,
+marque de l'instance, durée légale inchangée). Base
+`partiduo_admin_test_val2` ; 195 exemples verts.

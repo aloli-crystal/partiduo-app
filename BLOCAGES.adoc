@@ -1136,6 +1136,27 @@ faire vérifier par l'exécutant avec les clés publiques des
 utilisateurs d'administration, publiées au serveur hors de l'API des
 tâches.
 
+*Mise à jour (29 septembre 2026, D-VAL2-001 à D-VAL2-008).* La validation
+à deux est désormais un réglage de chaque structure ; par défaut, une
+personne confirme seule après ré-authentification forte. La signature des
+validations ne concerne que le mode à deux personnes : *reportée*. En mode
+une personne, l'exécutant reçoit `approval_mode` et exige un seul nom, sans
+pouvoir le vérifier davantage ; la suppression définitive reste revérifiée
+par le serveur (D-CRA-007).
+
+== B-VAL2-001 — Contrat `manage instance admin-invite` : deux noms exigés
+
+*Constat.* Le contrat 1.0.0 (`doc/api/instance-cli.adoc`, D-CLI-005)
+exige `--approvers` avec deux personnes distinctes. Un recours d'accès
+confirmé par une seule personne (D-VAL2-004) passe
+`--approvers <nom>,validation-une-personne` (D-VAL2-005) : le journal du
+dossier le dit, mais la marque occupe la place d'une personne.
+
+*Levée proposée.* Contrat 1.1.0 : option `--approval-mode single|dual`
+(défaut `dual`), un seul nom accepté en mode `single` et inscrit comme tel
+dans l'audit de l'instance ; l'exécutant l'utilise quand la version du
+contrat le permet.
+
 == B-CRA-003 — Remise des invitations par le serveur et cloisonnement non essayés en réel
 
 *Constat.* `--mail-command` est essayé avec un script à la place de
