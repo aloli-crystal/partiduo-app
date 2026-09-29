@@ -10993,3 +10993,140 @@ ajoutés ; s'il est figé mais pas 2025, les lignes corrigées sont ajoutées au
 millésime 2025 (les 2035 déposées gardent leurs cases) ; sinon rien. Une
 ligne changée par l'administrateur n'est jamais touchée. Retour sans effet :
 les anciennes cases étaient fausses.
+
+== Chiffrement des sauvegardes (29 septembre 2026)
+
+Décision de l'utilisateur : le chiffrement des sauvegardes est un *choix*
+réglé dans partiduo-admin. Levée de B-CRA-001 pour les sauvegardes ; détail
+et procédures dans le README de partiduo-admin (« Sauvegardes et
+chiffrement »).
+
+=== D-CHF-001 — Trois modes, réglés par cabinet et surchargeables par dossier
+
+*Choix.* `admin_firm.backup_encryption` (`none`, `server`, `cabinet`) est la
+valeur par défaut des dossiers du cabinet ; `admin_dossier.backup_encryption`
+la surcharge (vide : celle du cabinet). Toute tâche qui prend une sauvegarde
+(`backup.run`, `instance.archive`, `instance.upgrade`, `backup.restore` en
+remplacement) porte le réglage effectif dans `params.encryption`. Un
+changement vaut pour les sauvegardes suivantes : chaque `admin_backup` garde
+son mode, l'empreinte de la clé et l'engagement sur sa clé de données,
+affichés dans la liste. Défaut « clé du serveur », y compris pour les
+cabinets existants (migration `0003`) : aucune sauvegarde n'est plus prise
+en clair sans choix explicite.
+
+=== D-CHF-002 — Clé du cabinet : RSA-OAEP de 3072 bits, produite chez le cabinet
+
+*Choix.* RSA-OAEP (SHA-256, MGF1-SHA-256), 3072 bits au moins, plutôt que
+X25519 : WebCrypto sait produire, exporter et importer une paire RSA-OAEP
+dans tous les navigateurs courants (X25519 depuis peu) et `openssl pkeyutl`
+déchiffre la clé de données sans script. La paire est produite *dans le
+navigateur* de l'admin du cabinet (clé privée chiffrée par sa phrase de
+passe en PKCS#8 PBES2 — PBKDF2-HMAC-SHA256, 600 000 itérations, AES-256-CBC
+—, lisible par `openssl pkey`, téléchargée, jamais envoyée) ou par
+`openssl genpkey`. Seule la clé publique est déposée ; son empreinte est le
+SHA-256 du DER de la clé publique, identique à celle d'`openssl`.
+
+=== D-CHF-003 — Clé du serveur dans l'état de l'exécutant
+
+*Choix.* 32 octets aléatoires, en hexadécimal, dans
+`/var/lib/partiduo-agent/backup-server.key` (0600, `--server-key`), créés au
+premier usage (création exclusive) ou par `partiduo-agent server-key`, qui
+affiche l'empreinte (HMAC-SHA256 de la clé, rien n'en fuit). Jamais sous le
+répertoire des sauvegardes ni dans l'administration : une copie hors site
+des sauvegardes est illisible sans elle ; le serveur restaure seul. Pas de
+rotation dans cette version : une clé changée rend illisibles les
+sauvegardes qu'elle chiffrait (l'exécutant le dit, empreinte à l'appui).
+
+=== D-CHF-004 — Enveloppe hybride, format 1, en flux
+
+*Choix.* Une clé de données aléatoire par sauvegarde, enveloppée par la clé
+du cabinet (RSA-OAEP) ou du serveur (AES-256-GCM) ; par fichier, une clé
+dérivée par HKDF-SHA256 (sel de l'en-tête) ; contenu en segments de 64 Kio
+chiffrés par AES-256-GCM, nonce = numéro de segment et drapeau « dernier »,
+en-tête entier en données associées, engagement HMAC sur la clé de données
+dans l'en-tête. OpenSSL lié par la bibliothèque standard et le shard `jose`
+déjà présent (aucune dépendance nouvelle, pas d'`age`). `pg_dump`, `tar` et
+`pg_restore` écrivent et lisent par un tube (geste `-` des enveloppes de
+sudo) : le clair ne touche jamais le disque, un fichier partiel n'est
+jamais laissé sous son nom définitif.
+
+=== D-CHF-005 — Restaurer avec la clé du cabinet : la clé privée reste dans le navigateur
+
+*Choix.* La page « Clé du cabinet requise » lit la clé privée (PEM chiffré
+ou non) dans le navigateur, vérifie son empreinte, déchiffre la clé de
+données de la sauvegarde choisie et n'envoie qu'elle ; les champs de la clé
+privée et de la phrase de passe n'ont pas de nom. L'administration contrôle
+l'engagement (mauvaise clé refusée sans tâche), garde la clé de données
+dans `admin_task.data_keys` jusqu'à la réclamation, où elle est remise une
+seule fois (`secrets.data_keys`, jamais dans `params`, le journal d'audit ou
+le résultat) puis effacée ; effacée aussi à l'annulation et à la fin.
+L'exécutant la garde en mémoire. Une tâche qui l'a reçue n'est pas
+rejouable : une restauration interrompue se redemande avec la clé.
+
+*Alternative écartée.* Envoyer la clé privée ou la phrase de passe à
+l'administration pour qu'elle déchiffre : la clé privée passerait par le
+serveur.
+
+=== D-CHF-006 — Clés de données des sauvegardes prises : le temps de la tâche
+
+*Choix.* L'exécutant tire la clé de données, la retient dans le journal de
+reprise (`secret.*`, 0600) pour qu'une reprise chiffre la suite avec la
+même clé et qu'un retour arrière relise la sauvegarde préalable, puis
+l'efface à la fin de la tâche (journal supprimé si elle réussit, clés
+oubliées si elle échoue ou si le compte rendu ne passe pas). Une reprise
+qui ne peut plus la retrouver (clé du cabinet) reprend la sauvegarde depuis
+la base.
+
+=== D-CHF-007 — Restauration test selon le mode
+
+*Choix.* Aucun et clé du serveur : restauration test complète, comme avant.
+Clé du cabinet sans sa clé : empreintes SHA-256 et intégrité de l'enveloppe
+(en-tête, clé attendue, engagement, découpage en segments) ; la sauvegarde
+reste « faite », la liste l'indique « enveloppe seule » et rappelle que le
+contenu n'est vérifiable qu'avec la clé du cabinet. Avec la clé de données
+fournie (« Tester avec la clé ») : complète. L'archive de fin de vie est
+relue en entier à sa prise, la tâche détenant alors sa clé de données.
+
+=== D-CHF-008 — Qui règle quoi
+
+*Choix.* Le réglage (cabinet, dossier) appartient au super-admin et à
+l'admin du cabinet ; déposer ou remplacer la clé du cabinet, et quitter le
+mode « clé du cabinet » (cabinet ou dossier), à l'admin du cabinet seul :
+l'exploitant du parc ne rend pas lisibles les sauvegardes suivantes d'un
+cabinet qui l'a refusé. Limite : une administration compromise peut encore
+le faire pour les sauvegardes *suivantes* (B-CRA-001).
+
+=== D-CHF-009 — Restauration hors de Partiduo
+
+*Choix.* `partiduo-agent decrypt` (clé privée et phrase de passe, clé du
+serveur ou clé de données) et `partiduo-agent inspect`, sans administration
+ni réseau ; un script Python indépendant (`scripts/dechiffrer-sauvegarde.py`,
+paquet `cryptography`), qui sert aussi de seconde implémentation du format
+dans les specs ; `openssl pkeyutl` pour la clé de données et `openssl kdf`
+pour la clé de fichier. `openssl enc` refusant AES-GCM, la ligne de commande
+`openssl` seule ne déchiffre pas le contenu : c'est dit dans le README.
+
+=== D-CHF-010 — API de l'exécutant 1.1.0
+
+*Choix.* Ajouts seulement, d'où la mineure : `encryption`,
+`backup_encryption`, `media_sha256`, `key_provided` dans les paramètres,
+`secrets.data_keys` dans la tâche réclamée, `encryption` (mode, empreinte,
+engagement, clé enveloppée) et `media_sha256` dans le résultat. Un
+exécutant qui ne reçoit pas `encryption` sauvegarde en clair.
+
+=== D-CHF-011 — Empreintes des fichiers conservés, authentification avant remplacement
+
+*Choix.* Les empreintes SHA-256 portent sur les fichiers tels que conservés
+(chiffrés s'ils le sont), celle de l'archive des pièces jointes s'ajoute à
+celle de la base ; toutes deux sont vérifiées avant une restauration test
+ou une restauration. Une restauration d'une sauvegarde chiffrée authentifie
+d'abord ses deux fichiers en entier : rien n'est remplacé par un fichier
+altéré ou avec une mauvaise clé. Une archive chiffrée compte dans la durée
+légale revérifiée par le serveur (D-CRA-007).
+
+=== D-CHF-012 — Journal d'audit
+
+*Choix.* `backup_encryption.firm` et `backup_encryption.dossier` (avant,
+après, mode effectif), `backup_key.deposit` (empreinte, empreinte
+précédente, taille), `backup.restore` et `backup.test_restore` (mode de la
+sauvegarde, clé fournie ou non) ; jamais une clé de données.

@@ -1099,6 +1099,26 @@ clé privée n'est pas sur le serveur (`age`), la restauration test se
 faisant alors hors du serveur ou avec une clé de restauration dédiée ; à
 trancher (gestion des clés) avant la mise en production.
 
+*Levé pour les sauvegardes* (29 septembre 2026, partiduo-admin, D-CHF-001 à
+D-CHF-012). Le chiffrement est un réglage du cabinet, surchargeable par
+dossier : aucun, clé du serveur (défaut : protège les copies hors site) ou
+clé du cabinet (RSA-OAEP 3072 bits, clé privée produite dans le navigateur
+de l'admin du cabinet ou par `openssl`, jamais sur le serveur ni dans
+l'administration). En mode « clé du cabinet », ni le serveur ni
+l'exécutant ne peuvent lire une sauvegarde prise : le clair ne passe que
+par un tube pendant la prise, la clé de données ne reste pas sur le disque
+après la tâche, la restauration test se limite à l'empreinte et à
+l'enveloppe, et restaurer exige la clé de données que le navigateur de
+l'admin du cabinet déchiffre et remet une seule fois.
+
+*Reste, par construction.* Les bases *en service* et les pièces jointes
+vivantes sont sur le serveur, qui les fait tourner : une compromission du
+serveur ou du compte des instances les donne toujours, et, pendant une
+restauration, le serveur voit ce qu'il restaure. Une administration
+compromise peut changer le mode des sauvegardes *suivantes* (pas des
+précédentes) ; le passage hors du mode « clé du cabinet » est réservé à
+l'admin du cabinet, dans l'application seulement (D-CHF-008).
+
 == B-CRA-002 — Double validation déclarative pour l'exécutant
 
 *Constat.* `approval_ref` et `approvers` d'une tâche sont des chaînes :
