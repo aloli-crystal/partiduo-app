@@ -5,7 +5,7 @@ nl:
     permissions:
       register:
         read: "Registers, URSSAF-hulp en drempels raadplegen"
-        write: "Ontvangsten en aankopen boeken en tegenboeken, aangiften noteren"
+        write: "Ontvangsten en aankopen boeken, wijzigen, verwijderen en tegenboeken, aangiften noteren"
       settings:
         write: "Micro-onderneming instellen (aard, tarieven, drempels, overstap)"
     menu:
@@ -106,10 +106,17 @@ nl:
         date:
           future: "Toekomstige datum: enkel een uitgevoerde verrichting boeken"
           closed_period: "De periode van deze datum is afgesloten: corrigeren met een tegenboeking in een open periode"
+          declared_period: "De URSSAF-periode van deze datum is al aangegeven: corrigeren met een tegenboeking in een niet-aangegeven periode"
         reversal:
           is_reversal: "Een tegenboeking wordt niet tegengeboekt"
           already: "Deze lijn is al tegengeboekt"
           before_line: "De tegenboeking kan de lijn niet voorafgaan"
+        change:
+          from_invoicing: "Lijn uit de facturatie: corrigeer ze in de facturatie, of boek ze tegen"
+          is_reversal: "Een tegenboeking wordt niet gewijzigd: verwijder ze en boek opnieuw tegen"
+          reversed: "Tegengeboekte lijn: verwijder eerst de tegenboeking"
+          closed_period: "Afgesloten periode: de lijn is definitief, boek ze tegen in een open periode"
+          declared_period: "Periode al aangegeven bij de URSSAF: de lijn is definitief, boek ze tegen in een niet-aangegeven periode"
         too_long: "Hoogstens %{max} tekens"
       parameter:
         code:

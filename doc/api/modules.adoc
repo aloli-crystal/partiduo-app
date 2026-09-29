@@ -283,7 +283,17 @@ copie PDF (ADR-004 D9 révisé, DECISIONS D-CPY-001)
 `source`, `reversal_of_id`
 |`micro.purchase.recorded` |`purchase_id` |Micro-entreprise, achat inscrit ou contre-passé ; mêmes
 clés, sans `vat_amount` ni `source`
+|`micro.receipt.updated`, `micro.purchase.updated` |`receipt_id`, `purchase_id` |Micro-entreprise,
+ligne d'une période ouverte modifiée ; mêmes clés qu'à l'inscription (DECISIONS D-MIC2-003)
+|`micro.receipt.deleted`, `micro.purchase.deleted` |`receipt_id`, `purchase_id` |Micro-entreprise,
+ligne d'une période ouverte supprimée ; clés `number`, `date`, `origin` (DECISIONS D-MIC2-003)
 |===
+
+Un abonné peut refuser l'opération publiée en levant
+`Partiduo::Events::Refused` (erreurs par champ) : l'éditeur qui l'attend
+rend un échec avec ces erreurs et tout est annulé (DECISIONS D-MIC2-003 :
+la Comptabilité refuse une modification d'une ligne micro dont elle ne
+peut remplacer l'écriture).
 
 Publication, dans la transaction de la commande :
 

@@ -6,7 +6,8 @@ private alias Api = Partiduo::Api::Micro
 private alias M = MicroSpec
 
 # ADR-007 D1 : livre des recettes et registre des achats, natifs,
-# chronologiques, intangibles (contre-passation datée), édités en PDF et CSV.
+# chronologiques, intangibles une fois la période close (contre-passation
+# datée, D-MIC2-001), édités en PDF et CSV.
 describe_module "MICRO", Api do
   it "charge natures et paramètres datés au provisionnement" do
     M.setup
@@ -89,12 +90,14 @@ describe_module "MICRO", Api do
     Api.reverse_receipt(M.actor, Api::ReverseInput.new(line.id, M.date("2026-09-01"))).success?.should be_true
   end
 
-  it "garde l'intangibilité en base (déclencheur, contraintes)" do
+  it "garde l'intangibilité d'une période close en base (déclencheur, contraintes)" do
     M.setup
     line = M.receipt("2026-08-10", "100")
+    # Période ouverte : la base laisse modifier (D-MIC2-001).
+    InvoicingSpec.sql_error("UPDATE micro_receipt SET label = 'x' WHERE id = $1", line.id).should be_nil
+    M.close_period("2026-08-10")
     InvoicingSpec.sql_error("UPDATE micro_receipt SET amount = 1 WHERE id = $1", line.id).to_s.should contain("intangible")
     InvoicingSpec.sql_error("DELETE FROM micro_receipt WHERE id = $1", line.id).to_s.should contain("intangible")
-    M.close_period("2026-08-10")
     nature = M.nature("SERVICE").id
     sql = "INSERT INTO micro_receipt (number, date, nature_id, category, amount, vat_amount, method, party_name, label, " \
           "reference, origin, source, recorded_at) VALUES ($1, '2026-08-11', $2, 'service_bic', 5, 0, 'cash', '', '', '', " \

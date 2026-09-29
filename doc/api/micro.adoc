@@ -14,12 +14,14 @@ CGI (art. 50-0, 102 ter, 293 B).
   `ModuleDisabled` s'il est inactif, `Forbidden` sans la permission.
 * Tables : `micro_settings`, `micro_nature`, `micro_receipt`,
   `micro_purchase`, `micro_counter`, `micro_parameter`, `micro_declaration`,
-  `micro_item_nature`, `micro_invoice` (migration micro 0001) ; côté
+  `micro_item_nature`, `micro_invoice` (migration micro 0001 ; valeurs
+  officielles : 0002 ; lignes modifiables en période ouverte : 0003) ; côté
   Comptabilité, `accounting_micro_account` (migration accounting 0010).
 * Données initiales : `MICRO.parameters` (natures par défaut dans la langue
   de l'instance, paramètres datés de `src/micro/data/parameters.yml`).
 * Instance : `partiduo-provision --modules micro[,invoicing[,accounting]]`.
-* Décisions : `DECISIONS.adoc`, D-MIC-001 à D-MIC-010.
+* Décisions : `DECISIONS.adoc`, D-MIC-001 à D-MIC-018, D-MIC2-001 et
+  suivantes (registres modifiables en période ouverte).
 
 == Permissions
 
@@ -28,7 +30,7 @@ CGI (art. 50-0, 102 ter, 293 B).
 |Permission |Fonctions
 
 |`micro.register.read` |registres (lecture, éditions CSV et PDF, récapitulatif des achats), paramètres, natures, déclarations URSSAF, « À traiter », 2042-C-PRO, seuils
-|`micro.register.write` |saisie et contre-passation (recettes, achats), requêtes de contrôle, déclaration notée
+|`micro.register.write` |saisie, modification et suppression en période ouverte, contre-passation (recettes, achats), requêtes de contrôle, déclaration notée
 |`micro.settings.write` |paramètres, natures, nature des articles, paramètres datés, chargement des valeurs par défaut, republication, bascules
 |===
 
@@ -46,9 +48,11 @@ Comptabilité).
 |`receipts_total(actor, query)`, `purchases_total(actor, query)` |totaux d'une requête par agrégat (`TotalsView` : nombre, montant, TVA), sans charger les lignes
 |`check_receipt(actor, input)` |requête de contrôle de la saisie
 |`record_receipt(actor, ReceiptInput)` |inscrit la recette (`R2026-00001`), publie `micro.receipt.recorded`
-|`reverse_receipt(actor, ReverseInput)` |contre-passation datée (montant opposé), publie l'événement ; origine `manual` même pour une recette issue de la Facturation (remboursement, écriture inverse en Comptabilité, D-MIC-011)
+|`update_receipt(actor, id, ReceiptInput)` |modifie une recette d'une période ouverte (D-MIC2-001) ; mêmes contrôles que la saisie ; publie `micro.receipt.updated` ; renumérotée si elle change d'année
+|`delete_receipt(actor, id)` |supprime une recette d'une période ouverte ; publie `micro.receipt.deleted` ; numéro non repris
+|`reverse_receipt(actor, ReverseInput)` |contre-passation datée (montant opposé) dans une période ouverte, publie l'événement ; seule correction d'une ligne d'une période déclarée ou close ; origine `manual` même pour une recette issue de la Facturation (remboursement, écriture inverse en Comptabilité, D-MIC-011)
 |`export_receipts(actor, query, ExportFormat)` |édition CSV ou PDF/A-2b (`FileView`)
-|`purchases`, `purchase`, `check_purchase`, `record_purchase`, `reverse_purchase`, `export_purchases` |même chose pour le registre des achats (`A2026-00001`), `micro.purchase.recorded`
+|`purchases`, `purchase`, `check_purchase`, `record_purchase`, `update_purchase`, `delete_purchase`, `reverse_purchase`, `export_purchases` |même chose pour le registre des achats (`A2026-00001`), `micro.purchase.recorded`, `.updated`, `.deleted`
 |`purchase_totals(actor, year)`, `receipt_totals(actor, year)` |récapitulatif annuel par nature (`NatureTotalView` : montant, TVA, hors taxe, nombre de lignes)
 |`republish(actor)` |republie les événements de toutes les lignes (Comptabilité activée plus tard)
 |===
@@ -63,11 +67,26 @@ Règles :
   pièce jointe lisible par l'acteur (`core.attachment.read`) ou déposée par
   lui (D-MIC-015) ; client ou fournisseur par fiche ou par nom libre ;
 * numérotation par registre et par année, sous verrou (`micro_counter`) ;
-* *intangibilité* : une ligne ne se modifie ni ne s'efface (déclencheur
-  `micro_register_guard`) ; aucune ligne n'entre dans une période close ; la
-  correction est une contre-passation, au plus tôt à la date de la ligne et
-  jamais à venir, une seule par ligne (index unique) ; `LineView#locked` signale une ligne
-  d'une période close ;
+* *période* d'une ligne : la période de déclaration URSSAF (mois ou
+  trimestre, selon la périodicité) qui contient sa date. Elle est *close*
+  quand elle est déclarée (`mark_declared`, à la main ou après la
+  transmission par l'extension `partiduo-urssaf`) ou quand la période du
+  socle est close (D-MIC2-001) ;
+* *période ouverte* : une ligne saisie (`origin` `manual`) se modifie
+  (`update_*`) et se supprime (`delete_*`), sauf si elle est contre-passée
+  (supprimer d'abord la contre-passation) ; une contre-passation se
+  supprime mais ne se modifie pas ; une recette issue de la Facturation ne
+  se modifie pas (`micro.errors.line.change.*`) ;
+* *période close* : la ligne est intangible (déclencheur
+  `micro_register_guard`, migration 0003) ; aucune ligne n'y entre ni n'y
+  est déplacée ; la correction est une contre-passation datée dans une
+  période ouverte — donc comptée dans la déclaration suivante —, au plus
+  tôt à la date de la ligne et jamais à venir, une seule par ligne (index
+  unique). `LineView#locked` signale une ligne d'une période close,
+  `declared_on` la date de la déclaration ; `editable?`, `deletable?`,
+  `reversible?` disent ce que l'on peut en faire ;
+* un encaissement de la Facturation daté dans une période déjà déclarée est
+  inscrit à la date du jour ;
 * erreurs sous `micro.errors.line.*`.
 
 == Alimentation par la Facturation
@@ -151,3 +170,12 @@ Quand la Comptabilité est active, elle s'abonne à `micro.receipt.recorded` et
 `micro.purchase.recorded` (`Partiduo::Accounting::MicroEntries`) et passe une
 écriture de trésorerie au journal financier du mode de règlement : voir
 link:accounting-entries.adoc[] § Écritures de la micro-entreprise.
+
+Ligne modifiée ou supprimée en période ouverte (`micro.*.updated`,
+`micro.*.deleted`, D-MIC2-003) : la Comptabilité extourne l'écriture en
+vigueur de la ligne et, pour une modification, passe la nouvelle sous la
+même référence (rien ne change si elle serait identique). Si elle ne le
+peut pas alors que la ligne avait une écriture, elle refuse
+(`Partiduo::Events::Refused`) : la commande du module échoue avec ses
+erreurs et rien n'est modifié — registre et comptabilité ne divergent
+jamais.

@@ -342,4 +342,14 @@ Abonnés `micro.receipt.recorded` et `micro.purchase.recorded`
   contre-passation saisie à la main (remboursement) porte l'origine
   `manual` et passe l'écriture inverse (D-MIC-011) ;
 * un échec est consigné et ne bloque pas le registre ; `Partiduo::Api::Micro.republish`
-  republie les lignes.
+  republie les lignes ;
+* ligne modifiée ou supprimée dans une période ouverte (abonnés
+  `micro.receipt.updated`, `micro.receipt.deleted`, `micro.purchase.updated`,
+  `micro.purchase.deleted`, DECISIONS D-MIC2-003) : les écritures en vigueur
+  de la référence sont annulées par extourne (`cancel_entry`, à leur date)
+  et, pour une modification, la nouvelle écriture est passée sous la même
+  référence ; rien ne change si elle serait identique (journal, date,
+  libellé, pièce jointe, comptes, sens, montants). Extourne ou nouvelle
+  écriture impossible alors que la ligne en avait une : l'abonné lève
+  `Partiduo::Events::Refused` et la modification ou la suppression est
+  refusée ; ligne jamais comptabilisée : même règle qu'à l'inscription.

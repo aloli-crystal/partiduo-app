@@ -8,8 +8,13 @@ module Partiduo
     # `micro.purchase.recorded` (ADR-007 D2). Service interne : le contrat
     # `Partiduo::Api::Micro` l'appelle.
     #
-    # Une ligne inscrite ne change plus (déclencheur `micro_register_guard`) ;
-    # une erreur se corrige par une contre-passation datée, de montant opposé.
+    # Période d'une ligne : la période de déclaration URSSAF (mois ou
+    # trimestre) qui contient sa date. Tant qu'elle n'est ni déclarée
+    # (`micro_declaration`) ni close au socle, une ligne saisie se modifie
+    # et se supprime (`micro.*.updated`, `micro.*.deleted`) ; ensuite, elle
+    # est intangible et une erreur se corrige par une contre-passation
+    # datée dans une période ouverte (déclencheur `micro_register_guard`,
+    # D-MIC2-001).
     module Registers
       alias FieldError = Partiduo::Api::FieldError
       alias Api = Partiduo::Api::Micro
@@ -107,18 +112,35 @@ module Partiduo
         [] of FieldError
       end
 
-      # Date dans une période close du socle : refusée ; dans le futur :
-      # refusée pour une saisie directe (on n'inscrit qu'un encaissement ou
-      # un paiement fait).
+      # Date dans une période close du socle ou dans une période URSSAF
+      # déclarée : refusée ; dans le futur : refusée pour une saisie directe
+      # (on n'inscrit qu'un encaissement ou un paiement fait).
       def self.date_errors(date : Time, manual : Bool = true) : Array(FieldError)
         errors = [] of FieldError
         if manual && day(date) > Partiduo::Config.today
           errors << error("date", "line.date.future")
         end
-        if period = Partiduo::Api::Core.period_for(system, day(date))
-          errors << error("date", "line.date.closed_period") if period.closed?
+        if closed?(date)
+          errors << error("date", "line.date.closed_period")
+        elsif declared?(date)
+          errors << error("date", "line.date.declared_period")
         end
         errors
+      end
+
+      # Date dans une période close du socle.
+      def self.closed?(date : Time) : Bool
+        Partiduo::Api::Core.period_for(system, day(date)).try(&.closed?) || false
+      end
+
+      # Déclaration URSSAF notée dont la période contient `date`.
+      def self.declaration_for(date : Time) : Declaration?
+        on = day(date)
+        Declaration.filter(starts_on__lte: on, ends_on__gte: on).first
+      end
+
+      def self.declared?(date : Time) : Bool
+        !declaration_for(date).nil?
       end
 
       def self.receipt_errors(input : Api::ReceiptInput, manual : Bool = true,
@@ -193,6 +215,88 @@ module Partiduo
         ""
       end
 
+      # --- Modification et suppression (période ouverte, D-MIC2-001) ----------------
+
+      # Ligne qui ne se modifie ni ne se supprime : issue de la Facturation
+      # (la corriger là, ou la contre-passer), déjà contre-passée (supprimer
+      # d'abord sa contre-passation), ou d'une période close ou déclarée
+      # (la contre-passer). Une contre-passation se supprime mais ne se
+      # modifie pas (`update` vrai : modification).
+      def self.change_errors(row : Receipt | Purchase, update : Bool) : Array(FieldError)
+        errors = [] of FieldError
+        errors << error("id", "line.change.from_invoicing") if row.is_a?(Receipt) && row.origin != "manual"
+        errors << error("id", "line.change.is_reversal") if update && row.reversal_of_id
+        errors << error("id", "line.change.reversed") if reversed?(row)
+        if closed?(row.date!)
+          errors << error("id", "line.change.closed_period")
+        elsif declared?(row.date!)
+          errors << error("id", "line.change.declared_period")
+        end
+        errors
+      end
+
+      # Modifie une recette d'une période ouverte (contrôles faits par le
+      # contrat) et publie `micro.receipt.updated` : la Comptabilité remplace
+      # son écriture, ou refuse (`Partiduo::Events::Refused`). Changer
+      # d'année renumérote la ligne dans la nouvelle année.
+      def self.update_receipt!(row : Receipt, input : Api::ReceiptInput, actor_user_id : Int64?) : Receipt
+        nature = nature!(input.nature_id)
+        row.number = next_number("receipt", input.date) if day(input.date).year != row.date!.year
+        row.date = day(input.date)
+        row.nature_id = input.nature_id
+        row.category = nature.category
+        row.amount = input.amount
+        row.vat_amount = input.vat_amount
+        row.method = input.method
+        row.card_id = input.card_id
+        row.party_name = party_name(input.card_id, input.party_name)
+        row.label = input.label.strip
+        row.reference = input.reference.strip
+        row.attachment_id = input.attachment_id
+        row.modified_at = Time.utc
+        row.modified_by_id = actor_user_id
+        row.save!
+        publish_receipt(row, nature, actor_user_id, "micro.receipt.updated")
+        row
+      end
+
+      def self.update_purchase!(row : Purchase, input : Api::PurchaseInput, actor_user_id : Int64?) : Purchase
+        nature = nature!(input.nature_id)
+        row.number = next_number("purchase", input.date) if day(input.date).year != row.date!.year
+        row.date = day(input.date)
+        row.nature_id = input.nature_id
+        row.category = nature.category
+        row.amount = input.amount
+        row.vat_amount = input.vat_amount
+        row.method = input.method
+        row.card_id = input.card_id
+        row.party_name = party_name(input.card_id, input.party_name)
+        row.label = input.label.strip
+        row.reference = input.reference.strip
+        row.attachment_id = input.attachment_id
+        row.modified_at = Time.utc
+        row.modified_by_id = actor_user_id
+        row.save!
+        publish_purchase(row, nature, actor_user_id, "micro.purchase.updated")
+        row
+      end
+
+      # Supprime une ligne d'une période ouverte et publie
+      # `micro.receipt.deleted` ou `micro.purchase.deleted` : la Comptabilité
+      # extourne l'écriture passée, ou refuse. Le numéro n'est pas repris.
+      def self.delete!(row : Receipt | Purchase, actor_user_id : Int64?) : Nil
+        receipt = row.is_a?(Receipt)
+        payload = {
+          "number" => row.number.to_s,
+          "date"   => row.date!.to_s("%Y-%m-%d"),
+          "origin" => row.is_a?(Receipt) ? row.origin.to_s : "manual",
+        }
+        payload[receipt ? "receipt_id" : "purchase_id"] = row.pk!.to_s
+        row.delete
+        Partiduo::Events.publish(receipt ? "micro.receipt.deleted" : "micro.purchase.deleted", payload,
+          actor_user_id: actor_user_id)
+      end
+
       # --- Contre-passation -----------------------------------------------------------
 
       # Erreurs d'une contre-passation : ligne existante, ni elle-même une
@@ -244,8 +348,9 @@ module Partiduo
 
       # Charge utile de quoi passer l'écriture sans relire le module
       # (ADR-006 D3, D-MIC-002).
-      def self.publish_receipt(row : Receipt, nature : Nature, actor_user_id : Int64?) : Nil
-        Partiduo::Events.publish("micro.receipt.recorded", common_payload(row, nature).merge({
+      def self.publish_receipt(row : Receipt, nature : Nature, actor_user_id : Int64?,
+                               name : String = "micro.receipt.recorded") : Nil
+        Partiduo::Events.publish(name, common_payload(row, nature).merge({
           "receipt_id" => row.pk!.to_s,
           "vat_amount" => row.vat_amount!.to_s,
           "origin"     => row.origin.to_s,
@@ -253,8 +358,9 @@ module Partiduo
         }), actor_user_id: actor_user_id)
       end
 
-      def self.publish_purchase(row : Purchase, nature : Nature, actor_user_id : Int64?) : Nil
-        Partiduo::Events.publish("micro.purchase.recorded", common_payload(row, nature).merge({
+      def self.publish_purchase(row : Purchase, nature : Nature, actor_user_id : Int64?,
+                                name : String = "micro.purchase.recorded") : Nil
+        Partiduo::Events.publish(name, common_payload(row, nature).merge({
           "purchase_id" => row.pk!.to_s,
           "vat_amount"  => row.vat_amount!.to_s,
           "origin"      => "manual",
@@ -424,12 +530,14 @@ module Partiduo
       private def self.build(rows : Array(T), reversals : Hash(Int64, Int64)) : Array(Api::LineView) forall T
         natures = Nature.all.to_a.index_by(&.pk!.as(Int64))
         closed = closed_periods
-        rows.map { |row| view(row, natures[row.nature_id!.to_i64], reversals[row.pk!.as(Int64)]?, closed) }
+        declared = Declaration.all.map { |item| {item.starts_on!, item.ends_on!, item.declared_on!} }
+        rows.map { |row| view(row, natures[row.nature_id!.to_i64], reversals[row.pk!.as(Int64)]?, closed, declared) }
       end
 
       private def self.view(row : Receipt | Purchase, nature : Nature, reversed_by_id : Int64?,
-                            closed : Array({Time, Time})) : Api::LineView
+                            closed : Array({Time, Time}), declared : Array({Time, Time, Time})) : Api::LineView
         date = row.date!
+        declared_on = declared.find { |(from, to, _)| from <= date <= to }.try(&.[2])
         origin, source = row.is_a?(Receipt) ? {row.origin.to_s, row.source.to_s} : {"manual", ""}
         vat = row.vat_amount!
         Api::LineView.new(
@@ -439,7 +547,8 @@ module Partiduo
           card_id: row.card_id.try(&.to_i64), party_name: row.party_name.to_s, label: row.label.to_s,
           reference: row.reference.to_s, attachment_id: row.attachment_id.try(&.to_i64), origin: origin, source: source,
           reversal_of_id: row.reversal_of_id.try(&.to_i64), reversed_by_id: reversed_by_id,
-          locked: closed.any? { |(from, to)| from <= date <= to }, recorded_at: row.recorded_at || Time.utc)
+          locked: !declared_on.nil? || closed.any? { |(from, to)| from <= date <= to }, recorded_at: row.recorded_at || Time.utc,
+          declared_on: declared_on, modified_at: row.modified_at)
       end
 
       private def self.closed_periods : Array({Time, Time})

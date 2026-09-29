@@ -41,9 +41,11 @@ module Partiduo
     # comprise, mode de règlement, référence de la pièce, pièce jointe.
     # `origin` : `manual` (saisie) ou `invoicing` (facture encaissée) ;
     # `source` : référence de l'événement d'origine (`payment:12`,
-    # `matching:5:invoice:42`). Une ligne ne se modifie ni ne s'efface
-    # (déclencheur) : la correction est une contre-passation
-    # (`reversal_of_id`, montant négatif).
+    # `matching:5:invoice:42`). Une ligne se modifie ou s'efface tant que sa
+    # période de déclaration URSSAF n'est ni déclarée ni close au socle
+    # (déclencheur, D-MIC2-001) ; ensuite, la correction est une
+    # contre-passation (`reversal_of_id`, montant négatif). `modified_at`,
+    # `modified_by_id` : dernière modification.
     class Receipt < Marten::Model
       field :id, :big_int, primary_key: true, auto: true
       field :number, :string, max_size: 20, unique: true
@@ -63,6 +65,8 @@ module Partiduo
       field :reversal_of_id, :big_int, null: true, blank: true
       field :recorded_by_id, :big_int, null: true, blank: true
       field :recorded_at, :date_time
+      field :modified_at, :date_time, null: true, blank: true
+      field :modified_by_id, :big_int, null: true, blank: true
     end
 
     # Ligne du registre des achats (ADR-007 D1), mêmes règles que le livre
@@ -85,6 +89,8 @@ module Partiduo
       field :reversal_of_id, :big_int, null: true, blank: true
       field :recorded_by_id, :big_int, null: true, blank: true
       field :recorded_at, :date_time
+      field :modified_at, :date_time, null: true, blank: true
+      field :modified_by_id, :big_int, null: true, blank: true
     end
 
     # Compteur de numérotation d'un registre par année (`R2026-00001`,

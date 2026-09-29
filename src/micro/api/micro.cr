@@ -236,6 +236,47 @@ module Partiduo
         end
       end
 
+      # Modifie une recette d'une période ouverte — ni déclarée à l'URSSAF,
+      # ni close au socle — saisie directement, ni contre-passée ni
+      # contre-passation (D-MIC2-001) ; mêmes contrôles que la saisie, la
+      # nouvelle date aussi dans une période ouverte. Publie
+      # `micro.receipt.updated` : la Comptabilité remplace son écriture ou
+      # refuse, et rien n'est alors modifié (D-MIC2-003).
+      def self.update_receipt(actor : Actor, id : Int64, input : ReceiptInput) : Result(LineView)
+        Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
+        Transaction.run do
+          row = Partiduo::Micro::Receipt.filter(id: id).lock.first || raise NotFound.new("micro_receipt", id)
+          errors = Registers.change_errors(row, update: true)
+          errors.concat(Registers.receipt_errors(input, actor: actor)) if errors.empty?
+          next Result(LineView).failure(errors) unless errors.empty?
+          refused(Result(LineView)) { Result(LineView).success(Registers.view(Registers.update_receipt!(row, input, actor.user_id))) }
+        end
+      end
+
+      # Supprime une recette d'une période ouverte (mêmes conditions que la
+      # modification ; une contre-passation se supprime) ; publie
+      # `micro.receipt.deleted`.
+      def self.delete_receipt(actor : Actor, id : Int64) : Result(Nil)
+        Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
+        Transaction.run do
+          row = Partiduo::Micro::Receipt.filter(id: id).lock.first || raise NotFound.new("micro_receipt", id)
+          errors = Registers.change_errors(row, update: false)
+          next Result(Nil).failure(errors) unless errors.empty?
+          refused(Result(Nil)) do
+            Registers.delete!(row, actor.user_id)
+            Result(Nil).success(nil)
+          end
+        end
+      end
+
+      # Refus d'un abonné (la Comptabilité ne peut remplacer ou extourner
+      # son écriture) : échec avec ses erreurs, la transaction est annulée.
+      private def self.refused(type : Result(T).class, & : -> Result(T)) : Result(T) forall T
+        yield
+      rescue ex : Partiduo::Events::Refused
+        Result(T).failure(ex.errors)
+      end
+
       # Totaux du livre des recettes sur toute la requête (sans pagination).
       def self.receipts_total(actor : Actor, query : RegisterQuery = RegisterQuery.new) : TotalsView
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
@@ -291,6 +332,34 @@ module Partiduo
         end
       end
 
+      # Modifie un achat d'une période ouverte (voir `update_receipt`) ;
+      # publie `micro.purchase.updated`.
+      def self.update_purchase(actor : Actor, id : Int64, input : PurchaseInput) : Result(LineView)
+        Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
+        Transaction.run do
+          row = Partiduo::Micro::Purchase.filter(id: id).lock.first || raise NotFound.new("micro_purchase", id)
+          errors = Registers.change_errors(row, update: true)
+          errors.concat(Registers.purchase_errors(input, actor)) if errors.empty?
+          next Result(LineView).failure(errors) unless errors.empty?
+          refused(Result(LineView)) { Result(LineView).success(Registers.view(Registers.update_purchase!(row, input, actor.user_id))) }
+        end
+      end
+
+      # Supprime un achat d'une période ouverte ; publie
+      # `micro.purchase.deleted`.
+      def self.delete_purchase(actor : Actor, id : Int64) : Result(Nil)
+        Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
+        Transaction.run do
+          row = Partiduo::Micro::Purchase.filter(id: id).lock.first || raise NotFound.new("micro_purchase", id)
+          errors = Registers.change_errors(row, update: false)
+          next Result(Nil).failure(errors) unless errors.empty?
+          refused(Result(Nil)) do
+            Registers.delete!(row, actor.user_id)
+            Result(Nil).success(nil)
+          end
+        end
+      end
+
       # Totaux du registre des achats sur toute la requête (sans pagination).
       def self.purchases_total(actor : Actor, query : RegisterQuery = RegisterQuery.new) : TotalsView
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
@@ -332,8 +401,9 @@ module Partiduo
         Urssaf.declarations(year, today)
       end
 
-      # Note la déclaration faite sur le site de l'URSSAF pour la période
-      # qui commence le `starts_on`.
+      # Note la déclaration faite sur le site de l'URSSAF (ou transmise par
+      # l'extension URSSAF) pour la période qui commence le `starts_on` : la
+      # période est dès lors close, ses lignes intangibles (D-MIC2-001).
       def self.mark_declared(actor : Actor, input : DeclarationInput) : Result(DeclarationView)
         Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
         Transaction.run do

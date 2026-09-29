@@ -75,6 +75,12 @@ Partiduo::Modules.register do
   # le registre, qui peut republier ses lignes.
   on("micro.receipt.recorded") { |event| Partiduo::Accounting::MicroEntries.on_event(event) }
   on("micro.purchase.recorded") { |event| Partiduo::Accounting::MicroEntries.on_event(event) }
+  # Ligne d'une période ouverte modifiée ou supprimée (D-MIC2-003) :
+  # écriture extournée et remplacée ; refus (`Refused`) plutôt qu'un écart.
+  on("micro.receipt.updated") { |event| Partiduo::Accounting::MicroEntries.on_change(event) }
+  on("micro.receipt.deleted") { |event| Partiduo::Accounting::MicroEntries.on_change(event) }
+  on("micro.purchase.updated") { |event| Partiduo::Accounting::MicroEntries.on_change(event) }
+  on("micro.purchase.deleted") { |event| Partiduo::Accounting::MicroEntries.on_change(event) }
 
   # Écritures du module liberal (ADR-007 D6) : trésorerie et contrepartie
   # selon la nature, la rubrique de la 2035-A ou la catégorie

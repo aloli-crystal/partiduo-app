@@ -48,9 +48,13 @@ private def writes(actor : Partiduo::Api::Actor) : Array(Proc(Nil))
     -> { Api.check_receipt(actor, receipt_input); nil },
     -> { Api.record_receipt(actor, receipt_input); nil },
     -> { Api.reverse_receipt(actor, Api::ReverseInput.new(1_i64, DAY)); nil },
+    -> { Api.update_receipt(actor, 1_i64, receipt_input); nil },
+    -> { Api.delete_receipt(actor, 1_i64); nil },
     -> { Api.check_purchase(actor, purchase_input); nil },
     -> { Api.record_purchase(actor, purchase_input); nil },
     -> { Api.reverse_purchase(actor, Api::ReverseInput.new(1_i64, DAY)); nil },
+    -> { Api.update_purchase(actor, 1_i64, purchase_input); nil },
+    -> { Api.delete_purchase(actor, 1_i64); nil },
     -> { Api.mark_declared(actor, Api::DeclarationInput.new(DAY, DAY)); nil },
   ]
 end

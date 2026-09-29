@@ -5,7 +5,7 @@ fr:
     permissions:
       register:
         read: "Consulter les registres, l'aide URSSAF et les seuils"
-        write: "Saisir et contre-passer recettes et achats, noter les déclarations"
+        write: "Saisir, modifier, supprimer et contre-passer recettes et achats, noter les déclarations"
       settings:
         write: "Paramétrer la micro-entreprise (natures, taux, seuils, bascules)"
     menu:
@@ -106,10 +106,17 @@ fr:
         date:
           future: "Date à venir : n'inscrire qu'une opération faite"
           closed_period: "La période de cette date est close : corriger par une contre-passation dans une période ouverte"
+          declared_period: "La période URSSAF de cette date est déjà déclarée : corriger par une contre-passation dans une période non déclarée"
         reversal:
           is_reversal: "Une contre-passation ne se contre-passe pas"
           already: "Cette ligne est déjà contre-passée"
           before_line: "La contre-passation ne peut précéder la ligne"
+        change:
+          from_invoicing: "Ligne issue de la Facturation : la corriger dans la Facturation, ou la contre-passer"
+          is_reversal: "Une contre-passation ne se modifie pas : la supprimer, puis contre-passer de nouveau"
+          reversed: "Ligne contre-passée : supprimer d'abord sa contre-passation"
+          closed_period: "Période close : la ligne est intangible, la contre-passer dans une période ouverte"
+          declared_period: "Période déjà déclarée à l'URSSAF : la ligne est intangible, la contre-passer dans une période non déclarée"
         too_long: "%{max} caractères au plus"
       parameter:
         code:

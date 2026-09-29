@@ -5,7 +5,7 @@ en:
     permissions:
       register:
         read: "View registers, URSSAF help and thresholds"
-        write: "Record and reverse receipts and purchases, note returns"
+        write: "Record, edit, delete and reverse receipts and purchases, note returns"
       settings:
         write: "Configure the micro-business (natures, rates, thresholds, switches)"
     menu:
@@ -106,10 +106,17 @@ en:
         date:
           future: "Future date: only record a completed operation"
           closed_period: "This date's period is closed: correct with a reversal in an open period"
+          declared_period: "This date's URSSAF period is already declared: correct with a reversal in an undeclared period"
         reversal:
           is_reversal: "A reversal cannot be reversed"
           already: "This line is already reversed"
           before_line: "The reversal cannot precede the line"
+        change:
+          from_invoicing: "Line from Invoicing: correct it in Invoicing, or reverse it"
+          is_reversal: "A reversal cannot be edited: delete it, then reverse again"
+          reversed: "Reversed line: delete its reversal first"
+          closed_period: "Closed period: the line is final, reverse it in an open period"
+          declared_period: "Period already declared to URSSAF: the line is final, reverse it in an undeclared period"
         too_long: "At most %{max} characters"
       parameter:
         code:

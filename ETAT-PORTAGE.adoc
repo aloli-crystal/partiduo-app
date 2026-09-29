@@ -1662,8 +1662,9 @@ D-MIC-001 à D-MIC-010, blocage B-MIC-001, contrat link:doc/api/micro.adoc[]) :
   micro` : aucun écart (`accounting` : seul l'écart antérieur de D-ED-006) ;
   retour arrière puis réapplication de micro 0001 et accounting 0010.
 
-Reste : vérifier les paramètres initiaux aux sources (B-MIC-001) ; faire
-adopter l'amendement D-MIC-003 ; module `liberal` (ADR-007 D6) et extension
+Reste : vérifier les paramètres initiaux aux sources (B-MIC-001) ;
+amendement D-MIC-003 refusé le 29 septembre 2026, remplacé par D-MIC2-001
+(registres modifiables en période ouverte) ; module `liberal` (ADR-007 D6) et extension
 `partiduo-teledec` (D4). L'interface simplifiée (D3) est faite : section
 suivante.
 
@@ -2686,8 +2687,7 @@ chaque point renvoie à sa décision ou à son blocage.
   lecture seule dans l'interface (D-CLI-003).
 . *Micro-entreprise (après le lot G)* : vérifier aux sources les taux,
   seuils et cases initiaux (B-MIC-001) ; essai du mode simplifié sur un
-  téléphone (B-UI-009, micro et libéral) ; faire adopter l'amendement
-  D-MIC-003 ; extension `partiduo-teledec` faite (lot T clos), adaptateur
+  téléphone (B-UI-009, micro et libéral) ; extension `partiduo-teledec` faite (lot T clos), adaptateur
   réel en attente (B-TDC-001) ; noter
   plusieurs déclarations URSSAF passées d'un coup (D-MIC-012).
 . *Professions libérales (après le lot L)* : vérifier au formulaire
@@ -2734,7 +2734,8 @@ chaque point renvoie à sa décision ou à son blocage.
   compte (D-MIG-006), comptes 120 / 129 au plan FR initial (D-CLO-003),
   dépendance optionnelle déclarée `optional_depends_on "LIBERAL"` pour
   TELEDEC (ADR-003, ADR-006 D3 ; D-TDC-002) et `depends_on_any` pour un
-  libéral sans Comptabilité (ADR-007 D4).
+  libéral sans Comptabilité (ADR-007 D4), ADR-003 D7 `micro.*.updated`,
+  `micro.*.deleted` et refus motivé d'un abonné (D-MIC2-003).
 . *Contrat* : `limit` / `offset` pour `general_ledger` et `journals`, comptes
   des rubriques d'un état (D-UI-036) ; lecture des fiches en bloc (D-STK-013) ;
   livraison par ligne (D-STK-010).
@@ -2841,3 +2842,22 @@ DATABASE_URL='postgres:///partiduo_<dossier>?host=/tmp' bin/partiduo-migrate imp
   --fec demo/732829320FEC20241231.txt --report rapport/ [--locale en|nl] [--dry-run]
 crystal tool format src spec config && ameba
 ----
+
+== Registres micro modifiables en période ouverte (29 septembre 2026)
+
+Amendement D-MIC-003 refusé par l'utilisateur ; retour à ADR-007 D1
+(DECISIONS D-MIC2-001 à D-MIC2-006). Fait :
+
+* une ligne du livre des recettes ou du registre des achats se modifie et
+  se supprime tant que sa période de déclaration URSSAF (mois ou
+  trimestre) n'est pas déclarée ; déclarée (transmise par
+  `partiduo-urssaf` ou notée à la main) ou close au socle, elle est
+  intangible et se corrige par contre-passation dans une période ouverte
+  (migration micro 0003, déclencheur et verrou consultatif) ;
+* Comptabilité : écriture extournée et remplacée, ou extournée, par les
+  événements `micro.*.updated` et `micro.*.deleted` ; refus plutôt
+  qu'écart (`Partiduo::Events::Refused`) ;
+* `partiduo-urssaf` : avertissements et anomalies `not_marked`,
+  `turnover_changed` (migration urssaf 0005) ;
+* interface : liste groupée par période, Modifier et Supprimer, cadenas et
+  « Contre-passer », mode simplifié et téléphone compris.

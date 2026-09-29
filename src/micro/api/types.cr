@@ -96,11 +96,14 @@ module Partiduo
         attachment_id : Int64? = nil,
         vat_amount : BigDecimal = BigDecimal.new(0)
 
-      # Contre-passation datée d'une ligne (jamais de modification).
+      # Contre-passation datée d'une ligne, dans une période ouverte : seule
+      # correction d'une ligne dont la période est déclarée ou close.
       record ReverseInput, id : Int64, date : Time, label : String = ""
 
       # Ligne d'un registre. `reversed_by_id` : contre-passation qui l'annule ;
-      # `locked` : sa période est close.
+      # `locked` : sa période est close — déclarée à l'URSSAF (`declared_on`,
+      # date de la déclaration) ou close au socle (D-MIC2-001) ;
+      # `modified_at` : dernière modification.
       record LineView,
         id : Int64,
         register : String,
@@ -123,7 +126,9 @@ module Partiduo
         reversal_of_id : Int64?,
         reversed_by_id : Int64?,
         locked : Bool,
-        recorded_at : Time do
+        recorded_at : Time,
+        declared_on : Time? = nil,
+        modified_at : Time? = nil do
         # Chiffre d'affaires de la ligne : encaissé hors TVA.
         def net_amount : BigDecimal
           amount - vat_amount
@@ -135,6 +140,23 @@ module Partiduo
 
         def method_key : String
           "micro.methods.#{method}"
+        end
+
+        # Se modifie : période ouverte, saisie directe (pas issue de la
+        # Facturation), ni contre-passation ni contre-passée.
+        def editable? : Bool
+          !locked && origin == "manual" && reversal_of_id.nil? && reversed_by_id.nil?
+        end
+
+        # Se supprime : période ouverte, saisie directe, pas contre-passée (une
+        # contre-passation se supprime).
+        def deletable? : Bool
+          !locked && origin == "manual" && reversed_by_id.nil?
+        end
+
+        # Se contre-passe : ni contre-passation ni déjà contre-passée.
+        def reversible? : Bool
+          reversal_of_id.nil? && reversed_by_id.nil?
         end
       end
 

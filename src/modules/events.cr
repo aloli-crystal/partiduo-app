@@ -46,6 +46,15 @@ module Partiduo
       # (ADR-007 D2, D-MIC-002) : la Comptabilité passe l'écriture.
       "micro.receipt.recorded"  => %w[receipt_id],
       "micro.purchase.recorded" => %w[purchase_id],
+      # Ligne d'une période ouverte modifiée (charge utile complète, comme à
+      # l'inscription) ou supprimée (D-MIC2-003, amendement d'ADR-003 D7) :
+      # la Comptabilité extourne l'écriture passée et, pour une
+      # modification, passe la nouvelle ; si elle ne le peut pas, elle
+      # refuse l'opération (`Refused`).
+      "micro.receipt.updated"  => %w[receipt_id],
+      "micro.receipt.deleted"  => %w[receipt_id],
+      "micro.purchase.updated" => %w[purchase_id],
+      "micro.purchase.deleted" => %w[purchase_id],
       # Recette, dépense ou immobilisation inscrite par le module des
       # professions libérales (ADR-007 D6, D-LIB-002) : la Comptabilité passe
       # l'écriture.
@@ -55,6 +64,18 @@ module Partiduo
     }
 
     NAMES = SCHEMA.keys
+
+    # Refus motivé d'un abonné : l'opération publiée ne doit pas avoir lieu
+    # (D-MIC2-003). L'éditeur qui l'attend la rattrape et rend un échec avec
+    # ces erreurs (tout est alors annulé) ; sinon elle se propage comme toute
+    # exception d'abonné et annule l'opération.
+    class Refused < Exception
+      getter errors : Array(Partiduo::Api::FieldError)
+
+      def initialize(@errors : Array(Partiduo::Api::FieldError))
+        super("opération refusée par un abonné : #{@errors.map(&.key).join(", ")}")
+      end
+    end
 
     # Événements rejouables, consignés à chaque publication dans le journal
     # du socle (`modules_event_log`), qu'un abonné soit actif ou non : un

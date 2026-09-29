@@ -24,8 +24,9 @@ module Partiduo
     #   date du jour, comme la Facturation retire tous les règlements venus
     #   d'un lettrage.
     #
-    # Une référence (`payment:<id>`, `matching:<id>:invoice:<id>`) n'est
-    # inscrite qu'une fois. Un échec est consigné et ne bloque jamais
+    # Un encaissement daté dans une période URSSAF déjà déclarée est inscrit
+    # à la date du jour (D-MIC2-001). Une référence (`payment:<id>`,
+    # `matching:<id>:invoice:<id>`) n'est inscrite qu'une fois. Un échec est consigné et ne bloque jamais
     # l'opération d'origine (point de sauvegarde). Service interne.
     module Feeds
       Log = ::Log.for("partiduo.micro")
@@ -128,6 +129,9 @@ module Partiduo
                       actor_user_id : Int64?) : Nil
         return if Receipt.filter(source: source, reversal_of_id__isnull: true).exists?
         invoice = invoice(invoice_id) || raise "facture #{invoice_id} inconnue du module micro"
+        # Encaissement d'une période URSSAF déjà déclarée : inscrit à la date
+        # du jour, reporté sur la déclaration suivante (D-MIC2-001).
+        date = Partiduo::Config.today if Registers.declared?(date)
         amount = amount.round(2, mode: :ties_away)
         return unless amount > 0
         gross = invoice.total_gross!

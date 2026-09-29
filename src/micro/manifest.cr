@@ -13,7 +13,8 @@ Partiduo::Modules.register do
 
   # Consultation et éditions des registres, URSSAF, 2042-C-PRO, seuils.
   permission "micro.register.read"
-  # Saisie, contre-passation, déclaration URSSAF notée.
+  # Saisie, modification et suppression en période ouverte,
+  # contre-passation, déclaration URSSAF notée.
   permission "micro.register.write"
   # Paramètres, natures, taux et seuils datés, bascules.
   permission "micro.settings.write"

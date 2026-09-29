@@ -6,7 +6,7 @@ private alias Api = Partiduo::Api::Micro
 private alias M = MicroSpec
 
 # Lot G (tests) : cas limites des registres de la micro-entreprise (ADR-007
-# D1, D-MIC-003) — numérotation, contre-passation, filtres, paramètres,
+# D1, D-MIC2-001) — numérotation, contre-passation, filtres, paramètres,
 # natures, articles — et contraintes d'intégrité posées en base par la
 # migration micro 0001. Tout passe par `Partiduo::Api::Micro` ; seules les
 # contraintes en base sont éprouvées en SQL direct.
@@ -273,12 +273,13 @@ describe_module "MICRO", Api do
   end
 
   describe "intégrité en base (migration micro 0001)" do
-    it "garde le registre des achats intangible et hors période close" do
+    it "garde le registre des achats intangible une fois la période close, et hors période close" do
       M.setup
       line = M.purchase("2026-08-10", "40")
-      InvoicingSpec.sql_error("UPDATE micro_purchase SET label = 'x' WHERE id = $1", line.id).to_s.should contain("intangible")
-      InvoicingSpec.sql_error("DELETE FROM micro_purchase WHERE id = $1", line.id).to_s.should contain("intangible")
+      InvoicingSpec.sql_error("UPDATE micro_purchase SET label = 'x' WHERE id = $1", line.id).should be_nil
       M.close_period("2026-08-10")
+      InvoicingSpec.sql_error("UPDATE micro_purchase SET label = 'y' WHERE id = $1", line.id).to_s.should contain("intangible")
+      InvoicingSpec.sql_error("DELETE FROM micro_purchase WHERE id = $1", line.id).to_s.should contain("intangible")
       sql = "INSERT INTO micro_purchase (number, date, nature_id, category, amount, method, party_name, label, reference, " \
             "recorded_at) VALUES ('X-1', '2026-08-11', $1, 'goods', 5, 'cash', '', '', '', now())"
       InvoicingSpec.sql_error(sql, M.nature("GOODS").id).to_s.should contain("période close")

@@ -6765,7 +6765,11 @@ Comptabilité (référence `micro:receipt:<id>`).
 événements de l'historique « à comptabiliser » de la Facturation
 (`Billing::EVENTS`), qui les aurait mal interprétés.
 
-=== D-MIC-003 — Registres intangibles dès l'inscription ; correction par contre-passation seulement (G:micro, micro ; amendement proposé à ADR-007 D1)
+=== D-MIC-003 — Registres intangibles dès l'inscription ; correction par contre-passation seulement (G:micro, micro ; amendement refusé le 29 septembre 2026, remplacé par D-MIC2-001)
+
+*Statut.* Amendement refusé le 29 septembre 2026, remplacé par D-MIC2-001 :
+une ligne se modifie et se supprime tant que sa période de déclaration
+URSSAF n'est pas déclarée.
 
 *Contexte.* ADR-007 D1 : registres « intangibles une fois la période close
 (correction par contre-passation datée) ». Autoriser la modification en
@@ -7009,6 +7013,8 @@ la bascule vers la TVA seulement) sous « Plus de détails » (`<details>`
 natif). « Enregistrer et en saisir une autre » ramène au formulaire. Une
 ligne ne se modifie pas (D-MIC-003) : l'écran de la ligne propose
 « Annuler cette ligne », contre-passation datée du jour après confirmation.
+_(Remplacé le 29 septembre 2026 par D-MIC2-001 et D-MIC2-005 : Modifier et
+Supprimer en période ouverte, « Contre-passer » en période déclarée.)_
 Éditions CSV et PDF : celles du contrat (`export_receipts`,
 `export_purchases`), depuis le pied de la liste.
 
@@ -11509,3 +11515,178 @@ main restent possibles. Consigné dans B-TDC-004.
 *Vérification.* `partiduo-teledec` : 206 exemples verts en ordre aléatoire
 (4 en attente : suite du stage, sans réseau), Ameba sans remarque ;
 `partiduo-demo` : spec verte. Base `partiduo_test_tdc2_*`.
+
+== Registres micro modifiables en période ouverte (29 septembre 2026)
+
+Décision de l'utilisateur du 29 septembre 2026 sur l'amendement proposé
+D-MIC-003 (registres intangibles dès l'inscription) : *refusé* —
+« Attention de ne pas être plus royaliste que le roi, c'est un régime
+micro, est-ce raisonnable de tout bloquer ? ». Retour à ADR-007 D1 :
+registres intangibles *une fois la période close*, correction par
+contre-passation datée ; pendant une période ouverte, une ligne se modifie
+et se supprime. Précision de l'utilisateur le même jour : la « période »
+d'un micro-entrepreneur est sa période de déclaration URSSAF.
+
+=== D-MIC2-001 — Période d'une ligne : son mois ou trimestre de déclaration URSSAF ; modifiable jusqu'à la déclaration (micro ; remplace D-MIC-003)
+
+*Contexte.* ADR-007 D1 : « intangibles une fois la période close
+(correction par contre-passation datée) ». D-MIC-003 lisait « dès
+l'inscription » ; l'utilisateur l'a refusé. Pour un micro-entrepreneur, la
+période qui compte est celle de la déclaration du chiffre d'affaires à
+l'URSSAF.
+
+*Choix.* La période d'une ligne est la période de déclaration URSSAF
+(mois ou trimestre selon la périodicité des paramètres du module, dans
+l'année civile) qui contient sa date.
+
+* *Période ouverte* (non déclarée) : une ligne saisie se modifie
+  (`update_receipt`, `update_purchase` : mêmes contrôles que la saisie, la
+  nouvelle date aussi dans une période ouverte ; changer d'année renumérote
+  la ligne) et se supprime (`delete_receipt`, `delete_purchase` : le numéro
+  n'est pas repris). Ne se modifient pas : une recette issue de la
+  Facturation (elle se corrige dans la Facturation, ou se contre-passe),
+  une ligne contre-passée (supprimer d'abord sa contre-passation), une
+  contre-passation (elle se supprime seulement). Trace : `modified_at`,
+  `modified_by_id`.
+* *Période close* : dès que la période est déclarée — transmise à l'URSSAF
+  par `partiduo-urssaf`, qui la note par `mark_declared`, ou notée à la main
+  par `mark_declared` (seul moyen sans l'extension) — ou que la période du
+  socle qui contient la date est close, la ligne est intangible ; aucune
+  ligne n'y entre ni n'y est déplacée ; une erreur se corrige par une
+  contre-passation datée dans une période non déclarée, donc comptée dans
+  la déclaration suivante, comme le fait l'URSSAF. Il n'y a pas de période
+  « déclarée mais modifiable avec avertissement ».
+* La période déclarée se lit sur les déclarations notées
+  (`micro_declaration`, bornes enregistrées) : changer de périodicité ne
+  rouvre rien.
+* Un encaissement de la Facturation daté dans une période déjà déclarée est
+  inscrit à la date du jour (`Feeds`), reporté sur la déclaration suivante.
+* Contrat : `LineView#locked` (période déclarée ou close), `declared_on`,
+  `modified_at`, `editable?`, `deletable?`, `reversible?` ; erreurs
+  `micro.errors.line.change.*` (`from_invoicing`, `is_reversal`,
+  `reversed`, `closed_period`, `declared_period`) et
+  `micro.errors.line.date.declared_period` (fr, en, nl).
+
+Specs : `spec/micro/changes_spec.cr` (période ouverte, trimestre et mois
+déclarés, période close du socle, base), `spec/micro/access_spec.cr`.
+
+*Alternative écartée.* D-MIC-003 (tout bloquer dès l'inscription) :
+refusé. La période du socle seule (mois comptable ou exercice) : laisserait
+modifier un chiffre d'affaires déjà déclaré à l'URSSAF.
+
+=== D-MIC2-002 — Déclencheur : lignes d'une période déclarée ou close intangibles, sérialisé avec la déclaration (migration micro 0003)
+
+*Choix.* Migration micro 0003 : `micro_register_guard` refuse
+`UPDATE`/`DELETE` d'une ligne dont la date tombe dans une période close du
+socle ou dans une période déclarée (`micro_declaration`), et
+`INSERT`/`UPDATE` vers une telle date (« période close », « période
+déclarée ») ; il prend en partage le verrou consultatif
+`hashtext('micro_declaration')`, qu'un nouveau déclencheur
+`micro_declaration_guard` prend en exclusif sur `micro_declaration` : une
+déclaration notée attend la fin des écritures en cours dans les registres,
+et toute écriture suivante la voit. Colonnes `modified_at`,
+`modified_by_id`. Retour : déclencheur de la migration 0001 rétabli.
+
+*Alternative écartée.* Contrôle dans le contrat seulement : un accès SQL
+direct ou une extension pourrait modifier une période déclarée.
+
+=== D-MIC2-003 — Cohérence avec la Comptabilité : `micro.*.updated` et `micro.*.deleted`, extourne et nouvelle écriture, refus plutôt qu'écart (amendement d'ADR-003 D7)
+
+*Contexte.* Le module micro ne dépend que du socle (ADR-007 D1) et ne parle
+à la Comptabilité que par événements (ADR-006 D3, ADR-007 D2) : un
+`depends_on "ACCOUNTING"` est exclu, le micro-entrepreneur sans
+Comptabilité étant le cas courant. La Comptabilité ne modifie ni ne
+supprime une écriture passée — pas d'état brouillon — : elle l'annule par
+extourne (`cancel_entry`, D-ACC-015). C'était le motif de D-MIC-003 : sans
+événement de modification, une ligne modifiée aurait laissé son écriture.
+
+*Choix.* Quatre événements ajoutés à la liste fermée
+(`Partiduo::Events::SCHEMA`) : `micro.receipt.updated`,
+`micro.purchase.updated` (charge utile complète, celle de l'inscription),
+`micro.receipt.deleted`, `micro.purchase.deleted` (`number`, `date`,
+`origin`). La Comptabilité s'y abonne (`MicroEntries.on_change`) : les
+écritures en vigueur de la référence (`micro:receipt:<id>`) sont extournées
+à leur date et, pour une modification, la nouvelle écriture est passée sous
+la même référence (une référence extournée n'est plus « passée ») ; rien ne
+change si l'écriture serait identique (journal, date, libellé, pièce
+jointe, comptes, sens, montants). Si l'extourne ou la nouvelle écriture est
+impossible alors que la ligne avait une écriture (date hors exercice…),
+l'abonné lève `Partiduo::Events::Refused` (nouvelle exception du bus,
+erreurs par champ) ; le contrat du module la rattrape et rend un échec
+avec ces erreurs : rien n'est modifié. Une ligne jamais comptabilisée
+(paramétrage absent) garde la règle de l'inscription (échec consigné,
+republication).
+
+Specs : `spec/integration/micro_changes_spec.cr` — remplacement,
+modification sans effet comptable, suppression, refus hors exercice, et
+invariant vérifié après chacune de trente opérations mêlées tirées au
+hasard (saisies, modifications, suppressions, contre-passations) : chaque
+ligne a exactement une écriture en vigueur, de son montant et de sa date ;
+une ligne supprimée n'en a plus et ses écritures se soldent ;
+`spec/modules/events_spec.cr`.
+
+*Amendement.* ADR-003 D7 (liste fermée des événements) : ajout des quatre
+événements et du refus motivé d'un abonné (`Refused`).
+
+*Alternative écartée.* Appeler la Comptabilité depuis le module : interdit
+sans `depends_on` (ADR-006 D3). Republier `micro.*.recorded` avec une
+révision : détourne l'événement d'inscription et ne dit pas la
+suppression. Supprimer l'écriture : le contrat de la Comptabilité ne le
+permet pas (pièces numérotées, piste d'audit). Laisser l'écart et compter
+sur la republication : c'est la désynchronisation que D-MIC-003 voulait
+éviter.
+
+=== D-MIC2-004 — `partiduo-urssaf` : déclaration acceptée que le module ne reflète plus (U:urssaf)
+
+*Contexte.* Une déclaration transmise est notée dans le module
+(`mark_declared`), qui clôt la période ; le chiffre d'affaires est lu avant
+l'appel à l'URSSAF et la note suit l'accusé : une ligne modifiée entre les
+deux, ou une note refusée, ferait diverger déclaration et registre.
+
+*Choix.* Contrôles de la période (`urssaf.controls.*`, avertissements,
+jamais bloquants) pour une déclaration acceptée : `not_marked` (période
+non notée comme déclarée dans le module : ses lignes restent modifiables),
+`turnover_changed` (chiffre d'affaires du registre différent de celui
+transmis : « déclaration à corriger » dans l'espace URSSAF, montants
+déclaré et au registre). `FollowUp.check_registers` ouvre les anomalies
+de mêmes codes (migration urssaf 0005, sans doublon) après chaque
+transmission et à chaque relevé du suivi. Le bouton « Déclarer » demande
+confirmation (la période sera close). Specs :
+`spec/urssaf/register_changes_spec.cr`.
+
+*Alternative écartée.* Bloquer la déclaration suivante : l'utilisateur ne
+veut rien bloquer ; l'URSSAF se corrige dans son espace.
+
+=== D-MIC2-005 — Interface : liste par période, Modifier et Supprimer, cadenas et « Contre-passer » (interface)
+
+*Choix.* Livre des recettes et registre des achats groupés par période de
+déclaration (`Table#groups`, en-tête `th scope="rowgroup"` : « 3e
+trimestre 2026 », « Septembre 2026 », état « déclarée le … » avec cadenas
+ou « non déclarée, modifiable » ; groupes affichés dans l'ordre des dates,
+pas sous un autre tri). Par ligne, colonne d'actions : période ouverte,
+« Modifier » (formulaire de saisie prérempli, `/micro/receipts/<id>/edit`)
+et « Supprimer » (confirmation `data-pd-confirm`,
+`/micro/receipts/<id>/delete`) ; période déclarée ou close, cadenas (texte
+pour les lecteurs d'écran « Période close, ligne intangible ») et
+« Contre-passer » (ligne inverse datée du jour, confirmation). Boutons de
+ligne `pd-row-button` : 44 px et libellé masqué au téléphone, nom
+accessible avec le numéro (`aria-label` « Modifier R2026-00003 »,
+`Screen::Action#aria_label`). Consultation d'une ligne : période et
+explication de ce que l'on peut faire. Écran URSSAF du module : noter la
+déclaration avertit qu'elle clôt la période. Même écrans en mode simplifié
+et en mode complet ; fr, en, nl. Icônes `pencil`, `trash-2`, `undo-2`
+ajoutées au jeu Lucide (transcrites à la main, comme D-UI-012). Specs :
+`spec/ui/micro_changes_spec.cr`, `spec/ui/micro_spec.cr`.
+
+Le bouton se lit « Contre-passer » aussi en mode simplifié, à la demande de
+l'utilisateur ; D-UI-063 (« annuler » plutôt que « contre-passer ») reste
+vrai pour les étiquettes des lignes (« annulation », « annulée »).
+
+*Alternative écartée.* Un tableau par période : tri, filtre et export
+dupliqués ; une colonne « Période » : répète la même information sur
+chaque ligne.
+
+=== D-MIC2-006 — Bases de test (tests)
+
+*Choix.* `partiduo_test_mic2_app` (cœur, huit configurations),
+`partiduo_test_mic2_ui`, `partiduo_test_mic2_urssaf`, supprimées à la fin.
