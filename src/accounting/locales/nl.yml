@@ -609,6 +609,9 @@ nl:
     vat_returns:
       settlement_label: "Vereffening van de btw — %{form} van %{from} tot %{to}"
       total: "Totaal"
+      annex_title: "Bijlage 3310-A — handelingen belast tegen een bijzonder tarief (regel 14)"
+      annex_base: "Maatstaf van heffing — %{rate}"
+      annex_tax: "Verschuldigde belasting — %{rate}"
       columns:
         box: "Rooster"
         label: "Omschrijving"

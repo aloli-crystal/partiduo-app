@@ -1119,3 +1119,28 @@ Blocages levés en tout ou partie à la clôture du portage (voir
   et état `readytobesent`. La liasse est refusée par TELEDEC comme prévu
   tant que la valeur de `#SOURCE` n'est pas communiquée : B-TDC-004 reste
   ouvert.
+
+== Travaux reportés (29 septembre 2026)
+
+Blocages ouverts par la réalisation des travaux reportés du livrable
+(DECISIONS, section du même nom).
+
+=== B-R5-001 — EDI-TVA : format public, non vérifiable hors du circuit des partenaires EDI
+
+*Constat.* Le cahier des charges EDI-TVA (messages EDIFACT de la DGFiP,
+publié sur impots.gouv.fr) décrit la syntaxe, mais un fichier ne se
+vérifie qu'en l'émettant par un partenaire EDI agréé, après une campagne
+de tests propre à ce partenaire : aucun validateur public, aucun jeu
+d'essai officiel dans le dépôt, aucun accès réseau à ces sources ici. Un
+export écrit « de mémoire » ne serait pas vérifiable, et un fichier faux
+refusé par la DGFiP est pire qu'un fichier absent (D-R5-007).
+
+*Contournement.* La CA3 et la CA12 se transmettent par TELEDEC, lui-même
+partenaire EDI (`partiduo-teledec`, API marque blanche) ; CSV et PDF de la
+déclaration, annexe 3310-A comprise, pour une saisie sur le site des
+impôts.
+
+*Levée.* Se procurer le cahier des charges EDI-TVA du millésime et un
+circuit d'essai (partenaire EDI ou campagne de tests), puis écrire
+l'export depuis `VatReturnView` (cases, annexe) et le vérifier sur ce
+circuit.

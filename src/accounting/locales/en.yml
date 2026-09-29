@@ -609,6 +609,9 @@ en:
     vat_returns:
       settlement_label: "VAT settlement — %{form} from %{from} to %{to}"
       total: "Total"
+      annex_title: "Schedule 3310-A — transactions taxable at a special rate (line 14)"
+      annex_base: "Taxable amount — %{rate}"
+      annex_tax: "Tax due — %{rate}"
       columns:
         box: "Box"
         label: "Label"

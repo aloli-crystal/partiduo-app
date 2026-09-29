@@ -91,7 +91,7 @@ describe_module "ACCOUNTING", "Déclarations de TVA françaises" do
     lines["658"].should eq([{"debit", d("0.50")}])
   end
 
-  it "déclare la TVA d'un taux exigible à l'encaissement au mois du paiement complet" do
+  it "déclare la TVA d'un taux exigible à l'encaissement au prorata des encaissements" do
     data = fr_dataset
     services = ReferentialSpec.vat_rate("SERV", "20", label: "Services à l'encaissement", sale_on_payment: true)
     Api.set_vat_rate_accounts(system, Api::VatRateAccountsInput.new(services.id, "445661", "44571")).value!
@@ -110,15 +110,17 @@ describe_module "ACCOUNTING", "Déclarations de TVA françaises" do
     Api.preview_vat_return(system, q1).value!.amount("08.base").should eq(d("2000"))
     Api.preview_vat_return(system, q1.copy_with(exigibility: "operation")).value!.amount("08.base").should eq(d("3000"))
 
-    # Paiement partiel : rien d'exigible.
+    # Paiement partiel (200 sur 1 200 TTC) : un sixième exigible
+    # (D-R5-005), en euros entiers.
     line = invoice.lines.find! { |item| item.card_id == data.customer.id && item.vat_role.nil? }
     Api.post_financial(system, Api::FinancialInput.new(ledger_id: EntrySpec.ledger("F01").id,
       date: EntrySpec.date("2026-04-05"), lines: [Api::PaymentLineInput.new(d("200"), card: data.customer.code,
       match_line_ids: [line.id])])).value!
-    Api.preview_vat_return(system, q2).value!.amount("08.base").should eq(d("0"))
+    partial = Api.preview_vat_return(system, q2).value!
+    {partial.amount("08.base"), partial.amount("08.tax")}.should eq({d("167"), d("33")})
 
-    # Solde payé en mai, lettré avec le premier paiement : exigible au
-    # deuxième trimestre (date du dernier paiement), pas au premier.
+    # Solde payé en mai, lettré avec le premier paiement : le reste est
+    # exigible au deuxième trimestre, rien au premier.
     second = Api.post_financial(system, Api::FinancialInput.new(ledger_id: EntrySpec.ledger("F01").id,
       date: EntrySpec.date("2026-05-12"), lines: [Api::PaymentLineInput.new(d("1000"), card: data.customer.code)])).value!.first
     second_line = second.lines.find! { |item| item.card_id == data.customer.id }.id

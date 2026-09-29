@@ -10,8 +10,8 @@ module Partiduo
       # la CA12 (régime simplifié, 3517-S) : montant des opérations réalisées
       # (cadre A), TVA brute par taux (base et taxe), TVA déductible. Les
       # opérations imposables aux taux particuliers (DOM hors 8,5 et 2,1 %,
-      # Corse, 2,1 % métropole, presse) sont regroupées en ligne 14 (détail
-      # de l'annexe 3310-A non repris, D-TVA-006).
+      # Corse, 2,1 % métropole, presse) sont regroupées en ligne 14, détaillée
+      # taux par taux par l'annexe 3310-A (`Fr.annex`, D-R5-006).
       OPERATIONS = [
         Box.new("A1", "fr.operations"), Box.new("A2", "fr.operations"), Box.new("A3", "fr.operations"),
         Box.new("A4", "fr.operations"), Box.new("A5", "fr.operations"), Box.new("B2", "fr.operations"),
@@ -67,6 +67,34 @@ module Partiduo
         DefaultRule.new("19", nil, "purchase", "deductible", accounts: "2"),
         DefaultRule.new("20", nil, "purchase", "deductible", excluded_accounts: "2"),
       ]
+
+      # Code des lignes de l'annexe 3310-A parmi les lignes d'une déclaration.
+      ANNEX_CODE = "A"
+
+      # Annexe 3310-A (opérations imposables à un taux particulier) : base et
+      # taxe de la ligne 14, taux par taux (règles `14.base` et `14.tax`),
+      # arrondies à `decimals` ; taux sans montant omis. Les taxes assimilées
+      # de l'annexe restent saisies en ligne 29. Rend {taux, base, taxe}.
+      def self.annex(rules : Array(Returns::Rule), movements : Array(Returns::Movement),
+                     decimals : Int32) : Array({Int64?, BigDecimal, BigDecimal})
+        bases = rules.select(&.box.==("14.base"))
+        taxes = rules.select(&.box.==("14.tax"))
+        return [] of {Int64?, BigDecimal, BigDecimal} if bases.empty? && taxes.empty?
+        movements.group_by(&.vat_rate_id).compact_map do |rate_id, list|
+          base = Returns.evaluate(bases, list, decimals)[0]["14.base"]? || Returns::ZERO
+          tax = Returns.evaluate(taxes, list, decimals)[0]["14.tax"]? || Returns::ZERO
+          {rate_id, base, tax} unless base.zero? && tax.zero?
+        end
+      end
+
+      # Ligne 14 reportée de l'annexe (total des lignes arrondies), quand
+      # l'annexe a des lignes.
+      def self.report_annex!(amounts : Hash(String, BigDecimal), annex : Array({Int64?, BigDecimal, BigDecimal})) : Nil
+        return if annex.empty?
+        amounts["14.base"] = annex.sum(Returns::ZERO) { |(_, base, _)| base }
+        amounts["14.tax"] = annex.sum(Returns::ZERO) { |(_, _, tax)| tax }
+        nil
+      end
 
       # TVA brute (16) et TVA déductible (23), communes aux deux formulaires.
       def self.gross_and_deductible!(amounts : Hash(String, BigDecimal)) : {BigDecimal, BigDecimal}

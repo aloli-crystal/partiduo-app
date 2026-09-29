@@ -609,6 +609,9 @@ fr:
     vat_returns:
       settlement_label: "Liquidation de la TVA — %{form} du %{from} au %{to}"
       total: "Total"
+      annex_title: "Annexe 3310-A — opérations imposables à un taux particulier (ligne 14)"
+      annex_base: "Base hors taxe — %{rate}"
+      annex_tax: "Taxe due — %{rate}"
       columns:
         box: "Case"
         label: "Libellé"

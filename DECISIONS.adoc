@@ -4085,6 +4085,9 @@ plus juste pour les prestations de services françaises, mais un lettrage
 peut réunir plusieurs factures et plusieurs paiements sans répartition
 enregistrée ; à reprendre si le besoin se confirme.
 
+*Révision (29 septembre 2026).* Exigibilité au prorata des encaissements
+partiels : D-R5-005.
+
 === D-TVA-005 — Écriture de liquidation (lot 4, tva)
 
 *Contexte.* `Ext_Tva::propose_form` propose de solder les comptes de TVA
@@ -4133,6 +4136,9 @@ internes documentés). Règles par défaut : ventes par taux, E1 (`EXP`), E2
 *Alternative écartée.* Reproduire l'annexe 3310-A et la CA12 ligne à ligne :
 formulaires annuels à suivre millésime par millésime, sans source dans
 NOALYSS.
+
+*Révision (29 septembre 2026).* Ligne 14 détaillée taux par taux par
+l'annexe 3310-A (D-R5-006) ; EDI-TVA : BLOCAGES B-R5-001.
 
 === D-TVA-007 — Brouillon, corrections, clôture figée (lot 4, tva)
 
@@ -10652,6 +10658,55 @@ fiche.
 *Alternative écartée.* Champ libre unique (maquette) : l'adresse de
 Factur-X (`ShipToTradeParty`) est structurée ; un champ libre ne se
 découpe pas sûrement.
+
+=== D-R5-005 — TVA exigible au prorata des encaissements partiels (accounting)
+
+*Contexte.* D-TVA-004 ne rendait exigible la TVA à l'encaissement qu'au
+paiement complet, faute de répartition des lettrages qui réunissent
+plusieurs factures et plusieurs paiements.
+
+*Choix.* Au prorata des sommes encaissées (CGI, art. 269-2-c). Répartition
+déterministe d'un lettrage : lignes au débit et au crédit appariées dans
+l'ordre chronologique (date, écriture, ligne), la plus ancienne dette
+réglée d'abord ; symétrique, elle couvre les avoirs et les extournes
+lettrés. Chaque encaissement est daté au plus tôt de l'opération (règle
+D-TVA-R01 conservée). Part encaissée = sommes appariées / total TTC de
+l'opération (ses lignes sans rôle de TVA du sens de ses lignes lettrées),
+plafonnée à 1 ; part d'une période = cumul arrondi au centime à sa fin
+moins cumul arrondi avant son début : les périodes successives totalisent
+l'opération sans reste. Candidates inchangées (écritures de la période et
+écritures antérieures lettrées avec une écriture de la période).
+`Accounting::VatReturns::Collections`.
+
+*Alternative écartée.* Répartition enregistrée par l'utilisateur à chaque
+lettrage : saisie supplémentaire pour un cas où l'ordre chronologique est
+la pratique ; prorata par lettrage sans ordre : un paiement partiel
+commun à deux factures serait réparti sur les deux, ce qu'aucun client ne
+fait.
+
+=== D-R5-006 — Annexe 3310-A : ligne 14 détaillée taux par taux (vat, accounting, interface)
+
+*Contexte.* D-TVA-006 regroupait les taux particuliers en ligne 14 sans le
+détail de l'annexe 3310-A.
+
+*Choix.* Détail par taux calculé par les règles de `14.base` et `14.tax`
+(`Vat::Fr.annex`), ligne 14 reportée du total des lignes arrondies (comme
+sur le formulaire papier) ; lignes enregistrées dans les lignes de la
+déclaration (code `A`, sans migration), rendues par
+`VatReturnView#annex_lines`, imprimées à la suite des cases et affichées
+par l'interface (« Annexe 3310-A »). Les numéros de lignes de l'annexe
+officielle ne sont pas reproduits (ils changent par millésime) : chaque
+ligne porte le code, le libellé et le pourcentage du taux. Taxes assimilées
+de l'annexe : ligne 29, saisie comme avant. La ligne 14 reste non
+transmissible par TELEDEC (codes sûrs inconnus, B-TDC-004).
+
+*Alternative écartée.* Reproduire les lignes numérotées de l'annexe : sans
+source vérifiable du millésime courant dans le dépôt ; le détail par taux
+suffit à reporter chaque ligne à la main.
+
+=== D-R5-007 — EDI-TVA non écrit (blocage motivé)
+
+*Choix.* Pas d'export EDI-TVA : BLOCAGES B-R5-001.
 
 == Valeurs officielles vérifiées (29 septembre 2026)
 

@@ -154,6 +154,8 @@ module Partiduo
           decimals = Returns.decimals(params.form)
           amounts, contributions = Returns.evaluate(ruled_rules, movements, decimals)
           computed = boxes.to_h { |box| {box.code, amounts[box.code]? || ZERO} }
+          annex = params.regime == "fr" ? Partiduo::Vat::Fr.annex(ruled_rules, movements, decimals) : [] of {Int64?, BigDecimal, BigDecimal}
+          Partiduo::Vat::Fr.report_annex!(computed, annex)
           Returns.totals!(params.form, computed)
           raw = computed
           unless decimals == 2
@@ -161,7 +163,7 @@ module Partiduo
             raw = boxes.to_h { |box| {box.code, cents[box.code]? || ZERO} }
             Returns.totals!(params.form, raw)
           end
-          Computation.new(params, computed, [] of Returns::ListingLine, contributions, movements, raw)
+          Computation.new(params, computed, annex_lines(annex), contributions, movements, raw)
         end
       end
 
@@ -172,6 +174,24 @@ module Partiduo
         adjustments.each { |code, value| amounts[code] = value }
         Returns.totals!(form, amounts)
         amounts
+      end
+
+      # Lignes de l'annexe 3310-A : taux (code et libellé), base, taxe.
+      private def self.annex_lines(annex : Array({Int64?, BigDecimal, BigDecimal})) : Array(Returns::ListingLine)
+        return [] of Returns::ListingLine if annex.empty?
+        rates = Partiduo::Vat::Rate.filter(id__in: annex.compact_map(&.[0])).to_a.to_h { |rate| {rate.id!.to_i64, rate} }
+        lines = annex.map do |(rate_id, base, tax)|
+          rate = rate_id.try { |id| rates[id]? }
+          label = rate ? "#{rate.label} (#{percent(rate.rate!)} %)" : ""
+          Returns::ListingLine.new(nil, nil, label, rate.try(&.code).to_s, Partiduo::Vat::Fr::ANNEX_CODE, base, tax)
+        end
+        lines.sort_by(&.vat_number)
+      end
+
+      # Taux en pourcentage sans zéros inutiles : `13`, `2.1`.
+      private def self.percent(value : BigDecimal) : String
+        text = value.to_s
+        text.includes?('.') ? text.rstrip('0').rstrip('.') : text
       end
 
       private def self.client_listing(rules : Array(Rule), movements : Array(Movement), threshold : BigDecimal) : Array(Returns::ListingLine)
@@ -238,7 +258,6 @@ module Partiduo
       private record Row,
         entry_id : Int64,
         date : Time,
-        paid_on : Time?,
         ledger_id : Int64,
         ledger_kind : String,
         account_id : Int64,
@@ -255,26 +274,42 @@ module Partiduo
         collected_account_id : Int64?
 
       # Mouvements de TVA exigibles de `from` à `to` : lignes hors taxe et
-      # de TVA des achats et des ventes, datées de l'opération ou du
-      # paiement selon l'exigibilité ; lignes des journaux d'opérations
+      # de TVA des achats et des ventes, datées de l'opération ou des
+      # encaissements selon l'exigibilité ; lignes des journaux d'opérations
       # diverses et financiers pour les règles de solde (hors écritures de
       # liquidation).
+      #
+      # Exigibilité à l'encaissement : au prorata des sommes encaissées
+      # (`Collections`, DECISIONS D-R5-005) ; la part d'une période est la
+      # part cumulée à sa fin moins la part cumulée avant son début, chaque
+      # montant arrondi au centime, de sorte que les périodes successives
+      # totalisent exactement l'opération une fois payée.
       def self.movements(from : Time, to : Time, exigibility : String, rules : Array(Rule)) : Array(Movement)
         movements = [] of Movement
-        rows(from, to).group_by { |row| {row.entry_id, row.vat_rate_id} }.each_value do |group|
+        rows = rows(from, to)
+        schedules = Collections.schedules(rows.select { |row| on_payment?(row, exigibility) }.map(&.entry_id).uniq!)
+        before = from - 1.day
+        rows.group_by { |row| {row.entry_id, row.vat_rate_id} }.each_value do |group|
           first = group.first
-          date = exigible_on(first, exigibility)
-          next if date.nil? || date < from || date > to
-          bases = group.select(&.vat_role.==("base")).map { |row| {row, signed_base(row)} }
+          if on_payment?(first, exigibility)
+            schedule = schedules[first.entry_id]? || next
+            date = schedule.last_date(from, to) || next
+            share = ->(amount : BigDecimal) { schedule.part(amount, before, to) }
+          else
+            next if first.date < from || first.date > to
+            date = first.date
+            share = ->(amount : BigDecimal) { amount }
+          end
+          bases = group.select(&.vat_role.==("base")).map { |row| {row, share.call(signed_base(row))} }
           group.each do |row|
             case row.vat_role
             when "base"
-              movements << movement(row, date, "base", signed_base(row), row.account)
+              movements << movement(row, date, "base", share.call(signed_base(row)), row.account)
             when "tax"
               source = tax_source(row)
               amount = row.debit ? row.amount : -row.amount
               amount = -amount if source == "collected"
-              allocate(row, date, source, amount, bases, movements)
+              allocate(row, date, source, share.call(amount), bases, movements)
             end
           end
         end
@@ -327,32 +362,24 @@ module Partiduo
         end
       end
 
-      # Date d'exigibilité : celle de l'opération, ou celle du paiement
-      # complet (`jr_date_paid`) pour un taux exigible à l'encaissement, et
-      # jamais avant l'opération elle-même (acompte reçu avant la facture,
-      # avoir ou extourne lettrés avec l'écriture qu'ils annulent : la plus
-      # tardive des deux dates) ; nil si l'opération n'est pas encore payée.
-      private def self.exigible_on(row : Row, exigibility : String) : Time?
-        on_payment = case exigibility
-                     when "operation" then false
-                     when "payment"   then row.ledger_kind.in?("sale", "purchase")
-                     else
-                       (row.ledger_kind == "sale" && row.sale_on_payment) ||
-                         (row.ledger_kind == "purchase" && row.purchase_on_payment)
-                     end
-        return row.date unless on_payment
-        row.paid_on.try { |paid| paid > row.date ? paid : row.date }
+      # Taux exigible à l'encaissement pour cette ligne : par la déclaration
+      # (`payment` : tous les achats et ventes ; `operation` : aucun), sinon
+      # par le taux (`sale_on_payment`, `purchase_on_payment`).
+      private def self.on_payment?(row : Row, exigibility : String) : Bool
+        case exigibility
+        when "operation" then false
+        when "payment"   then row.ledger_kind.in?("sale", "purchase")
+        else
+          (row.ledger_kind == "sale" && row.sale_on_payment) ||
+            (row.ledger_kind == "purchase" && row.purchase_on_payment)
+        end
       end
 
-      # Lignes hors taxe et de TVA des écritures datées jusqu'à `to`, dans la
-      # période ou payées dans la période. Une écriture est payée quand
-      # toutes ses lignes lettrées le sont par des lettrages soldés, à la
-      # date la plus récente des autres écritures de ces lettrages.
-      #
-      # Écritures candidates : celles de la période, et celles d'avant la
-      # période lettrées avec une écriture de la période (seules à pouvoir y
-      # devenir exigibles) ; les lettrages et le tiers ne sont lus que pour
-      # elles, sans parcourir tout l'historique.
+      # Lignes hors taxe et de TVA des écritures datées jusqu'à `to` : celles
+      # de la période, et celles d'avant la période lettrées avec une
+      # écriture de la période (seules à pouvoir y devenir exigibles à
+      # l'encaissement) ; le tiers n'est lu que pour elles, sans parcourir
+      # tout l'historique.
       private def self.rows(from : Time, to : Time) : Array(Row)
         sql = <<-SQL
           WITH candidates AS (
@@ -379,38 +406,8 @@ module Partiduo
             JOIN accounting_ledger l ON l.id = e.ledger_id
             WHERE l.kind IN ('sale', 'purchase') AND x.vat_role IS NULL AND x.card_id IS NOT NULL
             ORDER BY x.entry_id, x.position DESC
-          ),
-          matchings AS (
-            SELECT DISTINCT x.matching_id
-            FROM accounting_entry_line x
-            JOIN candidates c ON c.entry_id = x.entry_id
-            WHERE x.matching_id IS NOT NULL
-          ),
-          settled AS (
-            SELECT y.matching_id,
-                   sum(CASE WHEN y.side = 'debit' THEN y.amount ELSE -y.amount END) = 0 AS settled
-            FROM accounting_entry_line y
-            JOIN matchings m ON m.matching_id = y.matching_id
-            GROUP BY y.matching_id
-          ),
-          paid AS (
-            SELECT x.entry_id,
-                   CASE WHEN bool_and(s.settled) THEN max(o.date) END AS paid_on
-            FROM accounting_entry_line x
-            JOIN candidates c ON c.entry_id = x.entry_id
-            JOIN accounting_entry e ON e.id = x.entry_id
-            JOIN accounting_ledger l ON l.id = e.ledger_id
-            JOIN settled s ON s.matching_id = x.matching_id
-            LEFT JOIN LATERAL (
-              SELECT max(e2.date) AS date
-              FROM accounting_entry_line y
-              JOIN accounting_entry e2 ON e2.id = y.entry_id
-              WHERE y.matching_id = x.matching_id AND y.entry_id <> x.entry_id
-            ) o ON true
-            WHERE l.kind IN ('sale', 'purchase')
-            GROUP BY x.entry_id
           )
-          SELECT x.entry_id, e.date, p.paid_on, e.ledger_id, l.kind, a.id, a.number, x.vat_rate_id, x.vat_role,
+          SELECT x.entry_id, e.date, e.ledger_id, l.kind, a.id, a.number, x.vat_rate_id, x.vat_role,
                  x.side = 'debit', x.amount, t.card_id, COALESCE(r.reverse_charge, false),
                  COALESCE(r.sale_on_payment, false), COALESCE(r.purchase_on_payment, false),
                  va.deductible_account_id, va.collected_account_id
@@ -422,16 +419,13 @@ module Partiduo
           LEFT JOIN vat_rate r ON r.id = x.vat_rate_id
           LEFT JOIN accounting_vat_rate_account va ON va.vat_rate_id = x.vat_rate_id
           LEFT JOIN third t ON t.entry_id = x.entry_id
-          LEFT JOIN paid p ON p.entry_id = x.entry_id
           WHERE x.vat_role IS NOT NULL AND e.date <= $2::date
-            AND (e.date >= $1::date
-                 OR (GREATEST(e.date, p.paid_on) >= $1::date AND GREATEST(e.date, p.paid_on) <= $2::date))
           ORDER BY x.entry_id, x.position
           SQL
         Marten::DB::Connection.default.open do |db|
           db.query_all(sql, args: [from, to] of ::DB::Any) do |result_set|
             Row.new(
-              entry_id: result_set.read(Int64), date: result_set.read(Time), paid_on: result_set.read(Time?), ledger_id: result_set.read(Int64),
+              entry_id: result_set.read(Int64), date: result_set.read(Time), ledger_id: result_set.read(Int64),
               ledger_kind: result_set.read(String), account_id: result_set.read(Int64), account: result_set.read(String),
               vat_rate_id: result_set.read(Int64?), vat_role: result_set.read(String), debit: result_set.read(Bool),
               amount: result_set.read(BigDecimal), card_id: result_set.read(Int64?), reverse_charge: result_set.read(Bool),
@@ -968,8 +962,21 @@ module Partiduo
             ReportOutput::Row.new([box.code, I18n.t(box.label_key), box.amount] of ReportOutput::Cell,
               box.total ? :subtotal : :line)
           end
+          rows.concat(annex_rows(view))
         end
         ReportOutput::Table.new(name, title, subtitle, columns, rows)
+      end
+
+      # Annexe 3310-A à la suite des cases : base puis taxe de chaque taux.
+      private def self.annex_rows(view : Api::VatReturnView) : Array(ReportOutput::Row)
+        annex = view.annex_lines
+        return [] of ReportOutput::Row if annex.empty?
+        rows = [ReportOutput::Row.new(["", I18n.t("accounting.vat_returns.annex_title"), nil] of ReportOutput::Cell, :subtotal)]
+        annex.each do |line|
+          rows << ReportOutput::Row.new([line.vat_number, I18n.t("accounting.vat_returns.annex_base", {"rate" => line.name}), line.amount] of ReportOutput::Cell)
+          rows << ReportOutput::Row.new([line.vat_number, I18n.t("accounting.vat_returns.annex_tax", {"rate" => line.name}), line.vat] of ReportOutput::Cell)
+        end
+        rows
       end
     end
   end

@@ -120,6 +120,13 @@ module Partiduo
         def amount(code : String) : BigDecimal
           box(code).try(&.amount) || BigDecimal.new(0)
         end
+
+        # Lignes de l'annexe 3310-A d'une CA3 ou d'une CA12 (ligne 14 taux
+        # par taux) : `vat_number` porte le code du taux, `name` son libellé
+        # et son pourcentage, `amount` la base, `vat` la taxe (D-R5-006).
+        def annex_lines : Array(VatListingLineView)
+          regime == "fr" ? lines.select(&.code.==(Partiduo::Vat::Fr::ANNEX_CODE)) : [] of VatListingLineView
+        end
       end
 
       # Apport d'une règle à une case (`declaration_amount_detail`).

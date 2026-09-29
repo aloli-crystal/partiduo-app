@@ -50,6 +50,16 @@ due, `29` taxes assimilées, `32` total à payer ; CA12 : `25`, `28`, `29`,
 `ac` acomptes versés, `sp` solde à payer, `ex` excédent. Les montants français
 sont déclarés en euros entiers, les belges au centime.
 
+*Annexe 3310-A* (CA3 et CA12) : la ligne 14 (taux particuliers : Corse,
+DOM hors lignes 10 et 11, 2,1 % de la métropole…) est détaillée taux par
+taux, depuis les règles de `14.base` et `14.tax`, et reportée du total de
+l'annexe (lignes arrondies à l'euro). `VatReturnView#annex_lines` : lignes
+de code `A`, `vat_number` = code du taux, `name` = libellé et pourcentage,
+`amount` = base, `vat` = taxe ; enregistrées avec la déclaration et
+imprimées à la suite des cases (CSV, PDF). Les taxes assimilées de l'annexe
+restent saisies en ligne `29` (D-R5-006). Pas de fichier EDI-TVA
+(BLOCAGES B-R5-001).
+
 == Calcul
 
 Une déclaration se calcule depuis les écritures, *toutes* les écritures quel
@@ -62,14 +72,17 @@ partielle, D-TVA-011).
   de la ligne hors taxe du même taux, au prorata ; lignes des journaux
   d'opérations diverses et financiers pour les règles de solde (hors
   écritures de liquidation). Un avoir donne des montants négatifs.
-. *Exigibilité* (`exigibility`) : `rates` (défaut) — à l'opération, ou au
-  paiement complet pour un taux exigible à l'encaissement
+. *Exigibilité* (`exigibility`) : `rates` (défaut) — à l'opération, ou à
+  l'encaissement pour un taux exigible à l'encaissement
   (`sale_on_payment`, `purchase_on_payment` du taux) ; `operation` ;
-  `payment` (tous les taux). Une facture est payée quand toutes ses lignes
-  lettrées le sont par des lettrages soldés, à la date la plus récente des
-  paiements de ces lettrages, et jamais avant sa propre date (acompte reçu
-  avant la facture, avoir ou extourne lettrés avec l'écriture qu'ils
-  annulent) ; un paiement partiel ne rend rien exigible (D-TVA-004).
+  `payment` (tous les taux). À l'encaissement, la TVA est exigible *au
+  prorata des sommes encaissées* : les lignes au débit et au crédit d'un
+  lettrage sont appariées dans l'ordre chronologique (la plus ancienne dette
+  réglée d'abord), chaque encaissement daté au plus tôt de l'opération
+  (acompte reçu avant la facture, avoir ou extourne lettrés) ; la part d'une
+  période est la part encaissée cumulée à sa fin moins celle d'avant son
+  début, au centime, rapportée au total TTC de l'opération. Un lettrage
+  soldé rend l'opération entièrement exigible (D-TVA-004 révisée, D-R5-005).
 . *Période* : celle du mois, du trimestre ou de l'année ; des bornes libres
   (`date_from`, `date_to`) ne sont admises que pour une CA12 (exercice
   décalé, `dates.not_allowed` ailleurs).
