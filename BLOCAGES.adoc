@@ -208,6 +208,11 @@ modifié (hors des shards autorisés).
 
 *Levée.* Signaler à l'amont avec un cas minimal.
 
+*Signalement préparé le 29 septembre 2026* :
+link:doc/amont/marten-champs-apres-contrainte-unique.md[] — reproduction sans
+base, cause (`@@field_contexts_map` mémorisée par `db_unique_constraint`) et
+texte du ticket ; à ouvrir par le mainteneur.
+
 == B-SKEL-001 — `partiduo-ui-bulma` en cours de modification pendant la vérification de `partiduo-skel` (lot 1, skel)
 
 *Constat.* `partiduo-skel` dépend de `../partiduo-ui-bulma` en `path:` ; un
@@ -272,6 +277,11 @@ et les specs vérifient `<pdfaid:part>3</pdfaid:part>` dans le XMP.
 
 *Levée.* Corriger la règle (`args: ["pdfaid:part", "3"]`) dans
 `pdf-validate`, puis vider `IGNORED_RULES`.
+
+*Signalement préparé le 29 septembre 2026* :
+link:doc/amont/pdf-validate-regle-pdfaid-part-pdfa3.md[] — reproduction avec
+`pdf-a` (seul échec du profil) et texte du ticket ; à ouvrir par le
+mainteneur.
 
 == B-INV-002 — Arbre de travail partagé avec le lot 2 pendant l'écriture (lot F, facturation)
 
@@ -339,6 +349,12 @@ par les specs.
 
 *Levée.* Signaler l'anomalie à l'amont de Crystal (`String#encode`, tampon
 d'iconv) ; revenir à `encode` quand elle sera corrigée.
+
+*Signalement préparé le 29 septembre 2026* :
+link:doc/amont/crystal-string-encode-invalid-skip.md[] — reproduction
+minimale (un octet perdu tous les 1 024 octets, Crystal 1.19.1 et 1.21.1),
+cause (`E2BIG` traité comme une séquence invalide) et texte du ticket ; à
+ouvrir par le mainteneur.
 
 == B-SEC-001 — Restrictions de visibilité reportées : dette de sécurité (lot 6, relecture)
 

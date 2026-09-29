@@ -10876,6 +10876,15 @@ fiche d'une action.
 *Alternative écartée.* Plusieurs profils par action : l'origine n'en admet
 qu'un ; à reprendre si le besoin se confirme.
 
+=== D-R5-017 — Anomalies amont : reproductions et tickets préparés, non ouverts
+
+*Choix.* Pour B-ED-001 (Crystal), B-REF-001 (Marten) et B-INV-001
+(`pdf-validate`) : un document par anomalie sous `doc/amont/` (constat,
+versions, cause probable lue dans les sources, reproduction minimale
+exécutée le 29 septembre 2026, texte du ticket en anglais). Les tickets
+restent à ouvrir par le mainteneur ; les contournements restent en place
+jusqu'aux corrections.
+
 == Valeurs officielles vérifiées (29 septembre 2026)
 
 Vérification aux sources officielles des valeurs fiscales et sociales des
