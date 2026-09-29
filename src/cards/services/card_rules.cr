@@ -15,6 +15,12 @@ module Partiduo
       PARTY_KINDS = KINDS - %w[item]
       # Nature d'un client (ADR-004 D9), vide : pas encore précisée.
       CUSTOMER_NATURES = %w[individual business public]
+      # Nature d'un fournisseur (DAS2) : personne physique ou morale ; vide :
+      # pas encore précisée (déclaré en raison sociale).
+      SUPPLIER_NATURES = %w[individual business]
+      PERSON_NAME_SIZE = 128
+      # Date de naissance admise : ni avant 1900, ni dans l'avenir.
+      BIRTH_YEAR_MIN = 1900
 
       MAX_SIZES = {
         "name"         => 255,
@@ -65,7 +71,11 @@ module Partiduo
         vat_rate_id : Int64?,
         extra : Hash(String, JSON::Any),
         customer_nature : String,
-        pdf_copy : Bool
+        pdf_copy : Bool,
+        supplier_nature : String,
+        last_name : String,
+        first_names : String,
+        birth_date : Time?
 
       # Normalise et valide. Renvoie les valeurs (même en cas d'erreur, pour
       # le contrôle instantané) et les erreurs par champ.
@@ -86,6 +96,7 @@ module Partiduo
         extra, extra_errors = Extra.normalize(attributes, input.extra, current.try(&.id))
         errors.concat(extra_errors)
 
+        supplier_nature, last_name, first_names, birth_date = supplier_person(input, current, kind)
         values = Values.new(
           category: category,
           code: QuickCode.format(input.code || ""),
@@ -112,10 +123,26 @@ module Partiduo
           customer_nature: input.customer_nature.try(&.strip) ||
                            (kind == "customer" ? current.try(&.customer_nature).to_s : ""),
           pdf_copy: input.pdf_copy.nil? ? current.try(&.pdf_copy) != false : input.pdf_copy == true,
+          supplier_nature: supplier_nature,
+          last_name: last_name,
+          first_names: first_names,
+          birth_date: birth_date,
         )
+        values = with_person_name(values)
 
         validate(values, current, errors)
         {values, errors}
+      end
+
+      # Nature et identité du fournisseur : nature non saisie (`nil`),
+      # nature et identité enregistrées sont gardées ; saisie, l'identité est
+      # décrite entière par la saisie.
+      private def self.supplier_person(input : Api::CardInput, current : Card?, kind : String) : {String, String, String, Time?}
+        nature = input.supplier_nature.try(&.strip) || (kind == "supplier" ? current.try(&.supplier_nature).to_s : "")
+        if input.supplier_nature.nil? && nature == "individual" && current
+          return {nature, current.last_name.to_s, current.first_names.to_s, current.birth_date}
+        end
+        {nature, text(input.last_name), text(input.first_names), input.birth_date.try(&.at_beginning_of_day)}
       end
 
       private def self.validate(values : Values, current : Card?, errors : Array(FieldError)) : Nil
@@ -125,6 +152,7 @@ module Partiduo
         end
         validate_code(values, current, errors)
         validate_nature(values, errors)
+        validate_person(values, errors)
         if current && current.category_id != values.category.id && current_kind_conflict?(current, values)
           errors << error("category_id", "kind_mismatch")
         end
@@ -171,6 +199,46 @@ module Partiduo
         elsif !CUSTOMER_NATURES.includes?(nature)
           errors << error("customer_nature", "invalid", {"value" => nature})
         end
+      end
+
+      # Fournisseur personne physique (DAS2) : nature connue, sur une fiche de
+      # fournisseur seulement ; nom et prénoms exigés, date de naissance
+      # plausible. Hors personne physique, ces champs restent vides.
+      private def self.validate_person(values : Values, errors) : Nil
+        nature = values.supplier_nature
+        unless nature.empty?
+          if values.category.kind != "supplier"
+            errors << error("supplier_nature", "not_applicable")
+          elsif !SUPPLIER_NATURES.includes?(nature)
+            errors << error("supplier_nature", "invalid", {"value" => nature})
+          end
+        end
+        if nature == "individual"
+          validate_identity(values, errors)
+        else
+          errors << error("last_name", "not_applicable") unless values.last_name.empty?
+          errors << error("first_names", "not_applicable") unless values.first_names.empty?
+          errors << error("birth_date", "not_applicable") if values.birth_date
+        end
+      end
+
+      private def self.validate_identity(values : Values, errors) : Nil
+        {"last_name" => values.last_name, "first_names" => values.first_names}.each do |field, value|
+          if value.empty?
+            errors << error(field, "blank")
+          elsif value.size > PERSON_NAME_SIZE
+            errors << error(field, "too_long", {"max" => PERSON_NAME_SIZE.to_s})
+          end
+        end
+        if (born = values.birth_date) && (born.year < BIRTH_YEAR_MIN || born > Partiduo::Config.today)
+          errors << error("birth_date", "invalid")
+        end
+      end
+
+      # Personne physique sans nom de fiche : « NOM Prénoms ».
+      private def self.with_person_name(values : Values) : Values
+        return values unless values.name.empty? && values.supplier_nature == "individual"
+        values.copy_with(name: [values.last_name, values.first_names].reject(&.empty?).join(" "))
       end
 
       # Proposition de nature d'après les identifiants (ADR-004 D9) : les
@@ -330,6 +398,11 @@ module Partiduo
         card.extra = JSON::Any.new(values.extra)
         card.customer_nature = values.category.kind == "customer" ? values.customer_nature : ""
         card.pdf_copy = values.pdf_copy
+        individual = values.category.kind == "supplier" && values.supplier_nature == "individual"
+        card.supplier_nature = values.category.kind == "supplier" ? values.supplier_nature : ""
+        card.last_name = individual ? values.last_name : ""
+        card.first_names = individual ? values.first_names : ""
+        card.birth_date = individual ? values.birth_date : nil
         card.save!
 
         Address.filter(card_id: card.id).delete(raw: true)

@@ -23,6 +23,9 @@ en:
       individual: "Private individual"
       business: "Business"
       public: "Public administration"
+    supplier_natures:
+      individual: "Natural person"
+      business: "Legal entity"
     value_types:
       text: "Text"
       number: "Number"
@@ -122,6 +125,20 @@ en:
           not_applicable: "This field does not apply to this card category."
           not_found: "This VAT rate does not exist."
           disabled: "VAT rate %{code} is disabled."
+        supplier_nature:
+          not_applicable: "The supplier nature only applies to supplier cards."
+          invalid: "The nature “%{value}” is not recognised (natural person, legal entity)."
+        last_name:
+          not_applicable: "The surname is only entered for a supplier who is a natural person."
+          blank: "The natural person's surname is required."
+          too_long: "The surname cannot exceed %{max} characters."
+        first_names:
+          not_applicable: "First names are only entered for a supplier who is a natural person."
+          blank: "The natural person's first names are required."
+          too_long: "First names cannot exceed %{max} characters."
+        birth_date:
+          not_applicable: "The date of birth is only entered for a supplier who is a natural person."
+          invalid: "The date of birth is not plausible (after 1900, not in the future)."
         customer_nature:
           not_applicable: "The nature only applies to customer cards."
           invalid: "The nature “%{value}” is not recognised (private individual, business, public administration)."

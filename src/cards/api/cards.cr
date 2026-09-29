@@ -17,6 +17,10 @@ module Partiduo
       # administration publique. Elles commandent le canal proposé, le
       # marquage B2C, les mentions et l'e-reporting.
       CUSTOMER_NATURES = Partiduo::Cards::CardRules::CUSTOMER_NATURES
+      # Natures d'un fournisseur (DAS2) : personne physique, personne
+      # morale. Une personne physique est déclarée par ses nom, prénoms et
+      # date de naissance plutôt que par une raison sociale.
+      SUPPLIER_NATURES = Partiduo::Cards::CardRules::SUPPLIER_NATURES
 
       # --- Entrées ---------------------------------------------------------------
 
@@ -45,6 +49,12 @@ module Partiduo
       # `customer_nature` (client seulement, `CUSTOMER_NATURES`) : `nil`
       # garde la nature enregistrée (vide à la création) ; `""` l'efface.
       # `pdf_copy` : `nil` garde le choix enregistré (oui à la création).
+      #
+      # `supplier_nature` (fournisseur seulement, `SUPPLIER_NATURES`) : `nil`
+      # garde la nature et l'identité enregistrées (`last_name`,
+      # `first_names`, `birth_date` alors ignorés) ; donnée, la saisie décrit
+      # l'identité entière. Personne physique : nom et prénoms exigés, date
+      # de naissance facultative ; nom de fiche vide : « NOM Prénoms ».
       record CardInput,
         category_id : Int64,
         name : String,
@@ -68,7 +78,11 @@ module Partiduo
         vat_rate_id : Int64? = nil,
         extra : Hash(String, JSON::Any) = {} of String => JSON::Any,
         customer_nature : String? = nil,
-        pdf_copy : Bool? = nil
+        pdf_copy : Bool? = nil,
+        supplier_nature : String? = nil,
+        last_name : String? = nil,
+        first_names : String? = nil,
+        birth_date : Time? = nil
 
       # Attribut propre d'une catégorie. `value_type` : `text`, `number`,
       # `date`, `boolean`, `card`.
@@ -184,7 +198,11 @@ module Partiduo
         created_at : Time,
         updated_at : Time,
         customer_nature : String = "",
-        pdf_copy : Bool = true do
+        pdf_copy : Bool = true,
+        supplier_nature : String = "",
+        last_name : String = "",
+        first_names : String = "",
+        birth_date : Time? = nil do
         def item? : Bool
           kind == "item"
         end
@@ -193,6 +211,17 @@ module Partiduo
         # `nil` si elle n'est pas précisée.
         def customer_nature_key : String?
           customer_nature.empty? ? nil : "cards.natures.#{customer_nature}"
+        end
+
+        # Fournisseur personne physique (DAS2) ?
+        def individual_supplier? : Bool
+          kind == "supplier" && supplier_nature == "individual"
+        end
+
+        # Clé i18n de la nature du fournisseur (`cards.supplier_natures.individual`) ;
+        # `nil` si elle n'est pas précisée.
+        def supplier_nature_key : String?
+          supplier_nature.empty? ? nil : "cards.supplier_natures.#{supplier_nature}"
         end
 
         # Nature proposée d'après le SIREN et le numéro de TVA (ADR-004 D9) :
@@ -235,6 +264,8 @@ module Partiduo
             delivery_addresses: delivery_addresses.map(&.to_input), unit_code: unit_code.presence,
             sale_price: sale_price, purchase_price: purchase_price, vat_rate_id: vat_rate_id, extra: extra,
             customer_nature: customer_nature, pdf_copy: pdf_copy,
+            supplier_nature: kind == "supplier" ? supplier_nature : nil, last_name: last_name,
+            first_names: first_names, birth_date: birth_date,
           )
         end
       end
@@ -580,6 +611,10 @@ module Partiduo
             updated_at: card.updated_at!,
             customer_nature: card.customer_nature.to_s,
             pdf_copy: card.pdf_copy.nil? ? true : card.pdf_copy!,
+            supplier_nature: card.supplier_nature.to_s,
+            last_name: card.last_name.to_s,
+            first_names: card.first_names.to_s,
+            birth_date: card.birth_date,
           )
         end
       end

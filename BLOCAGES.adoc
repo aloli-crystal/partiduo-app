@@ -736,7 +736,10 @@ laissent des incertitudes ; l'adaptateur retient l'option la plus simple
   fiches fournisseurs du socle ne distinguent pas la personne physique
   (`AE_3036_1` nom, `AE_3036_2` prénoms, `AI` date de naissance). *Levée* :
   une nature « personne physique » des fiches fournisseurs (cœur), puis le
-  formateur DAS2.
+  formateur DAS2. *Levé le 29 septembre 2026* pour la distinction
+  (D-R5-001, D-R5-002 : `AE_3036_*` et `AI` déclarés pour une personne
+  physique) ; restent à confirmer sur le stage la forme de `AI`
+  (`AAAA-MM-JJ` supposée) et celle des répétitions.
 . *2572.* Seul l'impôt total (`GE`) est transmis, sans ventilation entre
   taux normal et taux réduit (`TN`/`TP`, `RB`/`TB`) : TELEDEC peut
   recalculer le total ; l'utilisateur complète sur TELEDEC.

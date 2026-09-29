@@ -39,6 +39,14 @@ module Partiduo
       # Copie PDF d'une facture transmise par la plateforme agréée (ADR-004
       # D9) : `false` la refuse pour ce client.
       field :pdf_copy, :bool, default: true
+      # Nature d'un fournisseur (DAS2) : `individual` (personne physique) ou
+      # `business` ; vide : pas encore précisée (migration cards `0004`).
+      field :supplier_nature, :string, max_size: 16, blank: true, default: ""
+      # Identité d'une personne physique (fournisseur `individual`) : nom,
+      # prénoms, date de naissance, déclarés par la DAS2.
+      field :last_name, :string, max_size: 128, blank: true, default: ""
+      field :first_names, :string, max_size: 128, blank: true, default: ""
+      field :birth_date, :date, null: true, blank: true
 
       # Articles et services
       field :unit_code, :string, max_size: 3, blank: true, default: ""

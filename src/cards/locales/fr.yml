@@ -23,6 +23,9 @@ fr:
       individual: "Particulier"
       business: "Professionnel"
       public: "Administration publique"
+    supplier_natures:
+      individual: "Personne physique"
+      business: "Personne morale"
     value_types:
       text: "Texte"
       number: "Nombre"
@@ -122,6 +125,20 @@ fr:
           not_applicable: "Ce champ ne concerne pas cette catégorie de fiche."
           not_found: "Ce taux de TVA n'existe pas."
           disabled: "Le taux de TVA %{code} est désactivé."
+        supplier_nature:
+          not_applicable: "La nature de fournisseur ne concerne que les fiches de fournisseur."
+          invalid: "La nature « %{value} » n'est pas reconnue (personne physique, personne morale)."
+        last_name:
+          not_applicable: "Le nom ne se saisit que pour un fournisseur personne physique."
+          blank: "Le nom de la personne physique est obligatoire."
+          too_long: "Le nom ne peut dépasser %{max} caractères."
+        first_names:
+          not_applicable: "Les prénoms ne se saisissent que pour un fournisseur personne physique."
+          blank: "Les prénoms de la personne physique sont obligatoires."
+          too_long: "Les prénoms ne peuvent dépasser %{max} caractères."
+        birth_date:
+          not_applicable: "La date de naissance ne se saisit que pour un fournisseur personne physique."
+          invalid: "La date de naissance n'est pas plausible (après 1900, pas dans l'avenir)."
         customer_nature:
           not_applicable: "La nature ne concerne que les fiches de client."
           invalid: "La nature « %{value} » n'est pas reconnue (particulier, professionnel, administration publique)."

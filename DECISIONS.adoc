@@ -10565,3 +10565,47 @@ famille de la planche), planche régénérée par `scripts/icon_sprite.cr`. Le
 CRM les utilise (pipeline, flèches des cartes, « Appeler », « Écrire »,
 nature des activités ; D-CRM-018). Une icône qui manque à une extension
 s'ajoute à la planche commune, jamais dans l'extension.
+
+== Travaux reportés (29 septembre 2026)
+
+Réalisation des « travaux reportés » du livrable (`partiduo-docs/LIVRABLE.adoc`).
+
+=== D-R5-001 — Fournisseur personne physique : nature et identité sur la fiche (cards, interface)
+
+*Contexte.* La DAS2 déclare un bénéficiaire personne physique par ses nom,
+prénoms et date de naissance (`AE_3036_1`, `AE_3036_2`, `AI`) ; les fiches
+du socle ne distinguaient pas la personne physique (BLOCAGES B-TDC-004).
+
+*Choix.* Migration cards `0004` : `supplier_nature` (`individual`,
+`business`, vide : non précisée), `last_name`, `first_names`, `birth_date`,
+gardées par deux contraintes en base (nature connue ; identité vide hors
+personne physique). Contrat : `CardInput#supplier_nature` — `nil` garde la
+nature *et* l'identité enregistrées, ce qui laisse inchangés les appelants
+antérieurs (reprise, saisie express) ; donnée, la saisie décrit l'identité
+entière (une date absente l'efface). Personne physique : nom et prénoms
+exigés, date facultative mais plausible (après 1900, pas dans l'avenir) ;
+nom de fiche vide composé en « NOM Prénoms ». Fiche passée dans une autre
+catégorie que fournisseur : nature et identité effacées. `CardView` :
+`individual_supplier?`, `supplier_nature_key`. Interface : groupe
+« Fournisseur » du formulaire (liste de natures, nom, prénoms, date au
+sélecteur du navigateur) et consultation.
+
+*Alternative écartée.* Réutiliser `customer_nature` pour les fournisseurs :
+les natures n'ont pas le même sens (administration publique, B2C) et une
+fiche ne change pas de catégorie sans changer de rôle. Exiger la date de
+naissance : les fiches existantes deviendraient invalides à la première
+modification ; la DAS2 avertit à la place.
+
+=== D-R5-002 — DAS2 : bénéficiaire personne physique (partiduo-teledec)
+
+*Choix.* `Payload::Das2Line` porte `person`, `last_name`, `first_names`,
+`birth_date` (`AAAA-MM-JJ`), avec valeurs par défaut : un document préparé
+avant se relit comme une personne morale et son empreinte ne change pas.
+Le formateur de la marque blanche déclare `AE_3036_1`, `AE_3036_2` et `AI`
+(date omise si inconnue) pour une personne physique, `AF_3036_1` sinon ; le
+SIRET (`AF_3039_1`) reste déclaré dans les deux cas (entrepreneur
+individuel). Contrôles non bloquants à la préparation : date de naissance
+manquante (`das2_birth_date`), nature du fournisseur non précisée
+(`das2_nature_unset`, déclaré en raison sociale comme avant). L'écran du
+dépôt affiche l'identité déclarée. La forme exacte de `AI` et des
+répétitions reste à confirmer sur le stage (B-TDC-004).

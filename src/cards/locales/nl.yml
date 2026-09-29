@@ -23,6 +23,9 @@ nl:
       individual: "Particulier"
       business: "Onderneming"
       public: "Overheid"
+    supplier_natures:
+      individual: "Natuurlijk persoon"
+      business: "Rechtspersoon"
     value_types:
       text: "Tekst"
       number: "Getal"
@@ -122,6 +125,20 @@ nl:
           not_applicable: "Dit veld is niet van toepassing op deze fichecategorie."
           not_found: "Dit btw-tarief bestaat niet."
           disabled: "Btw-tarief %{code} is gedeactiveerd."
+        supplier_nature:
+          not_applicable: "De aard van de leverancier geldt alleen voor leveranciersfiches."
+          invalid: "De aard „%{value}” wordt niet herkend (natuurlijk persoon, rechtspersoon)."
+        last_name:
+          not_applicable: "De naam wordt alleen ingevuld voor een leverancier die een natuurlijk persoon is."
+          blank: "De naam van de natuurlijke persoon is verplicht."
+          too_long: "De naam mag niet langer zijn dan %{max} tekens."
+        first_names:
+          not_applicable: "De voornamen worden alleen ingevuld voor een leverancier die een natuurlijk persoon is."
+          blank: "De voornamen van de natuurlijke persoon zijn verplicht."
+          too_long: "De voornamen mogen niet langer zijn dan %{max} tekens."
+        birth_date:
+          not_applicable: "De geboortedatum wordt alleen ingevuld voor een leverancier die een natuurlijk persoon is."
+          invalid: "De geboortedatum is niet aannemelijk (na 1900, niet in de toekomst)."
         customer_nature:
           not_applicable: "De aard geldt alleen voor klantenfiches."
           invalid: "De aard „%{value}” wordt niet herkend (particulier, onderneming, overheid)."
