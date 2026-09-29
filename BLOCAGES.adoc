@@ -857,6 +857,27 @@ laissent des incertitudes ; l'adaptateur retient l'option la plus simple
 ci-dessus sur le stage (suite d'intégration, CA3 et DAS2 complètes), puis
 ajuster `Teledec::Remote::Formats`.
 
+*Levé en partie le 30 septembre 2026 (T3:teledec, réponses de TELEDEC du
+29 septembre, DECISIONS D-TDC3-001 à D-TDC3-008).* Confirmés et appliqués :
+source `API` ; clés des zones = code de la case seul (sauf 2065, 2031),
+clé inconnue ignorée par TELEDEC donc refusée localement ; codes de la CA3
+(`DK`, `KV`, `CC` ; `KW`, `KX`, `KZ` = E4, E5, F1 ; annexe en ligne 29 `KB` ;
+taux particuliers taux par taux) et de la CA12 revus ; DAS2 par
+bénéficiaire (`repetitionDAS2MontantSommesVersees`, `AF_3039_1` pour une
+personne morale) ; `CompleteWithErrors`/`CompleteWithWarnings` = contrôles
+internes de TELEDEC avant l'envoi ; types de rappel `Part` (DAS2) et
+`Paiement` (2571, 2572) ; rappels en `Basic` avec un mot de passe par
+partenaire, adresse dans `url` de chaque dépôt ; compte de l'entreprise créé
+à la transmission, dans le domaine du partenaire. *Reste* : forme de `AI`
+(date de naissance) ; acceptation par `+` dans l'adresse d'un compte ;
+liasse sans ligne de balance (2035 d'un libéral sans Comptabilité,
+D-TDC2-002) ; adresse de rappel de la liasse (le format de l'API Balance
+n'a pas de champ : adresse configurée chez TELEDEC pour le partenaire) ;
+routes du parcours greffe (redirection en marque blanche, récupération du
+PDF) non documentées ; zone `CA` de la 2035-B ; confirmation par
+l'opérateur du domaine réglé (`PARTIDUO_TELEDEC_USER_DOMAIN`) auprès de
+TELEDEC. À vérifier ensemble sur le stage (suite d'intégration).
+
 == Vérification de bout en bout des lots E, G, L et T (28 septembre 2026)
 
 Mises à jour des blocages antérieurs :

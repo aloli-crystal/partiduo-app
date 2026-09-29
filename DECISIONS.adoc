@@ -11367,3 +11367,145 @@ balance, droits, contrôle et transmission au TELEDEC simulé, Comptabilité
 avec et sans `liberal`) et `spec/ui/teledec_ui_liberal_spec.cr` (écran et
 paramètres) ; suite complète verte en ordre aléatoire, Ameba sans
 remarque ; `partiduo-demo` : spec verte. Base `partiduo_test_tdc2_*`.
+
+== Réponses de TELEDEC : adaptateur réel corrigé (30 septembre 2026)
+
+TELEDEC a répondu le 29 septembre 2026 aux questions de B-TDC-004
+(`partiduo/.teledec-doc/REPONSES-TELEDEC-2026-09-29.adoc`, qui fait foi).
+L'adaptateur réel (`Teledec::HttpTransport`, `Teledec::Remote::Formats`), le
+TELEDEC simulé des specs et les rappels sont corrigés en conséquence.
+
+=== D-TDC3-001 — `#SOURCE` de la liasse : `API` (T3:teledec ; B-TDC-004)
+
+*Choix.* Valeur par défaut `API`, donnée par TELEDEC ;
+`PARTIDUO_TELEDEC_SOURCE` reste le réglage (refus traduit en
+`teledec.errors.transport.source`). Le TELEDEC simulé n'admet que `API`.
+
+=== D-TDC3-002 — Zones de la liasse : code de la case seul, schéma contrôlé (T3:teledec ; D-VAL-006)
+
+*Choix.* Dans `zones_formulaires`, la clé est le code de la case seul
+(`"2035A": {"AA": …}`, `"2035B": {"CA": …}`, `2033A`, `2050`…), sauf pour
+la 2065 et la 2031, dont les champs portent le suffixe dans le schéma de
+TELEDEC (`HA_2065`, `Formats::SUFFIXED_ZONE_FORMS`). Le suffixe était ajouté
+par le formateur de `partiduo-teledec`, pas par les données de `liberal`
+(sa table porte le code seul) : seul le formateur change, sans migration de
+données. TELEDEC ignorant *sans erreur* une clé inconnue, toute case hors
+du schéma relevé des formulaires 2035, 2035-A et 2035-B
+(`Formats::ZONE_CODES`, repris de la spec D-VAL-006 et vérifié contre
+elle) est un contrôle bloquant à la préparation
+(`teledec.controls.zone_unknown`) et refusée à l'envoi
+(`teledec.errors.transport.zone_unknown`).
+
+*Alternative écartée.* Laisser partir une case inconnue : la déclaration
+serait incomplète sans que personne le sache.
+
+=== D-TDC3-003 — Codes de la TVA : CA3 et CA12 revus (T3:teledec)
+
+*Choix.* CA3 (`3310CA3`) : A4 importations `DK`, A5 sorties de régime
+suspensif `KV`, B2 acquisitions intracommunautaires `CC` ; E4, E5, F1
+(opérations non imposables, pour information) `KW`, `KX`, `KZ` ; taxes
+assimilées de l'annexe 3310-A en ligne 29 (`KB`, inchangé). TELEDEC n'a pas
+de ligne 14 : les opérations aux taux particuliers, que la Comptabilité
+détaille taux par taux (annexe, D-R5-006), partent dans les champs de leur
+taux du formulaire 3310CA3 (`Formats::ANNEX_CODES` : 2,10 % métropole
+`MF`/`ME`, Corse 0,90 % `BE`/`MA` et 13 % `NN`/`NP`, DOM 1,05 % `BP`/`CP` et
+1,75 % `BQ`/`CQ`, relevés dans les spécifications) ; la ligne 14 de
+Partiduo est alors le report des lignes arrondies (`VatTotals`) et ne part
+pas ; un taux particulier sans code reste un contrôle bloquant
+(`box_unmapped`).
+
+CA12 (`3517SCA12`) : la 3517-S n'a pas de cadre A ; les repères A1, A2,
+A4, A5, B2, B5 de Partiduo (propres à la CA3, repris des bases par taux) et
+sa ligne 17 (« dont TVA sur acquisitions intracommunautaires », comprise
+dans la ligne 08) ne se transmettent pas, sans bloquer. Taux particuliers :
+une seule ligne (`EJ`, `FJ`). La « ligne 17 → `GA` » et la « ligne 29 →
+`LB` » de la réponse de TELEDEC suivent la numérotation de la 3517-S
+(remboursements provisionnels, crédit) : Partiduo ne calcule pas de
+remboursement provisionnel et son crédit (sa ligne 25) va déjà en `LB` ;
+ses taxes assimilées (sa ligne 29) n'ont pas de total sur la 3517-S et
+restent un contrôle bloquant.
+
+*Alternative écartée.* Envoyer la ligne 17 de Partiduo en `GA` : la TVA
+sur acquisitions intracommunautaires deviendrait un remboursement obtenu
+et réduirait à tort le montant dû.
+
+=== D-TDC3-004 — DAS2 : une répétition par bénéficiaire (T3:teledec ; D-R5-002)
+
+*Choix.* Un objet `repetitionDAS2TV` par bénéficiaire (identité, adresse,
+profession, SIRET de l'établissement en `AD`), ses natures dans le
+sous-tableau `repetitionDAS2MontantSommesVersees` (`CA` lettre de la
+DGFiP, `BA` montant). Personne morale : `AF_3036_1` (raison sociale) et
+`AF_3039_1` (SIRET) ; personne physique : `AE_3036_1`, `AE_3036_2`, `AI`,
+sans les champs `AF_*`. Le TELEDEC simulé refuse l'ancienne forme.
+
+=== D-TDC3-005 — États et types des rappels (T3:teledec ; D-TDC-021, D-TDC-024)
+
+*Choix.* `CompleteWithErrors` et `CompleteWithWarnings` sont les contrôles
+internes de TELEDEC *avant* l'envoi (bloquants, non bloquants) : le dépôt
+reste transmis, en attente, l'état brut est affiché (« Contrôles de
+TELEDEC : erreurs bloquantes à corriger sur TELEDEC », « … incohérences
+non bloquantes »). Seuls `OK`/`Accepted` (accepté par la DGFiP) et
+`ERREUR`/`Rejected` (rejeté) sont définitifs. Statut suivi dans un
+compte-rendu : `declarationStatus`, sinon `status`, à défaut
+`formulairesStatus` (`SENT` : soumis, en attente). Type des rappels
+(`declarationType`) : `TVA`, `Liasse`, `Part` pour la DAS2, `Paiement` pour
+les relevés 2571 et 2572 ; un rappel d'un autre type est ignoré, un
+paiement ne vaut que pour un relevé d'IS (qui n'était jusqu'ici jamais
+accusé par un rappel).
+
+=== D-TDC3-006 — Rappels : un mot de passe par partenaire, adresse par déclaration (T3:teledec ; D-TDC-027)
+
+*Choix.* TELEDEC s'authentifie en HTTP `Basic` avec *un* mot de passe par
+partenaire, configuré chez TELEDEC et dans l'instance
+(`PARTIDUO_TELEDEC_CALLBACK_PASSWORD`, identifiant facultatif
+`PARTIDUO_TELEDEC_CALLBACK_USER`), comparé en temps constant, jamais
+journalisé ni affiché. Le jeton par entreprise disparaît (plus de `Bearer`
+ni de paramètre `token`, plus de renouvellement à l'écran ; colonne vidée
+par la migration `0005_teledec_account`). Sans mot de passe réglé, tout
+rappel est refusé (401) et aucune adresse n'est donnée : le suivi se fait
+par « Actualiser le statut ». L'adresse des rappels
+(`https://<instance>/hooks/TELEDEC/callback`, sans secret) part dans le
+champ `url` de chaque dépôt en marque blanche. La liasse (API Balance)
+produit aussi des rappels, mais son format n'a pas de champ d'adresse
+(clés `#` relevées) : ses rappels vont à l'adresse configurée chez TELEDEC
+pour le partenaire (consigné dans B-TDC-004). L'écran des paramètres
+montre l'état du mot de passe et l'adresse.
+
+=== D-TDC3-007 — Compte de l'entreprise en marque blanche : adresse dans le domaine du partenaire (T3:teledec)
+
+*Choix.* TELEDEC crée le compte de l'entreprise à la transmission, sous
+une adresse d'utilisateur *dans le domaine déclaré comme partenaire chez
+TELEDEC*. Aucun domaine n'est écrit dans le code, les specs ou la
+documentation : `PARTIDUO_TELEDEC_USER_DOMAIN` est obligatoire pour
+l'adaptateur réel (sans lui : `teledec.errors.transport.user_domain`,
+message de configuration, rien n'est envoyé) ; format de la partie locale
+`PARTIDUO_TELEDEC_USER_FORMAT`, `{siren}` obligatoire, défaut
+`teledec-{siren}` (stable par entreprise, sans collision ; le `+` n'est
+pas retenu par défaut faute de savoir si TELEDEC l'accepte). Mot de passe
+aléatoire, oublié aussitôt : seul son haché bcrypt (coût 12, comme
+`#MOT-DE-PASSE` de l'API Balance) est gardé dans les paramètres
+(`account_password_hash`, créé à la première transmission sous le verrou
+des dépôts) et transmis — par `#EMAIL`/`#MOT-DE-PASSE` pour la liasse, par
+`POST /service/creation-entreprise` avant la première déclaration en
+marque blanche (environnement noté dans `account_env`). L'adresse du
+compte sert aussi au suivi (`email` des routes de statut) ; l'email des
+paramètres devient l'email de contact, repris dans l'identité. Specs et
+TELEDEC simulé : domaine fictif `partiduo.test`.
+
+*À confirmer par l'opérateur.* Le domaine réglé doit appartenir à
+l'opérateur, être celui déclaré chez TELEDEC, et recevoir les courriels
+que TELEDEC enverrait aux comptes (boîte générique, redirection ou relais).
+
+=== D-TDC3-008 — Greffe : pas de dépôt par l'API (T3:teledec)
+
+*Choix.* Le dépôt au greffe passe par une redirection en marque blanche
+vers le formulaire greffe de TELEDEC, finalisé par l'utilisateur, puis la
+récupération du PDF du dépôt ; ni la route d'initiation ni celle de
+récupération ne sont documentées dans `.teledec-doc/` : le transport
+refuse le greffe avec un message qui renvoie au site de TELEDEC
+(`teledec.errors.transport.greffe`), la préparation et l'issue notée à la
+main restent possibles. Consigné dans B-TDC-004.
+
+*Vérification.* `partiduo-teledec` : 206 exemples verts en ordre aléatoire
+(4 en attente : suite du stage, sans réseau), Ameba sans remarque ;
+`partiduo-demo` : spec verte. Base `partiduo_test_tdc2_*`.
