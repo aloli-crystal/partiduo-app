@@ -323,6 +323,10 @@ de l'Analytique et les ajouter à la réconciliation (totaux par poste).
 opérations diverses, balances pour la réconciliation) ; reste la reprise
 elle-même dans `partiduo-migrate`.
 
+*Levé le 29 septembre 2026* : reprise des plans, groupes, postes,
+ventilations et opérations diverses, avant la clôture des périodes,
+réconciliée par poste (D-R5-011).
+
 == B-ED-001 — `String#encode` avec `invalid: :skip` perd des octets (lot 3, éditions)
 
 *Constat.* Crystal 1.19.1 : `text.encode("ISO-8859-15", invalid: :skip)`
@@ -355,6 +359,11 @@ attendant, la reprise des actions et des dépôts (`partiduo-migrate`, à
 écrire) doit au minimum *avertir* dans son rapport quand `ag_dest` n'est pas
 vide (valeur autre que « tous ») ou quand `profile_sec_repository` contient
 des lignes, en indiquant que le cloisonnement ne sera pas appliqué.
+
+*Levé le 29 septembre 2026* : droits par dépôt par profil (D-R5-015) et
+actions réservées à un profil (D-R5-016) ; `partiduo-migrate` avertit dans
+son rapport quand la source en porte (D-R5-014) — les profils d'origine
+n'étant jamais repris, ces restrictions se reposent sur l'instance.
 
 == B-JF-001 — Parcours du jalon F dans le navigateur arrêté à la page de connexion (jalon F)
 
@@ -427,6 +436,11 @@ comme écritures ordinaires).
 
 *Levée.* Lot de reprise dédié, dans l'ordre de B-MIG-001 (ventiler avant de
 clore les périodes), avec les avertissements de B-SEC-001.
+
+*Levé le 29 septembre 2026* : analytique (D-R5-011), numéros de relevé
+(D-R5-012), stock et prévisions (D-R5-013), suivi (D-R5-014), avec les
+avertissements de B-SEC-001. Les écritures d'ouverture restent reprises
+comme écritures ordinaires (hors des travaux reportés).
 
 == B-CRIT-004 — Conformité visuelle à la maquette non vérifiée à l'œil (critique de complétude)
 

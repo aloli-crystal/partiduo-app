@@ -40,7 +40,10 @@ module Partiduo
       # * `remind_on` : date de rappel ;
       # * `concerned_card_ids` : autres fiches concernées (`action_person`) ;
       # * `tag_ids` : étiquettes ;
-      # * `comment` : premier commentaire (création seulement).
+      # * `comment` : premier commentaire (création seulement) ;
+      # * `visible_profile_id` : action réservée aux utilisateurs de ce
+      #   profil (plus son auteur et qui paramètre le suivi) ; `nil` :
+      #   visible de toute personne qui lit le suivi (D-R5-016).
       record ActionInput,
         action_type_id : Int64,
         date : Time,
@@ -53,10 +56,14 @@ module Partiduo
         contact_card_id : Int64? = nil,
         concerned_card_ids : Array(Int64) = [] of Int64,
         tag_ids : Array(Int64) = [] of Int64,
-        comment : String = ""
+        comment : String = "",
+        visible_profile_id : Int64? = nil
 
       # Fiche citée par une action.
       record CardRef, id : Int64, code : String, name : String
+
+      # Profil auquel une action peut être réservée (D-R5-016).
+      record ProfileRef, id : Int64, name : String
 
       record CommentView, id : Int64, text : String, author_id : Int64?, created_at : Time
 
@@ -84,7 +91,8 @@ module Partiduo
         comments : Array(CommentView),
         owner_id : Int64?,
         created_at : Time,
-        updated_at : Time do
+        updated_at : Time,
+        visible_profile_id : Int64? = nil do
         def open? : Bool
           OPEN_STATES.includes?(state)
         end

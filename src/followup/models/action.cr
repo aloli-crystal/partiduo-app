@@ -47,6 +47,9 @@ module Partiduo
       field :card_id, :big_int, null: true, blank: true
       field :contact_card_id, :big_int, null: true, blank: true
       field :owner_id, :big_int, null: true, blank: true
+      # Profil auquel l'action est réservée (`ag_dest`, migration `0002`) ;
+      # vide : visible de toute personne qui lit le suivi.
+      field :visible_profile_id, :big_int, null: true, blank: true
 
       with_timestamp_fields
     end

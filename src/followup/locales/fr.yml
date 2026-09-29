@@ -68,6 +68,7 @@ fr:
         hour_invalid: "Heure invalide (HH:MM)."
         priority_invalid: "Priorité invalide."
         state_invalid: "État invalide."
+        profile_unknown: "Profil inconnu : l'action ne peut pas lui être réservée."
         card_unknown: "Fiche inconnue (%{id})."
         tag_unknown: "Étiquette inconnue (%{id})."
       comment:

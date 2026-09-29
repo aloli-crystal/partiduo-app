@@ -148,22 +148,30 @@ module Partiduo
 
       def self.actions(actor : Actor, query : ActionQuery = ActionQuery.new) : Array(ActionSummaryView)
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
-        Partiduo::Followup::Actions.search(query)
+        Partiduo::Followup::Actions.search(query, Partiduo::Followup::Visibility.viewer(actor))
       end
 
       def self.count_actions(actor : Actor, query : ActionQuery = ActionQuery.new) : Int64
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
-        Partiduo::Followup::Actions.count(query)
+        Partiduo::Followup::Actions.count(query, Partiduo::Followup::Visibility.viewer(actor))
       end
 
       def self.action(actor : Actor, id : Int64) : ActionView
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
-        Partiduo::Followup::Actions.view(find_action(id))
+        Partiduo::Followup::Actions.view(find_action(id, actor))
       end
 
       def self.action_by_reference(actor : Actor, reference : String) : ActionView?
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
-        Partiduo::Followup::Action.filter(reference: reference.strip).first.try { |action| Partiduo::Followup::Actions.view(action) }
+        action = Partiduo::Followup::Action.filter(reference: reference.strip).first || return
+        return unless Partiduo::Followup::Visibility.visible?(action, Partiduo::Followup::Visibility.viewer(actor))
+        Partiduo::Followup::Actions.view(action)
+      end
+
+      # Profils auxquels une action peut être réservée (formulaire).
+      def self.visibility_profiles(actor : Actor) : Array(ProfileRef)
+        Guard.authorize!(actor, READ, module_code: MODULE_CODE)
+        Partiduo::Auth::Profile.all.order(:name).to_a.map { |profile| ProfileRef.new(profile.pk!.as(Int64), profile.name.to_s) }
       end
 
       def self.check_action(actor : Actor, input : ActionInput) : Result(Nil)
@@ -199,6 +207,7 @@ module Partiduo
         Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
         Transaction.run do
           action = Partiduo::Followup::Action.filter(id: id).lock.first || raise NotFound.new("followup_action", id)
+          ensure_visible!(action, actor)
           errors = Partiduo::Followup::Rules.action_errors(input)
           errors.concat(Partiduo::Followup::Rules.comment_errors(input.comment).map(&.copy_with(field: "comment"))) unless input.comment.strip.empty?
           next Result(ActionView).failure(errors) unless errors.empty?
@@ -216,6 +225,7 @@ module Partiduo
         Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
         Transaction.run do
           action = Partiduo::Followup::Action.filter(id: id).lock.first || raise NotFound.new("followup_action", id)
+          ensure_visible!(action, actor)
           unless STATES.includes?(state)
             next Result(ActionView).failure(Partiduo::Followup::Rules.error("state", "action", "state_invalid"))
           end
@@ -229,7 +239,7 @@ module Partiduo
       def self.delete_action(actor : Actor, id : Int64) : Result(Nil)
         Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
         Transaction.run do
-          find_action(id).delete
+          find_action(id, actor).delete
           Result(Nil).success(nil)
         end
       end
@@ -237,7 +247,7 @@ module Partiduo
       def self.add_comment(actor : Actor, id : Int64, text : String) : Result(CommentView)
         Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
         Transaction.run do
-          action = find_action(id)
+          action = find_action(id, actor)
           errors = Partiduo::Followup::Rules.comment_errors(text)
           next Result(CommentView).failure(errors) unless errors.empty?
           comment = Partiduo::Followup::Comment.create!(action: action, text: text.strip, author_id: actor.user_id)
@@ -251,8 +261,8 @@ module Partiduo
       def self.relate(actor : Actor, id : Int64, other_id : Int64) : Result(Nil)
         Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
         Transaction.run do
-          find_action(id)
-          find_action(other_id)
+          find_action(id, actor)
+          find_action(other_id, actor)
           if id == other_id
             next Result(Nil).failure(Partiduo::Followup::Rules.error("other_id", "relation", "self"))
           end
@@ -267,6 +277,7 @@ module Partiduo
       def self.unrelate(actor : Actor, id : Int64, other_id : Int64) : Result(Nil)
         Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
         Transaction.run do
+          find_action(id, actor)
           least, greatest = Partiduo::Followup::Actions.pair(id, other_id)
           Partiduo::Followup::Relation.filter(least_id: least, greatest_id: greatest).delete
           Result(Nil).success(nil)
@@ -279,7 +290,7 @@ module Partiduo
       def self.link(actor : Actor, id : Int64, reference : String) : Result(Nil)
         Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
         Transaction.run do
-          action = find_action(id)
+          action = find_action(id, actor)
           errors = Partiduo::Followup::Rules.link_errors(reference)
           next Result(Nil).failure(errors) unless errors.empty?
           unless Partiduo::Followup::Link.filter(action_id: id, reference: reference.strip).exists?
@@ -292,6 +303,7 @@ module Partiduo
       def self.unlink(actor : Actor, id : Int64, reference : String) : Result(Nil)
         Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
         Transaction.run do
+          find_action(id, actor)
           Partiduo::Followup::Link.filter(action_id: id, reference: reference.strip).delete
           Result(Nil).success(nil)
         end
@@ -301,13 +313,13 @@ module Partiduo
       def self.actions_linked_to(actor : Actor, reference : String) : Array(ActionSummaryView)
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
         ids = Partiduo::Followup::Link.filter(reference: reference.strip).to_a.map(&.action_id!.as(Int64)).uniq!
-        Partiduo::Followup::Actions.summaries(ids)
+        Partiduo::Followup::Actions.summaries(Partiduo::Followup::Visibility.filter(ids, Partiduo::Followup::Visibility.viewer(actor)))
       end
 
       def self.set_tags(actor : Actor, id : Int64, tag_ids : Array(Int64)) : Result(ActionView)
         Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
         Transaction.run do
-          action = find_action(id)
+          action = find_action(id, actor)
           known = Partiduo::Followup::Tag.filter(id__in: tag_ids.uniq).to_a.map(&.pk!.as(Int64)).to_set
           errors = tag_ids.each_with_index.compact_map do |(tag_id, index)|
             next if known.includes?(tag_id)
@@ -323,14 +335,14 @@ module Partiduo
 
       def self.reminders(actor : Actor, today : Time = Partiduo::Config.today) : RemindersView
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
-        Partiduo::Followup::Actions.reminders(today)
+        Partiduo::Followup::Actions.reminders(today, Partiduo::Followup::Visibility.viewer(actor))
       end
 
       # Export CSV d'une recherche (`export_follow_up_csv.php`), sans plafond :
       # `limit` et `offset` de la requête sont ignorés.
       def self.export_actions(actor : Actor, query : ActionQuery = ActionQuery.new) : FileView
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
-        Partiduo::Followup::Exports.actions(Partiduo::Followup::Actions.search_all(query))
+        Partiduo::Followup::Exports.actions(Partiduo::Followup::Actions.search_all(query, Partiduo::Followup::Visibility.viewer(actor)))
       end
 
       # --- Interne ---------------------------------------------------------------------------
@@ -347,8 +359,17 @@ module Partiduo
         Partiduo::Followup::Tag.filter(id: id).first || raise NotFound.new("followup_tag", id)
       end
 
-      private def self.find_action(id : Int64) : Partiduo::Followup::Action
-        Partiduo::Followup::Action.filter(id: id).first || raise NotFound.new("followup_action", id)
+      # Action visible de l'acteur (D-R5-016), sinon `NotFound` : une
+      # action réservée n'existe pas pour qui ne la voit pas.
+      private def self.find_action(id : Int64, actor : Actor) : Partiduo::Followup::Action
+        action = Partiduo::Followup::Action.filter(id: id).first || raise NotFound.new("followup_action", id)
+        ensure_visible!(action, actor)
+        action
+      end
+
+      private def self.ensure_visible!(action : Partiduo::Followup::Action, actor : Actor) : Nil
+        return if Partiduo::Followup::Visibility.visible?(action, Partiduo::Followup::Visibility.viewer(actor))
+        raise NotFound.new("followup_action", action.pk!.as(Int64))
       end
     end
   end

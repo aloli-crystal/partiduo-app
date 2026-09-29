@@ -68,6 +68,7 @@ en:
         hour_invalid: "Invalid time (HH:MM)."
         priority_invalid: "Invalid priority."
         state_invalid: "Invalid status."
+        profile_unknown: "Unknown profile: the action cannot be restricted to it."
         card_unknown: "Unknown card (%{id})."
         tag_unknown: "Unknown tag (%{id})."
       comment:

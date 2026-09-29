@@ -40,6 +40,11 @@ nl:
       value: "Waarde"
       total: "Totaal"
     errors:
+      rights:
+        denied: "U mag niet schrijven in dit magazijn."
+        profile_unknown: "Onbekend profiel."
+        access_invalid: "Onbekend recht (lezen of schrijven)."
+        repository_unknown: "Onbekend magazijn (%{id})."
       repository:
         name_required: "De naam van het magazijn is verplicht."
         name_too_long: "De naam van het magazijn telt hoogstens %{max} tekens."

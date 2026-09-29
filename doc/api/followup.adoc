@@ -98,6 +98,19 @@ par date décroissante ; `limit` 10 000 au plus. Export CSV sans plafond
 (`late`).
 |===
 
+== Actions réservées à un profil
+
+`ActionInput#visible_profile_id` (`ag_dest` d'origine ; D-R5-016) : `nil`,
+toute personne qui lit le suivi voit l'action ; sinon, les utilisateurs de
+ce profil, son auteur et qui détient `followup.settings.write` (l'acteur
+système voit tout). Pour les autres, l'action n'existe pas : absente des
+recherches, comptes, rappels, exports et actions liées à une opération ;
+`action`, `update_action`, `set_state`, `add_comment`, `relate`, `link`…
+lèvent `NotFound`. Profil inconnu : `followup.errors.action.profile_unknown`.
+`visibility_profiles(actor)` (lecture) rend les profils du choix.
+Migration followup 0002 (`visible_profile_id`, remis à vide si le profil
+disparaît).
+
 == Menus
 
 Rubrique `FOLLOW_UP` (« Suivi », déclarée par `CORE`, D-FUP-002) :

@@ -44,6 +44,21 @@ module Partiduo
 
       record SettingsView, default_repository_id : Int64?, default_repository_name : String?
 
+      # --- Droits par dépôt (D-R5-015) ---------------------------------------------
+
+      # Droit d'un profil sur un dépôt : `R` lecture, `W` écriture, vide :
+      # aucun. Un profil sans aucun droit enregistré n'est pas restreint.
+      record RepositoryRightInput, repository_id : Int64, access : String
+
+      record RepositoryRightView, repository_id : Int64, repository_name : String, access : String
+
+      # Droits d'un profil : `restricted` faux, ses utilisateurs voient tous
+      # les dépôts (droits globaux du Stock).
+      record ProfileRightsView, profile_id : Int64, restricted : Bool, rights : Array(RepositoryRightView)
+
+      # Profil d'utilisateurs, pour le choix du profil dont on règle les droits.
+      record ProfileRef, id : Int64, name : String, restricted : Bool
+
       # --- Articles suivis -------------------------------------------------------
 
       # Article suivi en stock (attribut « code stock » d'une fiche,

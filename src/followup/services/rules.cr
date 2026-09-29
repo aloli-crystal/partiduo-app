@@ -79,6 +79,7 @@ module Partiduo
         end
         errors << error("priority", "action", "priority_invalid") unless Api::PRIORITIES.includes?(input.priority)
         errors << error("state", "action", "state_invalid") unless Api::STATES.includes?(input.state)
+        errors.concat(profile_errors(input.visible_profile_id))
         cards = Cards.by_id(([input.card_id, input.contact_card_id].compact + input.concerned_card_ids))
         {"card_id" => input.card_id, "contact_card_id" => input.contact_card_id}.each do |field, card_id|
           next if card_id.nil? || cards.has_key?(card_id)
@@ -94,6 +95,12 @@ module Partiduo
           errors << error("tag_ids[#{index}]", "action", "tag_unknown", {"id" => tag_id.to_s})
         end
         errors
+      end
+
+      # Profil auquel l'action est réservée : existant (D-R5-016).
+      def self.profile_errors(profile_id : Int64?) : Array(FieldError)
+        return [] of FieldError if profile_id.nil? || Partiduo::Auth::Profile.filter(id: profile_id).exists?
+        [error("visible_profile_id", "action", "profile_unknown")]
       end
 
       def self.valid_hour?(hour : String) : Bool

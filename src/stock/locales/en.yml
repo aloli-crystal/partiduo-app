@@ -40,6 +40,11 @@ en:
       value: "Value"
       total: "Total"
     errors:
+      rights:
+        denied: "You are not allowed to write to this warehouse."
+        profile_unknown: "Unknown profile."
+        access_invalid: "Unknown right (read or write)."
+        repository_unknown: "Unknown warehouse (%{id})."
       repository:
         name_required: "The warehouse name is required."
         name_too_long: "The warehouse name has at most %{max} characters."

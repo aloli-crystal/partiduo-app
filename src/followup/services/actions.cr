@@ -39,6 +39,7 @@ module Partiduo
         action.remind_on = input.remind_on.try { |date| day(date) }
         action.card_id = input.card_id
         action.contact_card_id = input.contact_card_id
+        action.visible_profile_id = input.visible_profile_id
         action
       end
 
@@ -84,7 +85,8 @@ module Partiduo
           concerned: concerned_ids.compact_map { |card_id| cards[card_id]? }, tags: tags.map { |tag| tag_view(tag) },
           links: Link.filter(action_id: id).order(:reference).to_a.map(&.reference!), related: related(id),
           comments: Comment.filter(action_id: id).order(:created_at, :id).to_a.map { |comment| comment_view(comment) },
-          owner_id: action.owner_id.try(&.to_i64), created_at: action.created_at!, updated_at: action.updated_at!)
+          owner_id: action.owner_id.try(&.to_i64), created_at: action.created_at!, updated_at: action.updated_at!,
+          visible_profile_id: action.visible_profile_id.try(&.to_i64))
       end
 
       def self.comment_view(comment : Comment) : Api::CommentView
@@ -110,10 +112,11 @@ module Partiduo
 
       alias Arg = ::DB::Any | Array(Int64)
 
-      def self.search_sql(query : Api::ActionQuery) : {String, Array(Arg)}
+      def self.search_sql(query : Api::ActionQuery, viewer : Visibility::Viewer? = nil) : {String, Array(Arg)}
         args = [] of Arg
         conditions = [] of String
         arg = ->(value : Arg) { args << value; "$#{args.size}" }
+        viewer.try { |reader| conditions << Visibility.condition(reader, arg) }
         if text = query.search.try(&.strip).presence
           pattern = "%#{text.gsub(/[\\%_]/) { |char| "\\#{char}" }}%"
           like = arg.call(pattern)
@@ -149,8 +152,8 @@ module Partiduo
         {where, args}
       end
 
-      def self.search(query : Api::ActionQuery) : Array(Api::ActionSummaryView)
-        where, args = search_sql(query)
+      def self.search(query : Api::ActionQuery, viewer : Visibility::Viewer? = nil) : Array(Api::ActionSummaryView)
+        where, args = search_sql(query, viewer)
         limit = query.limit.clamp(0, 10_000)
         offset = query.offset.clamp(0, Int32::MAX)
         ids = [] of Int64
@@ -165,8 +168,8 @@ module Partiduo
 
       # Toutes les actions d'une recherche, sans LIMIT (export) : les
       # identifiants d'abord, puis les résumés par paquets de 1 000.
-      def self.search_all(query : Api::ActionQuery) : Array(Api::ActionSummaryView)
-        where, args = search_sql(query)
+      def self.search_all(query : Api::ActionQuery, viewer : Visibility::Viewer? = nil) : Array(Api::ActionSummaryView)
+        where, args = search_sql(query, viewer)
         ids = [] of Int64
         Marten::DB::Connection.default.open do |db|
           db.query("SELECT a.id FROM followup_action a#{where} ORDER BY a.date DESC, a.id DESC", args: args) do |result_set|
@@ -176,8 +179,8 @@ module Partiduo
         ids.each_slice(1_000).flat_map { |slice| summaries(slice) }.to_a
       end
 
-      def self.count(query : Api::ActionQuery) : Int64
-        where, args = search_sql(query)
+      def self.count(query : Api::ActionQuery, viewer : Visibility::Viewer? = nil) : Int64
+        where, args = search_sql(query, viewer)
         Marten::DB::Connection.default.open do |db|
           db.query_one("SELECT count(*) FROM followup_action a#{where}", args: args, &.read(Int64))
         end
@@ -214,7 +217,7 @@ module Partiduo
 
       # --- Rappels ---------------------------------------------------------------------
 
-      def self.reminders(today : Time) : Api::RemindersView
+      def self.reminders(today : Time, viewer : Visibility::Viewer? = nil) : Api::RemindersView
         day = day(today).to_s("%Y-%m-%d")
         today_ids = [] of Int64
         late_ids = [] of Int64
@@ -228,7 +231,7 @@ module Partiduo
             result_set.each { late_ids << result_set.read(Int64) }
           end
         end
-        Api::RemindersView.new(summaries(today_ids), summaries(late_ids))
+        Api::RemindersView.new(summaries(Visibility.filter(today_ids, viewer)), summaries(Visibility.filter(late_ids, viewer)))
       end
     end
   end

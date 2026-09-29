@@ -50,12 +50,17 @@ module Partiduo
 
       def self.repositories(actor : Actor) : Array(RepositoryView)
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
+        allowed = Partiduo::Stock::Access.readable(actor)
         counts = Partiduo::Stock::Movements.movement_counts
-        Partiduo::Stock::Repository.all.order(:name).to_a.map { |row| Partiduo::Stock::Movements.repository_view(row, counts) }
+        rows = Partiduo::Stock::Repository.all.order(:name).to_a
+        rows.select! { |row| allowed.includes?(row.pk!.as(Int64)) } if allowed
+        rows.map { |row| Partiduo::Stock::Movements.repository_view(row, counts) }
       end
 
+      # Dépôt lisible de l'acteur (droits par dépôt, D-R5-015), sinon `NotFound`.
       def self.repository(actor : Actor, id : Int64) : RepositoryView
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
+        raise NotFound.new("stock_repository", id) unless Partiduo::Stock::Access.read?(actor, id)
         Partiduo::Stock::Movements.repository_view(find_repository(id))
       end
 
@@ -162,6 +167,7 @@ module Partiduo
       # entrée, négative = sortie ; refusé dans une période close.
       def self.record_change(actor : Actor, input : ChangeInput) : Result(ChangeView)
         Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
+        return Result(ChangeView).failure(repository_denied) unless Partiduo::Stock::Access.write?(actor, input.repository_id)
         Transaction.run do
           errors = Partiduo::Stock::Rules.change_errors(input)
           next Result(ChangeView).failure(errors) unless errors.empty?
@@ -182,6 +188,7 @@ module Partiduo
       # stock suivi : point de départ d'un inventaire (`take_last_inventory`).
       def self.inventory_proposal(actor : Actor, repository_id : Int64, date : Time) : Array(InventoryLineView)
         Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
+        raise NotFound.new("stock_repository", repository_id) unless Partiduo::Stock::Access.write?(actor, repository_id)
         find_repository(repository_id)
         Partiduo::Stock::Movements.inventory_proposal(repository_id, date)
       end
@@ -197,6 +204,7 @@ module Partiduo
       # devient un mouvement (entrée ou sortie) ; aucun mouvement sans écart.
       def self.record_inventory(actor : Actor, input : InventoryInput) : Result(ChangeView)
         Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
+        return Result(ChangeView).failure(repository_denied) unless Partiduo::Stock::Access.write?(actor, input.repository_id)
         Transaction.run do
           lock_inventory(input.repository_id)
           errors = Partiduo::Stock::Rules.inventory_errors(input)
@@ -225,12 +233,15 @@ module Partiduo
         query.date_from.try { |date| changes = changes.filter(date__gte: Partiduo::Stock::Movements.day(date)) }
         query.date_to.try { |date| changes = changes.filter(date__lte: Partiduo::Stock::Movements.day(date)) }
         query.kind.try { |kind| changes = changes.filter(kind: kind) }
+        Partiduo::Stock::Access.readable(actor).try { |ids| changes = changes.filter(repository_id__in: ids.to_a) }
         changes.order(:date, :id).to_a.map { |change| Partiduo::Stock::Movements.change_view(change) }
       end
 
       def self.change(actor : Actor, id : Int64) : ChangeView
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
-        Partiduo::Stock::Movements.change_view(find_change(id))
+        change = find_change(id)
+        raise NotFound.new("stock_change", id) unless Partiduo::Stock::Access.read?(actor, change.repository_id!.as(Int64))
+        Partiduo::Stock::Movements.change_view(change)
       end
 
       # Supprime l'opération et ses mouvements (`stock_inv_histo`) ; refusé
@@ -239,6 +250,7 @@ module Partiduo
         Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
         Transaction.run do
           change = Partiduo::Stock::Change.filter(id: id).lock.first || raise NotFound.new("stock_change", id)
+          next Result(Nil).failure(repository_denied) unless Partiduo::Stock::Access.write?(actor, change.repository_id!.as(Int64))
           if Partiduo::Stock::Movements.closed_on?(change.date!)
             next Result(Nil).failure(Partiduo::Stock::Rules.error(FieldError::BASE, "change", "closed_period",
               {"date" => change.date!.to_s("%Y-%m-%d")}))
@@ -253,12 +265,12 @@ module Partiduo
 
       def self.movements(actor : Actor, query : MovementQuery = MovementQuery.new) : Array(MovementView)
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
-        Partiduo::Stock::Movements.history(query)
+        Partiduo::Stock::Movements.history(query, Partiduo::Stock::Access.readable(actor))
       end
 
       def self.count_movements(actor : Actor, query : MovementQuery = MovementQuery.new) : Int64
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
-        Partiduo::Stock::Movements.history_query(query).count.to_i64
+        Partiduo::Stock::Movements.history_query(query, Partiduo::Stock::Access.readable(actor)).count.to_i64
       end
 
       # Quantité en stock d'une fiche suivie (son code stock) au jour `date`,
@@ -268,34 +280,84 @@ module Partiduo
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
         item = Partiduo::Stock::Item.filter(card_id: card_id).first || raise NotFound.new("stock_item", card_id)
         ids = repository_id ? [repository_id] : Partiduo::Stock::Repository.all.to_a.map(&.pk!.as(Int64))
+        Partiduo::Stock::Access.readable(actor).try { |allowed| ids.select! { |id| allowed.includes?(id) } }
         ids.sum(BigDecimal.new(0)) { |id| Partiduo::Stock::Movements.quantity_on(id, item.stock_code!, date) }
       end
 
       def self.state(actor : Actor, query : StateQuery) : StateView
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
-        Partiduo::Stock::Movements.state(query)
+        visible_state(actor, query)
       end
 
       def self.valuation(actor : Actor, date : Time = Partiduo::Config.today, repository_id : Int64? = nil) : ValuationView
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
-        Partiduo::Stock::Movements.valuation(date, repository_id)
+        visible_valuation(actor, date, repository_id)
       end
 
       # Exports CSV (sans plafond de lignes).
       def self.export_movements(actor : Actor, query : MovementQuery = MovementQuery.new) : FileView
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
-        rows = Partiduo::Stock::Movements.history_query(query).order(:date, :id).to_a
+        rows = Partiduo::Stock::Movements.history_query(query, Partiduo::Stock::Access.readable(actor)).order(:date, :id).to_a
         Partiduo::Stock::Exports.history(Partiduo::Stock::Movements.views(rows))
       end
 
       def self.export_state(actor : Actor, query : StateQuery) : FileView
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
-        Partiduo::Stock::Exports.state(Partiduo::Stock::Movements.state(query))
+        Partiduo::Stock::Exports.state(visible_state(actor, query))
       end
 
       def self.export_valuation(actor : Actor, date : Time = Partiduo::Config.today, repository_id : Int64? = nil) : FileView
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
-        Partiduo::Stock::Exports.valuation(Partiduo::Stock::Movements.valuation(date, repository_id))
+        Partiduo::Stock::Exports.valuation(visible_valuation(actor, date, repository_id))
+      end
+
+      # --- Droits par dépôt (D-R5-015) ---------------------------------------------------
+
+      # Profils de l'instance (paramétrage des droits), restreints ou non.
+      def self.rights_profiles(actor : Actor) : Array(ProfileRef)
+        Guard.authorize!(actor, SETTINGS_WRITE, module_code: MODULE_CODE)
+        restricted = Partiduo::Stock::RepositoryAccess.all.to_a.map(&.profile_id!.as(Int64)).to_set
+        Partiduo::Auth::Profile.all.order(:name).to_a.map do |profile|
+          id = profile.pk!.as(Int64)
+          ProfileRef.new(id, profile.name.to_s, restricted.includes?(id))
+        end
+      end
+
+      # Droits d'un profil sur chaque dépôt (paramétrage du Stock).
+      def self.profile_rights(actor : Actor, profile_id : Int64) : ProfileRightsView
+        Guard.authorize!(actor, SETTINGS_WRITE, module_code: MODULE_CODE)
+        rights = Partiduo::Stock::Access.profile_rights(profile_id)
+        views = Partiduo::Stock::Repository.all.order(:name).to_a.map do |repository|
+          id = repository.pk!.as(Int64)
+          RepositoryRightView.new(id, repository.name.to_s, rights[id]? || "")
+        end
+        ProfileRightsView.new(profile_id, !rights.empty?, views)
+      end
+
+      # Remplace les droits d'un profil ; aucun droit : restriction levée.
+      # Erreurs : `stock.errors.rights.profile_unknown`, `.access_invalid`,
+      # `.repository_unknown` (`%{id}`).
+      def self.set_profile_rights(actor : Actor, profile_id : Int64, rights : Array(RepositoryRightInput)) : Result(ProfileRightsView)
+        Guard.authorize!(actor, SETTINGS_WRITE, module_code: MODULE_CODE)
+        errors = [] of FieldError
+        unless Partiduo::Auth::Profile.filter(id: profile_id).exists?
+          errors << FieldError.new("profile_id", "stock.errors.rights.profile_unknown")
+        end
+        known = Partiduo::Stock::Repository.all.to_a.map(&.pk!.as(Int64)).to_set
+        rights.each_with_index do |right, index|
+          unless right.access.empty? || Partiduo::Stock::Access::ACCESSES.includes?(right.access)
+            errors << FieldError.new("rights[#{index}].access", "stock.errors.rights.access_invalid")
+          end
+          unless known.includes?(right.repository_id)
+            errors << FieldError.new("rights[#{index}].repository_id", "stock.errors.rights.repository_unknown",
+              {"id" => right.repository_id.to_s})
+          end
+        end
+        return Result(ProfileRightsView).failure(errors) unless errors.empty?
+        Transaction.run do
+          Partiduo::Stock::Access.save!(profile_id, rights)
+          Result(ProfileRightsView).success(profile_rights(actor, profile_id))
+        end
       end
 
       # --- Interne ---------------------------------------------------------------------------
@@ -317,6 +379,23 @@ module Partiduo
       private def self.lock_inventory(repository_id : Int64) : Nil
         Marten::DB::Connection.default.open(&.exec("SELECT pg_advisory_xact_lock(hashtext('stock_inventory'), $1::int)",
           repository_id.to_i32))
+      end
+
+      private def self.repository_denied : FieldError
+        FieldError.new("repository_id", "stock.errors.rights.denied")
+      end
+
+      # État et valorisation réduits aux dépôts lisibles de l'acteur.
+      private def self.visible_state(actor : Actor, query : StateQuery) : StateView
+        view = Partiduo::Stock::Movements.state(query)
+        allowed = Partiduo::Stock::Access.readable(actor) || return view
+        view.copy_with(rows: view.rows.select { |row| allowed.includes?(row.repository_id) })
+      end
+
+      private def self.visible_valuation(actor : Actor, date : Time, repository_id : Int64?) : ValuationView
+        view = Partiduo::Stock::Movements.valuation(date, repository_id)
+        allowed = Partiduo::Stock::Access.readable(actor) || return view
+        view.copy_with(rows: view.rows.select { |row| allowed.includes?(row.repository_id) })
       end
 
       private def self.find_repository(id : Int64) : Partiduo::Stock::Repository

@@ -68,6 +68,7 @@ nl:
         hour_invalid: "Ongeldig uur (UU:MM)."
         priority_invalid: "Ongeldige prioriteit."
         state_invalid: "Ongeldige status."
+        profile_unknown: "Onbekend profiel: de actie kan er niet voor voorbehouden worden."
         card_unknown: "Onbekende fiche (%{id})."
         tag_unknown: "Onbekend label (%{id})."
       comment:

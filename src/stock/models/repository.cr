@@ -16,6 +16,18 @@ module Partiduo
       with_timestamp_fields
     end
 
+    # Droit d'un profil sur un dépôt (`profile_sec_repository`) : `R`
+    # lecture, `W` écriture. Profil et dépôt cités par identifiant (clés
+    # étrangères en cascade posées par la migration `0002`).
+    class RepositoryAccess < Marten::Model
+      field :id, :big_int, primary_key: true, auto: true
+      field :profile_id, :big_int
+      field :repository_id, :big_int
+      field :access, :string, max_size: 1
+
+      with_timestamp_fields
+    end
+
     # Paramètres du module (ligne unique, colonne `singleton`, D-ANA-017) :
     # dépôt des mouvements issus de la Facturation et de la Comptabilité.
     class Setting < Marten::Model

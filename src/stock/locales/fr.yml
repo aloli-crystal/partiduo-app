@@ -40,6 +40,11 @@ fr:
       value: "Valeur"
       total: "Total"
     errors:
+      rights:
+        denied: "Vous n'avez pas le droit d'écrire dans ce dépôt."
+        profile_unknown: "Profil inconnu."
+        access_invalid: "Droit inconnu (lecture ou écriture)."
+        repository_unknown: "Dépôt inconnu (%{id})."
       repository:
         name_required: "Le nom du dépôt est obligatoire."
         name_too_long: "Le nom du dépôt compte au plus %{max} caractères."

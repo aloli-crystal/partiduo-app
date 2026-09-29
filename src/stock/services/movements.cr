@@ -131,9 +131,12 @@ module Partiduo
 
       # --- Historique ------------------------------------------------------------------------
 
-      def self.history_query(query : Api::MovementQuery)
+      # Mouvements qui répondent aux critères ; `allowed` : dépôts lisibles
+      # de l'acteur (`nil` : tous, droits par dépôt D-R5-015).
+      def self.history_query(query : Api::MovementQuery, allowed : Set(Int64)? = nil)
         movements = Movement.all
         query.repository_id.try { |id| movements = movements.filter(repository_id: id) }
+        allowed.try { |ids| movements = movements.filter(repository_id__in: ids.to_a) }
         query.card_id.try { |id| movements = movements.filter(card_id: id) }
         query.stock_code.try { |code| movements = movements.filter(stock_code: Rules.normalize_code(code)) }
         query.direction.try { |direction| movements = movements.filter(direction: direction) }
@@ -143,11 +146,11 @@ module Partiduo
         movements
       end
 
-      def self.history(query : Api::MovementQuery) : Array(Api::MovementView)
+      def self.history(query : Api::MovementQuery, allowed : Set(Int64)? = nil) : Array(Api::MovementView)
         offset = query.offset.clamp(0, Int32::MAX)
         limit = query.limit.clamp(0, 10_000)
         return [] of Api::MovementView if limit.zero?
-        views(history_query(query).order(:date, :id)[offset...(offset + limit)].to_a)
+        views(history_query(query, allowed).order(:date, :id)[offset...(offset + limit)].to_a)
       end
 
       # --- État des stocks ----------------------------------------------------------------------

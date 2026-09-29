@@ -49,6 +49,29 @@ des opérations (`stock.errors.repository.in_use`).
 leurs mouvements. `nil` : aucun mouvement automatique.
 |===
 
+== Droits par dépôt
+
+Par profil (`profile_sec_repository` d'origine ; D-R5-015). Un profil sans
+droit enregistré garde les droits globaux (`stock.movement.read`,
+`.write`) ; dès qu'il en a un, ses utilisateurs ne voient que les dépôts
+cités, en lecture (`R`) ou en écriture (`W`). L'acteur système et qui détient
+`stock.settings.write` voient tout.
+
+* Lecture filtrée : `repositories`, `repository` (`NotFound`), `changes`,
+  `change`, `movements`, `count_movements`, `quantity`, `state`,
+  `valuation` et leurs exports.
+* Écriture : `record_change`, `record_inventory`, `delete_change` refusés
+  hors des dépôts en `W` (`stock.errors.rights.denied`) ;
+  `inventory_proposal` : `NotFound`.
+* Paramétrage (`stock.settings.write`) : `rights_profiles(actor)` (profils,
+  restreints ou non), `profile_rights(actor, profile_id)`,
+  `set_profile_rights(actor, profile_id, [RepositoryRightInput(repository_id,
+  access)])` — accès vide : aucun ; liste sans droit : restriction levée.
+  Erreurs `stock.errors.rights.profile_unknown`, `.access_invalid`,
+  `.repository_unknown`.
+* Migration stock 0002 (`stock_repository_access`, cascades sur le profil et
+  le dépôt).
+
 == Articles suivis
 
 Un article est suivi en stock s'il a un *code stock* (`ATTR_DEF_STOCK`) :

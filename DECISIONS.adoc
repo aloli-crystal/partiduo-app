@@ -4932,6 +4932,8 @@ ACCOUNTANT existants par la migration. Les droits par dépôt sont reportés.
 *Alternative écartée.* Table de droits par dépôt dès maintenant : aucun écran
 ni besoin exprimé ; s'ajoutera comme les droits par journal (D-ACC-005).
 
+*Révision (29 septembre 2026).* Droits par dépôt, par profil : D-R5-015.
+
 === D-STK-007 — Inventaire : écarts calculés, opérations en période close refusées (lot 6, stock-previsions)
 
 *Contexte.* NOALYSS enregistre un inventaire comme des mouvements signés
@@ -5011,6 +5013,8 @@ de profils (`ag_dest`) et options par type (`document_option`), reportées.
 
 *Alternative écartée.* Placer le suivi au socle : le socle ne cite aucun
 module et le suivi est facultatif (ADR-006 D1).
+
+*Révision (29 septembre 2026).* Visibilité réservée à un profil : D-R5-016.
 
 === D-FUP-002 — Rubrique de menu `FOLLOW_UP` (lot 6, stock-previsions ; amendement proposé à ADR-005)
 
@@ -10783,6 +10787,94 @@ SAML en `POST …/acs`, exempté de CSRF (contrôlé par le cœur : signature,
 *Alternative écartée.* Formulaires propres à SAML et à OIDC dans
 l'interface : un nouveau type demanderait un nouvel écran ; la description
 par l'adaptateur suffit.
+
+=== D-R5-011 — Reprise de l'analytique (partiduo-migrate)
+
+*Contexte.* B-MIG-001 : le contrat de l'Analytique existe (lot 5), la
+reprise non.
+
+*Choix.* Plans, groupes, postes (état compris), puis ventilation des
+lignes par `distribute_entry` et opérations diverses par
+`create_misc_operation`, *après* le lettrage et *avant* la clôture des
+périodes reprises. Un rang de ventilation (`oa_row`) commun aux plans et de
+même montant donne une ligne à un poste par plan ; sinon une ligne par
+imputation. Non représentable (sens contraire à la ligne, total d'un plan
+supérieur au montant de la ligne, ligne non reprise) : la ligne entière va
+en annexe, avec la raison. Réconciliation par poste (`PLAN/POSTE` :
+débit, crédit, solde) entre les imputations reprises et les balances
+analytiques de l'instance, au centime, comme le reste (`analytique.csv`).
+Module Analytique inactif : annexe et note.
+
+*Alternative écartée.* Ventiler la ligne entière sur un seul poste quand la
+source est incomplète : invente une imputation.
+
+=== D-R5-012 — Numéros de relevé des journaux financiers (partiduo-migrate)
+
+*Contexte.* Dans l'application d'origine, la pièce d'une opération
+financière (`jr_pj_number`) est le numéro de l'extrait, que le
+rapprochement écrit aussi (D-REC-001) ; B-CRIT-003.
+
+*Choix.* Les opérations d'un journal financier de même numéro forment un
+relevé rapproché (`reconcile`, sans soldes : la source n'en garde pas) ; la
+pièce de l'écriture reste la sienne. Refus (journal sans fiche Banque) :
+avertissement.
+
+=== D-R5-013 — Reprise du stock et des prévisions (partiduo-migrate)
+
+*Choix.* Stock (module actif) : dépôts (le premier devient le dépôt par
+défaut ; une base qui n'a que le dépôt par défaut et aucun mouvement est
+« sans stock »), articles suivis sous leur code stock (attribut 19),
+mouvements regroupés par opération manuelle (`stock_change`), par
+opération comptable d'origine, sinon par jour et commentaire, en
+`record_change` (entrée positive, sortie négative ; le coût n'est pas dans
+la source). Prévisions : prévision sur les périodes de l'instance qui
+couvrent celles de la source, catégories, éléments (formule reprise telle
+quelle ; un élément propre à une période y reçoit son montant, D-FCT-002).
+Refus : avertissements, pas d'échec (la comptabilité réconcilie).
+
+=== D-R5-014 — Reprise du suivi (partiduo-migrate)
+
+*Choix.* Module actif : types par préfixe (code existant réutilisé),
+étiquettes, actions (fiche, contact, fiches concernées, étiquettes,
+priorité, état d'origine → `todo`, `follow`, `closed`, `abandoned`, rappel,
+heure normalisée en `HH:MM`), commentaires (date et auteur d'origine en
+tête du texte), actions liées. La référence est celle de l'instance, la
+correspondance est notée. Restrictions de l'origine non reproduites
+(droits par dépôt, `ag_dest`) : avertissement au rapport (B-SEC-001) — les
+profils d'origine n'étant jamais repris (ADR-002), elles se reposent sur
+l'instance (D-R5-015, D-R5-016).
+
+=== D-R5-015 — Droits par dépôt, par profil (stock, interface)
+
+*Contexte.* D-STK-006 reportait les droits par dépôt ; B-SEC-001 en faisait
+une dette de sécurité.
+
+*Choix.* Migration stock 0002 : `stock_repository_access` (profil, dépôt,
+`R`/`W`, cascades). Un profil sans ligne garde les droits globaux ; dès
+qu'il en a une, il ne voit que les dépôts cités (règle d'origine), ce qui
+laisse inchangées les instances existantes. L'acteur système et qui
+paramètre le Stock voient tout (comme les droits par journal, D-ACC-005).
+Filtrage de toutes les lectures, écriture exigée pour les opérations.
+Interface : « Droits par dépôt » depuis la liste des dépôts (profil, puis
+aucun accès, lecture, lecture et écriture par dépôt).
+
+*Alternative écartée.* Droits par utilisateur : l'origine les tient par
+profil et un magasinier change de profil plus souvent que de dépôt.
+
+=== D-R5-016 — Actions de suivi réservées à un profil (followup, interface)
+
+*Contexte.* D-FUP-001 reportait la visibilité par groupe (`ag_dest`) ;
+B-SEC-001.
+
+*Choix.* Migration followup 0002 : `followup_action.visible_profile_id`
+(clé étrangère, remise à vide si le profil disparaît). Visible des
+utilisateurs du profil, de l'auteur et de qui paramètre le suivi ; pour les
+autres, l'action n'existe pas (`NotFound`, absente des recherches, comptes,
+rappels et exports). Interface : « Visible par » sur le formulaire et la
+fiche d'une action.
+
+*Alternative écartée.* Plusieurs profils par action : l'origine n'en admet
+qu'un ; à reprendre si le besoin se confirme.
 
 == Valeurs officielles vérifiées (29 septembre 2026)
 
