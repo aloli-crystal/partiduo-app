@@ -12385,3 +12385,11 @@ huit configurations vertes (dont `liberal` : 803 exemples, et
 `liberal,accounting` : 1 071 exemples) ; `partiduo-ui-bulma` : 388
 exemples verts ; `partiduo-teledec` : 246 exemples verts (8 en attente :
 suite du stage, sans réseau) ; Ameba sans remarque dans les trois dépôts.
+Vérifié dans le navigateur intégré sur le dossier `liberal` de
+`partiduo-demo` (2035 de 2025 transmise au TELEDEC simulé : exercice 2025
+« 2035 transmise », cadenas et « Contre-passer » ; exercice 2026 ouvert,
+dépense modifiée par le formulaire prérempli) : au téléphone (375 px), les
+listes débordaient (libellés de pied et en-tête « Valeur d'origine ») ;
+libellés de pied d'une colonne de dates repliés au-delà du téléphone et
+en-tête d'une colonne de montants replié au téléphone, les listes tiennent
+dans 341 px. `partiduo-demo` : spec verte (6 exemples).
