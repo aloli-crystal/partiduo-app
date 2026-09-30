@@ -12613,3 +12613,238 @@ champ relié à son libellé et à son aide ; plus de champ « Interface » dans
 les paramètres de la profession libérale. Bases de test :
 `partiduo_test_lib4_app`, `partiduo_test_lib4_ui`, `partiduo_test_lib4_demo`,
 supprimées à la fin.
+
+== Facture récapitulative et facturation mensuelle des bons de livraison (30 septembre 2026)
+
+Demande de l'utilisateur : facturer en une fois les livraisons d'un même
+client au cours d'un mois (art. 289-I-3 du CGI : livraisons multiples à un
+même client au cours d'un même mois, facture au plus tard à la fin du mois),
+choisir ce rythme client par client, voir le livré non facturé, préparer (ou
+émettre et envoyer) les factures de fin de mois ; puis un encours maximum HT
+par client. Contrat : link:doc/api/invoicing.adoc[] (§ Bons à facturer,
+facture récapitulative, fin de mois). Préfixe : `D-INV2-`. ADR-006 D5
+complété (partiduo-docs).
+
+=== D-INV2-001 — Facture de plusieurs bons par le contrat : `invoice_delivery_notes` (facturation)
+
+*Contexte.* `TRANSFORMATIONS` fait d'un bon de livraison *une* facture
+(`source_id` unique), et rien n'empêchait d'en tirer deux factures.
+
+*Choix.* `Api::Invoicing.invoice_delivery_notes(actor, ids)` : un bon, la
+transformation habituelle (document source, « Issu du bon de livraison
+BL-… ») ; plusieurs, une *facture récapitulative* sans document source :
+pour chaque bon, du premier livré au dernier, une ligne de titre « Bon de
+livraison BL-2026-0003 du 03/09/2026 », ses lignes, un sous-total (s'il n'a
+pas ses propres titres). Client, devise, langue, adresse de livraison et
+canal du premier bon ; catégorie d'opération commune, ou `mixed` ; acomptes
+ouverts des chaînes des bons déduits. Contrôles, les bons verrouillés :
+sélection non vide et sans doublon, bons émis, même client, même devise, ni
+facturés ni repris par un autre brouillon. La transformation d'un bon en
+facture suit les mêmes contrôles (refus `already_billed`, `in_draft`).
+`TRANSFORMATIONS` est inchangé : la facture de plusieurs bons n'est pas une
+transformation d'un document.
+
+*Alternative écartée.* Plusieurs `source_id` (tableau) sur le document :
+casse la chaîne documentaire (`source`, `derived`) que lisent la mention
+d'origine, le Stock (D-STK-010) et les acomptes.
+
+=== D-INV2-002 — Lien bon ↔ facture : ligne qui cite son bon, table unique et figée, état « facturé » (facturation, migration invoicing 0006)
+
+*Choix.*
+
+* `invoicing_line.delivery_note_id` (`LineInput#delivery_note_id`,
+  `LineView#delivery_note_id`) : bon de livraison dont la ligne d'une
+  facture est issue ; une facture seulement (`invoice_only`), un bon émis du
+  même client et de la même devise. L'interface le garde dans un champ caché
+  de chaque ligne.
+* `invoicing_billed_delivery (invoice_id, delivery_note_id UNIQUE)` :
+  recalculée à chaque enregistrement du brouillon depuis ses lignes et son
+  document source (retirer le groupe d'un bon le libère ; supprimer le
+  brouillon aussi) ; un bon n'est repris que par *une* facture, brouillon ou
+  émise (index unique) ; lignes figées avec la facture émise
+  (`invoicing_child_guard('invoice_id')`).
+* État `invoiced` du bon (contrainte d'état élargie ; colonne modifiable d'un
+  document émis) posé à l'émission de la facture, *avant* `invoice.issued`,
+  tracé dans le journal du bon (`invoiced`). `DocumentView#delivery_notes`
+  (facture) et `#billed_in` (bon).
+* Reprise : chaque facture déjà tirée d'un bon (`source_id`) reçoit son
+  lien (la facture émise d'abord ; déclencheur suspendu le temps de
+  l'insertion, dans la transaction de la migration) ; ses bons émis passent
+  à `invoiced`.
+* Une facture créditée par avoir ne rend pas ses bons « à facturer » : la
+  livraison a eu lieu ; une nouvelle facture se fait à la main.
+
+*Alternative écartée.* Un indicateur « facturé » par ligne de bon
+(livraison partielle facturée ligne à ligne) : modèle plus lourd, sans
+demande ; la limite de D-STK-010 (livraison partielle d'une chaîne) reste.
+
+=== D-INV2-003 — Dates : période de facturation (BG-14), bon et livraison par ligne (BG-26, BT-127), mentions (facturation)
+
+*Choix.* Facture de plusieurs livraisons : `billing_period_start` et
+`billing_period_end` (colonnes du document, contrainte « les deux ou aucune,
+début ≤ fin », figées par le déclencheur d'intangibilité) = première et
+dernière livraison ; `delivery_date` = dernière. XML CII :
+`BillingSpecifiedPeriod` en tête, *au lieu de*
+`ActualDeliverySupplyChainEvent` (BT-72, date unique) ; sur chaque ligne
+issue d'un bon, `IncludedNote` = numéro du bon (BT-127) et
+`BillingSpecifiedPeriod` = sa date de livraison (BG-26) ; UBL de
+`partiduo-einvoicing` : `cac:InvoicePeriod` en tête et par ligne, `cbc:Note`.
+Mentions : `dates.delivery_period` (« Livraisons du … au … ») au lieu de
+`dates.delivery`, et `delivery_notes.summary.fr` (« Facture récapitulative
+des livraisons (art. 289-I-3 du CGI) : bons de livraison … » ; `.be` sans
+article). La facture d'un seul bon prend la date de livraison du bon (et
+non plus sa date d'émission). Empreinte : la période et le bon de chaque
+ligne n'y entrent que s'ils existent — les empreintes antérieures ne
+changent pas.
+
+*Alternative écartée.* BT-72 = dernière livraison seule : la facture ne
+dirait plus que les livraisons s'étalent sur le mois.
+
+=== D-INV2-004 — Rythme de facturation : réglage client de la Facturation, pas la fiche du socle (facturation)
+
+*Contexte.* La fiche client est au socle, partagée par la Comptabilité, le
+micro, la profession libérale, qui n'ont pas de bons de livraison.
+
+*Choix.* Table `invoicing_customer (card_id UNIQUE → cards_card ON DELETE
+CASCADE, billing_rhythm, credit_limit)` : accessoire de la fiche, comme
+`stock_item` (D-STK-002) ; pas de ligne = `per_delivery`, pas de plafond.
+`customer_billing` (lecture), `update_customer_billing`
+(`invoicing.settings.manage`). L'interface l'affiche dans une rubrique
+« Facturation » de la fiche client quand le module est actif.
+
+*Alternative écartée.* Colonne de `cards_card` (comme `pdf_copy`) : le socle
+porterait un réglage de la seule Facturation.
+
+=== D-INV2-005 — Encours HORS TAXES, dans la devise du dossier (facturation)
+
+*Choix.* Encours HT = bons de livraison émis non facturés (HT) + part HT
+restant due des factures et factures d'acompte émises non annulées : HT ×
+reste dû ÷ TTC, le reste dû étant TTC − acomptes déduits − règlements −
+avoirs (un règlement partiel ou un avoir réduit la part HT au prorata). Le
+plafond est un montant HT (précision de l'utilisateur). Documents en devise
+étrangère : convertis au cours du socle à leur date (comme le FEC,
+D-2F-009) ; sans cours, comptés à leur montant nominal et signalés
+(`unconverted`). Devis, commandes et brouillons n'entrent pas dans
+l'encours ; ils sont contrôlés à leur émission (D-INV2-009).
+
+*Alternative écartée.* Encours TTC (première formulation de la demande) :
+remplacé à la demande de l'utilisateur ; un plafond HT se compare au
+chiffre d'affaires et ne dépend pas des taux.
+
+=== D-INV2-006 — Stock et Comptabilité : lignes issues d'un bon, sans module Stock (stock, intégration)
+
+*Choix.* `Stock::Feeds` : pour une facture dont des lignes citent un bon,
+ces lignes ne sortent pas (le bon les a sorties), les autres (ajoutées à la
+facture) sortent ; sans ligne citant un bon, la règle de D-STK-004 et
+D-STK-010 (chaîne livrée) s'applique. Règle inchangée : le bon de livraison
+ne bouge le stock que si le module Stock est actif pour le dossier ;
+saisi, émis et facturé de même sans lui (spec
+`spec/stock/feeds_spec.cr`) ; les articles non suivis (prestations) ne
+bougent jamais. Comptabilité : la facture récapitulative publie
+`invoice.issued` comme toute facture, et l'écriture de vente est celle de
+toute facture (spec `spec/integration/invoicing_accounting_spec.cr`) ; un
+bon de livraison n'en produit aucune.
+
+=== D-INV2-007 — Fin de mois : préparation idempotente, préparer et proposer ou émettre et envoyer (facturation)
+
+*Choix.* `prepare_monthly_invoices` : pour chaque client au rythme
+`monthly` (ou le client désigné, quel que soit son rythme : « Facturer le
+mois »), un brouillon par devise qui regroupe ses bons émis, non facturés,
+libres, livrés au plus tard le dernier jour du mois — les bons oubliés d'un
+mois précédent compris. `invoicing_monthly_invoice (month, customer_id,
+currency_code) UNIQUE`, sous verrou consultatif : *jamais deux* factures
+pour un client, un mois et une devise ; un brouillon supprimé laisse la
+trace (le mois n'est pas repris pour ce client, la décision de l'utilisateur
+est respectée) ; une préparation refusée (`failed`, sans facture) est
+reprise au passage suivant. Paramètres du dossier
+(`monthly_billing_mode`) : `propose` (défaut) — les brouillons attendent
+dans « À traiter », émis et envoyés d'un clic, un par un ou tous
+(`issue_and_send`, `issue_and_send_proposals`) ; `auto_send` — chaque
+facture est aussitôt émise et envoyée par le canal de son client :
+courriel (adresse de la fiche), plateforme agréée (relevée par
+`partiduo-einvoicing`, copie PDF après le dépôt, mécanismes existants),
+papier (à imprimer puis marquer envoyé). Une émission refusée (SIREN
+manquant, encours) laisse le brouillon proposé, motif affiché.
+
+*Limite connue.* Un bon livré le dernier jour après le passage du soir
+entre dans la facture du mois suivant ; « Facturer ces bons » reste
+possible à tout moment.
+
+=== D-INV2-008 — Déclenchement : commande `manage invoicing_month_end`, quotidienne et idempotente, rattrapage (facturation, instance)
+
+*Contexte.* Le cœur n'a aucun mécanisme de tâches périodiques : les
+relances sont proposées depuis l'écran, les synchronisations des
+extensions à la demande ; la planification de `partiduo-admin` vise le
+parc (sauvegardes), pas les données d'un dossier.
+
+*Choix.* `month_end(actor, today)` et la commande
+`partiduo-manage invoicing_month_end [--date AAAA-MM-JJ] [--month AAAA-MM
+[--customer CODE]]`, *à lancer chaque jour par le planificateur de
+l'instance* : le mois précédent tant qu'il n'est pas clos (rattrapage d'un
+jour manqué, instance arrêtée), le mois courant le jour de sa fin ; chaque
+mois ainsi traité est clos (`invoicing_month_close`). Réponse JSON ;
+module Facturation inactif : rien, code 0. La ligne de planification par
+instance (cron) est écrite par la session qui porte le déploiement
+(passage des serveurs à FreeBSD) : `deploy/`, `bin/partiduo-provision` et
+`deploy/bin/partiduo-fleet` ne sont pas modifiés ici.
+
+*Alternative écartée.* Un minuteur dans le serveur web : plusieurs
+processus par instance le déclencheraient chacun, et un arrêt le ferait
+manquer sans rattrapage.
+
+=== D-INV2-009 — Encours maximum HT : refus à l'émission, dérogation motivée et tracée, alerte à 90 % (facturation)
+
+*Choix.* Contrôle à l'émission d'une commande, d'un bon de livraison et
+d'une facture (`CREDIT_CONTROLLED_KINDS`) : montant ajouté = HT du document
+(facture de bons : HT − bons repris, déjà comptés ; acomptes déduits
+retranchés). Au-delà du plafond, refus
+`invoicing.errors.credit_limit.exceeded` (encours actuel, montant,
+plafond, dépassement), sauf `IssueInput#credit_override_reason` (motif
+obligatoire, 500 caractères) et nouvelle permission
+`invoicing.credit_limit.override` (accordée aux profils ACCOUNTANT
+existants par la migration ; le profil comptable invité ne l'a pas) ;
+dérogation tracée dans le journal du document (`credit_override` : motif,
+montants). Devis : avertissement seulement (`controlled` faux). À la
+création d'un brouillon, l'écran avertit (`credit_check`). Facture
+d'acompte et avoir : non contrôlés (l'acompte réduit le risque). « À
+traiter » : clients à 90 % de leur plafond et plus (`credit_alerts`).
+
+*Alternative écartée.* Contrôle dès l'enregistrement du brouillon : un
+brouillon n'engage rien et doit pouvoir se préparer.
+
+=== D-INV2-010 — Interface : Bons à facturer, fiche client, dérogation, paramètres, « À traiter » (interface)
+
+*Choix.* Menu Facturation « Bons à facturer » (`INV_TO_INVOICE`,
+`invoicing:to_invoice`) : filtre par client et période de livraison, cases
+à cocher, « Facturer ces bons », encours HT / plafond de chaque client,
+bon repris par un brouillon signalé ; factures de fin de mois proposées
+(« Émettre et envoyer », « Tout émettre et envoyer ») ; « Facturer le
+mois » (clients mensuels, ou le client filtré). Fiche client : rubrique
+« Facturation » (rythme, encours maximum HT, encours HT, livré non
+facturé, reste dû HT), jauge accessible (nom accessible et état écrit en
+toutes lettres, jamais la seule couleur), « Modifier » (réglage client),
+« Facturer le mois de ce client ». Brouillon au-delà du plafond :
+avertissement chiffré, formulaire de dérogation (motif) pour qui a la
+permission. Paramètres de la Facturation : groupe « Facturation mensuelle
+des bons de livraison ». Tableau de bord, « À traiter » : factures du mois
+à émettre, clients proches du plafond. Conventions de `partiduo-ui-bulma` :
+cibles de 44 px, propriétés logiques, jetons de couleur (thème sombre),
+fr/en/nl. Spec : `partiduo-ui-bulma/spec/ui/delivery_billing_spec.cr`.
+
+=== D-INV2-011 — Aucun nouvel événement (ADR-003 D7 inchangé)
+
+*Choix.* Le Stock relit la facture et ses bons par le contrat depuis
+l'abonné d'`invoice.issued` (D-STK-001, amendement adopté) ; les bons sont
+marqués `invoiced` avant l'événement. `delivery_note.issued` et
+`invoice.issued` gardent leur charge utile. Aucun amendement d'ADR-003 D7
+n'est proposé.
+
+=== D-INV2-012 — Démonstration et bases de test (tests)
+
+*Choix.* Dossier `atelier` de `partiduo-demo` : client « Décoration Val de
+Loire » au rythme mensuel, encours maximum 4 200 € HT, trois bons par mois
+sur les trois derniers mois, fin de mois planifiée, facture de
+l'avant-dernier mois émise et envoyée d'un clic puis réglée, celle du mois
+dernier proposée, bons du mois en cours à facturer. Bases de test :
+`partiduo_test_bl_app`, `partiduo_test_bl_ui`, `partiduo_test_bl_einv`,
+`partiduo_test_bl_demo`, supprimées à la fin.

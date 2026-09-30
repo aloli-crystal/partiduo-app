@@ -7,7 +7,7 @@ Module activable `INVOICING` (ADR-006 D1, D4 à D6). Toutes les commandes et
 requêtes lèvent `ModuleDisabled` quand le module est inactif, `Forbidden`
 sans la permission voulue. Aucun appel au module Comptabilité : les échanges
 passent par les événements (ADR-006 D3). Décisions : `D-INV-001` à
-`D-INV-015` dans `DECISIONS.adoc`.
+`D-INV-015` et `D-INV2-001` à `D-INV2-012` dans `DECISIONS.adoc`.
 
 == Permissions
 
@@ -25,6 +25,7 @@ passent par les événements (ADR-006 D3). Décisions : `D-INV-001` à
 |`invoicing.template.manage` |modèles de mise en page
 |`invoicing.settings.manage` |paramètres de facturation
 |`invoicing.export.read` |transmission au comptable (CSV, FEC, ZIP)
+|`invoicing.credit_limit.override` |dérogation motivée à l'encours maximum HT d'un client (D-INV2-009)
 |===
 
 == Documents et enchaînement
@@ -62,7 +63,7 @@ api.document_pdf(actor, invoice.id)                             # FileView : PDF
   ventilée par groupe de TVA.
 * *Statuts* : devis `draft`, `sent`, `accepted`, `refused`, `expired`
   (calculé : validité échue) ; commande `confirmed` ; bon de livraison
-  `issued` ; facture et acompte `issued`, `sent`, `partially_paid`, `paid`,
+  `issued`, puis `invoiced` à l'émission de la facture qui le reprend ; facture et acompte `issued`, `sent`, `partially_paid`, `paid`,
   `cancelled` (avoirs), `overdue` (calculé). `effective_status` et
   `status_key` pour l'affichage. `decide_quote(actor, id, "accepted" | "refused")`.
 * *Acomptes* : `TransformInput.new("deposit_invoice", deposit_percent:)`
@@ -338,6 +339,123 @@ aucune extension de facturation électronique (D-INV-016).
   avoirs émis dans la période + `index.csv` (SHA-256).
 * Comptes : paramètres, sinon plan du régime (FR 411000 / 706000 / 445710 /
   512000 ; BE 400000 / 700000 / 451000 / 550000).
+
+== Bons à facturer, facture récapitulative, fin de mois (D-INV2)
+
+Facture récapitulative : art. 289-I-3 du CGI (livraisons multiples à un
+même client au cours d'un même mois, facture au plus tard à la fin du
+mois). Décisions `D-INV2-001` à `D-INV2-010` dans `DECISIONS.adoc`.
+
+[source,crystal]
+----
+api = Partiduo::Api::Invoicing
+api.delivery_notes_to_invoice(actor, api::ToInvoiceQuery.new(customer_card_id: client.id,
+  from: Time.utc(2026, 9, 1), to: Time.utc(2026, 9, 30)))           # Array(ToInvoiceView)
+draft = api.invoice_delivery_notes(actor, [bl1.id, bl2.id, bl3.id]).value!
+draft.delivery_notes                  # Array(DeliveryNoteRefView), du premier livré au dernier
+draft.billing_period_start            # première livraison (BG-14) ; billing_period_end : dernière
+invoice = api.issue(actor, draft.id).value!                           # bons à l'état « invoiced »
+----
+
+* *Bons à facturer* : `delivery_notes_to_invoice(actor, query)` (lecture) —
+  bons émis à l'état `issued` (ni facturés ni en brouillon de facture
+  émise), filtrés par client et par date de livraison ; `draft_invoice_id` :
+  brouillon de facture qui reprend déjà le bon ; `billing_rhythm` du client.
+* *Facturer des bons* : `invoice_delivery_notes(actor, ids) :
+  Result(DocumentView)` (écriture). Un bon : la transformation habituelle
+  (`source`, lignes recopiées, date de livraison du bon). Plusieurs :
+  *facture récapitulative* — pour chaque bon, du premier livré au dernier,
+  une ligne de titre « Bon de livraison BL-… du … », ses lignes, un
+  sous-total (s'il n'a pas ses propres titres) ; acomptes ouverts de leurs
+  chaînes déduits. Refus : `invoicing.errors.delivery_notes.empty`,
+  `.duplicate`, `.several_customers`, `.several_currencies`,
+  `invoicing.errors.document.delivery_notes.invalid` (pas un bon émis),
+  `.already_billed`, `.in_draft` (paramètre `number`).
+* *Lien bon ↔ facture* : `LineInput#delivery_note_id` / `LineView#delivery_note_id`
+  cite le bon dont la ligne d'une facture est issue ; recalculé à chaque
+  enregistrement du brouillon (retirer le groupe d'un bon le libère) ; un
+  bon n'est repris que par une facture (index unique en base), lien figé
+  avec la facture émise. `DocumentView#delivery_notes` (facture),
+  `#billed_in` (bon : facture qui le reprend), `#summary_invoice?`
+  (plusieurs livraisons : période de facturation).
+* *Mentions et Factur-X* : « Livraisons du … au … » (`dates.delivery_period`)
+  au lieu de la date de livraison unique ; « Facture récapitulative des
+  livraisons (art. 289-I-3 du CGI) : bons de livraison … »
+  (`delivery_notes.summary.fr` ; `.be` : sans article). XML CII :
+  `BillingSpecifiedPeriod` en tête (BG-14, sans
+  `ActualDeliverySupplyChainEvent`), et, sur chaque ligne, le numéro du bon
+  en note (BT-127) et sa date de livraison en période (BG-26).
+* *Stock* : les lignes qui citent un bon ne sortent pas une seconde fois ;
+  une ligne ajoutée à la facture sort (D-INV2-006).
+
+=== Réglage client et encours maximum HT
+
+* `customer_billing(actor, card_id) : CustomerBillingView` (lecture) :
+  `billing_rhythm` (`BILLING_RHYTHMS` : `per_delivery` par défaut,
+  `monthly`), `credit_limit` (HT, `nil` : pas de plafond), encours *hors
+  taxes* dans la devise du dossier : `unbilled_net` (bons émis non
+  facturés ; `unbilled_gross` pour l'affichage) + `receivable_net` (part HT
+  restant due des factures et factures d'acompte émises : HT × reste dû ÷
+  TTC) = `exposure` ; `percent_used`, `near_limit?` (≥ 90 %), `exceeded?`,
+  `unconverted` (documents en devise étrangère sans cours du socle).
+* `update_customer_billing(actor, card_id, CustomerBillingInput.new(rhythm,
+  credit_limit)) : Result(CustomerBillingView)` —
+  `invoicing.settings.manage` ; refus `invoicing.errors.customer_billing.rhythm`,
+  `.credit_limit`, `invoicing.errors.document.customer.not_customer`.
+* `credit_check(actor, id) : CreditCheckView?` (lecture) : encours actuel,
+  montant HT que le document ajoute (facture de bons : la seule différence ;
+  acomptes déduits retranchés), plafond, `exceeded?`, `excess`,
+  `controlled` (faux pour un devis). `nil` sans plafond, ou pour une facture
+  d'acompte, un avoir.
+* *Émission* : une commande, un bon de livraison ou une facture qui ferait
+  dépasser le plafond est refusé (`invoicing.errors.credit_limit.exceeded`,
+  paramètres `customer`, `exposure`, `amount`, `limit`, `excess`,
+  `currency`), sauf `IssueInput#credit_override_reason` (motif, 500
+  caractères au plus) et permission `invoicing.credit_limit.override`
+  (`credit_limit.override_denied` sinon) ; la dérogation est tracée
+  (`credit_override`, motif et montants). Le devis n'est jamais bloqué.
+* `credit_alerts(actor, percent = 90) : Array(CustomerBillingView)` : clients
+  qui atteignent `percent` % de leur plafond.
+
+=== Fin de mois
+
+* Paramètres : `SettingsInput#monthly_billing_mode` (`MONTHLY_BILLING_MODES`) :
+  `propose` (défaut, brouillons proposés) ou `auto_send` (émis et envoyés
+  par le canal de chaque client).
+* `prepare_monthly_invoices(actor, MonthlyInput.new(month:, customer_card_id:))
+  : MonthlyRunView` (« Facturer le mois ») : pour chaque client au rythme
+  `monthly` — ou le client désigné, quel que soit son rythme — un brouillon
+  par devise qui regroupe ses bons émis, non facturés, libres, livrés au
+  plus tard le dernier jour du mois (les bons oubliés des mois précédents
+  compris). *Jamais deux* préparations pour un client, un mois et une
+  devise (contrainte d'unicité, verrou consultatif), même si le brouillon
+  a été supprimé ; une préparation refusée (`failed`, sans facture) est
+  reprise au passage suivant. En mode `auto_send`, exige aussi
+  `invoicing.invoice.issue` et `invoicing.invoice.send`.
+* `month_end(actor, today = date du jour) : MonthlyRunView` : passage
+  *planifié*, idempotent, à lancer *chaque jour* — mois précédent tant qu'il
+  n'est pas clos (rattrapage d'un jour manqué), mois courant le jour de sa
+  fin ; chaque mois ainsi traité est clos. Ligne de commande de l'instance :
++
+[source,sh]
+----
+partiduo-manage invoicing_month_end                          # passage du jour (planificateur, chaque jour)
+partiduo-manage invoicing_month_end --date 2026-09-30        # passage d'un jour donné (rattrapage)
+partiduo-manage invoicing_month_end --month 2026-09 [--customer CODE]   # « Facturer le mois » à la demande
+----
++
+Réponse JSON sur la sortie standard (`status`, `months`, `prepared`,
+`skipped`) ; module Facturation inactif : `{"status":"skipped"}`, code 0.
+* `monthly_proposals(actor) : Array(MonthlyInvoiceView)` : factures de fin de
+  mois encore en brouillon (« À traiter »).
+* `issue_and_send(actor, id, input = IssueInput.new) : Result(DispatchView)`
+  (`invoicing.invoice.issue`) : émet la facture si elle est en brouillon,
+  puis l'envoie par son canal — `emailed` (courriel à l'adresse du client,
+  `invoicing.invoice.send`), `email_missing`, `email_failed` (tracé),
+  `send_denied`, `platform` (relevée par l'extension de transmission,
+  copie PDF après le dépôt), `to_print` (papier), `public_portal`,
+  `already_sent`. Libellés : `invoicing.dispatch.<action>`.
+  `issue_and_send_proposals(actor)` : toutes les propositions.
 
 == Tableau de bord
 
