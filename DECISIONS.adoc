@@ -12393,3 +12393,21 @@ listes débordaient (libellés de pied et en-tête « Valeur d'origine ») ;
 libellés de pied d'une colonne de dates repliés au-delà du téléphone et
 en-tête d'une colonne de montants replié au téléphone, les listes tiennent
 dans 341 px. `partiduo-demo` : spec verte (6 exemples).
+
+== Bascule comptabilité ⇄ recettes et dépenses pour la profession libérale (30 septembre 2026)
+
+=== D-UI-075 — Le professionnel libéral choisit son interface
+
+*Contexte.* Le mode simplifié (ADR-007 D3, D-UI-061) s'imposait à tout
+utilisateur de la société ; seul le comptable pouvait passer au mode complet.
+L'utilisateur veut qu'un professionnel libéral passe lui-même de ses
+recettes et dépenses à la comptabilité, et retour.
+
+*Choix.* `PartiduoUi::SimpleMode::SWITCHABLE` (module `LIBERAL`) : tout
+utilisateur qui lit les registres libéraux voit, dans son menu, « Passer à la
+comptabilité » ou « Passer aux recettes et dépenses » ; il commence en
+recettes et dépenses ; son choix est retenu par le cookie `partiduo_mode`.
+Le comptable garde sa règle (mode complet par défaut). La micro-entreprise
+reste en mode simplifié pour ses utilisateurs, à étendre si le besoin se
+présente (ajouter `MICRO` à `SWITCHABLE`). Le mode ne change que la
+présentation : les droits restent ceux du contrat.
