@@ -878,6 +878,20 @@ PDF) non documentées ; zone `CA` de la 2035-B ; confirmation par
 l'opérateur du domaine réglé (`PARTIDUO_TELEDEC_USER_DOMAIN`) auprès de
 TELEDEC. À vérifier ensemble sur le stage (suite d'intégration).
 
+*Mis à jour le 30 septembre 2026 (T6:teledec, schémas JSON officiels de
+TELEDEC, DECISIONS D-TDC6-001 à D-TDC6-005).* Levés par les schémas :
+forme de `AI` (date `AAAA-MM-JJ`) et des répétitions de la DAS2 (tableaux
+d'objets fermés) ; zone `CA` de la 2035-B (présente). Corrigés : millésime
+(année de campagne ; la DAS2 de 2025 part seule au millésime 2026, cause
+probable du refus du stage) ; cases de la 2035 suffixées (`FJ_2035`) ;
+zones de la 2035-B par millésime ; établissement de la DAS2 (`AA_3036_1`
+nom, `AA_3039_1` SIRET). *Reste à observer sur le stage* : DAS2 seule au
+millésime 2026 acceptée ; `period.millesime` lu hors liasse comme attendu ;
+2035 de la liasse avec `FJ_2035` reprise (les réponses du 29 septembre ne
+citaient que 2065 et 2031) ; millésime d'une liasse d'exercice décalé
+(règle de la DGFiP, non écrite chez TELEDEC). La CA3 (`3310CA3`) n'a pas de
+schéma publié : seule son enveloppe est validée.
+
 *Mise à jour du 30 septembre 2026 (T5:teledec, suite lancée par
 l'utilisateur, DECISIONS D-TDC5-001 à D-TDC5-003).* Confirmés sur le
 stage : jeton, `creation-entreprise`, liasse (source `API`), CA3 et relevé

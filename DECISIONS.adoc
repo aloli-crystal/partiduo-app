@@ -11871,6 +11871,9 @@ retours, traités ci-dessous.
 
 === D-TDC5-001 — DAS2 jointe au formulaire principal de la liasse du régime, vide (T5:teledec ; D-TDC4-001)
 
+*Remplacée par D-TDC6-001* (30 septembre 2026) : la DAS2 est un formulaire
+principal et part seule ; le refus venait du millésime envoyé (2025).
+
 *Constat.* Le stage refuse une DAS2 seule en marque blanche : « aucun
 formulaire de TVA ou de paiement ou de liasse n'a été trouvé dans le
 message envoyé depuis votre logiciel de comptabilité. Un des formulaires
@@ -11952,3 +11955,123 @@ défaut) ; les rappels d'autres déclarations sont signalés et ignorés.
 *Vérification.* `partiduo-teledec` : 214 exemples verts en ordre aléatoire
 (8 en attente : suite du stage, sans réseau dans le bac à sable), Ameba
 sans remarque. Base `partiduo_test_tdc5_teledec`.
+
+== Millésimes et schémas JSON officiels de TELEDEC (30 septembre 2026)
+
+L'utilisateur a récupéré les schémas JSON officiels de TELEDEC
+(`.teledec-doc/schemas/` : 127 fichiers `<formulaire>-<millésime>.json`,
+`index.json`, `envelope.json`) et une copie de la base de connaissances
+(`.teledec-doc/base/`). Ils font foi avec les réponses du 29 septembre ;
+ils ne sont pas versionnés (documents de TELEDEC).
+
+=== D-TDC6-001 — Millésime = année de campagne, par formulaire ; DAS2 seule (T6:teledec ; remplace D-TDC5-001)
+
+*Constat.* `Formats.millesime` envoyait l'année de fin de période : 2025
+pour la DAS2 des sommes de 2025, alors que la DAS2 n'existe qu'au
+millésime 2026 (`index.json` ; spécification « applicable à compter du
+01/01/2026 »). Le refus du stage (« aucun formulaire principal… ») vient
+très probablement de là : la DAS2 *est* un formulaire principal (annexe G
+de la page marque blanche). L'hypothèse de D-TDC5-001 (joindre une 2065
+vide) est contredite.
+
+*Choix.* `Teledec::Remote::Millesime` :
+
+* liasse : clôture au 31 décembre N → N+1, autre clôture en N → N
+  (guide de l'API Liasse : exercice 2024 → `#MILLESIME 2025` ; règle de la
+  DGFiP pour les exercices décalés, non écrite chez TELEDEC) ;
+* DAS2 : sommes de N → N+1 ;
+* TVA : année de la période ; palier `202502` pour une période close dès
+  le 1er juin 2025, `202602` dès le 1er juin 2026 ; le millésime 2026 de
+  base se nomme `202601` (pages « Millésime 2024/2025/2026 » et paliers,
+  évolutions de février 2026) ;
+* relevés d'IS : année de l'échéance, la précédente avant mars (mise en
+  production du millésime début mars, anciens formats refusés ensuite).
+
+`period.millesime` (marque blanche) et `#MILLESIME` (liasse, désormais
+envoyé) portent l'année de campagne ; le rang du palier
+(`Millesime.rank`, `target`) choisit le schéma et les tables de codes
+(`CA3_CODES`, `CA12_CODES`, `ZONE_CODES`, clés au rang : `202401`). Le
+schéma retenu est le plus récent publié sans dépasser le millésime visé
+(`index.json` ne liste un formulaire qu'aux millésimes où il change).
+La DAS2 part seule ; `REGIME_FORMS`, le bloc vide joint et la clé
+`teledec.errors.transport.das2_regime` sont retirés (migration 0006 :
+dernière erreur effacée, détail d'historique vidé) ; la préparation d'une
+DAS2 n'exige plus le régime (noté s'il est choisi). Le TELEDEC simulé
+compte la DAS2 parmi les formulaires principaux, à partir de son
+millésime 2026.
+
+*Alternative écartée.* Ne pas envoyer `period.millesime` hors liasse (la
+page le dit « uniquement applicable aux liasses ») : la CA3 et le 2571 du
+stage passaient avec l'année de la période, et le refus de la DAS2 montre
+que la valeur est lue.
+
+=== D-TDC6-002 — Validateur de schémas JSON en Crystal pur (T6:teledec)
+
+*Choix.* `Teledec::Remote::JsonSchema`, sans dépendance : sous-ensemble
+draft-07 relevé sur les 127 fichiers (`type`, `properties`, `required`,
+`additionalProperties`, `items`, `format` `date`/`date-time`/`email`,
+`minimum`, `maximum`, `minLength`), plus `enum`, `const`, `pattern`,
+`maxLength`, bornes exclusives, `minItems`, `maxItems`. Écarts avec le
+chemin JSON (`$.DAS2.repetitionDAS2TV[0].AI`) et un code traduit
+(`teledec.schema.*`). `date-time` admet l'heure sans décalage (TELEDEC
+l'exige ainsi pour `auth.timestamp`). `JsonSchema.unsupported` signale un
+mot-clé non interprété : une spec l'exige vide sur tous les schémas.
+`Teledec::Remote::Schemas` lit un dossier (`index.json`, à défaut les
+noms de fichiers) ; `check_document` (marque blanche, enveloppe seule si
+le formulaire n'a pas de schéma : la CA3 `3310CA3` n'est pas publiée),
+`check_block` (blocs `zones_formulaires` de la liasse : le texte de
+l'API Balance n'a pas de schéma).
+
+*Specs.* `spec/teledec/schemas_spec.cr` valide les documents de
+l'adaptateur réel — CA3 (enveloppe), CA12 (3517SCA12 2024, 202502,
+202601), 2571 (2571-2025), 2572 (2025, 202601), DAS2 de 2025 (DAS2-2026),
+cases des 2035, 2035-A, 2035-B (2025, 2026) — puis chaque dépôt préparé
+par l'extension et transmis au TELEDEC simulé, validation active. Schémas
+lus dans `TELEDEC_SCHEMAS_DIR` (défaut `../.teledec-doc/schemas`) ;
+absents (CI), ces exemples passent en attente.
+
+=== D-TDC6-003 — Validation facultative avant l'envoi (T6:teledec)
+
+*Choix.* Réglage d'instance `PARTIDUO_TELEDEC_SCHEMAS_DIR` : réglé,
+`HttpTransport#submit` valide le document (marque blanche) ou les cases
+jointes (liasse) *avant* de créer l'entreprise et d'envoyer ; un écart
+refuse avec `teledec.errors.transport.schema` (schéma, chemin, écart
+traduit, nombre des autres écarts). Schéma absent pour le
+formulaire/millésime, ou dossier introuvable : avertissement journalisé.
+Sans réglage : aucun changement. Vérifié sans les documents de TELEDEC
+sur des schémas de fantaisie (refus traduit, rien envoyé, avertissements).
+La suite du stage valide aussi ses documents si les schémas sont présents.
+
+=== D-TDC6-004 — Corrections révélées par les schémas (T6:teledec ; D-TDC3-002, D-TDC3-004)
+
+* *2035* : ses cases portent le suffixe du formulaire (`FJ_2035`), comme
+  la 2065 et la 2031 (`SUFFIXED_ZONE_FORMS`) ; sans lui, la case serait
+  refusée par le schéma — ignorée sans erreur par TELEDEC. Les réponses du
+  29 septembre ne citaient que 2065 et 2031 : le schéma prime.
+* *2035-B* : zones par millésime ; `AC` apparaît en 2025 ; `AD`, `AE`,
+  `AF`, `AG`, `DP`, `DQ`, `DR`, `DS` en 2026, où `DM` disparaît.
+  `ZONE_CODES` devient une table par millésime (`zone_codes`), le contrôle
+  `zone_unknown` suit le millésime de la liasse.
+* *DAS2* : l'établissement déclarant porte sa désignation en `AA_3036_1`
+  et son SIRET en `AA_3039_1` (schéma 2026 ; la raison sociale était
+  envoyée en `AA_3039_1`) ; `AI` est bien une date `AAAA-MM-JJ`.
+* Types : toutes les cases produites sont des entiers (`integer` ou
+  `number`), `KF`/`SD` des booléens ; codes de la CA12, du 2571 et du 2572
+  présents dans tous leurs millésimes ; aucun autre écart.
+
+=== D-TDC6-005 — `fullRegimeFiscal` : à la création de l'entreprise seulement (T6:teledec ; D-TDC5-002)
+
+*Constat.* La page marque blanche réserve `identity.fullRegimeFiscal` à
+l'option « EDI Requête » (sinon TELEDEC déduit le régime des formulaires) ;
+la page `creation-entreprise` le déclare facultatif, `ISRS` par défaut.
+
+*Choix.* Gardé dans `creation-entreprise` (sans lui, un libéral serait
+créé en `ISRS`), jamais dans l'identité d'une déclaration en marque
+blanche (une spec le vérifie).
+
+*Vérification.* `partiduo-teledec` : 238 exemples verts en ordre
+aléatoire avec les schémas présents (8 en attente : suite du stage, sans
+réseau dans le bac à sable) ; avec `TELEDEC_SCHEMAS_DIR=/nulle/part`, 13 en
+attente (les 5 exemples des schémas officiels en plus) ; Ameba sans
+remarque. `partiduo-demo` : 6 exemples verts (TELEDEC simulé). Bases
+`partiduo_test_tdc6_teledec`, `partiduo_test_demo_tdc6`.
