@@ -34,10 +34,11 @@ describe "bin/partiduo-provision" do
                           "'--name=Exemple SARL' --regime=fr")
     output.should contain("modules accounting,skel")
     output.should contain("+ gabarit nginx-vhost.conf.tmpl")
-    output.should contain("+ gabarit partiduo-instance.service.tmpl")
+    output.should contain("+ gabarit partiduo-instance.cron.tmpl")
+    output.should contain("paquet partiduo-app)")
   end
 
-  it "génère environnement, vhost et unité systemd sans rien installer" do
+  it "génère environnement, vhost et tâche cron pour FreeBSD sans rien installer" do
     with_tmpdir do |dir|
       code, output, errors = sh("bin/partiduo-provision", "--skip-createdb", "--manage", "true",
         "--name=Exemple", "--regime=be", "--output-dir", dir, "--port", "8200", "dupont")
@@ -50,20 +51,24 @@ describe "bin/partiduo-provision" do
       env.should contain("PARTIDUO_MODULES=accounting,invoicing\n")
       env.should contain("MARTEN_ALLOWED_HOSTS=dupont.partiduo.localhost\n")
       env.should match(/^MARTEN_SECRET_KEY=[0-9a-f]{64}$/m)
+      env.should contain("PARTIDUO_MEDIA_ROOT=/var/db/partiduo/dupont/media\n")
+      env.should contain("PARTIDUO_MODELES_PDF=auto\n")
+      # Gabarits et fichiers statiques : trouvés à côté des programmes du paquet.
+      env.should_not contain("PARTIDUO_ASSETS_ROOT")
       (File.info(File.join(dir, "dupont", "dupont.env")).permissions.value & 0o077).should eq(0)
 
       vhost = File.read(File.join(dir, "dupont", "dupont.nginx.conf"))
       vhost.should contain("server_name dupont.partiduo.localhost;")
       vhost.should contain("proxy_pass         http://127.0.0.1:8200;")
-      unit = File.read(File.join(dir, "dupont", "partiduo-dupont.service"))
-      unit.should contain("EnvironmentFile=/etc/partiduo/dupont.env")
-      unit.should contain("ExecStart=/opt/partiduo/instances/dupont/release/bin/partiduo-server")
-      [env, vhost, unit].each(&.should_not(contain("{{")))
-      File.read(File.join(dir, "dupont", "INSTALL.txt")).should contain("systemctl enable --now partiduo-dupont.service")
+      cron = File.read(File.join(dir, "dupont", "partiduo-dupont.cron"))
+      cron.should contain("40 3 * * * partiduo set -a && . /usr/local/etc/partiduo/dupont.env && set +a " \
+                          "&& cd /var/db/partiduo/dupont && /usr/local/lib/partiduo/bin/partiduo-manage invoicing_month_end")
+      [env, vhost, cron].each(&.should_not(contain("{{")))
+      File.exists?(File.join(dir, "dupont", "partiduo-dupont.service")).should be_false
 
       # Un certificat Let's Encrypt par instance (ADR-001 D2), obtenu en HTTP-01.
-      vhost.should contain("ssl_certificate     /etc/letsencrypt/live/dupont.partiduo.localhost/fullchain.pem;")
-      vhost.should contain("location ^~ /.well-known/acme-challenge/ {\n    root /var/www/letsencrypt;")
+      vhost.should contain("ssl_certificate     /usr/local/etc/letsencrypt/live/dupont.partiduo.localhost/fullchain.pem;")
+      vhost.should contain("location ^~ /.well-known/acme-challenge/ {\n    root /usr/local/www/letsencrypt;")
       acme = File.read(File.join(dir, "dupont", "dupont.acme.nginx.conf"))
       acme.should contain("server_name dupont.partiduo.localhost;")
       acme.should_not contain("ssl_certificate")
@@ -71,8 +76,17 @@ describe "bin/partiduo-provision" do
       install = File.read(File.join(dir, "dupont", "INSTALL.txt"))
       install.should start_with("# Installation")
       install.should contain("\nset -eu\n")
-      install.should contain("certbot certonly --webroot -w /var/www/letsencrypt -d dupont.partiduo.localhost " \
+      install.should contain("certbot certonly --webroot -w /usr/local/www/letsencrypt -d dupont.partiduo.localhost " \
                              "--cert-name dupont.partiduo.localhost --keep-until-expiring")
+      install.should contain("--deploy-hook 'service nginx reload'")
+      # Service FreeBSD : une instance de plus pour le script rc.d du paquet.
+      install.should contain("*) sysrc partiduo_instances+=\" dupont\" ;;")
+      install.should contain("service partiduo start dupont")
+      install.should contain("install -m 644 partiduo-dupont.cron /usr/local/etc/cron.d/partiduo-dupont")
+      install.should contain("/usr/local/etc/nginx/partiduo/dupont.conf")
+      install.should_not contain("systemctl")
+      # Prérequis nginx vérifié avant toute modification.
+      install.index!("include partiduo/*.conf").should be < install.index!("install -d -o root")
       install.should contain("--register-unsafely-without-email")
       install.should_not contain("--test-cert")
       # Vhost d'amorçage avant certbot, vhost définitif après.
@@ -118,6 +132,20 @@ describe "bin/partiduo-provision" do
     end
   end
 
+  it "sert l'instance par partiduo-app-devel (--version devel)" do
+    with_tmpdir do |dir|
+      code, output, _ = sh("bin/partiduo-provision", "--skip-createdb", "--manage", "true", "--name=X", "--regime=fr",
+        "--output-dir", dir, "--port", "8230", "--version", "devel", "recette")
+      code.should eq(0)
+      output.should contain("paquet partiduo-app-devel)")
+      install = File.read(File.join(dir, "recette", "INSTALL.txt"))
+      install.should contain("sysrc partiduo_devel_instances+=\" recette\"")
+      install.should contain("service partiduo_devel start recette")
+      File.read(File.join(dir, "recette", "partiduo-recette.cron")).should contain("/usr/local/lib/partiduo-devel/bin/partiduo-manage")
+    end
+    sh("bin/partiduo-provision", "--dry-run", "--version", "beta", "dossier").first.should eq(1)
+  end
+
   it "refuse un nom de dossier, un module ou une option invalides" do
     sh("bin/partiduo-provision", "--dry-run", "Dossier").first.should eq(1)
     sh("bin/partiduo-provision", "--dry-run", "dossier-").first.should eq(1)
@@ -129,23 +157,40 @@ describe "bin/partiduo-provision" do
 end
 
 describe "deploy/bin/partiduo-fleet" do
-  it "planifie une montée de version progressive sans rien exécuter" do
+  it "planifie une montée de version progressive, serveur par serveur, sans rien exécuter" do
     with_tmpdir do |dir|
-      File.write(File.join(dir, "inventory"), "# parc\nalpha deploy@srv1\nbeta deploy@srv1\ngamma deploy@srv2\n")
+      File.write(File.join(dir, "inventory"),
+        "# parc\nalpha deploy@srv1\nbeta deploy@srv1 app\nrecette deploy@srv1 devel\ngamma deploy@srv2\n")
       File.write(File.join(dir, "fleet.conf"), "INVENTORY=inventory\nPARTIDUO_DOMAIN=compta.example\n")
       config = "--config=#{File.join(dir, "fleet.conf")}"
 
-      code, output, _ = sh("deploy/bin/partiduo-fleet", config, "upgrade", "1.2.0", "--canary", "2")
+      code, output, _ = sh("deploy/bin/partiduo-fleet", config, "upgrade", "--canary", "1")
       code.should eq(0)
-      output.should contain("## alpha (deploy@srv1)")
-      output.should contain("## beta (deploy@srv1)")
-      output.should_not contain("gamma")
+      output.should contain("## deploy@srv1 : alpha beta")
+      output.should_not contain("srv2")
+      output.should_not contain("recette")
       output.should contain("pg_dump -Fc")
-      output.should contain("/opt/partiduo/releases/1.2.0/bin/partiduo-manage migrate")
+      output.should contain("pkg create -o /var/backups/partiduo/pkg partiduo-app")
+      output.should contain("pkg upgrade -y partiduo-app")
+      output.should contain("/usr/local/lib/partiduo/bin/partiduo-manage migrate")
       output.should contain("plan (ajoutez --execute pour exécuter)")
+      # Instances arrêtées et sauvegardées avant la mise à jour du paquet (D-AFN-007).
+      output.index!("service partiduo stop alpha").should be < output.index!("pg_dump -Fc")
+      output.rindex!("pg_dump -Fc").should be < output.index!("pkg upgrade -y")
+      output.index!("pkg upgrade -y").should be < output.index!("partiduo-manage migrate")
+      output.index!("partiduo-manage migrate").should be < output.index!("service partiduo start alpha")
 
-      sh("deploy/bin/partiduo-fleet", config, "upgrade", "1.2.0").first.should eq(1)
-      sh("deploy/bin/partiduo-fleet", config, "upgrade", "1.2.0", "--only", "alpha,inconnu").first.should eq(1)
+      # Version de développement : son paquet, son script rc.d, ses instances.
+      _, devel, _ = sh("deploy/bin/partiduo-fleet", config, "upgrade", "devel", "--all")
+      devel.should contain("## deploy@srv1 : recette")
+      devel.should contain("pkg upgrade -y partiduo-app-devel")
+      devel.should contain("service partiduo_devel stop recette")
+      devel.should contain("/usr/local/lib/partiduo-devel/bin/partiduo-manage migrate")
+
+      sh("deploy/bin/partiduo-fleet", config, "upgrade").first.should eq(1)
+      sh("deploy/bin/partiduo-fleet", config, "upgrade", "--only", "deploy@srv1,inconnu").first.should eq(1)
+      sh("deploy/bin/partiduo-fleet", config, "upgrade", "devel", "--only", "deploy@srv2").first.should eq(1)
+      sh("deploy/bin/partiduo-fleet", config, "build", "1.2.0").first.should eq(1)
 
       # Sauvegarde : base et pièces jointes listées par l'instance (backup-plan).
       _, backup, _ = sh("deploy/bin/partiduo-fleet", config, "backup", "alpha")
@@ -157,20 +202,37 @@ describe "deploy/bin/partiduo-fleet" do
       before.should be < dump
       dump.should be < after
       backup.should contain("sort -u $f.files.before $f.files.after >$f.files")
-      backup.should contain("tar -C \"$PARTIDUO_MEDIA_ROOT\" --ignore-failed-read -czf $f.media.tar.gz -T $f.files")
+      # bsdtar : seules les pièces encore présentes sont archivées.
+      backup.should contain("tar -C \"$PARTIDUO_MEDIA_ROOT\" -czf $f.media.tar.gz -T $f.files.present")
+      backup.should_not contain("--ignore-failed-read")
 
       # Restauration : base, puis pièces jointes de la même sauvegarde.
-      _, restore, _ = sh("deploy/bin/partiduo-fleet", config, "restore", "alpha", "/var/backups/partiduo/alpha/x.dump")
+      _, restore, _ = sh("deploy/bin/partiduo-fleet", config, "restore", "recette", "/var/backups/partiduo/recette/x.dump")
+      restore.should contain("service partiduo_devel stop recette")
       restore.index!("pg_restore").should be < restore.index!("tar -C \"$PARTIDUO_MEDIA_ROOT\" -xzf \"$a\"")
       restore.should contain("a=${f%.dump}.media.tar.gz")
 
-      # Montée de version : service arrêté avant la sauvegarde préalable (D-AFN-007).
-      _, upgrade, _ = sh("deploy/bin/partiduo-fleet", config, "upgrade", "1.2.0", "--only", "alpha")
-      upgrade.index!("systemctl stop partiduo-alpha.service").should be < upgrade.index!("pg_dump -Fc")
+      _, retire, _ = sh("deploy/bin/partiduo-fleet", config, "retire", "gamma")
+      retire.should contain("sysrc partiduo_instances-=gamma")
+      retire.should contain("rm -f /usr/local/etc/nginx/partiduo/gamma.conf")
 
       _, inventory, _ = sh("deploy/bin/partiduo-fleet", config, "inventory")
-      inventory.lines.size.should eq(4)
+      inventory.lines.size.should eq(5)
+      inventory.should contain("recette")
       File.read(File.join(dir, "inventory")).should contain("gamma deploy@srv2")
+    end
+  end
+
+  it "provisionne par le partiduo-provision du paquet choisi" do
+    with_tmpdir do |dir|
+      File.write(File.join(dir, "fleet.conf"), "INVENTORY=inventory\nPARTIDUO_DOMAIN=compta.example\n")
+      code, output, _ = sh("deploy/bin/partiduo-fleet", "--config=#{File.join(dir, "fleet.conf")}", "provision",
+        "deploy@srv1", "recette", "--version", "devel", "--name=Recette SARL", "--regime=fr")
+      code.should eq(0)
+      output.should contain("/usr/local/lib/partiduo-devel/bin/partiduo-provision --version=devel")
+      output.should contain("--data-dir=/var/db/partiduo --etc-dir=/usr/local/etc/partiduo")
+      output.should contain("'--name=Recette SARL'")
+      output.should contain("printf '%s %s %s\\n' 'recette' 'deploy@srv1' 'devel'")
     end
   end
 end

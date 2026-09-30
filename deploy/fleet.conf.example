@@ -2,31 +2,29 @@
 #
 # Configuration du parc pour deploy/bin/partiduo-fleet (fichier shell).
 # Copier en deploy/fleet.conf (ignoré par git) et adapter.
+#
+# Serveurs FreeBSD : Partiduo y est installé par paquet depuis pkg.aloli.net
+# (partiduo-app, partiduo-app-devel), voir deploy/README.adoc.
 
 # Domaine du parc : chaque instance est servie en <dossier>.<domaine>.
 PARTIDUO_DOMAIN=partiduo.example
 
 # Arborescence sur les serveurs.
-INSTALL_ROOT=/opt/partiduo          # releases/<version>/, current, instances/<dossier>/
-ETC_DIR=/etc/partiduo               # <dossier>.env (clé secrète, base, modules)
-BACKUP_DIR=/var/backups/partiduo    # <dossier>/pre-<version>-<date>.dump
-SYSTEM_USER=partiduo                # compte système des services
-PG_SOCKET=/var/run/postgresql       # PostgreSQL par socket Unix uniquement
+ETC_DIR=/usr/local/etc/partiduo     # <dossier>.env (clé secrète, base, modules)
+DATA_DIR=/var/db/partiduo           # <dossier>/ : répertoire de travail, pièces jointes
+BACKUP_DIR=/var/backups/partiduo    # <dossier>/pre-upgrade-<date>.dump, pkg/ (paquets conservés)
+SYSTEM_USER=partiduo                # compte système des services (créé par le paquet)
+PG_SOCKET=/tmp                      # PostgreSQL par socket Unix uniquement
 PG_OWNER=partiduo                   # rôle propriétaire des bases (CREATEDB)
 
-# Inventaire des instances : « <dossier> <serveur ssh> » par ligne
-# (chemin relatif à ce fichier).
+# Inventaire des instances : « <dossier> <serveur ssh> [app|devel] » par ligne
+# (chemin relatif à ce fichier ; sans version : app).
 INVENTORY=inventory
-
-# Dépôt qui compose la distribution (interface + cœur + extensions).
-DISTRIBUTION_DIR=../partiduo-ui-bulma
-ARCHIVE_DIR=tmp/releases
-KEEP_RELEASES=5
 
 # Certificats TLS : un certificat Let's Encrypt par instance (ADR-001 D2).
 ACME_EMAIL=ops@partiduo.example       # compte ACME (demande de relèvement du quota)
-ACME_WEBROOT=/var/www/letsencrypt     # défis HTTP-01, servis par nginx
+ACME_WEBROOT=/usr/local/www/letsencrypt  # défis HTTP-01, servis par nginx
 ACME_STAGING=0                        # 1 : autorité de test (n'entame pas le quota)
 
-# Élévation de privilèges sur les serveurs.
+# Élévation de privilèges sur les serveurs (security/sudo).
 SUDO=sudo

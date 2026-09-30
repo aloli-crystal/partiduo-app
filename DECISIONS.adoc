@@ -643,7 +643,10 @@ même depuis son shard.
 manifeste appartient à l'application `modules`, retouchée en parallèle ; le
 registre dédié est réversible (le manifeste pourra le déléguer).
 
-=== D-SET-006 — `bin/partiduo-provision` : script shell + commande Marten `provision` (lot 0, settings)
+=== D-SET-006 — `bin/partiduo-provision` : script shell + commande Marten `provision` (lot 0, settings ; fichiers de service révisés par D-PKG-002)
+
+*Statut.* Le principe tient ; les fichiers de service (unité systemd,
+chemins Linux) sont remplacés par ceux de FreeBSD (D-PKG-002).
 
 *Contexte.* ADR-001 D2 : createdb, migrate, jeu de données initial, vhost,
 unité de service ; ADR-006 D2 : `--modules` ; ADR-003 D1 : `--with`. La base
@@ -667,7 +670,11 @@ premier libre dès 8101 parmi les instances générées. Base : `partiduo_<dossi
 reconfigurer Marten après coup ou compiler un second point d'entrée ; le
 script garde chaque étape rejouable à la main.
 
-=== D-SET-007 — Parc : `deploy/bin/partiduo-fleet` plutôt que Capistrano (lot 0, settings)
+=== D-SET-007 — Parc : `deploy/bin/partiduo-fleet` plutôt que Capistrano (lot 0, settings ; construction, envoi et bascule par lien remplacés par D-PKG-003)
+
+*Statut.* `build`, `upload`, les liens `current` / `release` par instance,
+`rollback` et `cleanup` disparaissent avec les paquets FreeBSD ; la montée de
+version se fait serveur par serveur (D-PKG-003).
 
 *Contexte.* ADR-001 : « la mise à jour devient une opération de parc », à
 outiller dès le lot 0, sur le modèle de `capistrano-quimeo`.
@@ -9703,7 +9710,7 @@ fichiers orphelins et ne signale pas les pièces manquantes.
 `instance` échouerait à la sauvegarde préalable (le binaire de l'ancienne
 version n'a pas `backup-plan`) ; aucune instance n'est déployée, sans effet.
 
-=== D-CLI-007 — Certificat Let's Encrypt par instance, vhost d'amorçage
+=== D-CLI-007 — Certificat Let's Encrypt par instance, vhost d'amorçage (chemins FreeBSD : D-PKG-002)
 
 *Contexte.* ADR-001 D2 retient un certificat *par instance* ; les gabarits du
 lot 0 pointaient sur un certificat générique `*.<domaine>`.
@@ -12500,3 +12507,84 @@ dépenses » au téléphone (375 px), menu réduit rétabli, sans défilement
 horizontal ; champ relié à son libellé et à son aide (`aria-describedby`).
 Bases de test : `partiduo_test_lib3_app`, `partiduo_test_lib3_ui`,
 `partiduo_test_lib3_demo`, supprimées à la fin.
+
+== Déploiement FreeBSD par paquets (branche `freebsd`, 30 septembre 2026)
+
+=== D-PKG-001 — Serveurs FreeBSD ; Partiduo installé par paquet, deux versions qui cohabitent
+
+*Contexte.* Demande de l'utilisateur : ne pas réinventer la roue. ALOLI a son
+dépôt de paquets FreeBSD, `pkg.aloli.net`, construit par poudriere (beryl,
+comme `quimeo-ports`). Le déploiement du lot 0 visait Linux et systemd, et
+une archive construite par `partiduo-fleet build` ; il n'emportait ni les
+gabarits HTML ni les traductions, lus à l'exécution dans l'arborescence de
+construction.
+
+*Choix.* Serveurs sous FreeBSD 15. Partiduo y est installé par paquet depuis
+`pkg.aloli.net` : overlay de ports `aloli/aloli-ports`, source
+`aloli-crystal/partiduo-dist` (cœur, interface, toutes les extensions, dont
+MODELES et son convertisseur PDF). Deux paquets, qui cohabitent sur un
+serveur, chacun dans son répertoire et avec son script `rc.d` :
+`partiduo-app` (branche `production` de `partiduo-dist`, `/usr/local/lib/partiduo`,
+`partiduo`) et `partiduo-app-devel` (branche `development`,
+`/usr/local/lib/partiduo-devel`, `partiduo_devel`). Chaque instance est
+servie par l'un ou l'autre (sa *version*). Tout ce qu'un programme lit à
+l'exécution est rangé à côté de lui (`share/partiduo/artifacts`,
+`share/partiduo/assets`, `partiduo-dist`). Le paquet contient aussi
+`partiduo-provision` et ses gabarits. `partiduo-admin` (D-ADM-012,
+D-AFN-002, encore systemd) sera adapté ensuite ; les sauvegardes régulières
+relèveront d'une infrastructure dédiée.
+
+*Alternative écartée.* Archive maison construite et envoyée par
+`partiduo-fleet` : un second système de livraison, et des fichiers d'exécution
+oubliés (gabarits, traductions).
+
+=== D-PKG-002 — `partiduo-provision` sous FreeBSD : rc.d du paquet, cron, nginx inclus
+
+*Contexte.* D-SET-006 et D-CLI-007 produisaient une unité systemd et des
+fichiers aux emplacements de Debian.
+
+*Choix.* `--version app|devel` (défaut `app`) choisit le paquet qui sert
+l'instance. Environnement `/usr/local/etc/partiduo/<dossier>.env`
+(root:partiduo, 640), lu par `/bin/sh` (script `rc.d`, cron) : une valeur par
+ligne, sans caractère spécial ; `PARTIDUO_ASSETS_ROOT` n'y figure plus (le
+paquet range ses fichiers statiques à côté du serveur),
+`PARTIDUO_MODELES_PDF=auto` s'y ajoute. Données `/var/db/partiduo/<dossier>`
+(pièces jointes dans `media/`). `INSTALL.txt` vérifie d'abord que
+`nginx.conf` inclut `partiduo/*.conf`, puis ajoute l'instance au script
+`rc.d` du paquet (`sysrc partiduo_instances+=`, sans doublon ;
+`service partiduo start <dossier>`), installe la tâche quotidienne
+`/usr/local/etc/cron.d/partiduo-<dossier>` (fin de mois de la Facturation,
+à une minute tirée du port pour étaler le parc), le vhost
+`/usr/local/etc/nginx/partiduo/<dossier>.conf` et le certificat
+(`/usr/local/etc/letsencrypt`, webroot `/usr/local/www/letsencrypt`,
+`--deploy-hook 'service nginx reload'`). La ligne de commande Marten par
+défaut est celle du paquet.
+
+*Limite.* Le durcissement de l'unité systemd (`ProtectSystem`,
+`ReadWritePaths`…) n'a pas d'équivalent dans le script `rc.d` (`daemon -u`
+seul) ; une prison FreeBSD par instance serait l'étape suivante.
+
+=== D-PKG-003 — `partiduo-fleet` : montée de version serveur par serveur, retour arrière par le paquet conservé
+
+*Contexte.* Le paquet est partagé par les instances de sa version sur un
+serveur : la bascule instance par instance (D-SET-007) n'est plus possible.
+Demande de l'utilisateur : montée serveur par serveur, et `partiduo-fleet`
+adapté plutôt que retiré.
+
+*Choix.* Inventaire « `<dossier> <serveur> [app|devel]` ».
+`upgrade [app|devel]` sélectionne des *serveurs* (`--canary N`, `--only`,
+`--all`), vérifiés avant de commencer ; pour chacun : arrêt et sauvegarde
+`pre-upgrade-<date>` de ses instances de la version (D-AFN-007),
+`pkg create` du paquet en place dans `$BACKUP_DIR/pkg/`, `pkg upgrade`,
+`migrate` de chaque instance, démarrage et contrôle de santé. Au premier
+échec : `pkg add -f` du paquet conservé, restauration des bases, arrêt de la
+vague. `build`, `upload`, `rollback` et `cleanup` sont retirés (message
+explicite). Sauvegarde : `bsdtar` n'ayant pas `--ignore-failed-read`, seules
+les pièces encore présentes de l'union D-AFN-012 sont archivées ; un échec de
+`pg_dump` fait toujours échouer la sauvegarde.
+
+*Vérification.* `spec/deploy/scripts_spec.cr` (8 exemples, plans et fichiers
+générés). La commande de sauvegarde distante, extraite du plan, a été
+exécutée avec des doublures de `partiduo-manage` et `pg_dump` (`bsdtar` de
+macOS) : pièce disparue ignorée, archive correcte ; `pg_dump` en échec, code
+3 et aucune archive. Rien n'a encore tourné sur un serveur FreeBSD.

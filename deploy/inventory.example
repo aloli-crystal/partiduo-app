@@ -1,7 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Inventaire des instances Partiduo : « <dossier> <serveur ssh> », une par ligne.
+# Inventaire des instances Partiduo : « <dossier> <serveur ssh> [app|devel] »,
+# une par ligne ; la version désigne le paquet qui sert l'instance
+# (partiduo-app ou partiduo-app-devel ; sans version : app).
 # Tenu par partiduo-fleet (provision, retire). Copier en deploy/inventory.
-exemple-sarl   deploy@srv1.partiduo.example
-dupont-sprl    deploy@srv1.partiduo.example
-martin-sas     deploy@srv2.partiduo.example
+exemple-sarl   deploy@srv1.partiduo.example   app
+dupont-sprl    deploy@srv1.partiduo.example   app
+recette        deploy@srv1.partiduo.example   devel
+martin-sas     deploy@srv2.partiduo.example   app

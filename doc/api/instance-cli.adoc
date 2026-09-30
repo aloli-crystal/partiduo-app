@@ -27,14 +27,14 @@ appel 1.0.0 (sans l'option) garde son sens, deux personnes distinctes.
 La commande est une commande Marten du cœur : tout binaire de gestion qui
 embarque `partiduo/cli` la fournit (`partiduo-manage` de la distribution,
 `crystal run manage.cr --` en développement). Elle se lance *dans
-l'environnement de l'instance* (fichier `/etc/partiduo/<dossier>.env` :
+l'environnement de l'instance* (fichier `/usr/local/etc/partiduo/<dossier>.env` :
 `DATABASE_URL`, `PARTIDUO_MODULES`, `PARTIDUO_MEDIA_ROOT`…), sous le compte
 système de l'instance :
 
 [source]
 ----
-sudo -u partiduo sh -c 'set -a && . /etc/partiduo/exemple.env && set +a &&
-  /opt/partiduo/instances/exemple/release/bin/partiduo-manage instance status'
+sudo -u partiduo sh -c 'set -a && . /usr/local/etc/partiduo/exemple.env && set +a &&
+  /usr/local/lib/partiduo/bin/partiduo-manage instance status'
 ----
 
 Forme générale :
@@ -286,7 +286,7 @@ fichiers joints). Lecture seule, permis en lecture seule.
 [source,json]
 ----
 {"generated_at":"…","database":"partiduo_exemple","read_only":false,
- "media_root":"/opt/partiduo/instances/exemple/media","list_file":"/var/backups/…/x.files",
+ "media_root":"/var/db/partiduo/exemple/media","list_file":"/var/backups/…/x.files",
  "verified":false,"file_count":12,"total_bytes":3456789,
  "files":[{"path":"attachments/2026/09/<uuid>.pdf","bytes":34567,"sha256":"…","state":"present"}],
  "missing":[]}

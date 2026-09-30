@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Instance Partiduo {{DOSSIER}} ({{HOST}}) — tâches quotidiennes, généré par
+# partiduo-provision. Installé dans /usr/local/etc/cron.d/partiduo-{{DOSSIER}}
+# (cron(8) de FreeBSD : champ utilisateur après l'horaire).
+#
+# Fin de mois de la Facturation (D-INV2-008), commande idempotente avec
+# rattrapage : un passage quotidien suffit.
+SHELL=/bin/sh
+PATH=/usr/local/bin:/usr/bin:/bin
+{{DAILY_MINUTE}} 3 * * * {{SYSTEM_USER}} set -a && . {{ENV_FILE}} && set +a && cd {{DATA_DIR}}/{{DOSSIER}} && {{MANAGE_PATH}} {{DAILY_COMMAND}} >>/var/log/partiduo/{{DOSSIER}}.daily.log 2>&1

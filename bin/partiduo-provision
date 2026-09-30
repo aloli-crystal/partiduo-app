@@ -8,10 +8,11 @@
 #   3. société (Settings) et jeu de données initial selon le régime
 #      (commande `provision`, par Partiduo::Api::Core.provision)
 #   4. génération, depuis deploy/templates/, du fichier d'environnement, des
-#      vhosts nginx (amorçage ACME puis définitif) et de l'unité systemd de
-#      l'instance, et des commandes d'installation, dont l'obtention du
-#      certificat TLS Let's Encrypt de l'instance (ADR-001 D2 : un
-#      certificat par instance)
+#      vhosts nginx (amorçage ACME puis définitif) et de la tâche cron
+#      quotidienne de l'instance, et des commandes d'installation sur un
+#      serveur FreeBSD (paquet partiduo-app ou partiduo-app-devel, script
+#      rc.d du paquet), dont l'obtention du certificat TLS Let's Encrypt de
+#      l'instance (ADR-001 D2 : un certificat par instance)
 #
 # Rien n'est installé sur le système : les fichiers générés et les commandes
 # d'installation sont écrits dans <sortie>/<dossier>/ (INSTALL.txt). Leur
@@ -63,8 +64,10 @@ Base et service :
                           ni createdb, ni migrations, ni société ; nouveau
                           port et nouvelle clé secrète
   --port N                port HTTP local de l'instance (défaut : premier libre dès 8101)
-  --install-root RÉP      racine d'installation sur le serveur (défaut : /opt/partiduo)
-  --etc-dir RÉP           répertoire des fichiers d'environnement (défaut : /etc/partiduo)
+  --version app|devel     paquet qui sert l'instance (défaut : app) : partiduo-app
+                          (script rc.d partiduo) ou partiduo-app-devel (partiduo_devel)
+  --data-dir RÉP          données des instances (défaut : /var/db/partiduo)
+  --etc-dir RÉP           fichiers d'environnement (défaut : /usr/local/etc/partiduo)
   --system-user NOM       compte système du service (défaut : partiduo)
   --output-dir RÉP        où écrire les fichiers générés (défaut : ./tmp/instances)
 
@@ -72,12 +75,13 @@ Certificat TLS (Let's Encrypt, un par instance, défi HTTP-01) :
   --acme-email ADRESSE    compte ACME (défaut : $PARTIDUO_ACME_EMAIL ; sans
                           adresse, compte sans courriel)
   --acme-webroot RÉP      répertoire des défis servi par nginx
-                          (défaut : /var/www/letsencrypt)
+                          (défaut : /usr/local/www/letsencrypt)
   --acme-staging          autorité de test de Let's Encrypt (--test-cert) :
                           n'entame pas le quota de 50 certificats par semaine
   --manage COMMANDE       ligne de commande Marten de la distribution
-                          (défaut : $PARTIDUO_MANAGE, sinon bin/partiduo-manage,
-                          sinon « crystal run manage.cr -- »)
+                          (défaut : $PARTIDUO_MANAGE, sinon celle du paquet,
+                          /usr/local/bin/partiduo-manage ou partiduo-devel-manage,
+                          sinon bin/partiduo-manage, sinon « crystal run manage.cr -- »)
 
   --dry-run               affiche les étapes sans rien exécuter ni écrire
   -h, --help              cette aide
@@ -164,16 +168,19 @@ OWNER="${USER:-$(id -un)}"
 DATABASE=""
 PG_SOCKET="/tmp"
 PORT=""
-INSTALL_ROOT="/opt/partiduo"
-ETC_DIR="/etc/partiduo"
+VERSION="app"
+DATA_DIR="/var/db/partiduo"
+ETC_DIR="/usr/local/etc/partiduo"
 SYSTEM_USER="partiduo"
 OUTPUT_DIR="./tmp/instances"
 MANAGE="${PARTIDUO_MANAGE:-}"
 LOCALE=""
 PROVISION_ARGS=""
 ACME_EMAIL="${PARTIDUO_ACME_EMAIL:-}"
-ACME_WEBROOT="/var/www/letsencrypt"
+ACME_WEBROOT="/usr/local/www/letsencrypt"
 ACME_STAGING=0
+# Tâche quotidienne de l'instance (fin de mois de la Facturation, D-INV2-008).
+DAILY_COMMAND="invoicing_month_end"
 
 # Ajoute « --option=valeur » aux arguments de la commande `provision`, un par
 # ligne (les valeurs peuvent contenir des espaces, pas de saut de ligne).
@@ -217,7 +224,8 @@ while [ $# -gt 0 ]; do
     --database) need_value "$@"; DATABASE="$2"; shift ;;
     --pg-socket) need_value "$@"; PG_SOCKET="$2"; shift ;;
     --port) need_value "$@"; PORT="$2"; shift ;;
-    --install-root) need_value "$@"; INSTALL_ROOT="$2"; shift ;;
+    --version) need_value "$@"; VERSION="$2"; shift ;;
+    --data-dir) need_value "$@"; DATA_DIR="$2"; shift ;;
     --etc-dir) need_value "$@"; ETC_DIR="$2"; shift ;;
     --system-user) need_value "$@"; SYSTEM_USER="$2"; shift ;;
     --output-dir) need_value "$@"; OUTPUT_DIR="$2"; shift ;;
@@ -258,12 +266,25 @@ if [ -n "$ACME_EMAIL" ]; then
 fi
 printf '%s' "$ACME_WEBROOT" | grep -Eq '^/[A-Za-z0-9_./-]*$' || die "répertoire ACME invalide : « $ACME_WEBROOT »"
 
+# Paquet qui sert l'instance ; chaque version est installée dans son propre
+# répertoire (aloli-ports, finance/partiduo-app).
+case "$VERSION" in
+  app) PACKAGE=partiduo-app; PACKAGE_NAME=partiduo; RC_NAME=partiduo ;;
+  devel) PACKAGE=partiduo-app-devel; PACKAGE_NAME=partiduo-devel; RC_NAME=partiduo_devel ;;
+  *) die "version invalide : « $VERSION » (app ou devel)" ;;
+esac
+PACKAGE_MANAGE="/usr/local/lib/$PACKAGE_NAME/bin/partiduo-manage"
+printf '%s' "$DATA_DIR" | grep -Eq '^/[A-Za-z0-9_./-]*$' || die "répertoire de données invalide : « $DATA_DIR »"
+printf '%s' "$ETC_DIR" | grep -Eq '^/[A-Za-z0-9_./-]*$' || die "répertoire d'environnement invalide : « $ETC_DIR »"
+
 if [ -z "$PORT" ]; then PORT=$(next_port); fi
 case "$PORT" in '' | *[!0-9]*) die "port invalide : « $PORT »" ;; esac
 [ "$PORT" -ge 1024 ] && [ "$PORT" -le 65535 ] || die "port hors limites : $PORT"
 
 if [ -z "$MANAGE" ]; then
-  if [ -x "$ROOT/bin/partiduo-manage" ]; then
+  if [ -x "/usr/local/bin/$PACKAGE_NAME-manage" ]; then
+    MANAGE="/usr/local/bin/$PACKAGE_NAME-manage"
+  elif [ -x "$ROOT/bin/partiduo-manage" ]; then
     MANAGE="$ROOT/bin/partiduo-manage"
   else
     MANAGE="crystal run $ROOT/manage.cr --"
@@ -279,7 +300,7 @@ ACTIVE="$MODULES"
 [ -n "$ACTIVE" ] || ACTIVE="none"
 INSTANCE_DIR="$OUTPUT_DIR/$DOSSIER"
 
-echo "== Instance $DOSSIER : https://$HOST/ (base $DATABASE, modules $ACTIVE, port $PORT)"
+echo "== Instance $DOSSIER : https://$HOST/ (base $DATABASE, modules $ACTIVE, port $PORT, paquet $PACKAGE)"
 
 # --- 1. Base -------------------------------------------------------------------
 
@@ -337,13 +358,18 @@ TPL_PORT="$PORT"
 TPL_DATABASE_URL="$DATABASE_URL"
 TPL_MODULES="$ACTIVE"
 TPL_LOCALE="${LOCALE:-fr}"
-TPL_INSTALL_ROOT="$INSTALL_ROOT"
+TPL_DATA_DIR="$DATA_DIR"
+TPL_PACKAGE="$PACKAGE"
+TPL_MANAGE_PATH="$PACKAGE_MANAGE"
+TPL_DAILY_COMMAND="$DAILY_COMMAND"
+TPL_DAILY_MINUTE=$((PORT % 60))
 TPL_ETC_DIR="$ETC_DIR"
 TPL_ENV_FILE="$ETC_DIR/$DOSSIER.env"
 TPL_SYSTEM_USER="$SYSTEM_USER"
 TPL_ACME_WEBROOT="$ACME_WEBROOT"
 export TPL_SECRET_KEY TPL_DOSSIER TPL_HOST TPL_DOMAIN TPL_PORT TPL_DATABASE_URL TPL_MODULES TPL_LOCALE \
-  TPL_INSTALL_ROOT TPL_ETC_DIR TPL_ENV_FILE TPL_SYSTEM_USER TPL_ACME_WEBROOT
+  TPL_DATA_DIR TPL_PACKAGE TPL_MANAGE_PATH TPL_DAILY_COMMAND TPL_DAILY_MINUTE TPL_ETC_DIR TPL_ENV_FILE \
+  TPL_SYSTEM_USER TPL_ACME_WEBROOT
 
 OLD_UMASK=$(umask)
 umask 077
@@ -351,7 +377,7 @@ render "$TEMPLATES/instance.env.tmpl" "$INSTANCE_DIR/$DOSSIER.env"
 umask "$OLD_UMASK"
 render "$TEMPLATES/nginx-acme.conf.tmpl" "$INSTANCE_DIR/$DOSSIER.acme.nginx.conf"
 render "$TEMPLATES/nginx-vhost.conf.tmpl" "$INSTANCE_DIR/$DOSSIER.nginx.conf"
-render "$TEMPLATES/partiduo-instance.service.tmpl" "$INSTANCE_DIR/partiduo-$DOSSIER.service"
+render "$TEMPLATES/partiduo-instance.cron.tmpl" "$INSTANCE_DIR/partiduo-$DOSSIER.cron"
 
 # Certificat de l'instance : compte ACME, autorité de test éventuelle. Un
 # certificat encore valide n'est pas réémis (--keep-until-expiring) : rejouer
@@ -374,22 +400,32 @@ if [ "$DRY_RUN" = 0 ]; then
 # d'amorçage sert le défi ACME, certbot obtient le certificat, puis le vhost
 # définitif le remplace. Quota : 50 certificats par semaine pour le domaine.
 set -eu
+# Prérequis, vérifié avant toute modification : nginx lit les vhosts des instances.
+if ! grep -Eq '^[[:space:]]*include[[:space:]]+partiduo/\*\.conf;' /usr/local/etc/nginx/nginx.conf; then
+  echo "nginx.conf : ajoutez « include partiduo/*.conf; » dans le bloc http, puis relancez." >&2
+  exit 1
+fi
 install -d -o root -g $SYSTEM_USER -m 750 $ETC_DIR
 install -o root -g $SYSTEM_USER -m 640 $DOSSIER.env $ETC_DIR/$DOSSIER.env
-install -d -o $SYSTEM_USER -g $SYSTEM_USER $INSTALL_ROOT/instances/$DOSSIER/media
-ln -sfn $INSTALL_ROOT/current $INSTALL_ROOT/instances/$DOSSIER/release
-install -m 644 partiduo-$DOSSIER.service /etc/systemd/system/partiduo-$DOSSIER.service
-systemctl daemon-reload
-systemctl enable --now partiduo-$DOSSIER.service
+install -d -o $SYSTEM_USER -g $SYSTEM_USER -m 750 $DATA_DIR/$DOSSIER $DATA_DIR/$DOSSIER/media /var/log/partiduo
+# Service : script rc.d du paquet $PACKAGE, une instance de plus.
+case " \$(sysrc -n ${RC_NAME}_instances 2>/dev/null || true) " in
+  *" $DOSSIER "*) ;;
+  *) sysrc ${RC_NAME}_instances+=" $DOSSIER" ;;
+esac
+sysrc ${RC_NAME}_enable=YES
+service $RC_NAME start $DOSSIER
+# Tâches quotidiennes (cron(8), champ utilisateur).
+install -d -m 755 /usr/local/etc/cron.d
+install -m 644 partiduo-$DOSSIER.cron /usr/local/etc/cron.d/partiduo-$DOSSIER
 # Certificat : vhost d'amorçage (défi HTTP-01), certbot, vhost définitif.
-install -d -m 755 $ACME_WEBROOT
-install -m 644 $DOSSIER.acme.nginx.conf /etc/nginx/sites-available/partiduo-$DOSSIER.conf
-ln -sfn /etc/nginx/sites-available/partiduo-$DOSSIER.conf /etc/nginx/sites-enabled/partiduo-$DOSSIER.conf
-test -f /etc/letsencrypt/live/$HOST/fullchain.pem || { nginx -t && systemctl reload nginx; }
+install -d -m 755 $ACME_WEBROOT /usr/local/etc/nginx/partiduo
+install -m 644 $DOSSIER.acme.nginx.conf /usr/local/etc/nginx/partiduo/$DOSSIER.conf
+test -f /usr/local/etc/letsencrypt/live/$HOST/fullchain.pem || { nginx -t && service nginx reload; }
 certbot certonly --webroot -w $ACME_WEBROOT -d $HOST --cert-name $HOST --keep-until-expiring \\
-  --non-interactive --agree-tos $ACME_ACCOUNT$ACME_TEST --deploy-hook 'systemctl reload nginx'
-install -m 644 $DOSSIER.nginx.conf /etc/nginx/sites-available/partiduo-$DOSSIER.conf
-nginx -t && systemctl reload nginx
+  --non-interactive --agree-tos $ACME_ACCOUNT$ACME_TEST --deploy-hook 'service nginx reload'
+install -m 644 $DOSSIER.nginx.conf /usr/local/etc/nginx/partiduo/$DOSSIER.conf
+nginx -t && service nginx reload
 EOF
 fi
 echo "+ instructions d'installation -> $INSTALL"

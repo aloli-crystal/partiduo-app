@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Instance Partiduo {{DOSSIER}} — généré par partiduo-provision.
+# Instance Partiduo {{DOSSIER}} — généré par partiduo-provision. Installé dans
+# /usr/local/etc/nginx/partiduo/{{DOSSIER}}.conf (nginx.conf : include partiduo/*.conf;).
 # Certificat : un certificat Let's Encrypt propre à l'instance (ADR-001 D2),
 # obtenu par certbot en HTTP-01 sur {{ACME_WEBROOT}} (voir INSTALL.txt et
 # nginx-acme.conf.tmpl, le vhost d'amorçage).
@@ -26,8 +27,8 @@ server {
   http2       on;
   server_name {{HOST}};
 
-  ssl_certificate     /etc/letsencrypt/live/{{HOST}}/fullchain.pem;
-  ssl_certificate_key /etc/letsencrypt/live/{{HOST}}/privkey.pem;
+  ssl_certificate     /usr/local/etc/letsencrypt/live/{{HOST}}/fullchain.pem;
+  ssl_certificate_key /usr/local/etc/letsencrypt/live/{{HOST}}/privkey.pem;
 
   add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
 

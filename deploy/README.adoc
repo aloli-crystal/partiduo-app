@@ -4,11 +4,36 @@
 :icons: font
 
 Partiduo sert *une instance par dossier* : une application, une base
-PostgreSQL, une URL `<dossier>.<domaine>` (ADR-001 D2). Ce répertoire outille
+PostgreSQL, une URL `<dossier>.<domaine>` (ADR-001 D2). Les serveurs sont sous
+*FreeBSD* et Partiduo y est installé *par paquet*, depuis le dépôt
+`pkg.aloli.net` (overlay de ports `aloli/aloli-ports`, construit par
+poudriere ; distribution `aloli-crystal/partiduo-dist`). Ce répertoire outille
 la création d'une instance et l'exploitation du parc, sur le modèle de
-`prod-quimeo/capistrano-quimeo` (une version déployée, N plateformes, un vhost
-par plateforme, `init` / `backup` / `drop` / `clone`), transposé à un binaire
-Crystal et à systemd.
+`prod-quimeo/capistrano-quimeo` (N plateformes, un vhost par plateforme,
+`init` / `backup` / `drop`).
+
+== Paquets
+
+[cols="1,1,2",options="header"]
+|===
+|Paquet |Source |Installé dans
+
+|`partiduo-app`
+|branche `production` de `partiduo-dist`
+|`/usr/local/lib/partiduo/`, script `rc.d` `partiduo`
+
+|`partiduo-app-devel`
+|branche `development`
+|`/usr/local/lib/partiduo-devel/`, script `rc.d` `partiduo_devel`
+|===
+
+Les deux *cohabitent* sur un serveur ; chaque instance est servie par l'un ou
+l'autre (sa *version*, `app` ou `devel`). Chaque paquet contient le serveur,
+la ligne de commande Marten (`partiduo-manage`, aussi
+`/usr/local/bin/partiduo-manage` ou `partiduo-devel-manage`), le
+convertisseur PDF de MODELES, les gabarits, traductions et fichiers statiques
+(rangés à côté des programmes), `partiduo-provision` et ses gabarits. Le
+compte système `partiduo` est créé à l'installation.
 
 [cols="1,3",options="header"]
 |===
@@ -19,7 +44,8 @@ Crystal et à systemd.
 fichiers de service. N'installe rien sur le système.
 
 |`templates/instance.env.tmpl`
-|Environnement de l'instance : base, modules, domaine, clé secrète, port.
+|Environnement de l'instance : base, modules, domaine, clé secrète, port,
+pièces jointes. Lu par `/bin/sh` (script `rc.d`, tâches cron).
 
 |`templates/nginx-acme.conf.tmpl`
 |Vhost d'amorçage : ne sert que les défis ACME (HTTP-01), le temps d'obtenir
@@ -29,12 +55,13 @@ le certificat de l'instance.
 |Vhost nginx : défis ACME et redirection HTTPS, certificat Let's Encrypt
 *propre à l'instance*, mandataire vers le port local de l'instance.
 
-|`templates/partiduo-instance.service.tmpl`
-|Unité systemd `partiduo-<dossier>.service`, durcie.
+|`templates/partiduo-instance.cron.tmpl`
+|Tâches quotidiennes de l'instance (fin de mois de la Facturation), pour
+`cron(8)`.
 
 |`bin/partiduo-fleet`
-|Exploitation du parc : construction, envoi, provisionnement, montée de
-version progressive, retour arrière, état, sauvegardes, retrait.
+|Exploitation du parc : provisionnement, montée de version progressive
+(serveur par serveur), état, sauvegardes, retrait.
 
 |`fleet.conf.example`, `inventory.example`
 |Configuration du parc et inventaire des instances (à copier en `fleet.conf`
@@ -43,11 +70,14 @@ et `inventory`, ignorés par git).
 
 == Créer une instance : `partiduo-provision`
 
+Sur un serveur, en tant que `partiduo` : le script du paquet de la version
+voulue (`partiduo-fleet provision` le fait à distance).
+
 [source,sh]
 ----
-bin/partiduo-provision --name "Exemple SARL" --regime fr --siren 732829320 \
-  --modules accounting,invoicing --with skel --admin-email admin@exemple.fr \
-  exemple-sarl
+/usr/local/lib/partiduo/bin/partiduo-provision --name "Exemple SARL" --regime fr \
+  --siren 732829320 --modules accounting,invoicing --with skel \
+  --admin-email admin@exemple.fr exemple-sarl
 ----
 
 Étapes (ADR-001 D2 § Provisionnement) :
@@ -64,25 +94,36 @@ bin/partiduo-provision --name "Exemple SARL" --regime fr --siren 732829320 \
   transmettre (D-J1-001) ;
 . génération, dans `--output-dir` (défaut `./tmp/instances/<dossier>/`), de
   `<dossier>.env` (mode 600, clé secrète aléatoire), `<dossier>.acme.nginx.conf`,
-  `<dossier>.nginx.conf`, `partiduo-<dossier>.service` et `INSTALL.txt`, les
+  `<dossier>.nginx.conf`, `partiduo-<dossier>.cron` et `INSTALL.txt`, les
   commandes d'installation (script `sh`, `set -eu`) — *non exécutées*.
+
+`--version app|devel` (défaut `app`) choisit le paquet qui sert l'instance.
+`INSTALL.txt` vérifie d'abord que `nginx.conf` inclut `partiduo/*.conf`, puis
+installe l'environnement (`/usr/local/etc/partiduo/<dossier>.env`,
+root:partiduo, 640), crée `/var/db/partiduo/<dossier>/media`, ajoute l'instance
+au script `rc.d` du paquet (`sysrc partiduo_instances+=" <dossier>"`,
+`sysrc partiduo_enable=YES`, `service partiduo start <dossier>`), installe la
+tâche cron (`/usr/local/etc/cron.d/partiduo-<dossier>`, à une minute tirée du
+port), puis le certificat.
 
 === Certificat TLS : un par instance
 
 ADR-001 D2 retient un certificat Let's Encrypt *par instance* (pas de
 certificat générique). `INSTALL.txt` :
 
-. installe le vhost d'amorçage (HTTP seul, défis ACME sur `--acme-webroot`,
-  défaut `/var/www/letsencrypt`) et recharge nginx ;
+. installe le vhost d'amorçage (`/usr/local/etc/nginx/partiduo/<dossier>.conf`,
+  HTTP seul, défis ACME sur `--acme-webroot`, défaut
+  `/usr/local/www/letsencrypt`) et recharge nginx ;
 . `certbot certonly --webroot -d <dossier>.<domaine> --cert-name <dossier>.<domaine>
-  --keep-until-expiring --deploy-hook 'systemctl reload nginx'` ;
-. installe le vhost définitif (`/etc/letsencrypt/live/<dossier>.<domaine>/`) et
-  recharge nginx.
+  --keep-until-expiring --deploy-hook 'service nginx reload'` ;
+. installe le vhost définitif (`/usr/local/etc/letsencrypt/live/<dossier>.<domaine>/`)
+  et recharge nginx.
 
-Le renouvellement est celui de certbot (minuteur du paquet), par le même
-webroot, que le vhost définitif continue de servir. `--acme-email` (ou
-`$PARTIDUO_ACME_EMAIL`) désigne le compte ACME — celui qui portera la demande
-de relèvement de quota (ADR-001 D2) ; sans adresse, compte sans courriel.
+Le renouvellement est celui de certbot (`periodic` du paquet
+`py-certbot`), par le même webroot, que le vhost définitif continue de servir.
+`--acme-email` (ou `$PARTIDUO_ACME_EMAIL`) désigne le compte ACME — celui qui
+portera la demande de relèvement de quota (ADR-001 D2) ; sans adresse, compte
+sans courriel.
 
 *Quota* : 50 nouveaux certificats par semaine pour `partiduo.app`, tous
 comptes confondus. `--keep-until-expiring` ne réémet pas un certificat valide
@@ -91,14 +132,15 @@ quand on rejoue `INSTALL.txt` ; `--acme-staging` utilise l'autorité de test
 le certificat de l'instance retirée (`certbot delete`).
 
 `--dry-run` affiche les étapes sans rien exécuter. La ligne de commande Marten
-utilisée est `--manage`, sinon `$PARTIDUO_MANAGE`, sinon `bin/partiduo-manage`
-à côté du script (archive de version), sinon `crystal run manage.cr --`
-(développement). En production, c'est le binaire `partiduo-ui-manage` de la
-distribution (interface + cœur + extensions), renommé `partiduo-manage` dans
-l'archive : il connaît les migrations *et* les extensions.
+utilisée est `--manage`, sinon `$PARTIDUO_MANAGE`, sinon celle du paquet
+(`/usr/local/bin/partiduo-manage` ou `partiduo-devel-manage`), sinon
+`bin/partiduo-manage` à côté du script, sinon `crystal run manage.cr --`
+(développement). C'est la ligne de commande de la distribution (interface +
+cœur + extensions) : elle connaît les migrations *et* les extensions.
 
 Le port HTTP local est le premier libre à partir de 8101 parmi les instances
-déjà générées dans le répertoire de sortie (`--port` pour le fixer).
+déjà générées dans le répertoire de sortie et celles du serveur (`--port`
+pour le fixer).
 
 === Développement
 
@@ -120,33 +162,37 @@ distantes préfixées du serveur) sans rien exécuter ; `--execute` exécute.
 [source,sh]
 ----
 cp deploy/fleet.conf.example deploy/fleet.conf       # domaine, chemins, comptes
-cp deploy/inventory.example deploy/inventory         # « <dossier> <serveur> »
+cp deploy/inventory.example deploy/inventory         # « <dossier> <serveur> [app|devel] »
 
-deploy/bin/partiduo-fleet build 0.2.0                # archive de la distribution
-deploy/bin/partiduo-fleet upload 0.2.0               # sur chaque serveur ; current -> 0.2.0
 deploy/bin/partiduo-fleet provision deploy@srv1 exemple-sarl --name="Exemple SARL" --regime=fr
-deploy/bin/partiduo-fleet upgrade 0.2.0 --canary 3   # trois premières instances
-deploy/bin/partiduo-fleet upgrade 0.2.0 --all        # le reste
+deploy/bin/partiduo-fleet provision deploy@srv1 recette --version devel --name=Recette --regime=fr
+deploy/bin/partiduo-fleet upgrade --canary 1         # partiduo-app, premier serveur
+deploy/bin/partiduo-fleet upgrade --all              # partiduo-app, tous les serveurs
+deploy/bin/partiduo-fleet upgrade devel --all        # partiduo-app-devel
 deploy/bin/partiduo-fleet status
 ----
+
+Les nouvelles versions arrivent par le dépôt `pkg.aloli.net` : plus de
+construction ni d'envoi d'archive (`build`, `upload`, `rollback`, `cleanup`
+n'existent plus).
 
 === Arborescence sur un serveur
 
 [source]
 ----
-/opt/partiduo/
-├── releases/<version>/      # bin/partiduo-server, bin/partiduo-manage,
-│                            # bin/partiduo-provision, assets/, deploy/templates/
-├── current -> releases/<v>  # version des nouvelles instances
-└── instances/<dossier>/
-    ├── release -> ../../releases/<v>           # version de CETTE instance
-    ├── release.previous -> ../../releases/<v-1>
-    └── media/                                  # pièces jointes
-/etc/partiduo/<dossier>.env                     # root:partiduo, 640
-/etc/systemd/system/partiduo-<dossier>.service
-/etc/nginx/sites-available/partiduo-<dossier>.conf
+/usr/local/lib/partiduo/                 # paquet partiduo-app (…-devel : partiduo-devel/)
+├── bin/partiduo-server, partiduo-manage, partiduo-modeles-pdf, partiduo-provision
+├── deploy/templates/                    # gabarits de partiduo-provision
+└── share/partiduo/{artifacts,assets}/   # gabarits HTML, traductions, fichiers statiques
+/usr/local/etc/rc.d/partiduo             # rc.d du paquet (…-devel : partiduo_devel)
+/usr/local/etc/partiduo/<dossier>.env    # root:partiduo, 640
+/usr/local/etc/cron.d/partiduo-<dossier> # tâches quotidiennes
+/usr/local/etc/nginx/partiduo/<dossier>.conf
+/var/db/partiduo/<dossier>/media/        # pièces jointes
+/var/log/partiduo/<dossier>.log          # journal du serveur (daemon -o)
 /var/backups/partiduo/<dossier>/<nom>.dump      # pg_dump -Fc
 /var/backups/partiduo/<dossier>/<nom>.media.tar.gz  # pièces jointes
+/var/backups/partiduo/pkg/               # paquets conservés pour le retour arrière
 ----
 
 === Sauvegardes
@@ -157,44 +203,52 @@ même nom dans `$BACKUP_DIR/<dossier>/` : `<nom>.dump` (`pg_dump -Fc`),
 `partiduo-manage instance backup-plan`, link:../doc/api/instance-cli.adoc[]),
 `<nom>.media.tar.gz` (les pièces jointes listées). La liste vient de
 l'instance, relevée avant et après `pg_dump` (union, D-AFN-012) : seules les
-pièces enregistrées sont archivées, les fichiers manquants sont signalés
-dans `plan.json`. `restore <dossier> <nom>.dump` remet la base puis les
-pièces jointes de `<nom>.media.tar.gz` sous `$PARTIDUO_MEDIA_ROOT`.
+pièces enregistrées *et encore présentes* sont archivées (`bsdtar` n'a pas
+l'option `--ignore-failed-read` de GNU tar), les fichiers manquants sont
+signalés dans `plan.json`. `restore <dossier> <nom>.dump` remet la base puis
+les pièces jointes de `<nom>.media.tar.gz` sous `$PARTIDUO_MEDIA_ROOT`.
+
+Les sauvegardes régulières relèveront d'une infrastructure dédiée, à venir ;
+celles-ci servent aux opérations de parc.
 
 === La mise à jour est une opération de parc
 
 ADR-001 : « passer 300 dossiers en version N+1 suppose un outillage de
 déploiement et une stratégie de migration progressive ». La stratégie retenue :
 
-* *un seul binaire* pour tout le parc (ADR-003 D1) ; les extensions sont
-  compilées dedans, activées par instance (`PARTIDUO_MODULES`, puis écran
+* *un seul binaire par version* (ADR-003 D1) : les extensions sont compilées
+  dedans, activées par instance (`PARTIDUO_MODULES`, puis écran
   d'administration) ;
-* *chaque instance pointe sur sa version* (`instances/<dossier>/release`) :
-  un parc temporairement hétérogène est explicite, visible par `status` ;
-* `upgrade` exige une sélection (`--canary N`, `--only a,b`, `--all`), vérifie
-  toute la sélection avant de commencer, puis traite les instances *une par
-  une* : arrêt, sauvegarde `pre-<version>-<date>.dump` (service arrêté :
-  rien n'est écrit entre la sauvegarde et un retour arrière), `migrate` avec la
-  nouvelle version, bascule du lien (l'ancien devient `release.previous`),
-  démarrage, contrôle de santé HTTP ;
-* *au premier échec*, l'instance est remise dans son état d'avant (lien et
-  base restaurée depuis sa sauvegarde) et la vague s'arrête : les instances
-  suivantes n'ont pas bougé ;
-* `rollback <dossier>` rebascule le lien ; la base n'est restaurée que par
-  `restore <dossier> <fichier>`, explicitement ;
-* `cleanup` supprime les versions qu'aucune instance n'utilise, en gardant les
-  `KEEP_RELEASES` plus récentes.
+* le paquet est *partagé* par les instances de sa version sur un serveur :
+  la montée de version se fait donc *serveur par serveur* ;
+* `upgrade [app|devel]` exige une sélection de serveurs (`--canary N` : les N
+  premiers de l'inventaire, `--only s1,s2`, `--all`), vérifie toute la
+  sélection avant de commencer, puis, pour chaque serveur : arrêt de ses
+  instances de la version et sauvegarde `pre-upgrade-<date>.dump` de chacune
+  (services arrêtés : rien n'est écrit entre la sauvegarde et un retour
+  arrière), `pkg create` du paquet en place (`$BACKUP_DIR/pkg/`),
+  `pkg upgrade`, `migrate` de chaque instance, démarrage et contrôle de santé
+  HTTP ;
+* *au premier échec*, le serveur est remis dans son état d'avant (paquet
+  conservé réinstallé par `pkg add -f`, bases restaurées depuis leur
+  sauvegarde) et la vague s'arrête : les serveurs suivants n'ont pas bougé ;
+* une instance de recette sert à éprouver la branche `development` : elle est
+  servie par `partiduo-app-devel`, sur le même serveur que des instances de
+  production si l'on veut.
 
 === Prérequis d'un serveur
 
-* PostgreSQL 18, joint *par socket Unix* (`PG_SOCKET`) ; un rôle `partiduo`
-  avec `CREATEDB` (`provision` le crée au besoin), authentification `peer` ;
-* un compte système `partiduo` ; l'utilisateur ssh de déploiement peut
-  `sudo` ;
-* nginx et certbot ; le DNS de `<dossier>.<domaine>` pointe sur le serveur
+* FreeBSD 15, dépôt `pkg.aloli.net` activé (beryl, recette `pkg-repo-aloli`) ;
+  paquet `partiduo-app` (et/ou `partiduo-app-devel`) ;
+* PostgreSQL 18, joint *par socket Unix* (`PG_SOCKET`, défaut `/tmp`) ; un
+  rôle `partiduo` avec `CREATEDB` (`provision` le crée au besoin),
+  authentification `peer` ;
+* l'utilisateur ssh de déploiement peut `sudo` (`security/sudo`) ;
+* nginx, dont `nginx.conf` inclut `partiduo/*.conf` dans le bloc `http` ;
+  `py-certbot` ; le DNS de `<dossier>.<domaine>` pointe sur le serveur
   (défi HTTP-01) ;
 * `curl` pour le contrôle de santé.
 
-Rien de cet outillage n'a été exécuté contre un serveur réel au lot 0 : les
+Rien de cet outillage n'a encore été exécuté contre un serveur réel : les
 specs (`spec/deploy/scripts_spec.cr`) vérifient les plans et la génération
 des fichiers.
