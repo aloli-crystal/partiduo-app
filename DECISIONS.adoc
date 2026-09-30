@@ -11784,3 +11784,81 @@ Chorus Pro, MODELES). Les étiquettes colorées `is-* is-light` passaient
 déjà (4,8:1 au moins). Spec de contraste dans
 `spec/ui/accessibility_spec.cr`, comme pour `--pd-field-border` ; vérifié
 dans le navigateur intégré (thème sombre, 375 px).
+
+== Suite du stage étendue (30 septembre 2026)
+
+La suite d'intégration de `partiduo-teledec` contre le stage de TELEDEC
+(`spec/integration/sandbox_spec.cr`), déjà verte chez l'utilisateur (jeton,
+entreprise de test, liasse, CA3), couvre désormais la DAS2, le relevé 2571,
+la 2035 sans balance et les rappels. Elle ne tourne que depuis le poste de
+l'utilisateur ; ailleurs, ses exemples passent en attente.
+
+=== D-TDC4-001 — DAS2 et relevé 2571 en marque blanche, contrôles de TELEDEC lus (T4:teledec ; D-TDC3-004, D-TDC3-005)
+
+*Choix.* DAS2 de 2025 sur l'entreprise de test : une société (raison
+sociale et SIRET) payée de deux natures, une personne physique (nom,
+prénoms, date de naissance) ; relevé d'acompte 2571 (quatrième acompte de
+l'exercice 2026), l'entreprise de test étant remise au régime `ISRS` par
+`creation-entreprise` avant le dépôt. Chaque exemple attend le lien,
+l'identifiant de suivi et l'état lu (jusqu'à 30 s tant que TELEDEC ne
+trouve pas le dépôt ou le dit `NotCompleted`) et échoue sur
+`CompleteWithErrors` avec les libellés d'erreur de TELEDEC (réponse du
+suivi, lue comme les `declarationErreurs` en production, puis
+comptes-rendus), expurgés de toute valeur du fichier de configuration.
+
+*Point à observer.* Le millésime envoyé est l'année de fin de période
+(`Formats.millesime`) : 2025 pour la DAS2 de 2025, alors que la
+spécification DAS2 qui crée `AI` (date de naissance) est le millésime 2026
+« applicable à compter du 01/01/2026 ». Si TELEDEC ignore `AI` ou refuse le
+millésime, l'exemple le montrera ; aucune correction n'est faite sans cette
+observation.
+
+=== D-TDC4-002 — 2035 sans balance construite par l'extension, seconde entreprise de test (T4:teledec ; D-TDC2-002)
+
+*Choix.* La 2035 est préparée par l'extension elle-même dans la base de
+test (module `liberal` seul, Comptabilité désactivée, régime BNC, exercice
+2025), puis son identité est remplacée par celle d'une seconde entreprise
+fictive (SIREN `999888662`, SIRET `99988866200015`, clés valides) : autre
+compte en marque blanche, régimes non mélangés avec la société à l'IS.
+Construction faite avant tout appel au stage (donc vérifiée aussi hors
+réseau). Un refus de TELEDEC fait échouer l'exemple avec son message :
+c'est la réponse à l'incertitude de D-TDC2-002.
+
+=== D-TDC4-003 — Rappels reçus par la réception réelle, derrière un tunnel (T4:teledec ; D-TDC3-006)
+
+*Choix.* Serveur HTTP minimal dans le processus des specs, sur
+`127.0.0.1:TELEDEC_CALLBACK_PORT` (8787 par défaut), qui passe chaque
+`POST /hooks/TELEDEC/callback` au gestionnaire réel
+(`Teledec::Ui::CallbackHandler` → `Api.callback` →
+`Callbacks.authenticate`, `Callbacks.receive`), extension active dans la
+base de test. Une CA3 (juillet 2026) part avec `url` = adresse formée par
+`Callbacks.url` depuis `TELEDEC_CALLBACK_URL` (https seulement) ; l'exemple
+attend un rappel (`TELEDEC_CALLBACK_WAIT`, 5 minutes par défaut), exige
+200, le rattache à la déclaration (référence ou SIREN), puis rejoue le même
+corps avec un mauvais mot de passe et sans en-tête : 401. Sans adresse ou
+sans mot de passe : en attente, motif « adresse publique des rappels non
+réglée ». Tunnel documenté dans l'en-tête de la suite et le README
+(`cloudflared tunnel --url http://localhost:8787`, ou `ngrok http 8787`).
+
+*Alternative écartée.* `scripts/verif_t.cr` : il suppose une instance
+provisionnée et un TELEDEC simulé ; il n'apporte rien de plus fidèle que le
+gestionnaire de la route lui-même, et alourdirait l'exemple.
+
+=== D-TDC4-004 — Réglages de la suite sans fuite vers les autres specs (T4:teledec)
+
+*Choix.* Les réglages du fichier ne sont plus recopiés dans l'environnement
+du processus : domaine, format et source sont passés à l'adaptateur de la
+suite ; le mot de passe (et l'identifiant) des rappels n'est appliqué que
+le temps de l'exemple des rappels, puis rendu. Auparavant, la suite
+complète lancée sur le poste de l'utilisateur recopiait le domaine du
+partenaire et faisait échouer la spec « exige le domaine du partenaire »
+(dont le message d'échec affichait la valeur). Nouveaux réglages, lus
+dans le fichier sans le préfixe `PARTIDUO_` (ou dans l'environnement sous
+le même nom) : `TELEDEC_CALLBACK_URL`, `TELEDEC_CALLBACK_PORT`,
+`TELEDEC_CALLBACK_WAIT`.
+
+*Vérification.* `partiduo-teledec` : 210 exemples verts en ordre aléatoire
+(8 en attente : suite du stage, sans réseau), Ameba sans remarque. Deux
+specs (clôture écartée de la liasse et de la DAS2) ne créent plus le compte
+120, désormais dans le plan FR initial (amendement D-CLO-003). Base
+`partiduo_test_tdc4_teledec`.
