@@ -1252,3 +1252,15 @@ impôts.
 circuit d'essai (partenaire EDI ou campagne de tests), puis écrire
 l'export depuis `VatReturnView` (cases, annexe) et le vérifier sur ce
 circuit.
+
+== Stage de TELEDEC après les réponses du 29 septembre (30 septembre 2026)
+
+*B-TDC-004 levé pour la liasse* : la suite d'intégration
+`spec/integration/sandbox_spec.cr`, lancée par l'utilisateur depuis son
+poste contre le stage de TELEDEC, passe en entier (5 exemples, aucun en
+attente) : jeton OAuth2 et refus d'un secret faux, création de l'entreprise
+de test dans le domaine du partenaire, *liasse acceptée avec la source `API`*
+(adresse de la liasse rendue, état « en attente »), CA3 déposée en marque
+blanche avec son état. Restent à essayer sur le stage : la DAS2 et les
+relevés d'IS réels, une 2035 sans balance (libéral sans Comptabilité), les
+rappels avec le mot de passe partenaire, et le parcours greffe.
