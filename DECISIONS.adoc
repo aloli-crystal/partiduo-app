@@ -9885,7 +9885,10 @@ alerte à 40, création refusée à 50 (sauf domaines `.localhost` et `.test`).
 *Alternative écartée.* Interroger crt.sh : dépendance réseau, retard
 d'indexation.
 
-=== D-ADM-012 — Planification par commande et minuteur systemd
+=== D-ADM-012 — Planification par commande et minuteur systemd (minuteur remplacé par une tâche cron : D-PKG-006)
+
+*Statut.* La commande `schedule` tient ; le minuteur systemd est remplacé
+par `/usr/local/etc/cron.d/partiduo-admin` (port `finance/partiduo-admin`).
 
 *Choix.* `partiduo-admin-manage schedule` toutes les 15 minutes : sauvegarde
 planifiée due (quotidienne ou hebdomadaire), élagage des sauvegardes
@@ -9940,7 +9943,10 @@ aurait laissé ouverte la collision de l'hôte `admin`.
 sous-domaines en ligne de commande ; aligner sa règle le jour où il sera
 retouché.
 
-=== D-ASP-002 — Version d'un dossier : une version publiée, jamais un chemin
+=== D-ASP-002 — Version d'un dossier : une version publiée, jamais un chemin (remplacée par D-PKG-005)
+
+*Statut.* Plus de versions publiées ni de répertoire de versions : un
+dossier est servi par un paquet, `app` ou `devel` (D-PKG-005).
 
 *Contexte.* À la création, la version venait d'un champ de formulaire non
 vérifié côté serveur ; l'exécutant en faisait
@@ -9996,7 +10002,10 @@ configurations de modules), `partiduo_test_A_final_admin` (suite de
 du cœur, comme D-ASP-*), `partiduo_migrate_A` (migrations sur base vierge,
 recréée pour chaque dépôt).
 
-=== D-AFN-002 — Production : deux scripts enveloppes possédés par root, seuls permis par sudoers
+=== D-AFN-002 — Production : deux scripts enveloppes possédés par root, seuls permis par sudoers (FreeBSD : D-PKG-006)
+
+*Statut.* Le principe tient ; les gestes sont réécrits pour FreeBSD et le
+paquet d'une instance (D-PKG-006).
 
 *Contexte.* Relecture (bloquant) : `ProductionSystem#instance` plaçait le nom
 de base, venu de la tâche, dans un script `sh -c` sans le valider (une base
@@ -10121,7 +10130,10 @@ comptées) et ordonne par parcours en profondeur : une pièce se désactive
 après celles qui la requièrent, s'active après celles qu'elle requiert ;
 sans dépendance connue, l'ordre reçu est gardé.
 
-=== D-AFN-007 — Montée de version : service arrêté avant la sauvegarde, retour arrière sur toute erreur
+=== D-AFN-007 — Montée de version : service arrêté avant la sauvegarde, retour arrière sur toute erreur (caduque : D-PKG-004, D-PKG-005)
+
+*Statut.* L'administration ne monte plus les dossiers de version : beryl
+met les paquets à jour et le script `rc.d` migre au démarrage.
 
 *Contexte.* Relecture (majeur) : la sauvegarde préalable était prise
 service en marche (écritures perdues au retour arrière) ; seule une
@@ -12615,3 +12627,59 @@ sauvegarde dédiée.
 
 *Vérification.* `spec/deploy/scripts_spec.cr` : 8 exemples verts,
 `upgrade` renvoie à beryl.
+
+=== D-PKG-005 — `partiduo-admin` : plus de montée de version ; paquet `app` ou `devel` d'un dossier
+
+*Contexte.* Décisions de l'utilisateur : une seule administration ; la mise à
+jour des programmes, sur tous les serveurs, relève de beryl (`pkg upgrade`) ;
+les migrations passent au démarrage de chaque instance (D-PKG-004). La
+montée de version par dossier ou par vagues d'ADR-008 D5 n'a plus lieu
+d'être : le paquet est partagé par les instances d'un serveur.
+
+*Choix.* L'administration retire les versions publiées (`Release`), les
+vagues (`Wave`, champs de vague des tâches, alerte `wave_failed`), la tâche
+`instance.upgrade` et l'état `waiting`, le droit et les écrans de montée.
+Chaque dossier porte son *paquet* (`Dossier.package`, `app` par défaut ou
+`devel`), choisi à la création, affiché, transmis à l'exécutant et copié
+lors d'une restauration en instance neuve ; `Dossier.version` reste la
+version relevée sur l'instance. Migration `0005` de `partiduo-admin`
+(colonne, tâches de vague annulées, tables retirées). Protocole de
+l'exécutant 2.0.0 (majeure : type de tâche et état retirés) ; l'adresse
+reste `/api/agent/v1/…`, l'exécutant et l'administration étant livrés
+ensemble. ADR-008 D5 révisée (partiduo-docs, branche `freebsd`).
+
+*Vérification.* `partiduo-admin`, branche `freebsd`, commit `ed9d6a0` :
+format et typage des programmes et des 20 fichiers de specs ; specs non
+lancées (PostgreSQL inaccessible dans le bac à sable de la session).
+
+=== D-PKG-006 — Exécutant et administration sous FreeBSD ; paquet d'une instance lu dans `rc.conf`
+
+*Contexte.* L'exécutant (`partiduo-agent`) et ses enveloppes racine
+(D-AFN-002) installaient les instances pour systemd et Debian ;
+l'administration tournait sous systemd, planifiée par un minuteur.
+
+*Choix.* Les enveloppes suivent l'`INSTALL.txt` FreeBSD de
+`partiduo-provision` (D-PKG-002) : configuration
+`/usr/local/etc/partiduo-agent/helpers.conf` (root, `stat -f`), outils par
+chemin absolu, gabarits lus dans le paquet de l'instance
+(`/usr/local/lib/partiduo[-devel]/deploy/templates`). Le paquet d'une
+instance se lit dans `rc.conf` (`partiduo_instances`,
+`partiduo_devel_instances`) ; seules la création et la restauration en
+instance neuve le reçoivent de l'administration, et un paquet qui
+contredit la déclaration est refusé. Environnement :
+`PARTIDUO_MODELES_PDF` accepté, `PARTIDUO_MEDIA_ROOT` exigé sous
+`/var/db/partiduo`, `PARTIDUO_ASSETS_ROOT` refusé. Sauvegarde compatible
+`bsdtar` (pièces présentes seulement, échec de `pg_dump` propagé).
+L'administration retrouve ses gabarits, traductions et fichiers statiques à
+côté de son programme installé (`share/partiduo-admin`), comme
+`partiduo-dist`. Les unités systemd disparaissent : scripts `rc.d`
+(`partiduo_admin`, `partiduo_agent`) et tâche cron de planification dans les
+ports `finance/partiduo-admin` et `sysutils/partiduo-agent` d'`aloli-ports`.
+Une seule administration et un seul exécutant par serveur : leurs variantes
+`-devel` sont en conflit avec la version de production.
+
+*Vérification.* `partiduo-admin`, branche `freebsd`, commit `c717570` :
+`sh -n` et shellcheck des enveloppes, essais réels des gestes avec des
+doublures (installation rejouable, `cli` avec paquet détecté, explicite ou
+contradictoire, service, sauvegarde, retrait), typage. Rien n'a encore
+tourné sur un serveur FreeBSD.
