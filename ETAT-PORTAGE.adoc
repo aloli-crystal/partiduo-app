@@ -2751,7 +2751,7 @@ chaque point renvoie à sa décision ou à son blocage.
    `invoice.platform_deposited` publié par une extension (D-CPY-001).
 ** REFUSÉ le 29 septembre 2026 — registres micro intangibles dès
    l'inscription (D-MIC-003) ; déjà retiré, remplacé par D-MIC2-001.
-** EN ATTENTE — ADR-003 D7 : événements `micro.receipt.updated`,
+** ADOPTÉ le 30 septembre 2026 — ADR-003 D7 : événements `micro.receipt.updated`,
    `micro.receipt.deleted`, `micro.purchase.updated`,
    `micro.purchase.deleted` et refus motivé d'un abonné
    (`Partiduo::Events::Refused`) (D-MIC2-003).

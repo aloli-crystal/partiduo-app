@@ -11659,6 +11659,9 @@ direct ou une extension pourrait modifier une période déclarée.
 
 === D-MIC2-003 — Cohérence avec la Comptabilité : `micro.*.updated` et `micro.*.deleted`, extourne et nouvelle écriture, refus plutôt qu'écart (amendement d'ADR-003 D7)
 
+*Amendement adopté le 30 septembre 2026.* ADR-003 D7 porte les quatre
+événements et le refus motivé d'un abonné.
+
 *Contexte.* Le module micro ne dépend que du socle (ADR-007 D1) et ne parle
 à la Comptabilité que par événements (ADR-006 D3, ADR-007 D2) : un
 `depends_on "ACCOUNTING"` est exclu, le micro-entrepreneur sans
