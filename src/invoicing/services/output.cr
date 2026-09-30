@@ -115,7 +115,7 @@ module Partiduo
       # présentés selon la langue du document.
       def self.mention_text(mention : Api::MentionView, view : Api::DocumentView) : String
         params = mention.params.to_h do |key, value|
-          formatted = if key == "date" && value.matches?(/\A\d{4}-\d{2}-\d{2}\z/)
+          formatted = if key.in?("date", "from", "to") && value.matches?(/\A\d{4}-\d{2}-\d{2}\z/)
                         format_date(Time.parse_utc(value, "%Y-%m-%d"), view.locale)
                       elsif key.in?("amount", "capital")
                         format_amount(BigDecimal.new(value), view.locale)

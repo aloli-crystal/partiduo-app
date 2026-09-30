@@ -172,3 +172,49 @@ describe "Stock avec la Facturation et la Comptabilité (D-STK-004)" do
     end
   end
 end
+
+# Facture récapitulative de plusieurs bons de livraison (D-INV2-006) : les
+# lignes issues d'un bon ne sortent pas une seconde fois ; celles ajoutées à
+# la facture sortent ; sans le module Stock, rien ne bouge.
+describe "Stock et facture récapitulative (D-INV2-006)" do
+  it "ne sort pas une seconde fois les bons regroupés ; sort une ligne ajoutée à la facture ; la prestation ne bouge pas" do
+    with_active_modules("invoicing,stock") do
+      setup = invoicing_setup
+      first = InvoicingSpec.issued(setup, "delivery_note", "2026-09-03")
+      second = InvoicingSpec.issued(setup, "delivery_note", "2026-09-10")
+      StockSpec.quantity(setup.goods).should eq(d("-4"))
+      draft = Inv.invoice_delivery_notes(InvoicingSpec.actor, [first.id, second.id]).value!
+      InvoicingSpec.issue(draft.id, "2026-09-27")
+      movements("invoice:#{draft.id}").should be_empty
+      StockSpec.quantity(setup.goods).should eq(d("-4"))
+      Api.count_movements(system).should eq(2)
+
+      # Facture d'un bon, carton supplémentaire ajouté à la facture.
+      third = InvoicingSpec.issued(setup, "delivery_note", "2026-09-20")
+      invoice = Inv.transform(InvoicingSpec.actor, third.id, Inv::TransformInput.new("invoice")).value!
+      lines = invoice.lines.map do |line|
+        Inv::LineInput.new(kind: line.kind, item_card_id: line.item_card_id, quantity: line.quantity,
+          unit_price: line.unit_price, vat_rate_id: line.vat_rate_id, delivery_note_id: line.delivery_note_id)
+      end
+      extra = InvoicingSpec.line(setup, "1", item_card_id: setup.goods.id)
+      Inv.update_document(InvoicingSpec.actor, invoice.id, InvoicingSpec.document_input(setup, lines: lines + [extra])).value!
+      InvoicingSpec.issue(invoice.id, "2026-09-27")
+      summary("invoice:#{invoice.id}").should eq([{"RAMETTES", "out", d("1")}])
+      StockSpec.quantity(setup.goods).should eq(d("-7"))
+    end
+  end
+
+  it "saisit, émet et facture des bons de livraison sans le module Stock, sans mouvement" do
+    with_active_modules("invoicing") do
+      setup = InvoicingSpec.setup
+      first = InvoicingSpec.issued(setup, "delivery_note", "2026-09-03")
+      second = InvoicingSpec.issued(setup, "delivery_note", "2026-09-10")
+      invoice = InvoicingSpec.issue(Inv.invoice_delivery_notes(InvoicingSpec.actor, [first.id, second.id]).value!.id, "2026-09-27")
+      invoice.status.should eq("issued")
+      Inv.document(InvoicingSpec.actor, first.id).status.should eq("invoiced")
+      count = Marten::DB::Connection.default.open(&.scalar("SELECT count(*) FROM stock_movement")).as(Int64)
+      count.should eq(0)
+      expect_raises(Partiduo::Api::ModuleDisabled) { Api.count_movements(system) }
+    end
+  end
+end

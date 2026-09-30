@@ -7,8 +7,9 @@ module Partiduo
     # ventes d'origine :
     #
     # * Facturation — `delivery_note.issued` : sortie des articles livrés ;
-    #   `invoice.issued` : sortie, sauf facture d'acompte et facture issue
-    #   d'un bon de livraison (ou d'un document déjà livré) ;
+    #   `invoice.issued` : sortie, sauf facture d'acompte, lignes issues d'un
+    #   bon de livraison (facture d'un ou de plusieurs bons, facture
+    #   récapitulative : D-INV2-006) et facture d'un document déjà livré ;
     #   `credit_note.issued` : retour en stock ;
     # * Comptabilité — `entry.posted` d'un journal d'achats (entrée, coût
     #   unitaire = hors taxe ÷ quantité) ou de ventes (sortie), sauf écriture
@@ -48,12 +49,13 @@ module Partiduo
       def self.from_document(id : Int64) : Nil
         document = Partiduo::Api::Invoicing.document(system, id)
         return unless document.kind.in?("delivery_note", "invoice", "credit_note")
-        return if document.kind == "invoice" && delivered?(document)
+        from_notes = from_notes?(document)
+        return if document.kind == "invoice" && !from_notes && delivered?(document)
         source = "#{document.kind}:#{id}"
         return if Movement.filter(source: source).exists?
         repository = Movements.default_repository || return
         date = document.issue_date || Partiduo::Config.today
-        lines = document.lines.compact_map { |line| line.item_card_id.try { |card_id| {card_id, line} } if line.kind == "item" }
+        lines = item_lines(document, from_notes)
         items = Movements.items_by_card(lines.map(&.[0]))
         comment = document.number.to_s
         lines.each do |(card_id, line)|
@@ -65,6 +67,22 @@ module Partiduo
           next if signed.zero?
           Movements.create!(repository.pk!.as(Int64), item, signed > 0 ? "in" : "out", signed.abs, date,
             comment: comment, source: source, created_by_id: document.issued_by_id)
+        end
+      end
+
+      # Facture de bons de livraison (D-INV2-006) : les lignes qui citent un
+      # bon sont déjà sorties par lui, les autres (ajoutées à la facture)
+      # sortent.
+      def self.from_notes?(document : Partiduo::Api::Invoicing::DocumentView) : Bool
+        document.kind == "invoice" && document.lines.any?(&.delivery_note_id)
+      end
+
+      # Lignes d'articles `{fiche, ligne}` ; `skip_notes` : sans celles qui
+      # citent un bon de livraison (déjà sorties par lui).
+      private def self.item_lines(document : Partiduo::Api::Invoicing::DocumentView, skip_notes : Bool)
+        document.lines.compact_map do |line|
+          next if skip_notes && line.delivery_note_id
+          line.item_card_id.try { |card_id| {card_id, line} } if line.kind == "item"
         end
       end
 

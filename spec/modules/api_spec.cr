@@ -110,7 +110,7 @@ describe Partiduo::Api::Modules do
         menu = Partiduo::Api::Modules.menu(actor_with("invoicing.invoice.read", "cards.card.read"))
         menu.map(&.code).should eq(%w[DASHBOARD BILLING REFERENCE])
         menu[0].route.should eq("core:dashboard")
-        menu[1].children.map(&.code).should eq(%w[INV_DOCUMENTS])
+        menu[1].children.map(&.code).should eq(%w[INV_DOCUMENTS INV_TO_INVOICE])
         menu[1].label_key.should eq("core.menu.billing")
         menu[2].children.map(&.code).should eq(%w[CARDS_LIST])
       end

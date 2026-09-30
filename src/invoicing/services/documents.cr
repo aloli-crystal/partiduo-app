@@ -22,7 +22,8 @@ module Partiduo
         unit_price : BigDecimal,
         discount_kind : String,
         discount_value : BigDecimal,
-        rate : Partiduo::Api::Vat::RateView? do
+        rate : Partiduo::Api::Vat::RateView?,
+        delivery_note_id : Int64? = nil do
         def data : Calculator::LineData
           Calculator::LineData.new(
             kind: kind, quantity: quantity, unit_price: unit_price, discount_kind: discount_kind,
@@ -62,6 +63,7 @@ module Partiduo
         errors.concat(deposit_errors(input, current))
         errors.concat(Channels.input_errors(input))
         errors.concat(PaymentTerms.errors(input))
+        errors.concat(DeliveryBilling.line_errors(input, current))
         lines = resolve_lines(input, errors)
         if errors.empty?
           totals = Calculator.compute(lines.map(&.data), input.global_discount_kind, input.global_discount_value)
@@ -243,7 +245,7 @@ module Partiduo
         if line.kind != "subtotal" && description.empty?
           errors << error("#{path}.description", "line.description.blank")
         end
-        {ResolvedLine.new(line.kind, nil, description, zero, "", zero, "none", zero, nil), errors}
+        {ResolvedLine.new(line.kind, nil, description, zero, "", zero, "none", zero, nil, line.delivery_note_id), errors}
       end
 
       private def self.priced_line(line : Api::LineInput, path : String) : {ResolvedLine?, Array(FieldError)}
@@ -258,7 +260,7 @@ module Partiduo
         rate, rate_errors = line_rate(line.vat_rate_id || card.try(&.vat_rate_id), path)
         errors.concat(rate_errors)
         resolved = ResolvedLine.new(line.kind, card.try(&.id), description, line.quantity, unit_code,
-          unit_price || BigDecimal.new(0), line.discount_kind, line.discount_value, rate)
+          unit_price || BigDecimal.new(0), line.discount_kind, line.discount_value, rate, line.delivery_note_id)
         if errors.empty? && discount_exceeds?(Calculator.line(resolved.data))
           errors << error("#{path}.discount_value", "line.discount.exceeds")
         end
@@ -377,7 +379,7 @@ module Partiduo
             unit_price: line.unit_price, discount_kind: line.discount_kind, discount_value: line.discount_value,
             discount_amount: result.discount, vat_rate_id: line.rate.try(&.id),
             vat_percent: line.rate.try(&.rate) || BigDecimal.new(0), vat_category: line.rate.try(&.category) || "",
-            net_amount: result.net,
+            net_amount: result.net, delivery_note_id: line.delivery_note_id,
           )
         end
 
@@ -386,6 +388,8 @@ module Partiduo
           deposit = find(deposit_id)
           DepositDeduction.create!(invoice_id: document_id, deposit_id: deposit_id, amount: deposit.total_gross!)
         end
+        # Bons de livraison facturés et période de facturation (D-INV2-002).
+        DeliveryBilling.sync!(document)
         document
       end
 
@@ -499,6 +503,8 @@ module Partiduo
           deductions: deductions, structured_reference: structured_reference, settings: Configuration.settings,
           currency_code: document.currency_code!, payment_terms: document.payment_terms.to_s,
           payment_terms_days: PaymentTerms.days(document),
+          billing_period_start: document.billing_period_start, billing_period_end: document.billing_period_end,
+          delivery_note_numbers: document.kind == "invoice" ? DeliveryBilling.refs(id_of(document.id)).map(&.number) : [] of String,
         )
       end
 
@@ -544,6 +550,7 @@ module Partiduo
             discount_amount: result.discount, gross_amount: result.gross,
             vat_rate_id: line.vat_rate_id.try { |rate_id| id_of(rate_id) }, vat_percent: line.vat_percent!,
             vat_category: line.vat_category.to_s, net_amount: result.net,
+            delivery_note_id: line.delivery_note_id.try(&.to_i64),
           )
         end.to_a
 
@@ -572,6 +579,9 @@ module Partiduo
           created_at: document.created_at!, updated_at: document.updated_at!,
           issue_channel: document.issue_channel.to_s, b2c: document.b2c!,
           payment_terms: document.payment_terms.to_s, payment_terms_days: document.payment_terms_days.try(&.to_i32),
+          billing_period_start: document.billing_period_start, billing_period_end: document.billing_period_end,
+          delivery_notes: document.kind == "invoice" ? DeliveryBilling.refs(document_id) : [] of Api::DeliveryNoteRefView,
+          billed_in: document.kind == "delivery_note" ? DeliveryBilling.billed_in(document_id) : nil,
         )
       end
 
@@ -590,7 +600,7 @@ module Partiduo
                         end
                         deposit_lines(source, data, percent)
                       else
-                        lines.map { |line| line_input(line) }
+                        copied_lines(source, input, lines)
                       end
         # Adresse de livraison du document d'origine, ou aucune (adresse vide)
         # s'il n'en avait pas : la fiche ne la réimpose pas.
@@ -608,8 +618,21 @@ module Partiduo
           deposit_ids: input.kind == "invoice" ? open_deposits(source) : [] of Int64,
           credited_document_id: input.kind == "credit_note" ? source_id : nil,
           payment_terms: source.payment_terms.presence, payment_terms_days: source.payment_terms_days.try(&.to_i32),
+          delivery_date: inherited_delivery_date(source),
         ).copy_with(**Channels.inherited(source, input.kind))
         {document_input, errors}
+      end
+
+      # Lignes recopiées ; celles de la facture d'un bon de livraison citent
+      # le bon (D-INV2-002).
+      private def self.copied_lines(source : Document, input : Api::TransformInput, lines : Array(Line)) : Array(Api::LineInput)
+        note_id = source.kind == "delivery_note" && input.kind == "invoice" ? id_of(source.id) : nil
+        lines.map { |line| line_input(line, note_id) }
+      end
+
+      # Facture d'un bon de livraison : date de livraison du bon (BT-72).
+      private def self.inherited_delivery_date(source : Document) : Time?
+        source.kind == "delivery_note" ? (source.delivery_date || source.issue_date) : nil
       end
 
       private def self.transform_errors(source : Document, input : Api::TransformInput) : Array(FieldError)
@@ -620,18 +643,23 @@ module Partiduo
           [error("kind", "transform.not_allowed", {"from" => source.kind!, "to" => input.kind})]
         elsif (status = effective_status(source, BigDecimal.new(0))).in?("refused", "expired", "cancelled")
           [error(FieldError::BASE, "transform.source_status", {"status" => status})]
+        elsif source.kind == "delivery_note" && input.kind == "invoice" &&
+              (code = DeliveryBilling.note_error(id_of(source.id), id_of(source.customer_id), source.currency_code!, nil)[0])
+          [error(FieldError::BASE, "document.delivery_notes.#{code}", {"number" => source.number.to_s})]
         else
           [] of FieldError
         end
       end
 
-      # Ligne recopiée telle quelle (désignation, prix, taux figés).
-      private def self.line_input(line : Line) : Api::LineInput
+      # Ligne recopiée telle quelle (désignation, prix, taux figés) ;
+      # `delivery_note_id` : bon de livraison que la ligne d'une facture cite.
+      def self.line_input(line : Line, delivery_note_id : Int64? = nil) : Api::LineInput
         Api::LineInput.new(
           kind: line.kind!, item_card_id: line.item_id.try { |item_id| id_of(item_id) },
           description: line.description.to_s, quantity: line.quantity!, unit_code: line.unit_code.presence,
           unit_price: line.kind.in?("item", "free") ? line.unit_price! : nil, discount_kind: line.discount_kind!,
           discount_value: line.discount_value!, vat_rate_id: line.vat_rate_id.try { |rate_id| id_of(rate_id) },
+          delivery_note_id: delivery_note_id,
         )
       end
 
@@ -663,7 +691,7 @@ module Partiduo
 
       # Factures d'acompte émises depuis la chaîne du document (lui-même et ses
       # ascendants), pas encore déduites, ni annulées ni créditées.
-      private def self.open_deposits(source : Document) : Array(Int64)
+      def self.open_deposits(source : Document) : Array(Int64)
         chain = [] of Int64
         current = source
         while current

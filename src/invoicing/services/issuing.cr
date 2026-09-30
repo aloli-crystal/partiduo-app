@@ -38,13 +38,12 @@ module Partiduo
         issue_date = Documents.day(input.issue_date || document.issue_date || Documents.today)
         deductions = Documents.deductions(document_id)
         card = Configuration.card(Documents.id_of(document.customer_id))
-        errors = issue_errors(document, data, totals, deductions, issue_date)
-        if card.nil? || card.kind != "customer"
-          errors << error("customer_card_id", "document.customer.not_found")
-        end
-        if card && Api::FISCAL_KINDS.includes?(document.kind) && siren_required?(card)
-          errors << error("customer_card_id", "issue.customer_siren_required", {"customer" => card.name})
-        end
+        errors = issue_errors(document, data, totals, deductions, issue_date) + customer_errors(document, card)
+        # Encours maximum HT du client (D-INV2-009) : refus au-delà, sauf
+        # dérogation motivée ; le devis n'est jamais bloqué.
+        credit = CreditControl.check(document)
+        refusal, override_reason = CreditControl.issue_decision(credit, input.credit_override_reason, actor)
+        errors << refusal if refusal
         return result.failure(errors) unless errors.empty? && card
 
         allocation = Numbering.allocate!(document.series!, issue_date)
@@ -67,8 +66,23 @@ module Partiduo
 
         Documents.log(document_id, "issued", actor, document.fingerprint.to_s,
           {"number" => allocation.number, "pdf_sha256" => pdf_sha256})
+        if override_reason && credit
+          Documents.log(document_id, "credit_override", actor, "", credit.params.merge({"reason" => override_reason}))
+        end
         after_issue(document, totals, actor)
         Partiduo::Api::Result(Api::DocumentView).success(Documents.view(document))
+      end
+
+      # Client introuvable, ou professionnel établi en France sans SIREN.
+      private def self.customer_errors(document : Document, card : Partiduo::Api::Cards::CardView?) : Array(FieldError)
+        errors = [] of FieldError
+        if card.nil? || card.kind != "customer"
+          errors << error("customer_card_id", "document.customer.not_found")
+        end
+        if card && Api::FISCAL_KINDS.includes?(document.kind) && siren_required?(card)
+          errors << error("customer_card_id", "issue.customer_siren_required", {"customer" => card.name})
+        end
+        errors
       end
 
       private def self.issue_errors(document : Document, data : Array(Calculator::LineData), totals : Calculator::Totals,
@@ -220,6 +234,9 @@ module Partiduo
             "issue_date"       => document.issue_date.try(&.to_s("%Y-%m-%d")) || "",
           }, actor_user_id: actor.user_id)
         when "invoice", "deposit_invoice"
+          # Bons de livraison facturés (D-INV2-002), avant l'événement : le
+          # Stock lit la facture et ses bons.
+          DeliveryBilling.mark_invoiced!(document, actor) if document.kind == "invoice"
           # `deposit_sources` : factures d'acompte déduites (`invoice:<id>`),
           # pour que l'écriture de la facture finale extourne leurs ventes
           # (D-INT-004).
@@ -315,6 +332,14 @@ module Partiduo
           end),
           "mentions" => document.mentions || JSON::Any.new(nil),
         }
+        # Facture récapitulative (D-INV2-003) : période et bon de chaque
+        # ligne ; absents ailleurs, les empreintes antérieures ne changent pas.
+        if (from = document.billing_period_start) && (upto = document.billing_period_end)
+          content["billing_period"] = JSON::Any.new("#{date.call(from)}/#{date.call(upto)}")
+        end
+        if lines.any?(&.delivery_note_id)
+          content["line_delivery_notes"] = JSON::Any.new(lines.map { |line| JSON::Any.new(line.delivery_note_id.to_s) })
+        end
         sorted(JSON::Any.new(content)).to_json
       end
 

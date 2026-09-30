@@ -138,9 +138,15 @@ module Partiduo
       end
 
       private def self.line_item(xml : XML::Builder, line : Api::LineView, index : Int32, view : Api::DocumentView) : Nil
+        # Ligne d'une facture récapitulative : bon de livraison (note BT-127)
+        # et date de sa livraison (période BG-26), D-INV2-003.
+        note = view.summary_invoice? ? line.delivery_note_id.try { |id| view.delivery_notes.find(&.id.==(id)) } : nil
         xml.element("ram:IncludedSupplyChainTradeLineItem") do
           xml.element("ram:AssociatedDocumentLineDocument") do
             xml.element("ram:LineID") { xml.text index.to_s }
+            if note
+              xml.element("ram:IncludedNote") { xml.element("ram:Content") { xml.text note.number } }
+            end
           end
           xml.element("ram:SpecifiedTradeProduct") do
             if card_id = line.item_card_id
@@ -165,6 +171,9 @@ module Partiduo
               xml.element("ram:TypeCode") { xml.text "VAT" }
               xml.element("ram:CategoryCode") { xml.text line.vat_category }
               xml.element("ram:RateApplicablePercent") { xml.text format_decimal(line.vat_percent, 2) }
+            end
+            if delivered = note.try(&.delivery_date)
+              period(xml, delivered, delivered)
             end
             unless line.discount_amount.zero?
               xml.element("ram:SpecifiedTradeAllowanceCharge") do
@@ -221,6 +230,18 @@ module Partiduo
         end
       end
 
+      # Période de facturation (BG-14 en tête, BG-26 sur une ligne).
+      private def self.period(xml : XML::Builder, from : Time, upto : Time) : Nil
+        xml.element("ram:BillingSpecifiedPeriod") do
+          xml.element("ram:StartDateTime") do
+            xml.element("udt:DateTimeString", {"format" => "102"}) { xml.text date(from) }
+          end
+          xml.element("ram:EndDateTime") do
+            xml.element("udt:DateTimeString", {"format" => "102"}) { xml.text date(upto) }
+          end
+        end
+      end
+
       private def self.agreement(xml : XML::Builder, view : Api::DocumentView) : Nil
         xml.element("ram:ApplicableHeaderTradeAgreement") do
           xml.element("ram:BuyerReference") { xml.text view.buyer_reference } unless view.buyer_reference.empty?
@@ -248,7 +269,9 @@ module Partiduo
               end
             end
           end
-          if delivered = view.delivery_date
+          # Facture récapitulative : la période de facturation (BG-14) remplace
+          # la date de livraison unique (BT-72).
+          if (delivered = view.delivery_date) && !view.summary_invoice?
             xml.element("ram:ActualDeliverySupplyChainEvent") do
               xml.element("ram:OccurrenceDateTime") do
                 xml.element("udt:DateTimeString", {"format" => "102"}) { xml.text date(delivered) }
@@ -279,6 +302,9 @@ module Partiduo
             end
           end
           tax_breakdown(xml, view)
+          if (from = view.billing_period_start) && (upto = view.billing_period_end)
+            period(xml, from, upto)
+          end
           document_allowances(xml, view)
           xml.element("ram:SpecifiedTradePaymentTerms") do
             terms = view.mentions.select { |mention| mention.code.starts_with?("payment.") && mention.code != "payment.bank" }

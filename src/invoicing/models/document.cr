@@ -79,6 +79,11 @@ module Partiduo
       # `payment_terms_days` vide : délai des paramètres.
       field :payment_terms, :string, max_size: 16, blank: true, default: ""
       field :payment_terms_days, :int, null: true, blank: true
+      # Période de facturation (BG-14) d'une facture récapitulative : de la
+      # première à la dernière livraison regroupée (migration `0006`) ; vide
+      # pour tout autre document.
+      field :billing_period_start, :date, null: true, blank: true
+      field :billing_period_end, :date, null: true, blank: true
 
       with_timestamp_fields
 
@@ -109,6 +114,19 @@ module Partiduo
       field :vat_percent, :decimal, max_digits: 7, decimal_places: 4, default: BigDecimal.new(0)
       field :vat_category, :string, max_size: 2, blank: true, default: ""
       field :net_amount, :decimal, max_digits: 20, decimal_places: 4, default: BigDecimal.new(0)
+      # Bon de livraison dont la ligne d'une facture est issue (migration
+      # `0006`) : groupe de lignes d'une facture récapitulative.
+      field :delivery_note_id, :big_int, null: true, blank: true
+    end
+
+    # Bon de livraison facturé par une facture, brouillon ou émise (migration
+    # `0006`) : un bon ne l'est qu'une fois (index unique sur
+    # `delivery_note_id`) ; figé avec la facture émise. Recalculé à chaque
+    # enregistrement du brouillon, depuis ses lignes et son document source.
+    class BilledDelivery < Marten::Model
+      field :id, :big_int, primary_key: true, auto: true
+      field :invoice, :many_to_one, to: Partiduo::Invoicing::Document, related: :billed_deliveries, on_delete: :cascade
+      field :delivery_note, :one_to_one, to: Partiduo::Invoicing::Document, related: :billed_in
     end
 
     # Acompte déduit d'une facture (facture d'acompte émise, déduite une

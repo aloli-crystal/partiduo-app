@@ -264,3 +264,25 @@ describe "Activation tardive de la Comptabilité (ADR-006 D2)" do
     end
   end
 end
+
+# Facture récapitulative (D-INV2-006) : son écriture de vente est celle de
+# toute facture, les bons de livraison n'en produisent aucune.
+describe "Facture récapitulative et Comptabilité (D-INV2-006)" do
+  it "passe une seule écriture de vente pour la facture de plusieurs bons de livraison" do
+    with_active_modules(I::BOTH) do
+      setup = I.setup
+      first = InvoicingSpec.issued(setup, "delivery_note", "2026-09-03")
+      second = InvoicingSpec.issued(setup, "delivery_note", "2026-09-10")
+      I.entries("delivery_note:#{first.id}").should be_empty
+      draft = Inv.invoice_delivery_notes(InvoicingSpec.actor, [first.id, second.id]).value!
+      invoice = InvoicingSpec.issue(draft.id, "2026-09-27")
+      invoice.totals.total_gross.should eq(d("2039.52"))
+      sale = I.entry("invoice:#{invoice.id}")
+      sale.receipt.should eq(invoice.number)
+      lines = I.by_account(sale)
+      lines[I.card_account(setup.customer.id)].should eq([{"debit", d("2039.52")}])
+      lines[I.card_account(setup.item.id)].should eq([{"credit", d("1600")}])
+      lines["44571"].should eq([{"credit", d("339.92")}])
+    end
+  end
+end
