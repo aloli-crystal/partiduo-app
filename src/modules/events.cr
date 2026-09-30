@@ -63,6 +63,26 @@ module Partiduo
       "liberal.receipt.recorded" => %w[receipt_id],
       "liberal.expense.recorded" => %w[expense_id],
       "liberal.asset.recorded"   => %w[asset_id operation],
+      # Ligne du livre-journal ou immobilisation d'un exercice ouvert
+      # modifiée (charge utile complète, comme à l'inscription) ou supprimée
+      # (`operation` : `acquisition`, `reversal`, `disposal`) — D-LIB2-002,
+      # amendement d'ADR-003 D7 par extension de D-MIC2-003 : la
+      # Comptabilité extourne l'écriture passée et, pour une modification,
+      # passe la nouvelle ; si elle ne le peut pas, elle refuse (`Refused`).
+      "liberal.receipt.updated" => %w[receipt_id],
+      "liberal.receipt.deleted" => %w[receipt_id],
+      "liberal.expense.updated" => %w[expense_id],
+      "liberal.expense.deleted" => %w[expense_id],
+      "liberal.asset.updated"   => %w[asset_id operation],
+      "liberal.asset.deleted"   => %w[asset_id operation],
+      # Déclaration fiscale annuelle transmise, ou son dépôt rejeté, publié
+      # par l'extension qui la transmet (`partiduo-teledec`) : `form`
+      # (`2035`), `year` (année déclarée), `reference` (dépôt) ; clé
+      # facultative `fingerprint` (empreinte de la déclaration préparée).
+      # Le module liberal fige l'exercice, ou le libère au rejet de ce dépôt
+      # (D-LIB2-003, amendement d'ADR-003 D7).
+      "tax_return.transmitted" => %w[form year reference],
+      "tax_return.rejected"    => %w[form year reference],
     }
 
     NAMES = SCHEMA.keys

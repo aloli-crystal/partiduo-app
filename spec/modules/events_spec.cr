@@ -21,13 +21,15 @@ def with_subscriber(& : String, Array(Partiduo::Events::Event) ->) : Nil
 end
 
 describe Partiduo::Events do
-  it "couvre la liste fermée de l'ADR-003 D7 et de l'ADR-006 D3 (plus payment.unmatched, D-2F-003, delivery_note.issued, D-STK-004, les registres micro et liberal, ADR-007 D2, D6, leurs modifications en période ouverte, D-MIC2-003, et quote.decided, ADR-009 D5)" do
+  it "couvre la liste fermée de l'ADR-003 D7 et de l'ADR-006 D3 (plus payment.unmatched, D-2F-003, delivery_note.issued, D-STK-004, les registres micro et liberal, ADR-007 D2, D6, leurs modifications en période ou exercice ouvert, D-MIC2-003, D-LIB2-002, la 2035 transmise ou rejetée, D-LIB2-003, et quote.decided, ADR-009 D5)" do
     Partiduo::Events::NAMES.sort.should eq(%w[
       card.saved credit_note.issued delivery_note.issued entry.cancelled entry.posted
-      invoice.issued invoice.platform_deposited liberal.asset.recorded liberal.expense.recorded liberal.receipt.recorded
+      invoice.issued invoice.platform_deposited liberal.asset.deleted liberal.asset.recorded liberal.asset.updated
+      liberal.expense.deleted liberal.expense.recorded liberal.expense.updated liberal.receipt.deleted
+      liberal.receipt.recorded liberal.receipt.updated
       micro.purchase.deleted micro.purchase.recorded micro.purchase.updated micro.receipt.deleted
       micro.receipt.recorded micro.receipt.updated payment.matched payment.recorded
-      payment.unmatched period.closed quote.decided
+      payment.unmatched period.closed quote.decided tax_return.rejected tax_return.transmitted
     ])
   end
 

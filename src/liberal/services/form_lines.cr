@@ -47,10 +47,11 @@ module Partiduo
         Api::HEADINGS.includes?(item) ? "liberal.headings.#{item}" : "liberal.items.#{item}"
       end
 
-      # Dernière année couverte par une période close du socle, `nil` si
-      # aucune.
+      # Dernière année couverte par une période close du socle ou dont la
+      # 2035 est transmise (DECISIONS D-LIB2-005), `nil` si aucune.
       def self.closed_through : Int32?
-        Partiduo::Api::Core.periods(Partiduo::Api::Actor.system).select(&.closed?).max_of?(&.ends_on.year)
+        closed = Partiduo::Api::Core.periods(Partiduo::Api::Actor.system).select(&.closed?).max_of?(&.ends_on.year)
+        [closed, Years.transmitted.keys.max?].compact.max?
       end
 
       # Un millésime au plus égal à une année close est figé : le changer

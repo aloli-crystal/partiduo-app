@@ -287,6 +287,17 @@ clés, sans `vat_amount` ni `source`
 ligne d'une période ouverte modifiée ; mêmes clés qu'à l'inscription (DECISIONS D-MIC2-003)
 |`micro.receipt.deleted`, `micro.purchase.deleted` |`receipt_id`, `purchase_id` |Micro-entreprise,
 ligne d'une période ouverte supprimée ; clés `number`, `date`, `origin` (DECISIONS D-MIC2-003)
+|`liberal.receipt.updated`, `liberal.expense.updated` |`receipt_id`, `expense_id` |Profession
+libérale, ligne d'un exercice ouvert modifiée ; mêmes clés qu'à l'inscription (DECISIONS D-LIB2-002)
+|`liberal.receipt.deleted`, `liberal.expense.deleted` |`receipt_id`, `expense_id` |Profession
+libérale, ligne d'un exercice ouvert supprimée ; clés `number`, `date`, `origin`, `reversal_of_id`
+|`liberal.asset.updated`, `liberal.asset.deleted` |`asset_id`, `operation` |Profession libérale,
+immobilisation modifiée, ou immobilisation, contre-passation ou cession (`disposal_id`) supprimée
+(DECISIONS D-LIB2-004)
+|`tax_return.transmitted`, `tax_return.rejected` |`form`, `year`, `reference` |Déclaration
+fiscale annuelle transmise, ou son dépôt rejeté, publié par l'extension qui la transmet
+(`partiduo-teledec`) ; clé facultative `fingerprint`. Le module liberal fige l'exercice de la 2035,
+ou le libère (DECISIONS D-LIB2-003)
 |===
 
 Un abonné peut refuser l'opération publiée en levant

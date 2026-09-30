@@ -74,7 +74,7 @@ describe_module "LIBERAL", Api do
     end
   end
 
-  it "corrige par contre-passation datée, jamais par modification, et ferme les périodes closes" do
+  it "corrige par contre-passation datée et ferme les périodes closes" do
     L.setup
     line = L.expense("2026-03-10", "250", "VEHICLE", nondeductible_amount: L.d("50"))
     reversal = Api.reverse_line(L.actor, Api::ReverseInput.new(line.id, L.date("2026-03-20"))).value!
@@ -88,14 +88,14 @@ describe_module "LIBERAL", Api do
     Api.reverse_line(L.actor, Api::ReverseInput.new(reversal.id, L.date("2026-03-21"))).error_keys
       .should eq(["liberal.errors.line.reversal.is_reversal"])
 
-    # Intangible en base : ni modification, ni suppression.
-    expect_raises(Exception, /intangible/) do
-      Partiduo::Liberal::Line.get!(id: line.id).update!(label: "autre")
-    end
-
     other = L.expense("2026-01-15", "30")
     L.close_period("2026-01-15")
     Api.line(L.system, other.id).locked.should be_true
+    # Intangible en base dans une période close : ni modification, ni
+    # suppression (D-LIB2-001).
+    expect_raises(Exception, /intangible/) do
+      Partiduo::Liberal::Line.get!(id: other.id).update!(label: "autre")
+    end
     Api.record_expense(L.actor, L.input("2026-01-20", "10", "OFFICE")).error_keys
       .should eq(["liberal.errors.line.date.closed_period"])
     Api.reverse_line(L.actor, Api::ReverseInput.new(other.id, L.date("2026-01-31"))).error_keys

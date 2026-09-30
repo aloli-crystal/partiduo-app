@@ -63,11 +63,15 @@ describe_module "LIBERAL", Api do
     line_sql("S4", "10", "RECEIPTS", "receipt")
   end
 
-  it "rend livre-journal, immobilisations et cessions intangibles et ferme les périodes closes" do
+  it "rend livre-journal, immobilisations et cessions d'une période close intangibles et ferme les périodes closes" do
     L.setup
     line = L.expense("2026-02-10", "30", "OFFICE")
     asset = L.asset("2026-02-11", "900", 3)
-    Api.dispose_asset(L.actor, Api::DisposalInput.new(asset.id, L.date("2026-03-01"), L.d("100"), "cash")).value!
+    Api.dispose_asset(L.actor, Api::DisposalInput.new(asset.id, L.date("2026-02-20"), L.d("100"), "cash")).value!
+    # Exercice ouvert : la base admet la modification (D-LIB2-001)…
+    sql("UPDATE liberal_line SET label = 'x' WHERE id = $1", line.id)
+    # …pas une fois la période close.
+    L.close_period("2026-02-15")
     refused("DELETE FROM liberal_line WHERE id = $1", line.id, pattern: /intangible/)
     refused("UPDATE liberal_line SET amount = 1 WHERE id = $1", line.id, pattern: /intangible/)
     refused("UPDATE liberal_asset SET duration_years = 5 WHERE id = $1", asset.id, pattern: /intangible/)
@@ -75,13 +79,16 @@ describe_module "LIBERAL", Api do
     refused("UPDATE liberal_disposal SET price = 1 WHERE asset_id = $1", asset.id, pattern: /intangible/)
     refused("DELETE FROM liberal_disposal WHERE asset_id = $1", asset.id, pattern: /intangible/)
 
+    refused("UPDATE liberal_line SET date = '2026-02-10' WHERE id = $1",
+      L.expense("2026-03-01", "5", "OFFICE").id, pattern: /période close/)
+
     L.close_period("2026-01-15")
     refused(LINE, "C1", "expense", "2026-01-20", L.nature("RENT").id, "rent", "10", "0", "cash", "manual", "", nil,
       pattern: /période close/)
     refused("INSERT INTO liberal_asset (number, label, category, acquired_on, service_on, amount, duration_years, " \
             "method, party_name, reference, recorded_at) VALUES ('C2', 'x', 'office', '2026-01-20', '2026-01-20', " \
             "10, 1, 'cash', '', '', now())", pattern: /période close/)
-    Api.lines(L.system).size.should eq(1)
+    Api.lines(L.system).size.should eq(2)
     Api.assets(L.system).size.should eq(1)
   end
 

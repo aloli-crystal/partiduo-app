@@ -126,7 +126,9 @@ module Partiduo
       record ReverseInput, id : Int64, date : Time, label : String = ""
 
       # Ligne du livre-journal. `reversed_by_id` : contre-passation qui
-      # l'annule ; `locked` : sa période est close.
+      # l'annule ; `locked` : intangible — son exercice est figé (clôturé,
+      # ou 2035 transmise le `transmitted_at`) ou sa période du socle est
+      # close (DECISIONS D-LIB2-001) ; `modified_at` : dernière modification.
       record LineView,
         id : Int64,
         number : String,
@@ -149,9 +151,28 @@ module Partiduo
         reversal_of_id : Int64?,
         reversed_by_id : Int64?,
         locked : Bool,
-        recorded_at : Time do
+        recorded_at : Time,
+        transmitted_at : Time? = nil,
+        modified_at : Time? = nil do
         def receipt? : Bool
           kind == "receipt"
+        end
+
+        # Se modifie : exercice ouvert, saisie directe (pas issue de la
+        # Facturation), ni contre-passation ni contre-passée.
+        def editable? : Bool
+          !locked && origin == "manual" && reversal_of_id.nil? && reversed_by_id.nil?
+        end
+
+        # Se supprime : exercice ouvert, saisie directe, pas contre-passée
+        # (une contre-passation se supprime).
+        def deletable? : Bool
+          !locked && origin == "manual" && reversed_by_id.nil?
+        end
+
+        # Se contre-passe : ni contre-passation ni déjà contre-passée.
+        def reversible? : Bool
+          reversal_of_id.nil? && reversed_by_id.nil?
         end
 
         def reversal? : Bool
@@ -225,8 +246,10 @@ module Partiduo
 
       record DisposalInput, asset_id : Int64, date : Time, price : BigDecimal, method : String, reference : String = ""
 
+      # Cession ; `locked` : son exercice est figé ou sa période close (elle
+      # ne se supprime plus).
       record DisposalView, id : Int64, asset_id : Int64, date : Time, price : BigDecimal, method : String,
-        reference : String
+        reference : String, locked : Bool = false
 
       record AssetView,
         id : Int64,
@@ -246,7 +269,24 @@ module Partiduo
         reversed_by_id : Int64?,
         disposal : DisposalView?,
         locked : Bool,
-        recorded_at : Time do
+        recorded_at : Time,
+        modified_at : Time? = nil do
+        # `locked` : intangible — exercice d'acquisition figé ou période
+        # close, ou une année figée postérieure en dépend (elle compte dans
+        # sa 2035, DECISIONS D-LIB2-004).
+
+        # Se modifie : non intangible, ni contre-passation ni contre-passée,
+        # sans cession (la supprimer d'abord).
+        def editable? : Bool
+          !locked && reversal_of_id.nil? && reversed_by_id.nil? && disposal.nil?
+        end
+
+        # Se supprime : non intangible, pas contre-passée, sans cession (une
+        # contre-passation se supprime).
+        def deletable? : Bool
+          !locked && reversed_by_id.nil? && disposal.nil?
+        end
+
         # Taux linéaire en %, `nil` si non amortissable.
         def rate : BigDecimal?
           duration_years > 0 ? (BigDecimal.new(100) / duration_years).round(2, mode: :ties_away) : nil
@@ -304,6 +344,37 @@ module Partiduo
         end
       end
 
+      # --- Exercices ---------------------------------------------------------------
+
+      # États d'un exercice (année civile de la 2035) : ouvert, clôturé au
+      # socle, 2035 transmise (DECISIONS D-LIB2-001).
+      YEAR_STATES = %w[open closed transmitted]
+
+      # Exercice `year` : `state` (le premier des deux événements qui le
+      # figent), date de clôture au socle, date de transmission de la 2035
+      # et référence du dépôt, empreinte de la 2035 au figement.
+      record YearView,
+        year : Int32,
+        state : String,
+        closed_at : Time?,
+        transmitted_at : Time?,
+        reference : String,
+        frozen_fingerprint : String do
+        def open? : Bool
+          state == "open"
+        end
+
+        # Clôturé ou 2035 transmise : lignes intangibles.
+        def frozen? : Bool
+          !open?
+        end
+
+        # Date du figement : clôture ou transmission, selon l'état.
+        def frozen_at : Time?
+          state == "transmitted" ? transmitted_at : closed_at
+        end
+      end
+
       # --- Réintégrations et déductions ------------------------------------------
 
       record AdjustmentInput, year : Int32, kind : String, label : String, amount : BigDecimal
@@ -352,7 +423,9 @@ module Partiduo
       # contrôles de cohérence. `fingerprint` : empreinte SHA-256 des
       # montants et de l'identification, pour vérifier au dépôt
       # (`partiduo-teledec`) que la déclaration n'a pas changé depuis sa
-      # validation.
+      # validation. `exercise` : état de l'exercice — ouvert, la 2035 est
+      # recalculée à chaque lecture ; figé, ses montants ne changent plus
+      # (DECISIONS D-LIB2-005).
       record TaxReturnView,
         year : Int32,
         identity : IdentityView,
@@ -361,7 +434,8 @@ module Partiduo
         disposals : Array(DisposalResultView),
         adjustments : Array(AdjustmentView),
         controls : Array(ControlView),
-        fingerprint : String do
+        fingerprint : String,
+        exercise : YearView do
         # Aucun contrôle bloquant : la 2035 peut être transmise.
         def ready? : Bool
           controls.none?(&.error?)

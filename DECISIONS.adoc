@@ -7327,7 +7327,11 @@ base vierge : `partiduo_migrate_g`.
 
 == Module des professions libérales — ADR-007 D6 (28 septembre 2026)
 
-=== D-LIB-001 — Application `liberal/`, module `LIBERAL` sans dépendance, sur le modèle de `micro` (L:liberal, liberal)
+=== D-LIB-001 — Application `liberal/`, module `LIBERAL` sans dépendance, sur le modèle de `micro` (L:liberal, liberal ; intangibilité remplacée par D-LIB2-001)
+
+*Statut.* L'intangibilité *dès l'inscription* est remplacée par D-LIB2-001
+(30 septembre 2026) : une ligne se modifie et se supprime tant que son
+exercice est ouvert. Le reste de la décision tient.
 
 *Contexte.* ADR-007 D6 : un module officiel `liberal` « sur le même modèle
 que `micro` » (registres natifs intangibles, alimentation par la
@@ -7415,7 +7419,12 @@ paramétrer aussi leurs règles de calcul, sans gain tant que la structure de
 la 2035-A ne change pas ; un changement de structure est une évolution du
 module.
 
-=== D-LIB-005 — Amortissement linéaire au prorata sur 360 jours ; plus-values à court et long terme (L:liberal, liberal)
+=== D-LIB-005 — Amortissement linéaire au prorata sur 360 jours ; plus-values à court et long terme (L:liberal, liberal ; correction des immobilisations remplacée par D-LIB2-004)
+
+*Statut.* « Une cession ne se contre-passe pas » et la seule
+contre-passation la même année sont remplacées par D-LIB2-004 : dans un
+exercice ouvert, une immobilisation se modifie et se supprime, sa cession
+se supprime. Le calcul de l'amortissement tient.
 
 *Contexte.* ADR-007 D6 : « l'amortissement se limite ici au linéaire ».
 Le greffon NOALYSS `amortis` répartit la base en annuités égales avec un
@@ -7451,7 +7460,11 @@ et `liberal,accounting`. Les specs du module (`spec/liberal/`) sont en
 par les specs d'intégration, qui forcent la configuration dans toutes les
 exécutions.
 
-=== D-LIB-007 — La 2035 préparée est une requête ; empreinte pour la transmission (L:liberal, liberal ; pour `partiduo-teledec`)
+=== D-LIB-007 — La 2035 préparée est une requête ; empreinte pour la transmission (L:liberal, liberal ; pour `partiduo-teledec` ; « rien n'est figé » remplacé par D-LIB2-003 et D-LIB2-005)
+
+*Statut.* « Rien n'est figé en base » est remplacé par D-LIB2-003 et
+D-LIB2-005 : la transmission de la 2035 fige l'exercice (`liberal_year`) et
+l'empreinte au figement est gardée. La 2035 reste une requête.
 
 *Contexte.* « Exposez la 2035 préparée par `Partiduo::Api` pour que
 `partiduo-teledec` la transmette. » ADR-007 D4 prévoit la formule *API
@@ -7471,7 +7484,10 @@ base.
 un état de plus à maintenir ; l'intangibilité du livre-journal après
 clôture et l'empreinte suffisent.
 
-=== D-LIB-008 — Réintégrations et déductions : part non déductible à la ligne, divers à l'année (L:liberal, liberal)
+=== D-LIB-008 — Réintégrations et déductions : part non déductible à la ligne, divers à l'année (L:liberal, liberal ; figement complété par D-LIB2-005)
+
+*Statut.* Complété par D-LIB2-005 : les ajustements d'une année dont la
+2035 est transmise sont figés aussi.
 
 *Contexte.* ADR-007 D6 : ventilation « avec les réintégrations et
 déductions diverses ».
@@ -7673,7 +7689,10 @@ aucun mouvement en classe 4).
 cas minoritaire (la plupart des professions de santé sont exonérées) ;
 à reprendre par un lot dédié si le besoin se confirme.
 
-=== D-LIB-010 — Table de correspondance figée pour les millésimes clos (L:clôture, liberal)
+=== D-LIB-010 — Table de correspondance figée pour les millésimes clos (L:clôture, liberal ; complétée par D-LIB2-005)
+
+*Statut.* Complétée par D-LIB2-005 : une année dont la 2035 est transmise
+fige aussi les millésimes qui la précèdent.
 
 *Contexte.* `set_form_line` et `delete_form_line` modifiaient sans
 restriction une ligne d'un millésime déjà couvert par une période close ;
@@ -12161,3 +12180,208 @@ points avant la réponse.
 avec les schémas présents (8 en attente : suite du stage, sans réseau dans
 le bac à sable) ; Ameba sans remarque ; `crystal tool format`. Base
 `partiduo_test_tdc7_a`, supprimée.
+
+== Livre-journal libéral modifiable tant que l'exercice est ouvert (30 septembre 2026)
+
+Décision de l'utilisateur du 30 septembre 2026, dans la ligne de celle du
+29 septembre pour la micro-entreprise (D-MIC2-001, « ne pas être plus
+royaliste que le roi ») : une ligne du livre-journal libéral (et du
+registre des immobilisations) n'est plus intangible dès l'inscription
+(D-LIB-001). Elle se modifie et se supprime tant que son exercice est
+ouvert ; l'exercice se fige au premier de deux événements, sa clôture ou la
+transmission de sa 2035 (en pratique le même jour) ; ensuite la ligne est
+intangible et se corrige par contre-passation datée dans un exercice
+ouvert. Deux exercices ouverts à la fois sont le cas normal.
+
+=== D-LIB2-001 — Exercice d'une ligne : son année civile ; modifiable jusqu'au figement (liberal ; remplace D-LIB-001 pour l'intangibilité)
+
+*Contexte.* ADR-007 D6 prévoyait un module « sur le même modèle que
+`micro` » ; D-LIB-001 avait repris D-MIC-003 (intangible dès
+l'inscription), refusé depuis pour la micro. Pour un libéral en
+déclaration contrôlée, la période qui compte est l'année de la 2035, qui
+est l'année civile (la 2035 porte sur les recettes encaissées et les
+dépenses payées de l'année).
+
+*Choix.* L'*exercice* d'une ligne est l'année civile de sa date (date
+d'acquisition pour une immobilisation, de cession pour une cession).
+
+* *Exercice ouvert* : une ligne saisie se modifie (`update_line` : mêmes
+  contrôles que la saisie, même sens, la nouvelle date aussi dans un
+  exercice ouvert ; changer d'année renumérote la ligne dans la nouvelle
+  année) et se supprime (`delete_line` : le numéro n'est pas repris),
+  droits `liberal.register.write`. Ne se modifient pas : une recette issue
+  de la Facturation (elle se corrige dans la Facturation, ou se
+  contre-passe), une ligne contre-passée (supprimer d'abord sa
+  contre-passation), une contre-passation (elle se supprime seulement).
+  Trace : `modified_at`, `modified_by_id`.
+* *Exercice figé* — clôturé au socle (`close_fiscal_year`, ou toutes les
+  périodes de l'année closes) ou 2035 transmise (D-LIB2-003) — ou période
+  du socle close : la ligne est intangible, aucune ligne n'y entre ni n'y
+  est déplacée ; une erreur se corrige par une contre-passation datée dans
+  un exercice ouvert.
+* *Deux exercices ouverts* : N-1 s'achève (écritures tardives,
+  corrections, 2035 préparée et recalculée) pendant que N avance ; rien
+  ne les lie.
+* Un encaissement de la Facturation daté dans un exercice figé est inscrit
+  à la date du jour (comme D-MIC2-001).
+* Contrat : `year(actor, year)` (`YearView` : `state` `open`, `closed`,
+  `transmitted`, dates, référence du dépôt, empreinte au figement),
+  `LineView#locked`, `transmitted_at`, `modified_at`, `editable?`,
+  `deletable?`, `reversible?` ; erreurs `liberal.errors.line.change.*`
+  (`from_invoicing`, `is_reversal`, `reversed`, `closed_period`,
+  `transmitted`) et `liberal.errors.line.date.transmitted` (fr, en, nl).
+
+Migration liberal 0003 : table `liberal_year`, colonnes `modified_at` et
+`modified_by_id` ; `liberal_register_guard` refuse `UPDATE`/`DELETE` d'une
+ligne, d'une immobilisation ou d'une cession d'une période close ou d'une
+année transmise, et `INSERT`/`UPDATE` vers une telle date ; il prend en
+partage le verrou consultatif `hashtext('liberal_year')`, qu'un nouveau
+déclencheur `liberal_year_guard` prend en exclusif : la transmission notée
+attend la fin des écritures en cours dans les registres. Retour :
+déclencheurs de la migration 0001 rétablis.
+
+Specs : `spec/liberal/changes_spec.cr`, `spec/liberal/integrity_spec.cr`,
+`spec/liberal/journal_spec.cr`, `spec/liberal/access_spec.cr`.
+
+*Alternative écartée.* L'exercice comptable du socle comme exercice de la
+ligne : un libéral peut tenir le module sans exercice au socle, et la 2035
+est toujours annuelle et civile ; la clôture du socle reste lue, date par
+date, par ses périodes.
+
+=== D-LIB2-002 — Cohérence avec la Comptabilité : `liberal.*.updated`, `liberal.*.deleted` (amendement d'ADR-003 D7 par extension de D-MIC2-003)
+
+*Amendement adopté le 30 septembre 2026 par extension de D-MIC2-003.*
+ADR-003 D7 porte les six événements.
+
+*Choix.* Six événements ajoutés à la liste fermée
+(`Partiduo::Events::SCHEMA`) : `liberal.receipt.updated`,
+`liberal.expense.updated`, `liberal.asset.updated` (charge utile complète,
+celle de l'inscription), `liberal.receipt.deleted`,
+`liberal.expense.deleted` (`number`, `date`, `origin`, `reversal_of_id`),
+`liberal.asset.deleted` (`operation` `acquisition`, `reversal` ou
+`disposal`, `disposal_id`). La Comptabilité s'y abonne
+(`LiberalEntries.on_change`, même mécanisme que `MicroEntries.on_change`) :
+les écritures en vigueur de la référence sont extournées et, pour une
+modification, la nouvelle écriture est passée sous la même référence ;
+rien ne change si elle serait identique. Si l'extourne ou la nouvelle
+écriture est impossible alors que la ligne avait une écriture (date hors
+exercice comptable…), l'abonné lève `Partiduo::Events::Refused` ; le
+contrat du module la rattrape et rend un échec : rien n'est modifié.
+
+Specs : `spec/integration/liberal_changes_spec.cr` — remplacement,
+modification sans effet comptable, suppression d'une ligne et d'une
+contre-passation, immobilisation modifiée, cession et immobilisation
+supprimées, refus hors exercice, recette de la Facturation refusée, et
+invariant vérifié après chacune de quarante opérations mêlées tirées au
+hasard (saisies de recettes et de dépenses, modifications, suppressions,
+contre-passations) puis après republication : chaque ligne a exactement une
+écriture en vigueur, de son montant et de sa date ; une ligne supprimée
+n'en a plus et ses écritures se soldent ; `spec/modules/events_spec.cr`.
+
+*Alternative écartée.* Celles de D-MIC2-003 (appel direct, republication
+avec révision, suppression d'écriture, écart toléré).
+
+=== D-LIB2-003 — Figement par la transmission : événement `tax_return.transmitted` publié par `partiduo-teledec` (amendement d'ADR-003 D7)
+
+*Contexte.* La transmission de la 2035 relève de `partiduo-teledec`
+(ADR-007 D4), qui lit déjà `Api::Liberal.tax_return` (D-TDC-002). Lui
+faire appeler une commande du module pour figer l'exercice serait un appel
+de module à module (ADR-006 D3), que la convention n'admet que pour lire.
+La clôture au socle, elle, est un geste existant, lu sur les périodes.
+
+*Choix.* Deux événements ajoutés à la liste fermée, publiés par
+l'extension qui transmet, dans la transaction qui note le dépôt, comme
+`invoice.platform_deposited` : `tax_return.transmitted` (`form` `2035`,
+`year`, `reference` du dépôt, `fingerprint` facultative : empreinte de la
+2035 jointe) et `tax_return.rejected` (mêmes clés, dépôt rejeté par
+TELEDEC). Le module `liberal` s'y abonne (`Years.on_event`) : à la
+transmission, l'année est notée transmise dans `liberal_year` (date,
+référence, empreinte transmise, empreinte de la 2035 préparée) et figée par
+les déclencheurs ; au rejet *de ce même dépôt*, la transmission est
+retirée et l'exercice redevient modifiable, sauf s'il est clôturé. Le
+module s'abonne aussi à `period.closed` : quand une année devient close,
+l'empreinte de sa 2035 est gardée. L'abonné ne refuse jamais (la
+transmission a déjà eu lieu) : un échec est consigné, sous point de
+sauvegarde.
+
+`partiduo-teledec` publie ces événements pour tout dépôt de liasse qui
+joint la 2035 du module (`tax_return_fingerprint` dans les détails), avec
+ou sans la Comptabilité, transmis par l'API (`transmit`) ou noté à la main
+(`record_outcome`) ; le rejet vient du suivi (`refresh`), des rappels ou de
+la saisie. La transmission reste refusée si la 2035 a changé depuis la
+préparation (`teledec.errors.filing.changed`) ; une modification entre la
+lecture et la transmission est sérialisée par le verrou consultatif.
+Specs : `partiduo-teledec/spec/teledec/liberal_freeze_spec.cr`.
+
+*Amendement.* ADR-003 D7 (liste fermée des événements), adopté le
+30 septembre 2026 par extension de D-MIC2-003.
+
+*Alternative écartée.* `Api::Liberal.mark_transmitted` appelé par
+l'extension (comme `Micro.mark_declared` par `partiduo-urssaf`) : appel de
+commande hors dépendance déclarée. Clôturer l'exercice du socle à la
+transmission : la Comptabilité peut avoir encore des écritures
+d'inventaire à passer.
+
+=== D-LIB2-004 — Immobilisations et cessions (liberal)
+
+*Choix.* Une immobilisation se modifie (`update_asset`) et se supprime
+(`delete_asset`, une contre-passation d'immobilisation aussi) tant que son
+exercice d'acquisition est ouvert, qu'elle n'est ni cédée ni contre-passée
+et qu'aucune année figée postérieure ne la compte dans sa 2035
+(`asset.change.later_year_frozen`) ; la même règle refuse une nouvelle
+acquisition ou une cession datée avant une année figée. Une cession se
+supprime (`delete_disposal`) dans les mêmes conditions ; ensuite
+l'immobilisation redevient modifiable ou cessible. Événements
+`liberal.asset.updated` et `liberal.asset.deleted` (D-LIB2-002).
+`AssetView#locked` (intangible), `editable?`, `deletable?`,
+`DisposalView#locked`. Specs : `spec/liberal/changes_spec.cr`,
+`spec/integration/liberal_changes_spec.cr`.
+
+*Alternative écartée.* Seule la contre-passation la même année (D-LIB-005) :
+plus restrictif que le livre-journal sans raison.
+
+=== D-LIB2-005 — 2035 préparée à la demande, figée avec l'exercice (liberal ; remplace « rien n'est figé » de D-LIB-007)
+
+*Choix.* La 2035 reste une requête (`tax_return`), recalculée à chaque
+lecture tant que l'exercice est ouvert (`TaxReturnView#exercise`). Figé,
+ses sources ne changent plus : livre-journal et immobilisations
+(déclencheurs), réintégrations et déductions (`liberal_adjustment_guard`
+refuse aussi une année transmise), table de correspondance (un millésime au
+plus égal à une année transmise est figé, comme D-LIB-010). L'empreinte au
+figement est gardée ; si la 2035 recalculée en diffère (identification ou
+profession changées depuis), le contrôle `liberal.controls.frozen_changed`
+l'avertit. Une 2035 transmise n'affiche plus l'avertissement « année
+ouverte ».
+
+*Alternative écartée.* Copier la 2035 en base au figement : un état de
+plus, alors que les sources sont intangibles et l'empreinte suffit.
+
+=== D-LIB2-006 — Interface : en-tête d'exercice, Modifier et Supprimer, cadenas et « Contre-passer » (interface)
+
+*Choix.* Comme D-MIC2-005. Livre-journal, recettes et dépenses (mode
+complet et mode simplifié) : en-tête de groupe de l'exercice
+(`th scope="rowgroup"` : « Exercice 2026 », « ouvert, modifiable »,
+« clôturé le … », « 2035 transmise le … », cadenas s'il est figé) ; par
+ligne, colonne d'actions : exercice ouvert, « Modifier » (formulaire de
+saisie prérempli, `/liberal/lines/<id>/edit`) et « Supprimer »
+(confirmation, `/liberal/lines/<id>/delete`) ; exercice figé ou période
+close, cadenas (texte pour les lecteurs d'écran « Exercice figé, ligne
+intangible ») et « Contre-passer » (ligne inverse datée du jour). Registre
+des immobilisations groupé par exercice d'acquisition ; « Modifier »,
+« Supprimer », « Supprimer la cession » (`/liberal/assets/<id>/edit`,
+`/delete`, `/disposal/delete`). Consultation d'une ligne ou d'une
+immobilisation : exercice et explication de ce que l'on peut faire. 2035 :
+état de l'exercice en tête, ajout d'ajustement proposé seulement dans un
+exercice ouvert, bandeau « prête à être déposée » retiré une fois
+transmise. Boutons de ligne `pd-row-button` (44 px au téléphone, nom
+accessible avec le numéro), propriétés logiques, fr, en, nl. Specs :
+`partiduo-ui-bulma/spec/ui/liberal_changes_spec.cr`.
+
+Bases de test : `partiduo_test_lib2_app`, `partiduo_test_lib2_ui`,
+`partiduo_test_lib2_teledec`, supprimées à la fin.
+
+*Vérification.* `partiduo-app` : `scripts/specs-modules.sh --order random`,
+huit configurations vertes (dont `liberal` : 803 exemples, et
+`liberal,accounting` : 1 071 exemples) ; `partiduo-ui-bulma` : 388
+exemples verts ; `partiduo-teledec` : 246 exemples verts (8 en attente :
+suite du stage, sans réseau) ; Ameba sans remarque dans les trois dépôts.

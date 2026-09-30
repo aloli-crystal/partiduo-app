@@ -14,7 +14,13 @@ module Partiduo
     # est inactif. Le module ne cite aucun autre module : la Facturation
     # l'alimente par ses événements, la Comptabilité passe les écritures à
     # `liberal.receipt.recorded`, `liberal.expense.recorded` et
-    # `liberal.asset.recorded` (ADR-006 D3).
+    # `liberal.asset.recorded`, les remplace ou les extourne à
+    # `liberal.*.updated` et `liberal.*.deleted` (ADR-006 D3).
+    #
+    # Exercice (année civile de la 2035, DECISIONS D-LIB2-001) : ouvert, ses
+    # lignes se modifient et se suppriment ; figé — clôturé au socle, ou sa
+    # 2035 transmise (`tax_return.transmitted`) —, elles sont intangibles et
+    # se corrigent par contre-passation datée dans un exercice ouvert.
     module Liberal
       MODULE_CODE    = "LIBERAL"
       READ           = "liberal.register.read"
@@ -216,8 +222,51 @@ module Partiduo
         end
       end
 
+      # Modifie une ligne d'un exercice ouvert — ni clôturé, ni 2035
+      # transmise, hors période close —, saisie directement, ni contre-passée
+      # ni contre-passation (DECISIONS D-LIB2-001) ; mêmes contrôles que la
+      # saisie, même sens, la nouvelle date aussi dans un exercice ouvert.
+      # Publie `liberal.receipt.updated` ou `liberal.expense.updated` : la
+      # Comptabilité remplace son écriture ou refuse, et rien n'est alors
+      # modifié (DECISIONS D-LIB2-002).
+      def self.update_line(actor : Actor, id : Int64, input : LineInput) : Result(LineView)
+        Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
+        Transaction.run do
+          row = Partiduo::Liberal::Line.filter(id: id).lock.first || raise NotFound.new("liberal_line", id)
+          errors = Registers.change_errors(row, update: true)
+          errors.concat(Registers.line_errors(row.kind.to_s, input, actor: actor)) if errors.empty?
+          next Result(LineView).failure(errors) unless errors.empty?
+          refused(Result(LineView)) { Result(LineView).success(Registers.view(Registers.update_line!(row, input, actor.user_id))) }
+        end
+      end
+
+      # Supprime une ligne d'un exercice ouvert (mêmes conditions que la
+      # modification ; une contre-passation se supprime) ; publie
+      # `liberal.receipt.deleted` ou `liberal.expense.deleted`.
+      def self.delete_line(actor : Actor, id : Int64) : Result(Nil)
+        Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
+        Transaction.run do
+          row = Partiduo::Liberal::Line.filter(id: id).lock.first || raise NotFound.new("liberal_line", id)
+          errors = Registers.change_errors(row, update: false)
+          next Result(Nil).failure(errors) unless errors.empty?
+          refused(Result(Nil)) do
+            Registers.delete!(row, actor.user_id)
+            Result(Nil).success(nil)
+          end
+        end
+      end
+
+      # Refus d'un abonné (la Comptabilité ne peut remplacer ou extourner
+      # son écriture) : échec avec ses erreurs, la transaction est annulée.
+      private def self.refused(type : Result(T).class, & : -> Result(T)) : Result(T) forall T
+        yield
+      rescue ex : Partiduo::Events::Refused
+        Result(T).failure(ex.errors)
+      end
+
       # Contre-passation datée d'une ligne (montants opposés, même nature,
-      # même tiers) ; publie l'événement de son sens.
+      # même tiers), dans un exercice ouvert : seule correction d'une ligne
+      # d'un exercice figé ; publie l'événement de son sens.
       def self.reverse_line(actor : Actor, input : ReverseInput) : Result(LineView)
         Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
         Transaction.run do
@@ -274,6 +323,56 @@ module Partiduo
           errors = Assets.errors(input, actor)
           next Result(AssetView).failure(errors) unless errors.empty?
           Result(AssetView).success(Assets.view(Assets.create!(input, actor.user_id)))
+        end
+      end
+
+      # Modifie une immobilisation acquise dans un exercice ouvert, sans
+      # contre-passation ni cession, qu'aucune année figée postérieure ne
+      # compte (DECISIONS D-LIB2-004) ; mêmes contrôles que l'inscription.
+      # Publie `liberal.asset.updated` : la Comptabilité remplace son
+      # écriture ou refuse.
+      def self.update_asset(actor : Actor, id : Int64, input : AssetInput) : Result(AssetView)
+        Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
+        Transaction.run do
+          row = Partiduo::Liberal::Asset.filter(id: id).lock.first || raise NotFound.new("liberal_asset", id)
+          errors = Assets.change_errors(row, update: true)
+          errors.concat(Assets.errors(input, actor)) if errors.empty?
+          next Result(AssetView).failure(errors) unless errors.empty?
+          refused(Result(AssetView)) { Result(AssetView).success(Assets.view(Assets.update!(row, input, actor.user_id))) }
+        end
+      end
+
+      # Supprime une immobilisation (ou une contre-passation d'immobilisation)
+      # aux mêmes conditions ; publie `liberal.asset.deleted`.
+      def self.delete_asset(actor : Actor, id : Int64) : Result(Nil)
+        Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
+        Transaction.run do
+          row = Partiduo::Liberal::Asset.filter(id: id).lock.first || raise NotFound.new("liberal_asset", id)
+          errors = Assets.change_errors(row, update: false)
+          next Result(Nil).failure(errors) unless errors.empty?
+          refused(Result(Nil)) do
+            Assets.delete!(row, actor.user_id)
+            Result(Nil).success(nil)
+          end
+        end
+      end
+
+      # Supprime la cession d'une immobilisation, datée dans un exercice
+      # ouvert qu'aucune année figée postérieure ne suit ; publie
+      # `liberal.asset.deleted` (`operation` `disposal`). L'immobilisation
+      # redevient modifiable ou cessible.
+      def self.delete_disposal(actor : Actor, asset_id : Int64) : Result(AssetView)
+        Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
+        Transaction.run do
+          Partiduo::Liberal::Asset.filter(id: asset_id).lock.first || raise NotFound.new("liberal_asset", asset_id)
+          disposal = Partiduo::Liberal::Disposal.filter(asset_id: asset_id).first
+          next Result(AssetView).failure(Registers.error("asset_id", "disposal.none")) unless disposal
+          errors = Assets.disposal_change_errors(disposal)
+          next Result(AssetView).failure(errors) unless errors.empty?
+          refused(Result(AssetView)) do
+            Assets.delete_disposal!(disposal, actor.user_id)
+            Result(AssetView).success(Assets.view(Partiduo::Liberal::Asset.get!(id: asset_id)))
+          end
         end
       end
 
@@ -352,11 +451,24 @@ module Partiduo
         end
       end
 
+      # --- Exercices ----------------------------------------------------------------------
+
+      # État de l'exercice `year` : ouvert, clôturé au socle (date), 2035
+      # transmise (date, référence du dépôt). Plusieurs exercices peuvent
+      # être ouverts à la fois.
+      def self.year(actor : Actor, year : Int32) : YearView
+        Guard.authorize!(actor, READ, module_code: MODULE_CODE)
+        Partiduo::Liberal::Years.view(year)
+      end
+
       # --- 2035 -------------------------------------------------------------------------
 
       # 2035, 2035-A et 2035-B préparées pour l'année civile `year`, avec les
-      # contrôles de cohérence (`ready?`) et l'empreinte. C'est la requête
-      # que lit `partiduo-teledec` pour transmettre la déclaration.
+      # contrôles de cohérence (`ready?`), l'empreinte et l'état de
+      # l'exercice : recalculées à chaque lecture tant qu'il est ouvert,
+      # inchangées une fois figé (DECISIONS D-LIB2-005). C'est la requête que
+      # lit `partiduo-teledec` pour transmettre la déclaration ; la
+      # transmission, publiée par `tax_return.transmitted`, fige l'exercice.
       def self.tax_return(actor : Actor, year : Int32) : TaxReturnView
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
         Partiduo::Liberal::TaxReturn.prepare(year)

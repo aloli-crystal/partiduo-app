@@ -36,8 +36,19 @@ module Partiduo
     #
     # Référence : `liberal:receipt:<id>`, `liberal:expense:<id>`,
     # `liberal:asset:<id>`, `liberal:disposal:<id>` ; une référence déjà
-    # comptabilisée ne l'est pas deux fois. Un échec ne bloque jamais le
-    # registre. Service interne.
+    # comptabilisée ne l'est pas deux fois. Un échec d'inscription ne bloque
+    # jamais le registre (la republication le rattrape).
+    #
+    # Ligne ou immobilisation modifiée ou supprimée dans un exercice ouvert
+    # (`liberal.*.updated`, `liberal.*.deleted`, DECISIONS D-LIB2-002, comme
+    # D-MIC2-003) : les écritures en vigueur de la référence sont extournées
+    # (la Comptabilité ne modifie ni ne supprime une écriture passée,
+    # D-ACC-015) et, pour une modification, la nouvelle écriture est passée
+    # sous la même référence — rien ne change si elle serait identique. Si
+    # l'extourne ou la nouvelle écriture est impossible alors que la ligne
+    # avait une écriture, l'abonné lève `Partiduo::Events::Refused` : la
+    # modification ou la suppression est refusée, livre-journal et
+    # comptabilité ne divergent jamais. Service interne.
     module LiberalEntries
       Log = ::Log.for("partiduo.accounting.liberal")
 
@@ -56,40 +67,120 @@ module Partiduo
         Log.warn(exception: ex) { "#{event.name} #{event.payload} non comptabilisé" }
       end
 
+      # Écriture que demande un événement : référence, clés du compte de
+      # contrepartie, contrepartie au débit ; `wanted` faux quand la ligne
+      # n'en demande pas (recette de la Facturation, cession à prix nul).
+      record Target, source : String, keys : {String, String}, debit : Bool, wanted : Bool
+
+      # Cible d'un événement `liberal.*` (inscription, modification ou
+      # suppression), `nil` pour un autre événement.
+      def self.target(name : String, payload : Hash(String, String)) : Target?
+        case name.sub(/\.(recorded|updated|deleted)\z/, "")
+        when "liberal.receipt"
+          Target.new("liberal:receipt:#{payload["receipt_id"]}", {payload["nature_code"]?.to_s, payload["heading"]?.to_s},
+            false, payload["origin"]? == "manual")
+        when "liberal.expense"
+          Target.new("liberal:expense:#{payload["expense_id"]}", {payload["nature_code"]?.to_s, payload["heading"]?.to_s},
+            true, true)
+        when "liberal.asset"
+          if payload["operation"]? == "disposal"
+            Target.new("liberal:disposal:#{payload["disposal_id"]}", {"", "disposal"}, false,
+              !decimal(payload["amount"]?).zero?)
+          else
+            Target.new("liberal:asset:#{payload["asset_id"]}", {"", "asset_#{payload["category"]?}"}, true, true)
+          end
+        end
+      end
+
       # Passe l'écriture d'un événement ; identifiant de l'écriture créée,
       # `nil` si l'événement n'en demande pas ou est déjà passé.
       def self.post(actor : Partiduo::Api::Actor, name : String, payload : Hash(String, String)) : Result(Int64?)
         none = Result(Int64?).success(nil)
-        case name
-        when "liberal.receipt.recorded"
-          return none unless payload["origin"]? == "manual"
-          source = "liberal:receipt:#{payload["receipt_id"]}"
-          keys = {payload["nature_code"]?.to_s, payload["heading"]?.to_s}
-          debit = false
-        when "liberal.expense.recorded"
-          source = "liberal:expense:#{payload["expense_id"]}"
-          keys = {payload["nature_code"]?.to_s, payload["heading"]?.to_s}
-          debit = true
-        when "liberal.asset.recorded"
-          if payload["operation"]? == "disposal"
-            source = "liberal:disposal:#{payload["disposal_id"]}"
-            keys = {"", "disposal"}
-            debit = false
-            return none if decimal(payload["amount"]?).zero?
-          else
-            source = "liberal:asset:#{payload["asset_id"]}"
-            keys = {"", "asset_#{payload["category"]?}"}
-            debit = true
-          end
-        else
-          return none
-        end
-        return none if Billing.posted?(source)
-        Partiduo::Api::Transaction.run { post_entry(actor, payload, source, keys, debit) }
+        return none unless name.ends_with?(".recorded")
+        target = target(name, payload)
+        return none unless target && target.wanted
+        return none if Billing.posted?(target.source)
+        Partiduo::Api::Transaction.run { post_entry(actor, payload, target) }
       end
 
-      private def self.post_entry(actor : Partiduo::Api::Actor, payload : Hash(String, String), source : String,
-                                  keys : {String, String}, debit : Bool) : Result(Int64?)
+      # Abonné de `liberal.receipt.updated`, `liberal.receipt.deleted`,
+      # `liberal.expense.updated`, `liberal.expense.deleted`,
+      # `liberal.asset.updated` et `liberal.asset.deleted` : refuse
+      # l'opération (`Refused`) plutôt que de laisser livre-journal et
+      # comptabilité diverger.
+      def self.on_change(event : Partiduo::Events::Event) : Nil
+        result = change(Partiduo::Api::Actor.system, event.name, event.payload)
+        raise Partiduo::Events::Refused.new(result.errors) if result.failure?
+      end
+
+      # Remplace (modification) ou extourne (suppression) l'écriture d'une
+      # ligne ; identifiant de la nouvelle écriture, `nil` s'il n'y en a pas.
+      def self.change(actor : Partiduo::Api::Actor, name : String,
+                      payload : Hash(String, String)) : Result(Int64?)
+        target = target(name, payload) || return Result(Int64?).success(nil)
+        live = Billing.live_entries([target.source]).order(:id).to_a
+        wanted = name.ends_with?(".updated") && target.wanted
+        return Result(Int64?).success(nil) if wanted && unchanged?(actor, payload, target, live)
+
+        Partiduo::Api::Transaction.run do
+          if failure = cancel_all(actor, live)
+            next Result(Int64?).failure(failure)
+          end
+          next Result(Int64?).success(nil) unless wanted
+          posted = post_entry(actor, payload, target)
+          if posted.failure? && live.empty?
+            # Ligne jamais comptabilisée (paramétrage absent) : même état
+            # qu'avant la modification, que la republication rattrapera.
+            Log.warn { "#{name} #{payload} non comptabilisé : #{posted.error_keys.join(", ")}" }
+            next Result(Int64?).success(nil)
+          end
+          posted
+        end
+      end
+
+      # Extourne les écritures ; erreurs de la première refusée, sinon `nil`.
+      private def self.cancel_all(actor : Partiduo::Api::Actor, entries : Array(Entry)) : Array(FieldError)?
+        entries.each do |entry|
+          cancelled = AccApi.cancel_entry(actor, AccApi::CancelEntryInput.new(entry.pk!.as(Int64)))
+          return cancelled.errors if cancelled.failure?
+        end
+        nil
+      end
+
+      # Une seule écriture en vigueur, déjà celle que la ligne demande.
+      private def self.unchanged?(actor : Partiduo::Api::Actor, payload : Hash(String, String), target : Target,
+                                  live : Array(Entry)) : Bool
+        return false unless live.size == 1
+        input, _ = entry_input(actor, payload, target)
+        !input.nil? && same?(live.first, input)
+      end
+
+      # L'écriture en vigueur est-elle déjà celle que la ligne demande
+      # (journal, date, libellé, pièce jointe, comptes, sens et montants) ?
+      private def self.same?(entry : Entry, input : AccApi::EntryInput) : Bool
+        ledger_id = entry.ledger_id.as(Int).to_i64
+        attachment_id = entry.attachment_id.try(&.to_i64)
+        return false unless ledger_id == input.ledger_id && entry.date == input.date
+        return false unless entry.label.to_s == input.label && attachment_id == input.attachment_id
+        current = entry.lines.map { |line| {line.account!.number.to_s, line.side.to_s, line.amount!} }.sort!
+        wanted = input.lines.map { |line| {line.account, line.side.code, line.amount} }.sort!
+        current == wanted
+      end
+
+      private def self.post_entry(actor : Partiduo::Api::Actor, payload : Hash(String, String),
+                                  target : Target) : Result(Int64?)
+        input, errors = entry_input(actor, payload, target)
+        return Result(Int64?).failure(errors) unless input
+        result = AccApi.post_entry(actor, input)
+        return Result(Int64?).failure(result.errors) if result.failure?
+        Result(Int64?).success(result.value!.id)
+      end
+
+      # Écriture demandée par une ligne, ou les erreurs qui l'empêchent (les
+      # comptes proposés par le régime sont créés au plan s'ils manquent).
+      private def self.entry_input(actor : Partiduo::Api::Actor, payload : Hash(String, String),
+                                   target : Target) : {AccApi::EntryInput?, Array(FieldError)}
+        keys = target.keys
         errors = [] of FieldError
         ledger = Billing.financial_ledger(payload["method"]?.to_s)
         bank = ledger.try { |found| Ledgers.account_of(found) }
@@ -98,14 +189,12 @@ module Partiduo
         counterpart = account(keys, label, actor, errors)
         date = parse_date(payload["date"]?)
         errors << FieldError.new("date", "accounting.errors.billing.date_missing") if date.nil?
-        return Result(Int64?).failure(errors) unless errors.empty? && ledger && bank && counterpart && date
+        return {nil, errors} unless errors.empty? && ledger && bank && counterpart && date
 
-        lines = entry_lines(decimal(payload["amount"]?), debit, counterpart, bank.number.to_s)
+        lines = entry_lines(decimal(payload["amount"]?), target.debit, counterpart, bank.number.to_s)
         input = AccApi::EntryInput.new(ledger_id: ledger.pk!.as(Int64), date: date, lines: lines, label: entry_label(payload),
-          attachment_id: payload["attachment_id"]?.try(&.to_i64?), source: source)
-        result = AccApi.post_entry(actor, input)
-        return Result(Int64?).failure(result.errors) if result.failure?
-        Result(Int64?).success(result.value!.id)
+          attachment_id: payload["attachment_id"]?.try(&.to_i64?), source: target.source)
+        {input, errors}
       end
 
       # Libellé d'un compte à créer : celui de la rubrique ou de la catégorie

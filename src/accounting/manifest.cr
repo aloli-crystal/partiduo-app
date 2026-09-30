@@ -91,4 +91,13 @@ Partiduo::Modules.register do
   on("liberal.receipt.recorded") { |event| Partiduo::Accounting::LiberalEntries.on_event(event) }
   on("liberal.expense.recorded") { |event| Partiduo::Accounting::LiberalEntries.on_event(event) }
   on("liberal.asset.recorded") { |event| Partiduo::Accounting::LiberalEntries.on_event(event) }
+  # Ligne ou immobilisation d'un exercice ouvert modifiée ou supprimée
+  # (D-LIB2-002) : écriture extournée et remplacée ; refus (`Refused`)
+  # plutôt qu'un écart.
+  on("liberal.receipt.updated") { |event| Partiduo::Accounting::LiberalEntries.on_change(event) }
+  on("liberal.receipt.deleted") { |event| Partiduo::Accounting::LiberalEntries.on_change(event) }
+  on("liberal.expense.updated") { |event| Partiduo::Accounting::LiberalEntries.on_change(event) }
+  on("liberal.expense.deleted") { |event| Partiduo::Accounting::LiberalEntries.on_change(event) }
+  on("liberal.asset.updated") { |event| Partiduo::Accounting::LiberalEntries.on_change(event) }
+  on("liberal.asset.deleted") { |event| Partiduo::Accounting::LiberalEntries.on_change(event) }
 end

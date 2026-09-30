@@ -6,7 +6,9 @@ module Partiduo
     # acquisition, contre-passation la même année, cession, plan
     # d'amortissement linéaire, tableau de la 2035-B et plus ou moins-values.
     # Publie `liberal.asset.recorded` (`operation` : `acquisition`,
-    # `reversal`, `disposal`). Service interne.
+    # `reversal`, `disposal`) ; à la modification ou à la suppression dans un
+    # exercice ouvert, `liberal.asset.updated` et `liberal.asset.deleted`
+    # (DECISIONS D-LIB2-004). Service interne.
     #
     # Amortissement linéaire (DECISIONS D-LIB-005) : annuité = base ÷ durée ;
     # prorata temporis en jours, sur une année de 360 jours (mois de 30
@@ -41,6 +43,7 @@ module Partiduo
           errors << error("category", "asset.category.invalid")
         end
         errors.concat(Registers.date_errors(input.acquired_on, manual, "acquired_on"))
+        errors.concat(later_frozen_errors(input.acquired_on, "acquired_on"))
         if (service_on = input.service_on) && day(service_on) < day(input.acquired_on)
           errors << error("service_on", "asset.service_before_acquisition")
         end
@@ -82,12 +85,103 @@ module Partiduo
           errors << error("date", "disposal.before_acquisition")
         end
         errors.concat(Registers.date_errors(input.date))
+        errors.concat(later_frozen_errors(input.date, "date"))
         if input.price < 0 || input.price.round(2) != input.price
           errors << error("price", "disposal.price.invalid")
         end
         errors << error("method", "line.method.invalid") unless Api::METHODS.includes?(input.method)
         errors << error("reference", "line.too_long", {"max" => "100"}) if input.reference.size > 100
         errors
+      end
+
+      # --- Modification et suppression (D-LIB2-004) ------------------------------------
+
+      # Immobilisation qui ne se modifie ni ne se supprime : contre-passée
+      # (supprimer d'abord la contre-passation), cédée (supprimer d'abord la
+      # cession), acquise dans un exercice figé ou une période close, ou
+      # comptée dans la 2035 d'une année figée postérieure. Une
+      # contre-passation se supprime mais ne se modifie pas.
+      def self.change_errors(row : Asset, update : Bool) : Array(FieldError)
+        errors = [] of FieldError
+        errors << error("id", "line.change.is_reversal") if update && row.reversal_of_id
+        errors << error("id", "line.change.reversed") if Asset.filter(reversal_of_id: row.pk).exists?
+        errors << error("id", "asset.change.disposed") if Disposal.filter(asset_id: row.pk).exists?
+        errors.concat(frozen_errors(row.acquired_on!))
+        errors
+      end
+
+      # Exercice d'acquisition figé, période close, ou année figée
+      # postérieure (l'immobilisation compte dans sa 2035).
+      def self.frozen_errors(date : Time, field : String = "id") : Array(FieldError)
+        errors = Registers.frozen_errors(date)
+        return errors.map { |item| FieldError.new(field, item.key, item.params) } unless errors.empty?
+        return [error(field, "asset.change.later_year_frozen")] if Years.frozen_from?(date.year)
+        [] of FieldError
+      end
+
+      # Modifie une immobilisation d'un exercice ouvert (contrôles faits par
+      # le contrat) et publie `liberal.asset.updated` : la Comptabilité
+      # remplace son écriture, ou refuse. Changer d'année renumérote.
+      def self.update!(row : Asset, input : Api::AssetInput, actor_user_id : Int64?) : Asset
+        acquired_on = day(input.acquired_on)
+        row.number = Registers.next_number("asset", acquired_on) if acquired_on.year != row.acquired_on!.year
+        row.label = input.label.strip
+        row.category = input.category
+        row.acquired_on = acquired_on
+        row.service_on = day(input.service_on || acquired_on)
+        row.amount = input.amount
+        row.duration_years = input.duration_years
+        row.method = input.method
+        row.card_id = input.card_id
+        row.party_name = Registers.party_name(input.card_id, input.party_name)
+        row.reference = input.reference.strip
+        row.attachment_id = input.attachment_id
+        row.modified_at = Time.utc
+        row.modified_by_id = actor_user_id
+        row.save!
+        publish(row, "acquisition", row.acquired_on!, row.amount!, actor_user_id, name: "liberal.asset.updated")
+        row
+      end
+
+      # Supprime une immobilisation (ou sa contre-passation) d'un exercice
+      # ouvert et publie `liberal.asset.deleted` : la Comptabilité extourne
+      # l'écriture, ou refuse. Le numéro n'est pas repris.
+      def self.delete!(row : Asset, actor_user_id : Int64?) : Nil
+        payload = {
+          "asset_id"  => row.pk!.to_s,
+          "operation" => row.reversal_of_id ? "reversal" : "acquisition",
+          "number"    => row.number.to_s,
+          "date"      => row.acquired_on!.to_s("%Y-%m-%d"),
+        }
+        row.delete
+        Partiduo::Events.publish("liberal.asset.deleted", payload, actor_user_id: actor_user_id)
+      end
+
+      # Cession qui ne se supprime plus : exercice figé, période close, ou
+      # année figée postérieure (la cession change sa 2035-B).
+      def self.disposal_change_errors(disposal : Disposal) : Array(FieldError)
+        frozen_errors(disposal.date!)
+      end
+
+      # Une année figée postérieure à `date` : une acquisition ou une
+      # cession à cette date changerait sa 2035.
+      def self.later_frozen_errors(date : Time, field : String) : Array(FieldError)
+        return [] of FieldError unless Years.frozen.any?(&.>(date.year))
+        [error(field, "asset.change.later_year_frozen")]
+      end
+
+      # Supprime la cession d'une immobilisation (exercice ouvert) et publie
+      # `liberal.asset.deleted` (`operation` `disposal`) : la Comptabilité
+      # extourne l'encaissement du prix, ou refuse.
+      def self.delete_disposal!(disposal : Disposal, actor_user_id : Int64?) : Nil
+        payload = {
+          "asset_id"    => disposal.asset_id.to_s,
+          "operation"   => "disposal",
+          "disposal_id" => disposal.pk!.to_s,
+          "date"        => disposal.date!.to_s("%Y-%m-%d"),
+        }
+        disposal.delete
+        Partiduo::Events.publish("liberal.asset.deleted", payload, actor_user_id: actor_user_id)
       end
 
       # --- Inscription ----------------------------------------------------------------
@@ -125,8 +219,8 @@ module Partiduo
       # Charge utile complète (ADR-006 D3) : la Comptabilité passe l'écriture
       # d'acquisition, d'annulation ou d'encaissement du prix de cession.
       def self.publish(asset : Asset, operation : String, date : Time, amount : BigDecimal, actor_user_id : Int64?,
-                       disposal : Disposal? = nil) : Nil
-        Partiduo::Events.publish("liberal.asset.recorded", {
+                       disposal : Disposal? = nil, name : String = "liberal.asset.recorded") : Nil
+        Partiduo::Events.publish(name, {
           "asset_id"       => asset.pk!.to_s,
           "operation"      => operation,
           "disposal_id"    => disposal.try(&.pk).to_s,
@@ -168,9 +262,15 @@ module Partiduo
         return [] of Api::AssetView if rows.empty?
         ids = rows.map(&.pk!.as(Int64))
         reversals = Asset.filter(reversal_of_id__in: ids).to_a.to_h { |row| {row.reversal_of_id!.to_i64, row.pk!.as(Int64)} }
-        disposals = Disposal.filter(asset_id__in: ids).to_a.to_h { |row| {row.asset_id!.to_i64, disposal_view(row)} }
         closed = Registers.closed_periods
+        transmitted = Years.transmitted
+        frozen = Years.frozen
+        disposals = Disposal.filter(asset_id__in: ids).to_a.to_h do |row|
+          {row.asset_id!.to_i64, disposal_view(row, locked?(row.date!, closed, transmitted))}
+        end
         rows.map do |row|
+          acquired_on = row.acquired_on!
+          locked = locked?(acquired_on, closed, transmitted) || frozen.any?(&.>=(acquired_on.year))
           id = row.pk!.as(Int64)
           Api::AssetView.new(id: id, number: row.number.to_s, label: row.label.to_s, category: row.category.to_s,
             acquired_on: row.acquired_on!, service_on: row.service_on!, amount: row.amount!,
@@ -178,17 +278,21 @@ module Partiduo
             party_name: row.party_name.to_s, reference: row.reference.to_s,
             attachment_id: row.attachment_id.try(&.to_i64), reversal_of_id: row.reversal_of_id.try(&.to_i64),
             reversed_by_id: reversals[id]?, disposal: disposals[id]?,
-            locked: Registers.locked?(row.acquired_on!, closed), recorded_at: row.recorded_at || Time.utc)
+            locked: locked, recorded_at: row.recorded_at || Time.utc, modified_at: row.modified_at)
         end
+      end
+
+      private def self.locked?(date : Time, closed : Array({Time, Time}), transmitted : Hash(Int32, Time)) : Bool
+        transmitted.has_key?(date.year) || Registers.locked?(date, closed)
       end
 
       def self.view(row : Asset) : Api::AssetView
         views([row]).first
       end
 
-      def self.disposal_view(row : Disposal) : Api::DisposalView
+      def self.disposal_view(row : Disposal, locked : Bool = false) : Api::DisposalView
         Api::DisposalView.new(row.pk!.as(Int64), row.asset_id!.to_i64, row.date!, row.price!, row.method.to_s,
-          row.reference.to_s)
+          row.reference.to_s, locked)
       end
 
       # Immobilisations vivantes (ni contre-passées ni contre-passations)

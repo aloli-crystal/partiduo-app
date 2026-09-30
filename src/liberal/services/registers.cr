@@ -8,8 +8,13 @@ module Partiduo
     # `liberal.receipt.recorded` et `liberal.expense.recorded`. Service
     # interne : le contrat `Partiduo::Api::Liberal` l'appelle.
     #
-    # Une ligne inscrite ne change plus (déclencheur `liberal_register_guard`) ;
-    # une erreur se corrige par une contre-passation datée, de montant opposé.
+    # Tant que son exercice (l'année civile de sa date) est ouvert, une
+    # ligne saisie se modifie et se supprime (`liberal.*.updated`,
+    # `liberal.*.deleted`) ; une fois l'exercice figé — clôturé au socle, ou
+    # sa 2035 transmise — ou sa période du socle close, elle est intangible
+    # et une erreur se corrige par une contre-passation datée dans un
+    # exercice ouvert (déclencheur `liberal_register_guard`, DECISIONS
+    # D-LIB2-001).
     module Registers
       alias FieldError = Partiduo::Api::FieldError
       alias Api = Partiduo::Api::Liberal
@@ -141,15 +146,28 @@ module Partiduo
         [] of FieldError
       end
 
-      # Date dans une période close du socle : refusée ; dans le futur :
-      # refusée pour une saisie directe (on n'inscrit qu'un mouvement fait).
+      # Date dans une période close du socle ou dans une année dont la 2035
+      # est transmise : refusée ; dans le futur : refusée pour une saisie
+      # directe (on n'inscrit qu'un mouvement fait).
       def self.date_errors(date : Time, manual : Bool = true, field : String = "date") : Array(FieldError)
         errors = [] of FieldError
         errors << error(field, "line.date.future") if manual && day(date) > Partiduo::Config.today
-        if period = Partiduo::Api::Core.period_for(system, day(date))
-          errors << error(field, "line.date.closed_period") if period.closed?
+        if closed?(date)
+          errors << error(field, "line.date.closed_period")
+        elsif Years.transmitted?(date.year)
+          errors << error(field, "line.date.transmitted", {"year" => date.year.to_s})
         end
         errors
+      end
+
+      # Date dans une période close du socle.
+      def self.closed?(date : Time) : Bool
+        Partiduo::Api::Core.period_for(system, day(date)).try(&.closed?) || false
+      end
+
+      # Date intangible : période close ou année transmise.
+      def self.locked_on?(date : Time) : Bool
+        closed?(date) || Years.transmitted?(date.year)
       end
 
       # --- Inscription ----------------------------------------------------------------
@@ -194,6 +212,73 @@ module Partiduo
         ""
       end
 
+      # --- Modification et suppression (exercice ouvert, D-LIB2-001) ------------------
+
+      # Ligne qui ne se modifie ni ne se supprime : issue de la Facturation
+      # (la corriger là, ou la contre-passer), déjà contre-passée (supprimer
+      # d'abord sa contre-passation), ou d'un exercice figé ou d'une période
+      # close (la contre-passer). Une contre-passation se supprime mais ne se
+      # modifie pas (`update` vrai : modification).
+      def self.change_errors(row : Line, update : Bool) : Array(FieldError)
+        errors = [] of FieldError
+        errors << error("id", "line.change.from_invoicing") if row.origin != "manual"
+        errors << error("id", "line.change.is_reversal") if update && row.reversal_of_id
+        errors << error("id", "line.change.reversed") if Line.filter(reversal_of_id: row.pk).exists?
+        errors.concat(frozen_errors(row.date!))
+        errors
+      end
+
+      # Exercice figé ou période close à la date d'une ligne existante.
+      def self.frozen_errors(date : Time) : Array(FieldError)
+        return [error("id", "line.change.closed_period")] if closed?(date)
+        return [error("id", "line.change.transmitted", {"year" => date.year.to_s})] if Years.transmitted?(date.year)
+        [] of FieldError
+      end
+
+      # Modifie une ligne d'un exercice ouvert (contrôles faits par le
+      # contrat : même sens, mêmes règles que la saisie) et publie
+      # `liberal.receipt.updated` ou `liberal.expense.updated` : la
+      # Comptabilité remplace son écriture, ou refuse
+      # (`Partiduo::Events::Refused`). Changer d'année renumérote la ligne
+      # dans la nouvelle année.
+      def self.update_line!(row : Line, input : Api::LineInput, actor_user_id : Int64?) : Line
+        nature = nature!(input.nature_id)
+        row.number = next_number("journal", input.date) if day(input.date).year != row.date!.year
+        row.date = day(input.date)
+        row.nature_id = input.nature_id
+        row.heading = nature.heading
+        row.amount = input.amount
+        row.nondeductible_amount = input.nondeductible_amount
+        row.method = input.method
+        row.card_id = input.card_id
+        row.party_name = party_name(input.card_id, input.party_name)
+        row.label = input.label.strip
+        row.reference = input.reference.strip
+        row.attachment_id = input.attachment_id
+        row.modified_at = Time.utc
+        row.modified_by_id = actor_user_id
+        row.save!
+        publish(row, nature, actor_user_id, UPDATED[row.kind.to_s])
+        row
+      end
+
+      # Supprime une ligne d'un exercice ouvert et publie
+      # `liberal.receipt.deleted` ou `liberal.expense.deleted` : la
+      # Comptabilité extourne l'écriture passée, ou refuse. Le numéro n'est
+      # pas repris.
+      def self.delete!(row : Line, actor_user_id : Int64?) : Nil
+        kind = row.kind.to_s
+        payload = {
+          "#{kind}_id"     => row.pk!.to_s,
+          "number"         => row.number.to_s,
+          "date"           => row.date!.to_s("%Y-%m-%d"),
+          "origin"         => row.origin.to_s,
+          "reversal_of_id" => row.reversal_of_id.to_s,
+        }
+        row.delete
+        Partiduo::Events.publish(DELETED[kind], payload, actor_user_id: actor_user_id)
+      end
+
       # --- Contre-passation -----------------------------------------------------------
 
       # Ligne existante, ni elle-même une contre-passation, ni déjà
@@ -224,14 +309,16 @@ module Partiduo
 
       # --- Événements -------------------------------------------------------------------
 
-      EVENTS = {"receipt" => "liberal.receipt.recorded", "expense" => "liberal.expense.recorded"}
+      EVENTS  = {"receipt" => "liberal.receipt.recorded", "expense" => "liberal.expense.recorded"}
+      UPDATED = {"receipt" => "liberal.receipt.updated", "expense" => "liberal.expense.updated"}
+      DELETED = {"receipt" => "liberal.receipt.deleted", "expense" => "liberal.expense.deleted"}
 
       # Charge utile de quoi passer l'écriture sans relire le module (ADR-006
       # D3) : la Comptabilité y trouve la nature, la rubrique et son libellé
-      # (compte créé au besoin).
-      def self.publish(row : Line, nature : Nature, actor_user_id : Int64?) : Nil
+      # (compte créé au besoin). Même charge utile à la modification.
+      def self.publish(row : Line, nature : Nature, actor_user_id : Int64?, name : String? = nil) : Nil
         kind = row.kind.to_s
-        Partiduo::Events.publish(EVENTS[kind], {
+        Partiduo::Events.publish(name || EVENTS[kind], {
           "#{kind}_id"           => row.pk!.to_s,
           "number"               => row.number.to_s,
           "date"                 => row.date!.to_s("%Y-%m-%d"),
@@ -348,7 +435,8 @@ module Partiduo
         end
         natures = Nature.all.to_a.index_by(&.pk!.as(Int64))
         closed = closed_periods
-        rows.map { |row| view(row, natures[row.nature_id!.to_i64], reversals[row.pk!.as(Int64)]?, closed) }
+        transmitted = Years.transmitted
+        rows.map { |row| view(row, natures[row.nature_id!.to_i64], reversals[row.pk!.as(Int64)]?, closed, transmitted) }
       end
 
       def self.view(row : Line) : Api::LineView
@@ -356,8 +444,9 @@ module Partiduo
       end
 
       private def self.view(row : Line, nature : Nature, reversed_by_id : Int64?,
-                            closed : Array({Time, Time})) : Api::LineView
+                            closed : Array({Time, Time}), transmitted : Hash(Int32, Time)) : Api::LineView
         date = row.date!
+        transmitted_at = transmitted[date.year]?
         Api::LineView.new(
           id: row.pk!.as(Int64), number: row.number.to_s, kind: row.kind.to_s, date: date,
           nature_id: nature.pk!.as(Int64), nature_code: nature.code.to_s, nature_label: nature.label.to_s,
@@ -365,9 +454,11 @@ module Partiduo
           method: row.method.to_s, card_id: row.card_id.try(&.to_i64), party_name: row.party_name.to_s,
           label: row.label.to_s, reference: row.reference.to_s, attachment_id: row.attachment_id.try(&.to_i64),
           origin: row.origin.to_s, source: row.source.to_s, reversal_of_id: row.reversal_of_id.try(&.to_i64),
-          reversed_by_id: reversed_by_id, locked: locked?(date, closed), recorded_at: row.recorded_at || Time.utc)
+          reversed_by_id: reversed_by_id, locked: !transmitted_at.nil? || locked?(date, closed),
+          recorded_at: row.recorded_at || Time.utc, transmitted_at: transmitted_at, modified_at: row.modified_at)
       end
 
+      # Date dans une période close du socle (liste `closed_periods`).
       def self.locked?(date : Time, closed : Array({Time, Time})) : Bool
         closed.any? { |(from, to)| from <= date <= to }
       end

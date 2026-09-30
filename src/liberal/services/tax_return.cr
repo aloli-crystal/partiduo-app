@@ -8,7 +8,11 @@ module Partiduo
     # (ADR-007 D6) depuis la ventilation du livre-journal par rubrique, le
     # registre des immobilisations et les réintégrations et déductions de
     # l'année ; lignes et cases lues dans la table de correspondance du
-    # millésime ; contrôles de cohérence avant dépôt. Service interne.
+    # millésime ; contrôles de cohérence avant dépôt. Calculée à chaque
+    # lecture : tant que l'exercice est ouvert, elle suit le livre-journal ;
+    # une fois figé (clôturé ou 2035 transmise), ses sources sont
+    # intangibles et elle ne change plus — l'empreinte gardée au figement le
+    # vérifie (DECISIONS D-LIB2-005). Service interne.
     #
     # Montants en euros entiers (arrondi commercial) : chaque rubrique est
     # arrondie, les totaux se calculent sur les montants arrondis, comme sur
@@ -69,9 +73,13 @@ module Partiduo
         end
 
         identity = identity()
-        controls = controls(year, totals, lines, rows, identity)
-        Api::TaxReturnView.new(year, identity, lines, rows, disposals, adjustment_views, controls,
-          fingerprint(year, identity, lines))
+        exercise = Years.view(year)
+        fingerprint = fingerprint(year, identity, lines)
+        controls = controls(year, totals, lines, rows, identity, exercise)
+        if exercise.frozen? && !exercise.frozen_fingerprint.empty? && exercise.frozen_fingerprint != fingerprint
+          controls << control("frozen_changed", "warning", {"year" => year.to_s})
+        end
+        Api::TaxReturnView.new(year, identity, lines, rows, disposals, adjustment_views, controls, fingerprint, exercise)
       end
 
       private def self.default_form(item : String) : String
@@ -145,12 +153,15 @@ module Partiduo
       end
 
       def self.controls(year : Int32, totals : Hash(String, Api::HeadingTotalView), lines : Array(Api::TaxLineView),
-                        rows : Array(Api::DepreciationRowView), identity : Api::IdentityView) : Array(Api::ControlView)
+                        rows : Array(Api::DepreciationRowView), identity : Api::IdentityView,
+                        exercise : Api::YearView = Years.view(year)) : Array(Api::ControlView)
         controls = [] of Api::ControlView
         controls << control("siren_missing", "error") unless identity.siren.matches?(/\A\d{9}\z/)
         controls << control("profession_missing", "warning") if identity.profession.strip.empty?
         controls.concat(amount_controls(year, totals, lines, rows))
-        controls.concat(period_controls(year))
+        # 2035 transmise : l'exercice est figé, l'avertissement « année
+        # ouverte » n'a plus d'objet.
+        controls.concat(period_controls(year)) unless exercise.state == "transmitted"
         controls
       end
 

@@ -5,7 +5,7 @@ nl:
     permissions:
       register:
         read: "Kasboek, vaste activa en aangifte 2035 raadplegen"
-        write: "Ontvangsten, uitgaven en vaste activa boeken en tegenboeken, bijtellingen en aftrekken noteren"
+        write: "Boeken, wijzigen en verwijderen in een open boekjaar, ontvangsten, uitgaven en vaste activa tegenboeken, bijtellingen en aftrekken noteren"
       settings:
         write: "Vrij beroep instellen (aarden, regels van de 2035)"
     menu:
@@ -122,6 +122,7 @@ nl:
       no_receipts: "Geen kasboekregel voor het jaar"
       no_fiscal_year: "Geen boekjaar van het dossier dekt %{year}"
       year_open: "Het jaar %{year} is niet afgesloten: de aangifte kan nog wijzigen"
+      frozen_changed: "De 2035 van %{year} is gewijzigd sinds het boekjaar werd vastgelegd (identificatie gewijzigd?): controleren vóór elke indiening"
     reversal_label: "Annulering van %{number}"
     export:
       filename:
@@ -195,10 +196,17 @@ nl:
         date:
           future: "Toekomstige datum: boek alleen een uitgevoerde verrichting"
           closed_period: "De periode van deze datum is afgesloten: corrigeer met een tegenboeking in een open periode"
+          transmitted: "De 2035 van %{year} is ingediend, het boekjaar is vastgelegd: corrigeer met een tegenboeking in een open boekjaar"
         reversal:
           is_reversal: "Een tegenboeking wordt niet tegengeboekt"
           already: "Deze regel is al tegengeboekt"
           before_line: "De tegenboeking kan de regel niet voorafgaan"
+        change:
+          from_invoicing: "Ontvangst uit een betaalde factuur: corrigeer ze in Facturatie, of boek ze tegen"
+          is_reversal: "Een tegenboeking wordt niet gewijzigd: verwijder ze en boek daarna de juiste regel"
+          reversed: "Tegengeboekte regel: verwijder eerst de tegenboeking"
+          closed_period: "Afgesloten boekjaar of periode: de regel is definitief, corrigeer met een tegenboeking"
+          transmitted: "De 2035 van %{year} is ingediend: de regel is definitief, corrigeer met een tegenboeking"
         too_long: "Hoogstens %{max} tekens"
       nature:
         in_use: "Aard al gebruikt: alleen de omschrijving en de activering wijzigen"
@@ -223,7 +231,11 @@ nl:
         reversal:
           disposed: "Vast actief verkocht: het wordt niet meer tegengeboekt"
           other_year: "Een vast actief wordt alleen in het jaar van aanschaf tegengeboekt; daarna verkopen"
+        change:
+          disposed: "Verkocht vast actief: verwijder eerst de verkoop"
+          later_year_frozen: "Een later vastgelegd boekjaar telt dit vast actief in zijn 2035: het wijzigt niet meer"
       disposal:
+        none: "Dit vast actief is niet verkocht"
         asset:
           unknown: "Onbekend of geannuleerd vast actief"
           already: "Vast actief al verkocht"
@@ -233,7 +245,7 @@ nl:
       adjustment:
         year:
           invalid: "Ongeldig jaar"
-          closed: "Dit jaar heeft een afgesloten periode"
+          closed: "Dit jaar heeft een afgesloten periode of de 2035 ervan is ingediend"
         kind:
           invalid: "Onbekende soort"
         label:

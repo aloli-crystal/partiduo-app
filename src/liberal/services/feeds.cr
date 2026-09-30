@@ -15,6 +15,10 @@ module Partiduo
     # * `payment.unmatched` : les recettes issues d'un lettrage des factures
     #   citées sont contre-passées à la date du jour (comme D-MIC-016).
     #
+    # Un encaissement daté dans un exercice figé ou une période close est
+    # inscrit à la date du jour, dans l'exercice ouvert (DECISIONS
+    # D-LIB2-001, comme D-MIC2-001).
+    #
     # Une référence (`payment:<id>`, `matching:<id>:invoice:<id>`) n'est
     # inscrite qu'une fois. Un échec est consigné et ne bloque jamais
     # l'opération d'origine (point de sauvegarde). Service interne.
@@ -106,6 +110,7 @@ module Partiduo
         invoice = invoice(invoice_id) || raise "facture #{invoice_id} inconnue du module liberal"
         amount = amount.round(2, mode: :ties_away)
         return unless amount > 0
+        date = Partiduo::Config.today if Registers.locked_on?(date)
         nature_id = default_nature || raise "aucune nature de recette active"
         input = Api::LineInput.new(date: date, nature_id: nature_id, amount: amount, method: method,
           card_id: invoice.card_id.try(&.to_i64), label: invoice.number.to_s, reference: invoice.number.to_s)

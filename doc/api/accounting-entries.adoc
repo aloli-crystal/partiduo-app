@@ -353,3 +353,20 @@ Abonnés `micro.receipt.recorded` et `micro.purchase.recorded`
   écriture impossible alors que la ligne en avait une : l'abonné lève
   `Partiduo::Events::Refused` et la modification ou la suppression est
   refusée ; ligne jamais comptabilisée : même règle qu'à l'inscription.
+
+== Écritures de la profession libérale : modification et suppression (DECISIONS D-LIB2-002)
+
+Abonnés `liberal.receipt.updated`, `liberal.receipt.deleted`,
+`liberal.expense.updated`, `liberal.expense.deleted`,
+`liberal.asset.updated` et `liberal.asset.deleted`
+(`Partiduo::Accounting::LiberalEntries.on_change`), comme pour la
+micro-entreprise : ligne du livre-journal, immobilisation, contre-passation
+ou cession modifiée ou supprimée dans un exercice ouvert. Les écritures en
+vigueur de la référence (`liberal:receipt:<id>`, `liberal:expense:<id>`,
+`liberal:asset:<id>`, `liberal:disposal:<id>`) sont extournées
+(`cancel_entry`) et, pour une modification, la nouvelle écriture est passée
+sous la même référence ; rien ne change si elle serait identique. Extourne
+ou nouvelle écriture impossible alors que la ligne en avait une : l'abonné
+lève `Partiduo::Events::Refused` et le contrat du module rend un échec,
+rien n'est modifié. Une recette issue de la Facturation, jamais
+comptabilisée par ce service, ne se modifie pas dans le module.

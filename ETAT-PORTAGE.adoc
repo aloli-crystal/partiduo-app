@@ -2880,3 +2880,23 @@ Amendement D-MIC-003 refusé par l'utilisateur ; retour à ADR-007 D1
   `turnover_changed` (migration urssaf 0005) ;
 * interface : liste groupée par période, Modifier et Supprimer, cadenas et
   « Contre-passer », mode simplifié et téléphone compris.
+
+== Livre-journal libéral modifiable tant que l'exercice est ouvert (30 septembre 2026)
+
+Décision de l'utilisateur dans la ligne de D-MIC2-001 (DECISIONS D-LIB2-001
+à D-LIB2-006). Fait :
+
+* une ligne du livre-journal, une immobilisation ou une cession se modifie
+  et se supprime tant que son exercice (année civile de la 2035) est
+  ouvert ; plusieurs exercices ouverts à la fois ; figé à sa clôture au
+  socle ou à la transmission de sa 2035, il est intangible et se corrige
+  par contre-passation dans un exercice ouvert (migration liberal 0003 :
+  `liberal_year`, déclencheurs, verrou consultatif) ;
+* Comptabilité : écriture extournée et remplacée, ou extournée, par les
+  événements `liberal.*.updated` et `liberal.*.deleted` ; refus plutôt
+  qu'écart (`Partiduo::Events::Refused`) ;
+* `partiduo-teledec` : la transmission d'une 2035 publie
+  `tax_return.transmitted` (le rejet, `tax_return.rejected`) ; le module
+  fige l'exercice ;
+* interface : en-tête d'exercice, Modifier et Supprimer, cadenas et
+  « Contre-passer », mode simplifié et téléphone compris.

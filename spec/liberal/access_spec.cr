@@ -37,6 +37,7 @@ private def reads(actor : Partiduo::Api::Actor) : Array(Proc(Nil))
     -> { Api.adjustments(actor, 2026); nil },
     -> { Api.tax_return(actor, 2026); nil },
     -> { Api.export_tax_return(actor, 2026); nil },
+    -> { Api.year(actor, 2026); nil },
   ]
 end
 
@@ -47,10 +48,15 @@ private def writes(actor : Partiduo::Api::Actor) : Array(Proc(Nil))
     -> { Api.check_expense(actor, line_input); nil },
     -> { Api.record_expense(actor, line_input); nil },
     -> { Api.reverse_line(actor, Api::ReverseInput.new(1_i64, DAY)); nil },
+    -> { Api.update_line(actor, 1_i64, line_input); nil },
+    -> { Api.delete_line(actor, 1_i64); nil },
     -> { Api.check_asset(actor, asset_input); nil },
     -> { Api.record_asset(actor, asset_input); nil },
     -> { Api.reverse_asset(actor, Api::ReverseInput.new(1_i64, DAY)); nil },
     -> { Api.dispose_asset(actor, Api::DisposalInput.new(1_i64, DAY, BigDecimal.new(1), "cash")); nil },
+    -> { Api.update_asset(actor, 1_i64, asset_input); nil },
+    -> { Api.delete_asset(actor, 1_i64); nil },
+    -> { Api.delete_disposal(actor, 1_i64); nil },
     -> { Api.add_adjustment(actor, Api::AdjustmentInput.new(2026, "deduction", "x", BigDecimal.new(1))); nil },
     -> { Api.delete_adjustment(actor, 1_i64); nil },
   ]

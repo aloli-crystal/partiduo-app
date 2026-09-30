@@ -17,16 +17,47 @@ les obligations viennent du CGI (art. 93, 96 à 100) et de la notice de la
 * Tables : `liberal_settings`, `liberal_nature`, `liberal_line`,
   `liberal_counter`, `liberal_asset`, `liberal_disposal`,
   `liberal_adjustment`, `liberal_form_line`, `liberal_invoice` (migration
-  liberal 0001) ; côté Comptabilité, `accounting_liberal_account` (migration
+  liberal 0001), `liberal_year` (état propre au module d'un exercice :
+  2035 transmise, empreinte au figement ; migration liberal 0003) ; côté
+  Comptabilité, `accounting_liberal_account` (migration
   accounting 0011).
 * Données initiales : `LIBERAL.defaults` (une nature par rubrique dans la
   langue de l'instance, table de correspondance de
   `src/liberal/data/defaults.yml`).
 * Instance : `partiduo-provision --modules liberal[,invoicing[,accounting]]`.
-* Specs : `spec/liberal/`, `spec/integration/liberal_spec.cr` ;
+* Specs : `spec/liberal/`, `spec/integration/liberal_spec.cr`,
+  `spec/integration/liberal_changes_spec.cr` ;
   configurations `liberal` et `liberal,accounting` de
   `scripts/specs-modules.sh` et de la CI.
-* Décisions : `DECISIONS.adoc`, D-LIB-001 à D-LIB-013 ; blocage B-LIB-001.
+* Décisions : `DECISIONS.adoc`, D-LIB-001 à D-LIB-014, D-LIB2-001 à
+  D-LIB2-006 (livre-journal modifiable tant que l'exercice est ouvert) ;
+  blocage B-LIB-001.
+
+== Exercice ouvert, exercice figé
+
+L'*exercice* d'une ligne, d'une immobilisation (date d'acquisition) ou
+d'une cession est l'année civile de sa date, celle de la 2035
+(D-LIB2-001). Il est *ouvert* jusqu'au premier de deux événements, qui le
+*figent* :
+
+* sa *clôture* au socle (`Api::Core.close_fiscal_year`, ou toutes les
+  périodes de l'année closes) ;
+* la *transmission* de sa 2035 : l'extension qui la dépose publie
+  `tax_return.transmitted` (`partiduo-teledec`), que le module note dans
+  `liberal_year` ; `tax_return.rejected` pour le même dépôt la retire.
+
+Plusieurs exercices sont ouverts à la fois (l'année N se saisit pendant que
+N-1 s'achève). Exercice ouvert : une ligne saisie se modifie
+(`update_line`) et se supprime (`delete_line`) ; exercice figé, ou période
+close du socle : intangible (déclencheur `liberal_register_guard`),
+corrigée par une contre-passation datée dans un exercice ouvert.
+
+[cols="2,3",options="header"]
+|===
+|Fonction |Effet
+
+|`year(actor, year)` |`YearView` : `state` (`open`, `closed`, `transmitted` — le premier des deux événements), `closed_at`, `transmitted_at`, `reference` du dépôt, `frozen_fingerprint` (empreinte de la 2035 au figement) ; `open?`, `frozen?`, `frozen_at`
+|===
 
 == Permissions
 
@@ -66,15 +97,22 @@ sont lues dans la table de correspondance du millésime.
 |`check_receipt`, `check_expense` |requêtes de contrôle
 |`record_receipt(actor, LineInput)` |inscrit la recette (`J2026-00001`), publie `liberal.receipt.recorded`
 |`record_expense(actor, LineInput)` |inscrit la dépense ; `nondeductible_amount` : part privée, réintégrée ; publie `liberal.expense.recorded`
-|`reverse_line(actor, ReverseInput)` |contre-passation datée (montants opposés) ; publie l'événement du sens de la ligne
+|`update_line(actor, id, LineInput)` |modifie une ligne d'un exercice ouvert, saisie directement, ni contre-passée ni contre-passation ; mêmes contrôles que la saisie, même sens ; changer d'année renumérote ; publie `liberal.receipt.updated` ou `liberal.expense.updated` (refus de la Comptabilité : échec, rien ne change)
+|`delete_line(actor, id)` |supprime une ligne d'un exercice ouvert (une contre-passation se supprime) ; numéro non repris ; publie `liberal.receipt.deleted` ou `liberal.expense.deleted`
+|`reverse_line(actor, ReverseInput)` |contre-passation datée dans un exercice ouvert (montants opposés) ; publie l'événement du sens de la ligne
 |`journal_totals(actor, query)` |nombre de lignes, recettes, dépenses, solde (`TotalsView`)
 |`heading_totals(actor, year)` |ventilation de l'année civile par rubrique (`HeadingTotalView`)
 |`export_journal(actor, query, ExportFormat)` |CSV ou PDF/A-2b (`FileView`)
 |===
 
-Une ligne ne se modifie ni ne s'efface (déclencheur `liberal_register_guard`),
-n'entre jamais dans une période close du socle ; une saisie directe n'est pas
-datée dans le futur.
+`LineView#locked` : exercice figé ou période close (`transmitted_at` : date
+de la transmission de la 2035) ; `editable?`, `deletable?`, `reversible?` ;
+`modified_at`. Refus `liberal.errors.line.change.*` (`from_invoicing`,
+`is_reversal`, `reversed`, `closed_period`, `transmitted`) et
+`liberal.errors.line.date.transmitted`. Aucune ligne n'entre dans une
+période close ni dans une année transmise ; une saisie directe n'est pas
+datée dans le futur. Un encaissement de la Facturation daté dans un
+exercice figé est inscrit à la date du jour.
 
 == Immobilisations et amortissements
 
@@ -85,7 +123,9 @@ datée dans le futur.
 |`assets(actor, year?)`, `asset(actor, id)` |registre (`AssetView`) ; avec `year`, les immobilisations vivantes de la 2035-B de l'année
 |`check_asset`, `record_asset(actor, AssetInput)` |inscrit l'immobilisation (`I2026-00001`) ; publie `liberal.asset.recorded` (`operation` `acquisition`)
 |`reverse_asset(actor, ReverseInput)` |contre-passation, la même année civile que l'acquisition, sans cession (`reversal`)
+|`update_asset(actor, id, AssetInput)`, `delete_asset(actor, id)` |modification ou suppression (d'une contre-passation aussi) d'une immobilisation acquise dans un exercice ouvert, sans cession ni contre-passation, qu'aucune année figée postérieure ne compte (`asset.change.later_year_frozen`) ; publie `liberal.asset.updated` ou `liberal.asset.deleted` (D-LIB2-004)
 |`dispose_asset(actor, DisposalInput)` |cession : date, prix, règlement (`disposal`) ; une par immobilisation
+|`delete_disposal(actor, asset_id)` |supprime la cession, datée dans un exercice ouvert ; publie `liberal.asset.deleted` (`operation` `disposal`)
 |`disposal_result(actor, asset_id)` |plus ou moins-value de la cession d'une immobilisation (`DisposalResultView`, `nil` si elle n'est pas cédée), sans calculer la 2035
 |`depreciation(actor, year)` |tableau de la 2035-B (`DepreciationRowView` : antérieurs, dotation, valeur résiduelle)
 |`schedule(actor, id)` |plan d'amortissement (année, annuité)
@@ -100,8 +140,8 @@ service et jusqu'à la cession, dernière annuité soldant la base (D-LIB-005).
 `adjustments(actor, year)`, `add_adjustment(actor, AdjustmentInput)`,
 `delete_adjustment(actor, id)` : divers à réintégrer, divers à déduire,
 quote-part de SCM ou SCP, frais d'établissement, provisions
-(`ADJUSTMENT_KINDS`). Figés dès qu'une période de l'année est close
-(déclencheur `liberal_adjustment_guard`).
+(`ADJUSTMENT_KINDS`). Figés dès qu'une période de l'année est close ou que
+sa 2035 est transmise (déclencheur `liberal_adjustment_guard`).
 
 == Table de correspondance (datée par millésime)
 
@@ -129,7 +169,7 @@ main (contrôle `box_manual`, avertissement).
 |===
 |Fonction |Effet
 
-|`tax_return(actor, year)` |`TaxReturnView` : identification, postes (`TaxLineView` : formulaire, ligne, case, montant en euros entiers, `mapped`), tableau des immobilisations, cessions, réintégrations et déductions, contrôles (`ControlView`), empreinte SHA-256
+|`tax_return(actor, year)` |`TaxReturnView` : identification, postes (`TaxLineView` : formulaire, ligne, case, montant en euros entiers, `mapped`), tableau des immobilisations, cessions, réintégrations et déductions, contrôles (`ControlView`), empreinte SHA-256, état de l'exercice (`exercise`, `YearView`) ; calculée à chaque lecture : elle suit le livre-journal tant que l'exercice est ouvert, ne change plus une fois figé (D-LIB2-005)
 |`export_tax_return(actor, year)` |édition de contrôle PDF/A-2b
 |`republish(actor)` |republie tous les événements (Comptabilité activée plus tard) ; la Comptabilité ne double rien
 |===
@@ -140,14 +180,17 @@ vérifier que la déclaration validée n'a pas changé.
 
 *Transmission* : `partiduo-teledec` (ADR-007 D4) lit `tax_return` avec un
 acteur muni de `liberal.register.read`, refuse le dépôt si `ready?` est faux
-et transmet `boxes` avec l'identification (D-LIB-007).
+et transmet `boxes` avec l'identification (D-LIB-007) ; le dépôt fait, il
+publie `tax_return.transmitted` et l'exercice est figé (D-LIB2-003).
 
 Contrôles : SIREN absent ou mal formé, poste non nul sans ligne ou sans case
 au millésime, deux postes dans la même case d'un formulaire
 (`box_duplicate`), rubrique négative, amortissement au-delà de la base
 (bloquants) ; profession non renseignée, véhicule dont la base dépasse le
 plus bas des plafonds d'amortissement (`vehicle_depreciation_ceiling`,
-D-LIB-012), aucune ligne, année sans exercice ou non close (à vérifier).
+D-LIB-012), aucune ligne, année sans exercice ou non close, 2035 changée
+depuis le figement (`frozen_changed` : identification modifiée) (à
+vérifier).
 
 == Événements
 
@@ -158,7 +201,16 @@ D-LIB-012), aucune ligne, année sans exercice ou non close (à vérifier).
 |`liberal.receipt.recorded` |`receipt_id`, `number`, `date`, `amount` (négatif : contre-passation), `nondeductible_amount`, `nature_code`, `heading`, `heading_label`, `method`, `card_id`, `party_name`, `label`, `reference`, `attachment_id`, `origin`, `source`, `reversal_of_id`
 |`liberal.expense.recorded` |mêmes clés, `expense_id`
 |`liberal.asset.recorded` |`asset_id`, `operation` (`acquisition`, `reversal`, `disposal`), `disposal_id`, `number`, `date`, `amount` (base, ou prix de cession), `category`, `category_label`, `method`, `card_id`, `party_name`, `label`, `reference`, `attachment_id`, `reversal_of_id`
+|`liberal.receipt.updated`, `liberal.expense.updated`, `liberal.asset.updated` |ligne ou immobilisation d'un exercice ouvert modifiée : mêmes clés qu'à l'inscription (D-LIB2-002)
+|`liberal.receipt.deleted`, `liberal.expense.deleted` |ligne supprimée : `receipt_id` ou `expense_id`, `number`, `date`, `origin`, `reversal_of_id`
+|`liberal.asset.deleted` |immobilisation, contre-passation ou cession supprimée : `asset_id`, `operation` (`acquisition`, `reversal`, `disposal`), `disposal_id`, `number`, `date`
 |===
+
+Le module s'abonne à `tax_return.transmitted` et `tax_return.rejected`
+(`form` `2035`, `year`, `reference`, `fingerprint` facultative : exercice
+figé ou libéré) et à `period.closed` (empreinte de la 2035 gardée quand
+l'année devient close) ; jamais de refus, la transmission ayant déjà eu
+lieu.
 
 Abonnés : la Comptabilité (`Partiduo::Accounting::LiberalEntries`) passe
 l'écriture de trésorerie (journal financier du mode de règlement ; compte de
@@ -167,7 +219,11 @@ paramétrable par `Api::Accounting.set_liberal_account`, sinon compte du
 régime de `src/accounting/data/liberal_accounts.yml`). Une recette issue de
 la Facturation n'y est pas comptabilisée une seconde fois. Tenue toutes
 taxes comprises (D-LIB-009) : aucune TVA collectée ni déductible, la TVA
-reversée est une charge (6358 en France, 640 en Belgique).
+reversée est une charge (6358 en France, 640 en Belgique). À la
+modification ou à la suppression (`*.updated`, `*.deleted`), l'écriture en
+vigueur est extournée et, pour une modification, remplacée sous la même
+référence ; si elle ne peut l'être, l'abonné refuse
+(`Partiduo::Events::Refused`) et le contrat rend un échec (D-LIB2-002).
 
 Alimentation par la Facturation : `invoice.issued`, `payment.recorded`,
 `payment.matched` (recette de la nature par défaut, toutes taxes comprises),
