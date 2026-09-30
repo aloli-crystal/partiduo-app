@@ -11862,3 +11862,93 @@ le même nom) : `TELEDEC_CALLBACK_URL`, `TELEDEC_CALLBACK_PORT`,
 specs (clôture écartée de la liasse et de la DAS2) ne créent plus le compte
 120, désormais dans le plan FR initial (amendement D-CLO-003). Base
 `partiduo_test_tdc4_teledec`.
+
+== Retours du stage de TELEDEC : DAS2, compte avant la liasse, rappels (30 septembre 2026)
+
+Suite du stage lancée par l'utilisateur : jeton, entreprise de test,
+liasse (source `API`), CA3 en marque blanche et relevé 2571 passent. Trois
+retours, traités ci-dessous.
+
+=== D-TDC5-001 — DAS2 jointe au formulaire principal de la liasse du régime, vide (T5:teledec ; D-TDC4-001)
+
+*Constat.* Le stage refuse une DAS2 seule en marque blanche : « aucun
+formulaire de TVA ou de paiement ou de liasse n'a été trouvé dans le
+message envoyé depuis votre logiciel de comptabilité. Un des formulaires
+principaux permettant l'identification du régime de l'entreprise n'est pas
+présent, veuillez en saisir un dans votre payload. ISRN : 3310CA3, 3514,
+3519… ». La documentation relevée (`.teledec-doc/`) range pourtant la DAS2
+parmi les formulaires principaux et ne dit pas à quoi la joindre.
+
+*Choix (hypothèse).* La DAS2 part dans le même document que le formulaire
+principal de la *liasse* du régime d'imposition du dossier : `2065` (IS
+simplifié ou normal), `2031` (BIC à l'IR), `2035` (BNC), `2072S` (SCI),
+bloc *vide* (`"2065": {}`) — aucune valeur, rien de trompeur ; le régime
+seul est identifié. Raisons : la DAS2 est annuelle comme la liasse et se
+transmet par la procédure EDI-TDFC, avec la liasse (sa zone `AD` est la
+date de clôture de l'exercice d'une société à l'IS) ; une CA3 n'a pas de
+période annuelle, et une déclaration de TVA à zéro serait trompeuse. Le
+régime est noté dans le document à la préparation (`details["tax_system"]`,
+préparation refusée sans régime : `teledec.errors.settings.tax_system`) ;
+une DAS2 préparée avant ce changement est refusée à l'envoi
+(`teledec.errors.transport.das2_regime` : préparer de nouveau).
+`Remote::Formats::REGIME_FORMS`.
+
+*Alternatives écartées.* CA12 ou CA3 de l'année en accompagnement
+(valeurs ou période trompeuses) ; DAS2 dans les `zones_formulaires` de
+l'API Balance (réécrirait la liasse déjà générée, sans balance).
+
+*Vérification.* Le TELEDEC simulé refuse désormais, avec le message du
+stage, tout dépôt en marque blanche sans formulaire principal de TVA, de
+paiement ou de liasse (spec `remote_spec.cr`). L'exemple DAS2 de la suite
+du stage (entreprise de test `ISRS`, 2065 vide) confirme ou infirme
+l'hypothèse. *Points à observer* sur le stage : que la 2065 vide ne
+modifie pas la liasse déjà générée par l'API Balance pour le même exercice
+(ouvrir la liasse de l'entreprise de test) ; pour un exercice décalé, la
+période de la DAS2 (année civile) diffère de celle de la liasse.
+
+=== D-TDC5-002 — Compte et entreprise créés avant la première liasse, à leur régime (T5:teledec ; D-TDC3-007, D-TDC4-002)
+
+*Constat.* La 2035 sans balance de la seconde entreprise de test est
+acceptée par l'API Balance, mais son suivi (`declaration-status`) répond
+« Utilisateur non trouvé pour l'email fourni »
+(`teledec.errors.transport.account`). Hypothèse vérifiée et écartée : le
+suivi n'interroge pas avec le compte de la première entreprise —
+`HttpTransport#status` forme l'adresse depuis le SIREN de l'identifiant de
+suivi (`999888662`), la même que `#EMAIL` de la liasse. Cause retenue : la
+liasse ne crée pas le compte de l'entreprise (au moins pas avant le
+suivi) ; la liasse de la première entreprise passait parce que l'exemple
+précédent avait créé son compte par `creation-entreprise` (B-TDC-004 :
+création automatique jamais vérifiée).
+
+*Choix.* L'adaptateur appelle `creation-entreprise` avant le premier dépôt
+d'un dossier, liasse comprise (`ensure_company`, comme pour la marque
+blanche). L'identité envoyée porte le régime fiscal complet
+(`fullRegimeFiscal` : `ISRS`, `ISRN`, `BICRS`, `BICRN`, `BNC`, `RF72S`,
+d'après le régime du document ou les formulaires de la liasse ; TELEDEC
+met `ISRS` à défaut) et, pour la TVA, `regimeFiscalTVA`. Le TELEDEC simulé
+ne crée plus de compte à la liasse et répond « Utilisateur non trouvé »
+au suivi d'un compte inconnu. Dans la suite, tout refus du suivi fait
+échouer l'exemple avec le message de TELEDEC expurgé
+(`SandboxSpec.status!`), plus de trace brute.
+
+=== D-TDC5-003 — Rappels : envoi par l'utilisateur depuis le lien de la déclaration (T5:teledec ; D-TDC4-003)
+
+*Constat.* Aucun rappel en 300 s après un simple dépôt de CA3 : TELEDEC
+rappelle à l'envoi, à l'acceptation et au rejet par la DGFiP, et en marque
+blanche l'envoi est fait par l'utilisateur dans l'interface de TELEDEC.
+La documentation n'a pas de route d'envoi d'une déclaration en marque
+blanche : seulement l'affichage du bouton (`AFFICHAGE-BOUTON-ENVOYER`,
+`affichage_btn_envoyer`), `envoi-liasse-deja-existante` (liasse, corps non
+documenté, scope non demandé) et `renvoyer-accuse-partenaire` (rejoue un
+rappel déjà émis).
+
+*Choix.* Envoi manuel, sans option : après le dépôt, l'exemple affiche le
+lien de la déclaration sur le stage (masqué s'il contenait une valeur du
+fichier de configuration) et demande de cliquer sur « Envoyer » (rien ne
+part à la DGFiP depuis le stage ; paiement fictif éventuel, code 3D Secure
+1234), puis attend le rappel (`TELEDEC_CALLBACK_WAIT`, 5 minutes par
+défaut) ; les rappels d'autres déclarations sont signalés et ignorés.
+
+*Vérification.* `partiduo-teledec` : 214 exemples verts en ordre aléatoire
+(8 en attente : suite du stage, sans réseau dans le bac à sable), Ameba
+sans remarque. Base `partiduo_test_tdc5_teledec`.

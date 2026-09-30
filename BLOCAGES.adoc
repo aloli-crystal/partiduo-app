@@ -878,6 +878,25 @@ PDF) non documentées ; zone `CA` de la 2035-B ; confirmation par
 l'opérateur du domaine réglé (`PARTIDUO_TELEDEC_USER_DOMAIN`) auprès de
 TELEDEC. À vérifier ensemble sur le stage (suite d'intégration).
 
+*Mise à jour du 30 septembre 2026 (T5:teledec, suite lancée par
+l'utilisateur, DECISIONS D-TDC5-001 à D-TDC5-003).* Confirmés sur le
+stage : jeton, `creation-entreprise`, liasse (source `API`), CA3 et relevé
+2571 en marque blanche. Constatés et traités : une DAS2 seule est refusée
+(« Un des formulaires principaux permettant l'identification du régime de
+l'entreprise n'est pas présent ») — elle part désormais jointe au
+formulaire principal de la liasse du régime, vide (*hypothèse* à confirmer
+par l'exemple DAS2, ainsi que l'absence d'effet de cette 2065 vide sur la
+liasse existante) ; la liasse ne crée pas le compte de l'entreprise
+(suivi : « Utilisateur non trouvé ») — `creation-entreprise` est appelée
+avant le premier dépôt, liasse comprise, avec le régime fiscal ; aucun
+rappel au simple dépôt — l'exemple des rappels fait envoyer la CA3 depuis
+son lien (pas de route d'envoi dans l'API). *Reste*, à relancer sur le
+stage : DAS2 jointe à la 2065 (et forme de `AI`) ; 2035 sans balance et
+son suivi (zone `CA` de la 2035-B) ; rappel reçu après l'envoi ; création
+automatique du compte par la liasse (écartée, non prouvée) ; greffe,
+adresse de rappel de la liasse et `+` dans l'adresse d'un compte, comme
+ci-dessus.
+
 == Vérification de bout en bout des lots E, G, L et T (28 septembre 2026)
 
 Mises à jour des blocages antérieurs :
