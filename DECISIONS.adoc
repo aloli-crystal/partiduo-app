@@ -12396,7 +12396,11 @@ dans 341 px. `partiduo-demo` : spec verte (6 exemples).
 
 == Bascule comptabilité ⇄ recettes et dépenses pour la profession libérale (30 septembre 2026)
 
-=== D-UI-075 — Le professionnel libéral choisit son interface
+=== D-UI-075 — Le professionnel libéral choisit son interface (remplacée par D-UI-076)
+
+*Statut.* *Remplacée par D-UI-076* (30 septembre 2026) : l'interface de la
+profession libérale est un réglage du dossier, plus un choix de chaque
+utilisateur.
 
 *Contexte.* Le mode simplifié (ADR-007 D3, D-UI-061) s'imposait à tout
 utilisateur de la société ; seul le comptable pouvait passer au mode complet.
@@ -12411,3 +12415,88 @@ Le comptable garde sa règle (mode complet par défaut). La micro-entreprise
 reste en mode simplifié pour ses utilisateurs, à étendre si le besoin se
 présente (ajouter `MICRO` à `SWITCHABLE`). Le mode ne change que la
 présentation : les droits restent ceux du contrat.
+
+== Interface de la profession libérale, réglage du dossier (30 septembre 2026)
+
+Décision de l'utilisateur (30 septembre 2026) : « Ce choix doit se faire
+dans le paramètre du dossier. » La bascule personnelle de D-UI-075 est
+retirée ; l'interface se règle une fois, pour tout le dossier, dans les
+paramètres de la profession libérale.
+
+=== D-LIB3-001 — Interface du dossier dans les paramètres du module (liberal)
+
+*Contexte.* L'interface (recettes et dépenses, ou comptabilité) vaut pour
+tous les utilisateurs du dossier : elle se range avec les autres paramètres
+du module, côté cœur, et non dans un cookie de l'interface.
+
+*Choix.* Colonne `liberal_settings.interface` (migration liberal 0004,
+défaut `simple`, contrainte `CHECK (interface IN ('simple',
+'accounting'))`). Contrat `Partiduo::Api::Liberal` :
+
+* `INTERFACE_SIMPLE`, `INTERFACE_ACCOUNTING`, `INTERFACES` ;
+* `SettingsInput#interface : String?` — `nil` garde l'interface enregistrée
+  (les appelants existants, qui ne la connaissent pas, ne la remettent pas à
+  zéro) ;
+* `SettingsView#interface` — interface *en vigueur* :
+  `accounting` seulement si elle est choisie et que le module Comptabilité
+  est actif, sinon `simple` ; `accounting_interface?` ;
+* `interfaces(actor)` (lecture) : `simple`, et `accounting` si le module
+  Comptabilité est actif ;
+* `update_settings` refuse une valeur inconnue
+  (`liberal.errors.settings.interface.unknown`) et la comptabilité sans le
+  module actif (`liberal.errors.settings.interface.accounting_inactive`) ;
+  droit `liberal.settings.write`, comme les autres paramètres.
+
+Le module lit l'activation de la Comptabilité au registre du socle
+(`Partiduo::Modules.active?`, comme la Facturation pour ses règlements),
+sans citer ni appeler la Comptabilité (ADR-006 D3). La Comptabilité
+désactivée ensuite, la vue rend `simple` d'elle-même, sans réécrire la
+valeur enregistrée : réactivée, le dossier retrouve son choix tant qu'il ne
+l'a pas changé. Référence : `doc/api/liberal.adoc`, section « Paramètres ».
+
+=== D-UI-076 — Interface réglée dans les paramètres du dossier ; bascule personnelle du seul comptable (interface)
+
+*Contexte.* D-UI-075 laissait chaque utilisateur de la profession libérale
+basculer depuis son menu (cookie `partiduo_mode`). L'utilisateur veut un
+réglage du dossier (D-LIB3-001).
+
+*Choix.*
+
+* Écran `liberal:settings` (droit `liberal.settings.write`) : champ
+  « Interface » (liste « Recettes et dépenses » — par défaut — ou
+  « Comptabilité », celle-ci seulement si le module Comptabilité est actif,
+  selon `Liberal.interfaces`), aide d'une phrase sous le champ qui dit la
+  différence (menu réduit et mots de tous les jours, ou journaux, écritures
+  et plan comptable pour tous les utilisateurs) ; sans la Comptabilité,
+  l'aide dit qu'elle se choisit une fois le module activé. Champ du
+  formulaire commun (`Form::Field` `select`, libellé associé, aide reliée
+  par `aria-describedby`, erreurs sous le champ). Refus du contrat affiché
+  sous le champ (422).
+* `PartiduoUi::SimpleMode` : `SWITCHABLE` retiré ; `folder_simple?` lit le
+  réglage du dossier (`Liberal.settings(actor).accounting_interface?`) ;
+  `choose(role, cookie, folder_simple)` : le comptable (rôle `accountant`)
+  suit son cookie comme avant D-UI-075 (mode complet par défaut), tout autre
+  utilisateur suit le dossier et jamais un cookie. `switch_target` rendu au
+  seul comptable : plus de bouton de bascule dans le menu d'un autre
+  utilisateur, `POST /mode` lui répond 403. Le comptable d'un dossier
+  libéral garde les libellés « Passer à la comptabilité » et « Passer aux
+  recettes et dépenses » (`switch_label`).
+* La micro-entreprise est inchangée (mode simplifié pour ses utilisateurs).
+* Le réglage ne change que la présentation : les droits restent ceux du
+  contrat, toute route permise reste joignable. En comptabilité, les
+  paramètres du module restent dans la rubrique Paramètres du menu, d'où
+  l'on revient aux recettes et dépenses.
+
+*Vérification.* `partiduo-app` : `scripts/specs-modules.sh --order random`,
+huit configurations vertes (dont `liberal` : 804 exemples, et
+`liberal,accounting` : 1 072 exemples) ; `partiduo-ui-bulma` : 391
+exemples verts en ordre aléatoire, garde-fous `interface_boundary` et
+`api_boundary` compris ; `partiduo-demo` : spec verte (6 exemples) ; Ameba
+sans remarque. Vérifié dans le navigateur intégré sur le dossier `liberal`
+de `partiduo-demo`, en thème sombre : aucun bouton de bascule dans le menu
+de l'utilisatrice ; « Comptabilité » enregistrée dans les paramètres, le
+tableau de bord et le menu complets s'affichent ; retour à « Recettes et
+dépenses » au téléphone (375 px), menu réduit rétabli, sans défilement
+horizontal ; champ relié à son libellé et à son aide (`aria-describedby`).
+Bases de test : `partiduo_test_lib3_app`, `partiduo_test_lib3_ui`,
+`partiduo_test_lib3_demo`, supprimées à la fin.

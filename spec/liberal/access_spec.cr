@@ -23,6 +23,7 @@ private def reads(actor : Partiduo::Api::Actor) : Array(Proc(Nil))
   query = Api::JournalQuery.new
   [
     -> { Api.settings(actor); nil },
+    -> { Api.interfaces(actor); nil },
     -> { Api.natures(actor); nil },
     -> { Api.form_lines(actor); nil },
     -> { Api.lines(actor); nil },

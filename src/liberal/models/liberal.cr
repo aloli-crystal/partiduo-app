@@ -4,13 +4,15 @@ module Partiduo
   module Liberal
     # Paramètres du professionnel libéral (une seule ligne, la première) :
     # profession exercée (cadre d'identification de la 2035), début
-    # d'activité, nature des recettes issues de la Facturation. Modèle
-    # interne : l'interface passe par `Partiduo::Api::Liberal`.
+    # d'activité, nature des recettes issues de la Facturation, interface
+    # du dossier (`simple` ou `accounting`, D-LIB3-001). Modèle interne :
+    # l'interface passe par `Partiduo::Api::Liberal`.
     class Settings < Marten::Model
       field :id, :big_int, primary_key: true, auto: true
       field :profession, :string, max_size: 100, blank: true, default: ""
       field :activity_started_on, :date, null: true, blank: true
       field :default_nature_id, :big_int, null: true, blank: true
+      field :interface, :string, max_size: 16, default: "simple"
 
       with_timestamp_fields
     end

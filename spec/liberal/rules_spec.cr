@@ -129,6 +129,36 @@ describe_module "LIBERAL", Api do
       Api.tax_return(L.system, 2026).identity.activity_started_on.should eq(Time.utc(2020, 3, 2))
     end
 
+    it "retient l'interface du dossier, la comptabilité seulement avec le module Comptabilité actif (D-LIB3-001)" do
+      L.setup
+      Api.settings(L.system).interface.should eq("simple")
+      Api.update_settings(L.system, Api::SettingsInput.new(interface: "expert")).error_keys
+        .should eq(["liberal.errors.settings.interface.unknown"])
+      with_active_modules("liberal") do
+        Api.interfaces(L.system).should eq(["simple"])
+        Api.update_settings(L.system, Api::SettingsInput.new(profession: "Ostéopathe", interface: "accounting")).error_keys
+          .should eq(["liberal.errors.settings.interface.accounting_inactive"])
+      end
+      with_active_modules("liberal,accounting") do
+        Api.interfaces(L.system).should eq(["simple", "accounting"])
+        view = Api.update_settings(L.system, Api::SettingsInput.new(profession: "Ostéopathe", interface: "accounting")).value!
+        view.interface.should eq("accounting")
+        view.accounting_interface?.should be_true
+        # Sans interface dans la saisie : celle du dossier est gardée.
+        Api.update_settings(L.system, Api::SettingsInput.new(profession: "Infirmière")).value!.interface.should eq("accounting")
+      end
+      with_active_modules("liberal") do
+        # Comptabilité désactivée : l'interface revient d'elle-même aux recettes et dépenses.
+        Api.settings(L.system).interface.should eq("simple")
+        Api.update_settings(L.system, Api::SettingsInput.new(profession: "Infirmière")).value!.interface.should eq("simple")
+      end
+      with_active_modules("liberal,accounting") do
+        Api.update_settings(L.system, Api::SettingsInput.new(profession: "Infirmière", interface: "simple")).value!
+          .interface.should eq("simple")
+        Api.settings(L.system).interface.should eq("simple")
+      end
+    end
+
     it "contrôle le code, le sens et la rubrique d'une nature ; modifiable tant qu'elle n'est pas employée" do
       L.setup
       Api.create_nature(L.system, Api::NatureInput.new("1abc", "X", "loan", "rent")).error_keys.sort!

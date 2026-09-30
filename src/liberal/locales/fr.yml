@@ -250,6 +250,10 @@ fr:
           invalid: "Sorte inconnue"
         label:
           blank: "Indiquer un libellé"
+      settings:
+        interface:
+          unknown: "Interface inconnue"
+          accounting_inactive: "La comptabilité suppose le module Comptabilité actif"
       form_line:
         year:
           closed: "Millésime figé : une année close l'emploie ; ajoutez une ligne au millésime suivant"

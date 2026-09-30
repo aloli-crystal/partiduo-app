@@ -21,6 +21,9 @@ module Partiduo
 
       PREFIXES = {"journal" => "J", "asset" => "I"}
 
+      # Module dont dépend l'interface « comptabilité » du dossier.
+      ACCOUNTING_MODULE = "ACCOUNTING"
+
       def self.system : Partiduo::Api::Actor
         Partiduo::Api::Actor.system
       end
@@ -58,7 +61,34 @@ module Partiduo
 
       def self.settings_view(row : Settings? = settings?) : Api::SettingsView
         return Api::SettingsView.new("", nil, nil) unless row
-        Api::SettingsView.new(row.profession.to_s, row.activity_started_on, row.default_nature_id.try(&.to_i64))
+        Api::SettingsView.new(row.profession.to_s, row.activity_started_on, row.default_nature_id.try(&.to_i64),
+          effective_interface(row.interface.to_s))
+      end
+
+      # Interfaces offertes au dossier : la comptabilité suppose le module
+      # Comptabilité actif, lu au registre du socle (aucun appel au module,
+      # ADR-006 D3 ; D-LIB3-001).
+      def self.interfaces : Array(String)
+        accounting_active? ? Api::INTERFACES.dup : [Api::INTERFACE_SIMPLE]
+      end
+
+      # Interface en vigueur : celle qui est enregistrée si elle est encore
+      # offerte, sinon `simple` (Comptabilité désactivée depuis).
+      def self.effective_interface(stored : String) : String
+        interfaces.includes?(stored) ? stored : Api::INTERFACE_SIMPLE
+      end
+
+      # Refus d'une interface inconnue, ou de la comptabilité sans le module
+      # Comptabilité actif ; `nil` : inchangée, rien à contrôler.
+      def self.interface_errors(interface : String?) : Array(FieldError)
+        return [] of FieldError if interface.nil?
+        return [error("interface", "settings.interface.unknown")] unless Api::INTERFACES.includes?(interface)
+        return [error("interface", "settings.interface.accounting_inactive")] unless interfaces.includes?(interface)
+        [] of FieldError
+      end
+
+      def self.accounting_active? : Bool
+        Partiduo::Modules.active?(ACCOUNTING_MODULE)
       end
 
       def self.nature_view(nature : Nature) : Api::NatureView

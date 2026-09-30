@@ -18,7 +18,8 @@ les obligations viennent du CGI (art. 93, 96 à 100) et de la notice de la
   `liberal_counter`, `liberal_asset`, `liberal_disposal`,
   `liberal_adjustment`, `liberal_form_line`, `liberal_invoice` (migration
   liberal 0001), `liberal_year` (état propre au module d'un exercice :
-  2035 transmise, empreinte au figement ; migration liberal 0003) ; côté
+  2035 transmise, empreinte au figement ; migration liberal 0003),
+  `liberal_settings.interface` (migration liberal 0004) ; côté
   Comptabilité, `accounting_liberal_account` (migration
   accounting 0011).
 * Données initiales : `LIBERAL.defaults` (une nature par rubrique dans la
@@ -30,7 +31,8 @@ les obligations viennent du CGI (art. 93, 96 à 100) et de la notice de la
   configurations `liberal` et `liberal,accounting` de
   `scripts/specs-modules.sh` et de la CI.
 * Décisions : `DECISIONS.adoc`, D-LIB-001 à D-LIB-014, D-LIB2-001 à
-  D-LIB2-006 (livre-journal modifiable tant que l'exercice est ouvert) ;
+  D-LIB2-006 (livre-journal modifiable tant que l'exercice est ouvert),
+  D-LIB3-001 (interface du dossier) ;
   blocage B-LIB-001.
 
 == Exercice ouvert, exercice figé
@@ -69,6 +71,26 @@ corrigée par une contre-passation datée dans un exercice ouvert.
 |`liberal.register.write` |saisie et contre-passation (recettes, dépenses, immobilisations), cessions, requêtes de contrôle, réintégrations et déductions
 |`liberal.settings.write` |paramètres, natures, table de correspondance, chargement des valeurs par défaut, republication
 |===
+
+== Paramètres
+
+[cols="2,3",options="header"]
+|===
+|Fonction |Effet
+
+|`settings(actor)` |`SettingsView` : profession, début d'activité, nature des recettes issues de la Facturation, `interface` en vigueur (`accounting_interface?`) ; rien n'est créé à la lecture
+|`interfaces(actor)` |interfaces que le dossier peut choisir : `simple` toujours, `accounting` si le module Comptabilité est actif
+|`update_settings(actor, SettingsInput)` |enregistre les paramètres ; `interface` `nil` garde celle du dossier ; refus `liberal.errors.settings.interface.unknown` et `.accounting_inactive`
+|===
+
+*Interface du dossier* (D-LIB3-001, colonne `liberal_settings.interface`,
+migration liberal 0004) : `simple` (recettes et dépenses, par défaut) ou
+`accounting` (comptabilité), pour tous les utilisateurs du dossier.
+Ce choix ne change que la présentation : les droits restent ceux des
+permissions. Le module Comptabilité désactivé ensuite, la vue rend
+`simple` d'elle-même (la valeur enregistrée n'est pas réécrite) ; le module
+lit son activation au registre du socle, sans appeler la Comptabilité
+(ADR-006 D3).
 
 == Rubriques et natures
 

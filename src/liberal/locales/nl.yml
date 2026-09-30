@@ -250,6 +250,10 @@ nl:
           invalid: "Onbekende soort"
         label:
           blank: "Geef een omschrijving op"
+      settings:
+        interface:
+          unknown: "Onbekende interface"
+          accounting_inactive: "De boekhouding vereist dat de module Boekhouding actief is"
       form_line:
         year:
           closed: "Vastgelegd jaar: een afgesloten jaar gebruikt het; voeg een regel toe voor het volgende jaar"
