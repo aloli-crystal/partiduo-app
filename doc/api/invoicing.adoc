@@ -344,7 +344,7 @@ aucune extension de facturation électronique (D-INV-016).
 
 Facture récapitulative : art. 289-I-3 du CGI (livraisons multiples à un
 même client au cours d'un même mois, facture au plus tard à la fin du
-mois). Décisions `D-INV2-001` à `D-INV2-010` dans `DECISIONS.adoc`.
+mois). Décisions `D-INV2-001` à `D-INV2-012` dans `DECISIONS.adoc`.
 
 [source,crystal]
 ----
