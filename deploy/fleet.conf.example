@@ -12,7 +12,7 @@ PARTIDUO_DOMAIN=partiduo.example
 # Arborescence sur les serveurs.
 ETC_DIR=/usr/local/etc/partiduo     # <dossier>.env (clé secrète, base, modules)
 DATA_DIR=/var/db/partiduo           # <dossier>/ : répertoire de travail, pièces jointes
-BACKUP_DIR=/var/backups/partiduo    # <dossier>/pre-upgrade-<date>.dump, pkg/ (paquets conservés)
+BACKUP_DIR=/var/backups/partiduo    # <dossier>/<nom>.dump et .media.tar.gz
 SYSTEM_USER=partiduo                # compte système des services (créé par le paquet)
 PG_SOCKET=/tmp                      # PostgreSQL par socket Unix uniquement
 PG_OWNER=partiduo                   # rôle propriétaire des bases (CREATEDB)

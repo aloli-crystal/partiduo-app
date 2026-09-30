@@ -60,8 +60,7 @@ le certificat de l'instance.
 `cron(8)`.
 
 |`bin/partiduo-fleet`
-|Exploitation du parc : provisionnement, montée de version progressive
-(serveur par serveur), état, sauvegardes, retrait.
+|Exploitation du parc : provisionnement, état, sauvegardes, retrait.
 
 |`fleet.conf.example`, `inventory.example`
 |Configuration du parc et inventaire des instances (à copier en `fleet.conf`
@@ -166,15 +165,13 @@ cp deploy/inventory.example deploy/inventory         # « <dossier> <serveur> [a
 
 deploy/bin/partiduo-fleet provision deploy@srv1 exemple-sarl --name="Exemple SARL" --regime=fr
 deploy/bin/partiduo-fleet provision deploy@srv1 recette --version devel --name=Recette --regime=fr
-deploy/bin/partiduo-fleet upgrade --canary 1         # partiduo-app, premier serveur
-deploy/bin/partiduo-fleet upgrade --all              # partiduo-app, tous les serveurs
-deploy/bin/partiduo-fleet upgrade devel --all        # partiduo-app-devel
 deploy/bin/partiduo-fleet status
 ----
 
-Les nouvelles versions arrivent par le dépôt `pkg.aloli.net` : plus de
-construction ni d'envoi d'archive (`build`, `upload`, `rollback`, `cleanup`
-n'existent plus).
+Les nouvelles versions arrivent par le dépôt `pkg.aloli.net` et c'est beryl
+qui met les paquets à jour : plus de construction, d'envoi ni de montée de
+version par `partiduo-fleet` (`build`, `upload`, `upgrade`, `rollback`,
+`cleanup` n'existent plus).
 
 === Arborescence sur un serveur
 
@@ -192,7 +189,6 @@ n'existent plus).
 /var/log/partiduo/<dossier>.log          # journal du serveur (daemon -o)
 /var/backups/partiduo/<dossier>/<nom>.dump      # pg_dump -Fc
 /var/backups/partiduo/<dossier>/<nom>.media.tar.gz  # pièces jointes
-/var/backups/partiduo/pkg/               # paquets conservés pour le retour arrière
 ----
 
 === Sauvegardes
@@ -219,19 +215,14 @@ déploiement et une stratégie de migration progressive ». La stratégie retenu
 * *un seul binaire par version* (ADR-003 D1) : les extensions sont compilées
   dedans, activées par instance (`PARTIDUO_MODULES`, puis écran
   d'administration) ;
-* le paquet est *partagé* par les instances de sa version sur un serveur :
-  la montée de version se fait donc *serveur par serveur* ;
-* `upgrade [app|devel]` exige une sélection de serveurs (`--canary N` : les N
-  premiers de l'inventaire, `--only s1,s2`, `--all`), vérifie toute la
-  sélection avant de commencer, puis, pour chaque serveur : arrêt de ses
-  instances de la version et sauvegarde `pre-upgrade-<date>.dump` de chacune
-  (services arrêtés : rien n'est écrit entre la sauvegarde et un retour
-  arrière), `pkg create` du paquet en place (`$BACKUP_DIR/pkg/`),
-  `pkg upgrade`, `migrate` de chaque instance, démarrage et contrôle de santé
-  HTTP ;
-* *au premier échec*, le serveur est remis dans son état d'avant (paquet
-  conservé réinstallé par `pkg add -f`, bases restaurées depuis leur
-  sauvegarde) et la vague s'arrête : les serveurs suivants n'ont pas bougé ;
+* *beryl met les paquets à jour* (`pkg upgrade`), serveur par serveur, sur
+  tout le parc (instances et administration) ; le paquet est partagé par
+  les instances de sa version sur un serveur ;
+* *le script `rc.d` migre chaque instance à son démarrage*
+  (`partiduo-manage migrate` avant le serveur) : après `pkg upgrade`,
+  `service partiduo restart` suffit ; une instance dont la migration échoue
+  ne démarre pas, et son journal (`/var/log/partiduo/<dossier>.log`) dit
+  pourquoi ;
 * une instance de recette sert à éprouver la branche `development` : elle est
   servie par `partiduo-app-devel`, sur le même serveur que des instances de
   production si l'on veut.

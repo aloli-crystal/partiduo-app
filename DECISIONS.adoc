@@ -12564,7 +12564,12 @@ défaut est celle du paquet.
 `ReadWritePaths`…) n'a pas d'équivalent dans le script `rc.d` (`daemon -u`
 seul) ; une prison FreeBSD par instance serait l'étape suivante.
 
-=== D-PKG-003 — `partiduo-fleet` : montée de version serveur par serveur, retour arrière par le paquet conservé
+=== D-PKG-003 — `partiduo-fleet` : montée de version serveur par serveur, retour arrière par le paquet conservé (montée de version remplacée par D-PKG-004)
+
+*Statut.* Remplacée le jour même par D-PKG-004 pour la montée de version :
+beryl met les paquets à jour, le script `rc.d` migre au démarrage ;
+`partiduo-fleet upgrade` est retiré. Le reste (inventaire avec version,
+retraits, sauvegarde avec `bsdtar`) tient.
 
 *Contexte.* Le paquet est partagé par les instances de sa version sur un
 serveur : la bascule instance par instance (D-SET-007) n'est plus possible.
@@ -12588,3 +12593,25 @@ générés). La commande de sauvegarde distante, extraite du plan, a été
 exécutée avec des doublures de `partiduo-manage` et `pg_dump` (`bsdtar` de
 macOS) : pièce disparue ignorée, archive correcte ; `pg_dump` en échec, code
 3 et aucune archive. Rien n'a encore tourné sur un serveur FreeBSD.
+
+=== D-PKG-004 — Mise à jour des paquets par beryl ; migrations au démarrage de l'instance
+
+*Contexte.* Demande de l'utilisateur : une seule administration, et la mise à
+jour des programmes, sur tous les serveurs, relève de beryl (`pkg upgrade`).
+Il faut pourtant migrer la base de chaque instance, sans quoi le nouveau
+programme tournerait sur l'ancien schéma.
+
+*Choix.* Le script `rc.d` du paquet (`aloli-ports`, `finance/partiduo-app`)
+lance `partiduo-manage migrate`, dans l'environnement et sous le compte de
+l'instance, avant son serveur ; en cas d'échec, l'instance ne démarre pas et
+l'erreur est dans son journal. Après `pkg upgrade`, beryl n'a qu'à relancer le
+service. `partiduo-fleet upgrade` est retiré (message qui renvoie à beryl) ;
+`partiduo-admin` retire ses vagues de montée de version et la tâche
+correspondante de l'exécutant (ADR-008 D5 à réviser).
+
+*Limite.* Plus de sauvegarde préalable ni de retour arrière automatiques à
+la mise à jour : ils relèveront de beryl et de l'infrastructure de
+sauvegarde dédiée.
+
+*Vérification.* `spec/deploy/scripts_spec.cr` : 8 exemples verts,
+`upgrade` renvoie à beryl.

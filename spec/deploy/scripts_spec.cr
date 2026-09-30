@@ -157,39 +157,17 @@ describe "bin/partiduo-provision" do
 end
 
 describe "deploy/bin/partiduo-fleet" do
-  it "planifie une montée de version progressive, serveur par serveur, sans rien exécuter" do
+  it "planifie sauvegardes, restauration et retrait sans rien exécuter ; la mise à jour relève de beryl" do
     with_tmpdir do |dir|
       File.write(File.join(dir, "inventory"),
         "# parc\nalpha deploy@srv1\nbeta deploy@srv1 app\nrecette deploy@srv1 devel\ngamma deploy@srv2\n")
       File.write(File.join(dir, "fleet.conf"), "INVENTORY=inventory\nPARTIDUO_DOMAIN=compta.example\n")
       config = "--config=#{File.join(dir, "fleet.conf")}"
 
-      code, output, _ = sh("deploy/bin/partiduo-fleet", config, "upgrade", "--canary", "1")
-      code.should eq(0)
-      output.should contain("## deploy@srv1 : alpha beta")
-      output.should_not contain("srv2")
-      output.should_not contain("recette")
-      output.should contain("pg_dump -Fc")
-      output.should contain("pkg create -o /var/backups/partiduo/pkg partiduo-app")
-      output.should contain("pkg upgrade -y partiduo-app")
-      output.should contain("/usr/local/lib/partiduo/bin/partiduo-manage migrate")
-      output.should contain("plan (ajoutez --execute pour exécuter)")
-      # Instances arrêtées et sauvegardées avant la mise à jour du paquet (D-AFN-007).
-      output.index!("service partiduo stop alpha").should be < output.index!("pg_dump -Fc")
-      output.rindex!("pg_dump -Fc").should be < output.index!("pkg upgrade -y")
-      output.index!("pkg upgrade -y").should be < output.index!("partiduo-manage migrate")
-      output.index!("partiduo-manage migrate").should be < output.index!("service partiduo start alpha")
-
-      # Version de développement : son paquet, son script rc.d, ses instances.
-      _, devel, _ = sh("deploy/bin/partiduo-fleet", config, "upgrade", "devel", "--all")
-      devel.should contain("## deploy@srv1 : recette")
-      devel.should contain("pkg upgrade -y partiduo-app-devel")
-      devel.should contain("service partiduo_devel stop recette")
-      devel.should contain("/usr/local/lib/partiduo-devel/bin/partiduo-manage migrate")
-
-      sh("deploy/bin/partiduo-fleet", config, "upgrade").first.should eq(1)
-      sh("deploy/bin/partiduo-fleet", config, "upgrade", "--only", "deploy@srv1,inconnu").first.should eq(1)
-      sh("deploy/bin/partiduo-fleet", config, "upgrade", "devel", "--only", "deploy@srv2").first.should eq(1)
+      # Paquets mis à jour par beryl ; le script rc.d migre au démarrage (D-PKG-003).
+      code, _, errors = sh("deploy/bin/partiduo-fleet", config, "upgrade", "--all")
+      code.should eq(1)
+      errors.should contain("beryl")
       sh("deploy/bin/partiduo-fleet", config, "build", "1.2.0").first.should eq(1)
 
       # Sauvegarde : base et pièces jointes listées par l'instance (backup-plan).

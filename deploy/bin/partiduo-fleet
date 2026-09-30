@@ -4,9 +4,9 @@
 # partiduo-fleet — exploitation du parc d'instances Partiduo sur des serveurs
 # FreeBSD, où Partiduo est installé par paquet (dépôt pkg.aloli.net, overlay
 # aloli-ports) : partiduo-app (branche production) ou partiduo-app-devel
-# (branche development), qui cohabitent. Provisionnement, montée de version
-# serveur par serveur avec sauvegarde et retour arrière, état, sauvegardes,
-# retrait.
+# (branche development), qui cohabitent. Provisionnement, état, sauvegardes,
+# retrait. La mise à jour des paquets relève de beryl (pkg upgrade) ; le
+# script rc.d migre chaque instance à son démarrage (D-PKG-003).
 #
 # Par défaut, RIEN n'est exécuté : chaque commande affiche le plan (commandes
 # locales et distantes). `--execute` l'exécute réellement.
@@ -26,11 +26,6 @@ Commandes :
   provision SERVEUR DOSSIER [--version app|devel] [OPTIONS…]
                                      crée l'instance (partiduo-provision du paquet) et
                                      l'installe ; version : paquet qui la sert (défaut : app)
-  upgrade [app|devel] (--only S1,S2 | --canary N | --all)
-                                     monte de version le paquet (défaut : app), serveur
-                                     par serveur : arrêt et sauvegarde des instances,
-                                     pkg upgrade, migrations, démarrage, contrôle ;
-                                     retour arrière et arrêt au premier échec
   status [DOSSIER]                   paquet, version et état du service de chaque instance
   backup DOSSIER | --all             sauvegarde la base (pg_dump -Fc) et les pièces jointes
   restore DOSSIER FICHIER            restaure une sauvegarde, base et pièces jointes
@@ -145,16 +140,6 @@ require_instance() {
   echo "$server"
 }
 
-# Serveurs portant au moins une instance de la version, dans l'ordre de l'inventaire.
-servers_of_kind() {
-  inventory_lines | awk -v k="$1" '($3 == "devel" ? "devel" : "app") == k && !seen[$2]++ { print $2 }'
-}
-
-# Instances d'une version sur un serveur.
-instances_on() {
-  inventory_lines | awk -v s="$1" -v k="$2" '$2 == s && ($3 == "devel" ? "devel" : "app") == k { print $1 }'
-}
-
 check_dossier() {
   printf '%s' "$1" | grep -Eq '^[a-z][a-z0-9-]{0,39}$' || die "dossier invalide : « $1 »"
 }
@@ -203,113 +188,6 @@ cmd_provision() {
     "--acme-webroot=$ACME_WEBROOT$acme$args $dossier"
   remote "$server" "cd $work/$dossier && $SUDO sh INSTALL.txt && $SUDO rm -rf $work"
   local_run "printf '%s %s %s\\n' '$dossier' '$server' '$kind' >> '$INVENTORY'"
-}
-
-# Serveurs visés par upgrade.
-select_servers() {
-  kind="$1"
-  selection="$2"
-  value="$3"
-  case "$selection" in
-    all) servers_of_kind "$kind" ;;
-    only) printf '%s\n' "$value" | tr ',' '\n' | sed '/^$/d' ;;
-    canary) servers_of_kind "$kind" | head -n "$value" ;;
-  esac
-}
-
-cmd_upgrade() {
-  kind=app
-  case "${1:-}" in app | devel) kind="$1"; shift ;; esac
-  selection=""
-  value=""
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --all) selection=all ;;
-      --only) [ $# -ge 2 ] || die "--only : liste manquante"; selection=only; value="$2"; shift ;;
-      --only=*) selection=only; value="${1#*=}" ;;
-      --canary) [ $# -ge 2 ] || die "--canary : nombre manquant"; selection=canary; value="$2"; shift ;;
-      --canary=*) selection=canary; value="${1#*=}" ;;
-      *) die "option inconnue : $1 (usage : upgrade [app|devel] --only S1,S2 | --canary N | --all)" ;;
-    esac
-    shift
-  done
-  [ -n "$selection" ] || die "précisez --only, --canary N ou --all : la montée de version du parc est progressive"
-  if [ "$selection" = canary ]; then
-    case "$value" in '' | *[!0-9]*) die "--canary : nombre attendu" ;; esac
-  fi
-
-  # Toute la sélection est vérifiée avant de toucher le premier serveur.
-  targets=$(select_servers "$kind" "$selection" "$value")
-  [ -n "$targets" ] || die "aucun serveur sélectionné"
-  for server in $targets; do
-    [ -n "$(instances_on "$server" "$kind")" ] || die "aucune instance $kind sur $server"
-  done
-
-  package=$(package_of "$kind")
-  rc=$(rc_of "$kind")
-  manage=$(manage_of "$kind")
-  echo "# Montée de version de $package ($selection${value:+ $value}) — $(mode_label)"
-  for server in $targets; do
-    instances=$(instances_on "$server" "$kind")
-    stamp='$(date +%Y%m%d-%H%M%S)'
-    echo "## $server : $(echo $instances)"
-    # Le paquet est partagé par les instances de la version sur le serveur :
-    # elles sont arrêtées et sauvegardées ensemble, AVANT pkg upgrade, et rien
-    # n'est écrit entre la sauvegarde et un éventuel retour arrière (D-AFN-007).
-    for dossier in $instances; do
-      remote "$server" "$SUDO service $rc stop $dossier"
-      backup_cmd "$server" "$dossier" "pre-upgrade-$stamp" ||
-        { start_all "$server" "$rc" "$instances"; exit 1; }
-    done
-    # Paquet en place conservé pour le retour arrière (pkg add -f).
-    remote "$server" "$SUDO install -d -m 750 $BACKUP_DIR/pkg && $SUDO pkg create -o $BACKUP_DIR/pkg $package" ||
-      { start_all "$server" "$rc" "$instances"; exit 1; }
-    remote "$server" "$SUDO pkg update -q && $SUDO pkg upgrade -y $package" ||
-      fail_upgrade "$server" "$kind" "$instances" "pkg upgrade"
-    for dossier in $instances; do
-      remote "$server" "$SUDO -u $SYSTEM_USER sh -c '$(load_env "$dossier") && cd $DATA_DIR/$dossier && $manage migrate'" ||
-        fail_upgrade "$server" "$kind" "$instances" "migrations de $dossier"
-    done
-    for dossier in $instances; do
-      remote "$server" "$SUDO service $rc start $dossier"
-      remote "$server" "sleep 3 && $(health_cmd "$dossier")" ||
-        fail_upgrade "$server" "$kind" "$instances" "contrôle de santé de $dossier"
-    done
-  done
-  echo "# Montée de version de $package terminée."
-}
-
-start_all() {
-  for dossier in $3; do
-    remote "$1" "$SUDO service $2 start $dossier || true"
-  done
-}
-
-health_cmd() {
-  echo "$SUDO sh -c '$(load_env "$1") && curl -fsS -o /dev/null -H \"Host: \$MARTEN_ALLOWED_HOSTS\" http://127.0.0.1:\$PORT/'"
-}
-
-# Échec sur un serveur : le paquet précédent est réinstallé, les bases de ses
-# instances restaurées, puis la vague s'arrête — les serveurs suivants gardent
-# leur version.
-fail_upgrade() {
-  server="$1"
-  kind="$2"
-  instances="$3"
-  step="$4"
-  package=$(package_of "$kind")
-  rc=$(rc_of "$kind")
-  echo "!! $server : échec ($step). Retour arrière et arrêt de la montée de version." >&2
-  for dossier in $instances; do
-    remote "$server" "$SUDO service $rc stop $dossier || true"
-  done
-  # partiduo-app-[0-9]* : n'attrape pas partiduo-app-devel.
-  remote "$server" "$SUDO pkg add -f \$(ls -1t $BACKUP_DIR/pkg/$package-[0-9]*.pkg | head -n 1)"
-  for dossier in $instances; do
-    restore_cmd "$server" "$dossier" "\$(ls -1t $BACKUP_DIR/$dossier/pre-upgrade-*.dump | head -n 1)"
-  done
-  start_all "$server" "$rc" "$instances"
-  exit 1
 }
 
 backup_cmd() {
@@ -410,11 +288,12 @@ cmd_retire() {
 case "$COMMAND" in
   inventory) cmd_inventory "$@" ;;
   provision) cmd_provision "$@" ;;
-  upgrade) cmd_upgrade "$@" ;;
   status) cmd_status "$@" ;;
   backup) cmd_backup "$@" ;;
   restore) cmd_restore "$@" ;;
   retire) cmd_retire "$@" ;;
+  upgrade)
+    die "« upgrade » n'existe plus : beryl met les paquets à jour (pkg upgrade), et le script rc.d migre chaque instance à son démarrage (voir deploy/README.adoc)" ;;
   build | upload | rollback | cleanup)
     die "« $COMMAND » n'existe plus : Partiduo est installé par paquet (pkg), voir deploy/README.adoc" ;;
   *) die "commande inconnue : $COMMAND (voir --help)" ;;
