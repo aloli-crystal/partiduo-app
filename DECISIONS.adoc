@@ -12075,3 +12075,89 @@ réseau dans le bac à sable) ; avec `TELEDEC_SCHEMAS_DIR=/nulle/part`, 13 en
 attente (les 5 exemples des schémas officiels en plus) ; Ameba sans
 remarque. `partiduo-demo` : 6 exemples verts (TELEDEC simulé). Bases
 `partiduo_test_tdc6_teledec`, `partiduo_test_demo_tdc6`.
+
+=== D-TDC7-001 — Liasse sans balance : section JSON dans la forme documentée, section de balance absente (T7:teledec ; D-TDC2-002, B-TDC-004)
+
+*Constat.* La suite du stage, lancée par l'utilisateur le 30 septembre
+2026, voit la 2035 d'un libéral sans Comptabilité (aucune ligne de
+balance) refusée par TELEDEC : « Misformatted JSON »
+(`teledec.errors.transport.refused`) ; la liasse avec balance passe.
+Reproduit hors ligne (même construction que la suite, adaptateur réel sur
+le TELEDEC simulé) : le corps envoyé à `/service/liasse` était
+l'identification `#CLE valeur`, aucune ligne de balance, puis
+`{"zones_formulaires":{"2035A":{…},"2035B":{…}}}` *sur une seule ligne*.
+Ce JSON est valide (`JSON.parse`) et conforme aux schémas `2035A-2026` et
+`2035B-2026` ; il n'y avait ni ligne vide ni section de balance vide. La
+liasse avec balance, elle, n'avait *jamais* porté de section JSON : c'est
+la première fois que TELEDEC en lisait une. La documentation (page « API
+Balance » et guide d'intégration de l'API Liasse) ne dit rien d'une liasse
+sans aucune ligne de balance : la balance « peut » suivre
+l'identification, la section JSON vient « à la suite de la balance », et
+ses deux exemples sont écrits sur plusieurs lignes, `{` seul sur la
+première, avec les blocs `zones_formulaires` et
+`informations_supplementaires`.
+
+*Choix (hypothèse).* La section JSON reprend exactement la forme
+documentée (`Remote::Formats.liasse_json`) : objet sur plusieurs lignes
+(indentation de deux espaces), `{` seul sur la première ligne, `}` seul
+sur la dernière, rien après ; les deux blocs, `informations_supplementaires`
+vide (Partiduo n'en transmet rien). Sans balance, la section de balance
+est *absente* : ni ligne vide, ni ligne d'en-tête de colonnes, ni ligne à
+zéro inventée ; la section JSON suit directement l'identification. Cause
+retenue : un lecteur ligne à ligne chez TELEDEC qui attend la forme de ses
+exemples. Non prouvée : si le stage refuse encore, poser à TELEDEC la
+question de la forme attendue d'une liasse sans balance (note de
+`.teledec-doc/QUESTIONS-EN-ATTENTE.adoc`).
+
+*Autre cause possible, rendue visible.* Le même dépôt appelle d'abord
+`creation-entreprise` (JSON) pour la seconde entreprise de test, au
+régime `BNC` et en forme `EI` — valeurs jamais essayées sur le stage. La
+suite nomme désormais la route qui refuse (`/service/creation-entreprise`
+ou `/service/liasse`) dans le message d'échec.
+
+*Vérification.* Specs hors ligne : corps de la 2035 construit comme la
+suite (module `liberal` seul, exercice 2025) et transmis par l'adaptateur
+réel, découpé en ses trois sections (`SpecSupport::LiasseBody`) :
+identification seule, aucune ligne de balance ni ligne vide ni `;`,
+section JSON sur plusieurs lignes analysée par `JSON.parse`, deux blocs,
+montants entiers ; blocs `2035A` et `2035B` validés par les schémas
+officiels du millésime 2026 (`Remote::JsonSchema`) ; balance puis JSON
+quand les deux existent, aucune section JSON sans case. Le TELEDEC simulé
+lit désormais la section JSON de la première ligne `{` à la fin du corps
+et répond « Misformatted JSON » à un JSON illisible. La suite du stage
+vérifie la forme du corps avant tout appel.
+
+=== D-TDC7-002 — Sortie de la suite du stage : aucun jeton ni haché affiché (T7:teledec ; D-TDC5-003)
+
+*Constat.* Le lien de déclaration rendu par TELEDEC
+(`https://stage.teledec.fr/service/declaration/<jeton JWT>`) encode
+l'adresse du compte et le haché bcrypt du mot de passe de l'entreprise de
+test ; l'exemple des rappels l'affichait en entier (il ne le masquait que
+s'il contenait une valeur du fichier de configuration), et les
+vérifications `submitted.url.should start_with(…)` l'auraient recopié dans
+leur message d'échec.
+
+*Choix.* L'exemple des rappels écrit le lien complet dans un fichier
+temporaire à droits 0600 (`SandboxSpec.write_link`, supprimé à la fin de
+l'exemple) et n'affiche que son chemin et le début tronqué du lien
+(jusqu'au segment du jeton, `SandboxSpec.truncated`). `SandboxSpec.scrub`
+retire aussi tout jeton JWT (`eyJ…`) et tout haché bcrypt (`$2a$…`,
+`$2b$…`, `$2y$…`, en clair ou encodé `%242a%24…`), en plus des valeurs du
+fichier de configuration. Les liens sont vérifiés sans être affichés
+(`SandboxSpec.expect_link!`) ; la réponse de `creation-entreprise` n'est
+citée qu'expurgée. Deux exemples hors ligne, toujours actifs, le
+vérifient (expurgation, fichier 0600).
+
+=== D-TDC7-003 — DAS2 seule et rappels : rien ne change avant la réponse de TELEDEC (T7:teledec ; D-TDC6-001, D-TDC5-003)
+
+*Constat.* Même au millésime 2026, le stage refuse la DAS2 seule ; aucun
+rappel ne parvient après l'envoi d'une CA3 depuis son lien. Les deux
+questions ont été posées à TELEDEC le 30 septembre 2026 (B-TDC-004).
+
+*Choix.* Aucun changement de l'adaptateur ni de la suite pour ces deux
+points avant la réponse.
+
+*Vérification.* `partiduo-teledec` : 243 exemples verts en ordre aléatoire
+avec les schémas présents (8 en attente : suite du stage, sans réseau dans
+le bac à sable) ; Ameba sans remarque ; `crystal tool format`. Base
+`partiduo_test_tdc7_a`, supprimée.

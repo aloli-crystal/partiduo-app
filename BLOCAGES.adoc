@@ -911,6 +911,19 @@ automatique du compte par la liasse (écartée, non prouvée) ; greffe,
 adresse de rappel de la liasse et `+` dans l'adresse d'un compte, comme
 ci-dessus.
 
+*Mise à jour du 30 septembre 2026 (T7:teledec, suite lancée par
+l'utilisateur, DECISIONS D-TDC7-001 à D-TDC7-003).* Confirmés sur le
+stage : jeton, entreprise de test, liasse avec balance, CA3 en marque
+blanche, relevé 2571. Échecs : (1) *2035 sans balance* refusée
+(« Misformatted JSON ») — la section JSON de la liasse suit désormais la
+forme documentée (plusieurs lignes, deux blocs), sans section de balance ;
+*hypothèse* à confirmer au prochain passage, la suite nommant la route qui
+refuse ; (2) *DAS2 seule* refusée même au millésime 2026 ; (3) *aucun
+rappel* reçu après l'envoi de la CA3 depuis son lien. Pour (2) et (3),
+*question posée à TELEDEC le 30 septembre 2026* ; rien ne change d'ici sa
+réponse. Si (1) échoue encore : demander à TELEDEC la forme attendue d'une
+liasse sans aucune ligne de balance.
+
 == Vérification de bout en bout des lots E, G, L et T (28 septembre 2026)
 
 Mises à jour des blocages antérieurs :
