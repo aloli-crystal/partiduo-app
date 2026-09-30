@@ -72,35 +72,17 @@ module Partiduo
 
       # --- Paramètres ------------------------------------------------------------
 
-      # Interface du dossier (D-LIB3-001), pour tous ses utilisateurs :
-      # `simple` (recettes et dépenses, par défaut) ou `accounting`
-      # (comptabilité, seulement si le module Comptabilité est actif).
-      INTERFACE_SIMPLE     = "simple"
-      INTERFACE_ACCOUNTING = "accounting"
-      INTERFACES           = [INTERFACE_SIMPLE, INTERFACE_ACCOUNTING]
-
       # `profession` : profession exercée (identification de la 2035) ;
-      # `default_nature_id` : nature d'une recette issue de la Facturation ;
-      # `interface` : interface du dossier (`INTERFACES`), `nil` pour garder
-      # celle qui est enregistrée.
+      # `default_nature_id` : nature d'une recette issue de la Facturation.
       record SettingsInput,
         profession : String = "",
         activity_started_on : Time? = nil,
-        default_nature_id : Int64? = nil,
-        interface : String? = nil
+        default_nature_id : Int64? = nil
 
-      # `interface` : interface en vigueur — `accounting` seulement si elle
-      # est choisie et que le module Comptabilité est actif ; sinon
-      # `simple`, d'elle-même, sans rien réécrire.
       record SettingsView,
         profession : String,
         activity_started_on : Time?,
-        default_nature_id : Int64?,
-        interface : String = INTERFACE_SIMPLE do
-        def accounting_interface? : Bool
-          interface == INTERFACE_ACCOUNTING
-        end
-      end
+        default_nature_id : Int64?
 
       record NatureInput, code : String, label : String, kind : String, heading : String, enabled : Bool = true
 

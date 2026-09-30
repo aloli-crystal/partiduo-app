@@ -38,13 +38,6 @@ module Partiduo
         Registers.settings_view
       end
 
-      # Interfaces que le dossier peut choisir (`INTERFACES`) : `accounting`
-      # seulement si le module Comptabilité est actif (D-LIB3-001).
-      def self.interfaces(actor : Actor) : Array(String)
-        Guard.authorize!(actor, READ, module_code: MODULE_CODE)
-        Registers.interfaces
-      end
-
       def self.update_settings(actor : Actor, input : SettingsInput) : Result(SettingsView)
         Guard.authorize!(actor, SETTINGS_WRITE, module_code: MODULE_CODE)
         Transaction.run do
@@ -55,13 +48,11 @@ module Partiduo
               errors << Registers.error("default_nature_id", "line.nature.unknown")
             end
           end
-          errors.concat(Registers.interface_errors(input.interface))
           next Result(SettingsView).failure(errors) unless errors.empty?
           row = Registers.settings!
           row.profession = input.profession.strip
           row.activity_started_on = input.activity_started_on.try { |date| Registers.day(date) }
           row.default_nature_id = input.default_nature_id
-          input.interface.try { |interface| row.interface = interface }
           row.save!
           Result(SettingsView).success(Registers.settings_view(row))
         end

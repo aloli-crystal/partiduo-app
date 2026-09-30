@@ -250,10 +250,6 @@ en:
           invalid: "Unknown kind"
         label:
           blank: "Enter a label"
-      settings:
-        interface:
-          unknown: "Unknown interface"
-          accounting_inactive: "Accounting requires the Accounting module to be active"
       form_line:
         year:
           closed: "Frozen year: a closed year uses it; add a line for the following year"

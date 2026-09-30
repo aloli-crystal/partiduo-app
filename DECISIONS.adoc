@@ -12423,7 +12423,11 @@ dans le paramètre du dossier. » La bascule personnelle de D-UI-075 est
 retirée ; l'interface se règle une fois, pour tout le dossier, dans les
 paramètres de la profession libérale.
 
-=== D-LIB3-001 — Interface du dossier dans les paramètres du module (liberal)
+=== D-LIB3-001 — Interface du dossier dans les paramètres du module (liberal) (remplacée par D-UI-077)
+
+*Statut.* *Remplacée par D-UI-077* (30 septembre 2026) : l'interface est
+une préférence de chaque utilisateur (D-AUTH-016) ; la migration liberal
+0005 reprend le réglage du dossier puis retire `liberal_settings.interface`.
 
 *Contexte.* L'interface (recettes et dépenses, ou comptabilité) vaut pour
 tous les utilisateurs du dossier : elle se range avec les autres paramètres
@@ -12454,7 +12458,11 @@ désactivée ensuite, la vue rend `simple` d'elle-même, sans réécrire la
 valeur enregistrée : réactivée, le dossier retrouve son choix tant qu'il ne
 l'a pas changé. Référence : `doc/api/liberal.adoc`, section « Paramètres ».
 
-=== D-UI-076 — Interface réglée dans les paramètres du dossier ; bascule personnelle du seul comptable (interface)
+=== D-UI-076 — Interface réglée dans les paramètres du dossier ; bascule personnelle du seul comptable (interface) (remplacée par D-UI-077)
+
+*Statut.* *Remplacée par D-UI-077* (30 septembre 2026) : l'interface est
+une préférence de chaque utilisateur, réglée dans ses préférences, plus un
+réglage du dossier ; le cookie `partiduo_mode` n'est plus utilisé.
 
 *Contexte.* D-UI-075 laissait chaque utilisateur de la profession libérale
 basculer depuis son menu (cookie `partiduo_mode`). L'utilisateur veut un
@@ -12500,3 +12508,108 @@ dépenses » au téléphone (375 px), menu réduit rétabli, sans défilement
 horizontal ; champ relié à son libellé et à son aide (`aria-describedby`).
 Bases de test : `partiduo_test_lib3_app`, `partiduo_test_lib3_ui`,
 `partiduo_test_lib3_demo`, supprimées à la fin.
+
+== Interface, préférence de chaque utilisateur (30 septembre 2026)
+
+Décision de l'utilisateur (30 septembre 2026) : le choix de l'interface se
+fait *par utilisateur* — « le professionnel préfèrera certainement le mode
+Recettes et dépenses et le comptable le mode Comptabilité ». Le réglage du
+dossier (D-LIB3-001, D-UI-076) est retiré ; chacun règle sa préférence,
+enregistrée par le cœur avec son compte, jamais dans un cookie.
+
+=== D-AUTH-016 — Préférences de l'utilisateur, enregistrées avec son compte (auth)
+
+*Contexte.* Une préférence personnelle doit suivre la personne d'un
+appareil à l'autre : ni cookie, ni réglage du dossier. Le socle n'avait pas
+d'endroit pour une préférence d'utilisateur hors de la langue.
+
+*Choix.* Colonne `auth_user.interface` (migration auth 0003), `NULL` tant
+que la personne n'a rien choisi, contrainte `CHECK (interface IS NULL OR
+interface IN ('simple', 'full'))`. Contrat `Partiduo::Api::Auth` :
+
+* `INTERFACE_SIMPLE`, `INTERFACE_FULL`, `INTERFACES` ;
+* `preferences(actor) : PreferencesView` — `interface` *en vigueur* (celle
+  qui est choisie, sinon le défaut du rôle : `full` pour le comptable,
+  `simple` pour un utilisateur de la société), `interface_chosen`,
+  `full_interface?` ;
+* `update_preferences(actor, PreferencesInput)` — `interface` `nil` garde la
+  préférence enregistrée ; refus `auth.errors.preferences.interface_invalid`
+  d'une valeur inconnue (fr, en, nl) ; mise à jour ciblée de la seule
+  colonne.
+
+Accès : acteur authentifié, même sous le niveau exigé (comme la sécurité du
+compte, `Guard.authorize_account!`) ; chacun ne lit et ne change que les
+siennes (l'utilisateur de l'acteur), jamais celles d'un autre ; refus à
+l'acteur anonyme ou technique. Aucune permission : une préférence ne change
+que la présentation, les droits restent ceux du profil. Le cœur ne sait
+rien des modules : l'interface décide si elle peut appliquer la préférence
+(module actif) sans la réécrire. Référence : `doc/api/auth.adoc`.
+
+*Migration du réglage de dossier.* La migration liberal 0005 (qui dépend
+de auth 0003) transmet `accounting` de `liberal_settings.interface` comme
+préférence `full` aux utilisateurs de la société qui n'ont rien choisi (le
+comptable y est par défaut), retire la contrainte puis la colonne. La
+migration 0004 n'est pas réécrite.
+
+*Alternative écartée.* Une table clé-valeur de préférences : une colonne
+typée et contrainte suffit tant qu'il n'y a qu'une préférence, et reste
+lisible dans le modèle comme la langue.
+
+=== D-UI-077 — Interface réglée dans les préférences de chaque utilisateur (interface)
+
+*Contexte.* D-UI-076 faisait de l'interface de la profession libérale un
+réglage du dossier ; l'utilisateur la veut personnelle (D-AUTH-016).
+
+*Choix.*
+
+* Écran `account_preferences` (`/account/preferences`), ouvert à toute
+  session authentifiée comme la sécurité du compte, joint depuis le menu de
+  l'utilisateur juste après « Sécurité du compte » (icône Lucide
+  `sliders-horizontal` ajoutée à la planche). Champ « Interface »
+  (`Form::Field` `select`, libellé associé, aide reliée par
+  `aria-describedby`, erreurs sous le champ) dans le vocabulaire du module :
+  « Recettes et dépenses » ou « Comptabilité » (profession libérale), « Mode
+  simplifié » ou « Mode complet » (comptable d'une micro-entreprise). Tant
+  que rien n'est choisi, l'introduction le dit (défaut du rôle). Sans choix
+  possible, pas de formulaire : l'interface appliquée et la raison
+  (Comptabilité inactive, préférence conservée qui reviendra avec le
+  module ; micro-entreprise en mode simplifié pour la société ; dossier
+  sans mode simplifié). Une interface non offerte est refusée (422).
+* Raccourci du menu de l'utilisateur (« Passer à la comptabilité », « Passer
+  aux recettes et dépenses », « Passer au mode simplifié/complet ») :
+  `POST /mode` (`interface_mode`) *enregistre* la préférence par le
+  contrat, même effet que l'écran ; 403 à qui n'a pas le choix ou pour une
+  interface autre que celle proposée.
+* `PartiduoUi::SimpleMode` : `Choice` (module du mode simplifié, interfaces
+  offertes, préférences du contrat), calculé une fois par requête ;
+  `interfaces(module, rôle, comptabilité active)` : profession libérale,
+  `full` seulement avec la Comptabilité active ; micro-entreprise, `full`
+  au seul comptable (ses utilisateurs de la société restent en mode
+  simplifié, ADR-007 D3) ; `choose(préférence, offertes)` : la préférence si
+  elle est offerte, sinon `simple`, sans rien effacer. Le cookie
+  `partiduo_mode` n'est plus lu ni écrit, pour personne, comptable compris.
+* Écran `liberal:settings` : le champ « Interface » est retiré (et, côté
+  contrat, `SettingsInput#interface`, `SettingsView#interface`,
+  `accounting_interface?`, `interfaces(actor)`).
+* Le mode ne change que la présentation : les droits restent ceux du
+  contrat, toute route permise reste joignable.
+
+*Vérification.* `partiduo-app` : `scripts/specs-modules.sh --order random`,
+huit configurations vertes (dont `liberal` : 807 exemples, et
+`liberal,accounting` : 1 075 exemples ; spec `spec/auth/preferences_spec.cr`) ;
+`partiduo-ui-bulma` : 392 exemples verts en ordre aléatoire, garde-fous
+`interface_boundary` et `api_boundary` compris ; `partiduo-demo` : spec
+verte (6 exemples) ; Ameba sans remarque dans les trois dépôts. Reprise de
+la migration liberal 0005 essayée sur une copie de la base de démonstration
+(dossier en `accounting` : l'utilisatrice passe à `full`, la colonne
+disparaît). Vérifié dans le navigateur intégré sur le dossier `liberal` de
+`partiduo-demo`, en thème sombre : « Préférences » dans le menu de
+l'utilisatrice, sous « Sécurité du compte » ; recettes et dépenses par
+défaut ; « Comptabilité » enregistrée, menu complet ; déconnexion puis
+reconnexion : comptabilité retrouvée, aucun cookie `partiduo_mode` ; retour
+aux recettes et dépenses par le raccourci du menu, enregistré (écran des
+préférences à jour) ; au téléphone (375 px), sans défilement horizontal ;
+champ relié à son libellé et à son aide ; plus de champ « Interface » dans
+les paramètres de la profession libérale. Bases de test :
+`partiduo_test_lib4_app`, `partiduo_test_lib4_ui`, `partiduo_test_lib4_demo`,
+supprimées à la fin.

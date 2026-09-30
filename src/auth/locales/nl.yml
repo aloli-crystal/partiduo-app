@@ -109,6 +109,8 @@ nl:
         locale_invalid: "Taal niet beschikbaar."
         profile_unknown: "Onbekend profiel."
         access_ends_on_past: "De einddatum van de toegang is al verstreken."
+      preferences:
+        interface_invalid: "Onbekende interface."
       ledger:
         access_invalid: "Onbekend recht (W, R of X)."
       profile:

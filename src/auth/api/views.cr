@@ -278,6 +278,30 @@ module Partiduo
 
       record ChangePasswordInput, new_password : String, current_password : String? = nil
 
+      # --- Préférences de l'utilisateur (D-AUTH-016) ---------------------------
+
+      # Présentation que la personne préfère : `simple` (recettes et
+      # dépenses, mode simplifié) ou `full` (comptabilité, mode complet).
+      # Une présentation seulement : les droits restent ceux du profil.
+      INTERFACE_SIMPLE = "simple"
+      INTERFACE_FULL   = "full"
+      INTERFACES       = [INTERFACE_SIMPLE, INTERFACE_FULL]
+
+      # `interface` : préférence *en vigueur* — celle que la personne a
+      # choisie (`interface_chosen`), sinon le défaut de son rôle : `full`
+      # pour le comptable, `simple` pour un utilisateur de la société.
+      # L'interface décide si elle peut l'appliquer (module actif…) sans
+      # jamais la réécrire.
+      record PreferencesView, interface : String, interface_chosen : Bool do
+        def full_interface? : Bool
+          interface == INTERFACE_FULL
+        end
+      end
+
+      # `interface` : `INTERFACES`, `nil` pour garder la préférence
+      # enregistrée.
+      record PreferencesInput, interface : String? = nil
+
       record ProfileInput,
         name : String,
         description : String = "",
