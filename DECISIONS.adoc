@@ -14087,8 +14087,8 @@ par nature) puis leurs règlements.
 *Choix.* Dossier `atelier` de `partiduo-demo` : le client mensuel
 « Décoration Val de Loire » rapporte le 25 du mois dernier une étagère au
 vernis rayé (bon de retour tiré de sa première livraison du mois, entrée
-en stock), déduite de sa facture récapitulative proposée ; le chèque le
-plus récent d'un autre client professionnel revient
+en stock), déduite de sa facture récapitulative proposée ; le règlement
+le plus récent d'un autre client professionnel revient
 impayé le jour du chargement (provision insuffisante, 15 € de frais
 refacturés par un brouillon de facture au taux hors champ `HC`, catégorie
 O, créé par le dossier ; contre-passation et frais passés en banque ;
