@@ -1321,3 +1321,27 @@ sans balance*, acceptée depuis que le régime s'écrit `BNCDC`
 3514, 3519… ») en attendant la réponse de TELEDEC
 (`.teledec-doc/QUESTIONS-EN-ATTENTE.adoc`), et pour les rappels (question
 posée aussi).
+
+== Réponses de TELEDEC du 1er octobre 2026 (B-TDC-004, T9:teledec)
+
+*B-TDC-004 mis à jour* (DECISIONS D-TDC9-001 à D-TDC9-007) :
+
+* *Greffe : amorce et PDF* — levé en partie. Le dépôt s'amorce par
+  `POST /service/nouvelle-declaration` (`formulaire: "greffe"`, droit
+  `nouvelle-declaration` du jeton) et son PDF signé se relève par
+  `GET /service/declarationPdf/{token}/…` (jeton de `lienPdf`) : branchés et
+  vérifiés sur le TELEDEC simulé. *Reste* : le reste du corps de l'amorce
+  et la forme de sa réponse (hypothèse D-TDC9-001), la liste des formes
+  juridiques éligibles (hypothèse), à confirmer par la suite d'exploration
+  ou par TELEDEC ; amorce jamais encore jouée sur le stage.
+* *Dry-run inexistant* — levé : il n'y a pas de validation sans dépôt chez
+  TELEDEC ; seule reste la validation locale par les schémas (D-TDC9-006).
+* *Rappels confirmés* — levé : à l'envoi, à l'acceptation et au rejet,
+  jamais au dépôt ; la liasse porte désormais son adresse de rappel en
+  `#URL` (documentée par le guide de l'API Liasse, D-TDC9-004). *Reste* :
+  observer un rappel de liasse sur le stage.
+* *Millésimes* — levé : rien pour la TVA, lendemain de la clôture pour la
+  liasse et la DAS2 (D-TDC9-003).
+* *DAS2 seule* — toujours refusée par le stage ; dix variantes à essayer
+  par la suite d'exploration (`TELEDEC_EXPLORATION=1`, D-TDC9-007) avant
+  toute nouvelle question à TELEDEC.

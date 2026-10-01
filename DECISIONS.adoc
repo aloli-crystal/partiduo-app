@@ -13261,3 +13261,188 @@ base) ; dans `partiduo-admin`, `sh -n` et shellcheck des enveloppes, essai
 réel des gestes avec une doublure d'acme.sh (installation, rejeu sans
 réémission, retrait, échéance), typage. Ni acme.sh ni Let's Encrypt n'ont
 encore été essayés sur un serveur FreeBSD.
+
+== TELEDEC : réponses du 1er octobre 2026 (T9:teledec)
+
+Réponses de TELEDEC au courriel du 30 septembre 2026
+(`.teledec-doc/REPONSES-TELEDEC-2026-10-01.adoc`, qui fait foi) : greffe,
+« dry-run », millésimes, rappels, régime fiscal. Code dans
+`partiduo-teledec` ; préfixe `D-TDC9-`.
+
+=== D-TDC9-001 — Greffe : amorce par `nouvelle-declaration`, formes éligibles (T9:teledec ; remplace D-TDC3-008)
+
+*Constat.* `Greffe`, `GreffeSeul`, `GreffeUpload` sont des types de
+déclaration ; le dépôt s'amorce par `POST /service/nouvelle-declaration`
+(droit `nouvelle-declaration`, accordé au partenaire le 1er octobre 2026)
+avec `formulaire: "greffe"`, qui rend l'adresse de redirection (connexion
+automatique, écran de dépôt). Le reste du corps n'est pas documenté. Le
+greffe n'est proposé qu'aux formes qui déposent leurs comptes (une SCI, une
+EI, une association ne le sont pas) ; aucune liste n'est publiée.
+
+*Choix.*
+
+* Droit `nouvelle-declaration` ajouté aux droits demandés au jeton
+  (`HttpTransport::SCOPES`, `stage/…` et `prod/…`). Facultatif
+  (`OPTIONAL_SCOPES`) : si le service des jetons répond `invalid_scope`, le
+  jeton est redemandé sans lui et seul le greffe est refusé
+  (`teledec.errors.transport.scope`, droit nommé) ; un 401 ou 403 persistant
+  de la route donne la même erreur. Les autres dépôts ne sont jamais
+  bloqués par ce droit.
+* *Hypothèse* (corps) : sur le modèle de la marque blanche — `formulaire`,
+  `auth` (compte de l'entreprise dans le domaine du partenaire, horodatage
+  en heure française, adresse des rappels, `retournerLien`), `identity`
+  (SIRET, raison sociale, clôture, adresse, forme juridique, email de
+  contact), `period` (exercice, référence du partenaire) ; ni balance ni
+  cases (TELEDEC reprend la liasse de l'exercice : avertissement
+  `teledec.controls.greffe_liasse` tant qu'elle n'est pas transmise). La
+  confidentialité des comptes se choisit sur l'écran de TELEDEC.
+  L'entreprise est créée avant, comme pour la marque blanche. Réponse :
+  adresse lue dans `url`, `lien`, `redirection`, `redirect`,
+  `urlRedirection`, `lienRedirection`, `autologin`, sinon la première valeur
+  `http…`, ou le texte brut ; sans adresse : `refused` (message de TELEDEC)
+  ou `no_link`. À confirmer par la suite d'exploration (D-TDC9-007) ou par
+  TELEDEC (`.teledec-doc/QUESTIONS-EN-ATTENTE.adoc`).
+* *Hypothèse* (éligibilité, `Config::GREFFE_LEGAL_FORMS`) : sociétés
+  commerciales tenues de déposer leurs comptes (code de commerce,
+  L232-21 à L232-23) — SARL, EURL, SAS, SASU, SA, SCA, SNC, SCS — et
+  sociétés d'exercice libéral à forme commerciale (SELARL, SELEURL, SELAS,
+  SELASU, SELAFA, SELCA), comparées sur leurs seules lettres (« S.A.R.L. »).
+  Écartées : EI, EIRL, sociétés civiles (SCI, SCM, SCP, SCEA, GAEC, EARL),
+  associations, GIE, indivisions, LMNP, formes inconnues. Refus traduit à
+  la préparation (`teledec.errors.greffe.legal_form`, forme citée ;
+  `legal_form_missing` si la forme n'est pas renseignée), échéance non
+  proposée, refus aussi à l'envoi (`greffe_legal_form`).
+* Interface : « Transmettre » amorce ; le bouton « Finaliser le dépôt chez
+  TELEDEC » ouvre l'adresse rendue dans un nouvel onglet
+  (`target="_blank" rel="noopener noreferrer"`). L'ancienne erreur
+  `teledec.errors.transport.greffe` disparaît (migration 0007 : dernière
+  erreur et détail d'événement qui la portaient effacés).
+
+*Specs.* `spec/teledec/greffe_spec.cr` : liste des formes, refus traduits
+(SCI, EI, association, forme absente), échéance masquée ; corps et adresse
+(JSON ou texte), refus, droit absent (403, `invalid_scope`, droits
+annoncés par le service des jetons) ; parcours complet sur le TELEDEC
+simulé (route `nouvelle-declaration`, droit exigé) et écran.
+
+=== D-TDC9-002 — Greffe : PDF signé du dépôt conservé en pièce jointe (T9:teledec)
+
+*Constat.* `GET /service/declarationPdf/{token}/teledec-liasse-fiscale.pdf`
+sert le PDF signé dès que le dépôt est finalisé ; le `{token}` fourni dans
+`lienPdf` des retours fait foi.
+
+*Choix.* Dès qu'un retour d'un dépôt au greffe à l'état finalisé (`Sent`,
+`OK`, `Accepted`, `ERREUR`, `Rejected`) porte `lienPdf` — réponse du suivi
+ou compte-rendu (`refresh`), rappel —, l'adaptateur en tire le jeton
+(`Formats.pdf_token`) et relève le PDF *sur la route de l'environnement
+des identifiants*, jamais à l'adresse reçue ; un corps qui n'est pas un PDF
+ou un refus : `teledec.errors.transport.document`. Le PDF
+(`depot-greffe-<siren>-<fin>.pdf`) est conservé une seule fois en pièce
+jointe du socle : colonne `teledec_filing.document_attachment_id`
+(migration 0007), événement « PDF du dépôt au greffe conservé », lien
+« PDF du dépôt au greffe » sur la fiche (`Api.document_file`, route
+`/ext/TELEDEC/filings/<id>/document`), à côté de l'accusé
+(`receipt_attachment_id`). Le suivi en échec sur le PDF laisse le dépôt
+transmis (erreur notée) ; un rappel dont le PDF ne peut être relevé aussi
+(`last_error`), le suivi reprenant ensuite l'accusé et le PDF ensemble. Une
+nouvelle préparation (rejet) oublie le PDF précédent, qui reste dans les
+pièces jointes. Suivi du greffe par `declaration-status`
+(`formulaire=greffe`) ; rappels de type `Greffe` ou `GreffeSeul`.
+
+*Specs.* Jeton tiré de `lienPdf` ; relevé sur le stage seulement ; rien
+avant la finalisation ni pour une autre sorte ; refus d'un corps non PDF ;
+parcours suivi puis accusé, rappel rejoué (un seul relevé), échec au rappel
+puis reprise au suivi ; téléchargement depuis l'écran.
+
+=== D-TDC9-003 — Millésime : rien pour la TVA, lendemain de la clôture pour la liasse et la DAS2 (T9:teledec ; complète D-TDC6-001)
+
+*Constat.* TVA : ne pas renseigner le millésime (ignoré) ; le palier du
+schéma est déduit de `period.end`. Liasse et DAS2 : année du lendemain de
+la clôture.
+
+*Choix.* La marque blanche n'envoie plus `period.millesime` pour la CA3 et
+la CA12 (annexes comprises) ; le palier reste calculé
+(`Millesime.target`) pour choisir le schéma de validation et la table des
+codes. `Millesime.campaign` écrit désormais la règle telle quelle pour la
+liasse et la DAS2 : `(clôture + 1 jour).year`. L'ancien calcul (31 décembre
+→ année suivante, sinon l'année de clôture) donnait le même résultat ;
+vérifié : clôture au 30/06/2025 → 01/07/2025 → 2025 ; au 31/12/2025 → 2026 ;
+au 30/12/2025 → 2025 ; DAS2 des sommes de 2025 → 2026. Relevés d'IS
+inchangés.
+
+*Specs.* `millesime_spec` (exemples de TELEDEC), `formats_spec` et
+`remote_spec` (aucun `millesime` pour la TVA), suite du stage (CA3 vérifiée
+sans millésime avant l'appel).
+
+=== D-TDC9-004 — Rappels confirmés ; adresse de rappel de la liasse en `#URL` (T9:teledec ; remplace la partie liasse de D-TDC3-006)
+
+*Constat.* TELEDEC rappelle à l'envoi, à l'acceptation et au rejet par la
+DGFiP, jamais au simple dépôt. Pour la liasse (API Balance) : courriel au
+compte utilisateur *et* appel du « webhook renseigné dans la payload ». Le
+guide d'intégration de l'API Liasse (2 mars 2026, `.teledec-doc/base/`)
+documente la ligne `#URL <adresse>` (« URL de callback pour les retours
+DGFiP »), avec `#REFERENCE` (renvoyée dans le rappel) et `#CREATION-AUTO OUI`.
+
+*Choix.* La liasse porte `#URL` (adresse des rappels de l'instance, la même
+que `auth.url`, absente sans mot de passe des rappels), `#REFERENCE` (déjà
+là) et `#CREATION-AUTO OUI`. Clé réglable par
+`PARTIDUO_TELEDEC_LIASSE_CALLBACK_KEY` (défaut `URL`) si TELEDEC en
+désignait une autre. `creation-entreprise` reste appelée avant la première
+liasse : c'est le seul moyen vérifié sur le stage de créer l'entreprise et
+son compte à leur régime (la liasse sans compte préalable donnait
+« Utilisateur non trouvé » au suivi, D-TDC5-002) ; `#CREATION-AUTO` s'y
+ajoute sans rien retirer de ce qui passe. La suite d'exploration
+(D-TDC9-007) essaie la liasse avec `#CREATION-AUTO OUI` sans
+`creation-entreprise` : si elle suffit, l'appel préalable pourra être
+retiré pour la liasse. Champs obligatoires du guide (`SOURCE`, `EMAIL`,
+`NOM`, `SIRET`, catégorie, régime, dates, `CREATION-AUTO`) : tous envoyés,
+sauf `#REEL-NORMAL-OU-SIMPLIFIE` pour une 2035 ou une 2072 (sans objet ; la
+spécification v1.2 de l'API Balance ne rend obligatoire que `#SOURCE`, et le
+stage accepte la 2035 ainsi). Suite du stage : l'exemple des rappels dit
+qu'aucun rappel n'arrive au dépôt, normalement.
+
+=== D-TDC9-005 — `fullRegimeFiscal` : facultatif, gardé à la création (T9:teledec ; confirme D-TDC6-005)
+
+*Constat.* Facultatif à la création : omis, l'entreprise prend l'IS réel
+simplifié, réajusté au premier envoi de liasse par la payload Balance.
+
+*Choix.* Gardé à la création de l'entreprise : il évite un régime faux
+jusqu'à la première liasse (et `BNCDC` fait passer la 2035 sur le stage,
+D-TDC8-001) ; documenté comme facultatif. Jamais dans une déclaration en
+marque blanche.
+
+=== D-TDC9-006 — Pas de validation « dry-run » chez TELEDEC (T9:teledec)
+
+*Constat.* La validation sans dépôt n'existe pas ; sa mention dans la
+documentation des schémas était une erreur (corrigée) ; prévue dans leur
+feuille de route.
+
+*Choix.* Aucune mention ne la présente comme disponible (README,
+commentaires, synthèse `.teledec-doc/API-TELEDEC.adoc`) ; la validation
+reste *locale*, par les schémas JSON officiels (`PARTIDUO_TELEDEC_SCHEMAS_DIR`,
+D-TDC6-003). La documentation des schémas est servie par `www.teledec.fr` et
+`stage.teledec.fr` avec un jeton portant le droit `json-schemas`.
+
+=== D-TDC9-007 — Suite d'exploration du stage (T9:teledec)
+
+*Contexte.* L'utilisateur préfère chercher lui-même sur le stage plutôt que
+de solliciter TELEDEC (DAS2 seule, corps du greffe, création automatique).
+
+*Choix.* `spec/integration/exploration_spec.cr`, activée seulement avec les
+identifiants du stage *et* `TELEDEC_EXPLORATION=1` (domaine du partenaire
+requis) : dix variantes de DAS2 seule (régime de l'entreprise à sa création
+— `ISRS`, aucun, `ISRN`, `BICRS` —, sans `period.millesime`, régime dans la
+payload, période réduite, CA3 néant déposée avant ou jointe, bloc minimal),
+cinq corps de l'amorce du greffe (minimal → complet, jamais finalisé), et
+la liasse `#CREATION-AUTO OUI` sans `creation-entreprise` avec un témoin.
+Chaque variante a sa propre entreprise fictive (SIREN à clé valide
+`998<série><n°>`, série `TELEDEC_EXPLORATION_SERIE` ou tirée de l'heure) ;
+rien ne part à la DGFiP (lien sans envoi, liasse sans bouton « Envoyer »).
+Tableau « variante → acceptée / refusée (message de TELEDEC expurgé) »
+affiché et écrit dans un fichier 0600. Les outils de la suite du stage
+passent dans `spec/support/sandbox.cr`, partagés. Commande :
+`TELEDEC_EXPLORATION=1 DATABASE_URL=… crystal spec spec/integration/exploration_spec.cr`.
+
+*Vérification.* `partiduo-teledec` : exemples verts en ordre aléatoire
+(suite du stage et exploration en attente : sans réseau dans le bac à
+sable) ; Ameba sans remarque ; `crystal tool format`. Base
+`partiduo_test_tdc9_main`, supprimée.
