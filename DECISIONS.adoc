@@ -13772,3 +13772,23 @@ sable) ; Ameba sans remarque ; `crystal tool format`. Commande :
 `TELEDEC_EXPLORATION=1 DATABASE_URL=… crystal spec
 spec/integration/exploration_spec.cr`. Bases `partiduo_test_tdc12_*`,
 supprimées.
+
+=== D-TDC12-005 — Droits facultatifs du jeton essayés un à un (1er octobre 2026)
+
+*Constat.* Sur le stage, `stage/nouvelle-declaration` est refusé
+(`invalid_scope`) et `stage/liste-declarations` accordé. L'adaptateur, au
+premier refus, redemandait un jeton sans *aucun* droit facultatif : la liste
+des déclarations était perdue, et le suivi de la DAS2 par la liste échouait
+(« liste des déclarations refusée », suite du stage du 1er octobre).
+
+*Choix.* Après un refus `invalid_scope`, chaque droit facultatif est essayé
+seul, avec les droits obligatoires et ceux déjà accordés ; seuls les droits
+accordés sont gardés. Le jeton est mis en cache comme avant : ces essais
+n'ont lieu qu'une fois par durée de vie du jeton.
+
+*Constat associé (quatrième exploration).* La liasse par l'API Balance n'existe
+chez TELEDEC qu'une fois son lien ouvert (`NotCompleted`, trouvée alors par
+`declaration-status` avec `formulaire=liasse`) ; la DAS2 n'est pas trouvée par
+`declaration-status` (ni `DAS2` ni `liasse`) mais figure dans la liste sous le
+type « Liasse » de l'exercice (`Created`) : le secours par la liste
+(D-TDC12-002) est donc le seul moyen de la suivre.
