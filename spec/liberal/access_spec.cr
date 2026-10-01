@@ -38,6 +38,7 @@ private def reads(actor : Partiduo::Api::Actor) : Array(Proc(Nil))
     -> { Api.tax_return(actor, 2026); nil },
     -> { Api.export_tax_return(actor, 2026); nil },
     -> { Api.year(actor, 2026); nil },
+    -> { Api.year_history(actor, 2026); nil },
   ]
 end
 
@@ -58,6 +59,8 @@ private def writes(actor : Partiduo::Api::Actor) : Array(Proc(Nil))
     -> { Api.delete_asset(actor, 1_i64); nil },
     -> { Api.delete_disposal(actor, 1_i64); nil },
     -> { Api.add_adjustment(actor, Api::AdjustmentInput.new(2026, "deduction", "x", BigDecimal.new(1))); nil },
+    -> { Api.close_year(actor, 2026); nil },
+    -> { Api.reopen_year(actor, 2026); nil },
     -> { Api.delete_adjustment(actor, 1_i64); nil },
   ]
 end

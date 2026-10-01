@@ -146,16 +146,19 @@ module Partiduo
         [] of FieldError
       end
 
-      # Date dans une période close du socle ou dans une année dont la 2035
-      # est transmise : refusée ; dans le futur : refusée pour une saisie
-      # directe (on n'inscrit qu'un mouvement fait).
+      # Date dans une période close du socle ou dans un exercice clôturé ou
+      # verrouillé (2035 transmise) : refusée ; dans le futur : refusée pour
+      # une saisie directe (on n'inscrit qu'un mouvement fait).
       def self.date_errors(date : Time, manual : Bool = true, field : String = "date") : Array(FieldError)
         errors = [] of FieldError
         errors << error(field, "line.date.future") if manual && day(date) > Partiduo::Config.today
         if closed?(date)
           errors << error(field, "line.date.closed_period")
-        elsif Years.transmitted?(date.year)
-          errors << error(field, "line.date.transmitted", {"year" => date.year.to_s})
+        else
+          case Years.state(date.year)
+          when "locked" then errors << error(field, "line.date.transmitted", {"year" => date.year.to_s})
+          when "closed" then errors << error(field, "line.date.year_closed", {"year" => date.year.to_s})
+          end
         end
         errors
       end
@@ -165,9 +168,9 @@ module Partiduo
         Partiduo::Api::Core.period_for(system, day(date)).try(&.closed?) || false
       end
 
-      # Date intangible : période close ou année transmise.
+      # Date intangible : période close, exercice clôturé ou verrouillé.
       def self.locked_on?(date : Time) : Bool
-        closed?(date) || Years.transmitted?(date.year)
+        closed?(date) || Years.held?(date.year)
       end
 
       # --- Inscription ----------------------------------------------------------------
@@ -228,11 +231,15 @@ module Partiduo
         errors
       end
 
-      # Exercice figé ou période close à la date d'une ligne existante.
+      # Exercice clôturé ou verrouillé, ou période close, à la date d'une
+      # ligne existante (D-LIB5-001 : un exercice clôturé se rouvre).
       def self.frozen_errors(date : Time) : Array(FieldError)
         return [error("id", "line.change.closed_period")] if closed?(date)
-        return [error("id", "line.change.transmitted", {"year" => date.year.to_s})] if Years.transmitted?(date.year)
-        [] of FieldError
+        case Years.state(date.year)
+        when "locked" then [error("id", "line.change.transmitted", {"year" => date.year.to_s})]
+        when "closed" then [error("id", "line.change.year_closed", {"year" => date.year.to_s})]
+        else               [] of FieldError
+        end
       end
 
       # Modifie une ligne d'un exercice ouvert (contrôles faits par le
@@ -435,8 +442,9 @@ module Partiduo
         end
         natures = Nature.all.to_a.index_by(&.pk!.as(Int64))
         closed = closed_periods
+        held = Years.held
         transmitted = Years.transmitted
-        rows.map { |row| view(row, natures[row.nature_id!.to_i64], reversals[row.pk!.as(Int64)]?, closed, transmitted) }
+        rows.map { |row| view(row, natures[row.nature_id!.to_i64], reversals[row.pk!.as(Int64)]?, closed, held, transmitted) }
       end
 
       def self.view(row : Line) : Api::LineView
@@ -444,7 +452,8 @@ module Partiduo
       end
 
       private def self.view(row : Line, nature : Nature, reversed_by_id : Int64?,
-                            closed : Array({Time, Time}), transmitted : Hash(Int32, Time)) : Api::LineView
+                            closed : Array({Time, Time}), held : Hash(Int32, String),
+                            transmitted : Hash(Int32, Time)) : Api::LineView
         date = row.date!
         transmitted_at = transmitted[date.year]?
         Api::LineView.new(
@@ -454,7 +463,7 @@ module Partiduo
           method: row.method.to_s, card_id: row.card_id.try(&.to_i64), party_name: row.party_name.to_s,
           label: row.label.to_s, reference: row.reference.to_s, attachment_id: row.attachment_id.try(&.to_i64),
           origin: row.origin.to_s, source: row.source.to_s, reversal_of_id: row.reversal_of_id.try(&.to_i64),
-          reversed_by_id: reversed_by_id, locked: !transmitted_at.nil? || locked?(date, closed),
+          reversed_by_id: reversed_by_id, locked: held.has_key?(date.year) || locked?(date, closed),
           recorded_at: row.recorded_at || Time.utc, transmitted_at: transmitted_at, modified_at: row.modified_at)
       end
 

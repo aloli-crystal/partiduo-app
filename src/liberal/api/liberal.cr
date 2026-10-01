@@ -17,10 +17,12 @@ module Partiduo
     # `liberal.asset.recorded`, les remplace ou les extourne à
     # `liberal.*.updated` et `liberal.*.deleted` (ADR-006 D3).
     #
-    # Exercice (année civile de la 2035, DECISIONS D-LIB2-001) : ouvert, ses
-    # lignes se modifient et se suppriment ; figé — clôturé au socle, ou sa
-    # 2035 transmise (`tax_return.transmitted`) —, elles sont intangibles et
-    # se corrigent par contre-passation datée dans un exercice ouvert.
+    # Exercice (année civile de la 2035, DECISIONS D-LIB2-001, D-LIB5-001) :
+    # ouvert, ses lignes se modifient et se suppriment ; clôturé
+    # (`close_year`, ou au socle), elles sont figées et l'exercice se rouvre
+    # (`reopen_year`) tant que la 2035 n'est pas transmise ; verrouillé (2035
+    # transmise, `tax_return.transmitted`), définitivement : elles se
+    # corrigent par contre-passation datée dans un exercice ouvert.
     module Liberal
       MODULE_CODE    = "LIBERAL"
       READ           = "liberal.register.read"
@@ -453,12 +455,52 @@ module Partiduo
 
       # --- Exercices ----------------------------------------------------------------------
 
-      # État de l'exercice `year` : ouvert, clôturé au socle (date), 2035
-      # transmise (date, référence du dépôt). Plusieurs exercices peuvent
-      # être ouverts à la fois.
+      # État de l'exercice `year` (DECISIONS D-LIB5-001) : ouvert, clôturé
+      # (par le professionnel, ou au socle : date, auteur), verrouillé (2035
+      # transmise : date, référence du dépôt) ; dernière réouverture.
+      # Plusieurs exercices peuvent être ouverts à la fois.
       def self.year(actor : Actor, year : Int32) : YearView
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
         Partiduo::Liberal::Years.view(year)
+      end
+
+      # Clôtures, réouvertures, verrous et rejets de l'exercice `year`, du
+      # plus ancien au plus récent : qui, quand.
+      def self.year_history(actor : Actor, year : Int32) : Array(YearChangeView)
+        Guard.authorize!(actor, READ, module_code: MODULE_CODE)
+        Partiduo::Liberal::Years.history(year)
+      end
+
+      # Clôture l'exercice ouvert `year` (D-LIB5-001) : ses lignes, ses
+      # immobilisations, ses réintégrations et déductions sont figées ;
+      # l'empreinte de sa 2035 est gardée. Droit de saisie (`WRITE`) : la
+      # clôture ne fait que retirer, réversiblement, ce que ce droit permet.
+      # Refus : année à venir (`year.close.future`), déjà clôturée
+      # (`year.close.already`), verrouillée (`year.close.locked`). Aucun
+      # événement : la Comptabilité n'a rien à passer.
+      def self.close_year(actor : Actor, year : Int32) : Result(YearView)
+        Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
+        Transaction.run do
+          errors = Partiduo::Liberal::Years.close_errors(year)
+          next Result(YearView).failure(errors) unless errors.empty?
+          Partiduo::Liberal::Years.close!(year, actor.user_id)
+          Result(YearView).success(Partiduo::Liberal::Years.view(year))
+        end
+      end
+
+      # Rouvre l'exercice clôturé `year` : ses lignes redeviennent
+      # modifiables, la Comptabilité suit leurs modifications ensuite
+      # (`liberal.*.updated`, D-LIB2-002). Refus : 2035 transmise
+      # (`year.reopen.locked`, définitif), exercice clos au socle
+      # (`year.reopen.core_closed`), exercice ouvert (`year.reopen.open`).
+      def self.reopen_year(actor : Actor, year : Int32) : Result(YearView)
+        Guard.authorize!(actor, WRITE, module_code: MODULE_CODE)
+        Transaction.run do
+          errors = Partiduo::Liberal::Years.reopen_errors(year)
+          next Result(YearView).failure(errors) unless errors.empty?
+          Partiduo::Liberal::Years.reopen!(year, actor.user_id)
+          Result(YearView).success(Partiduo::Liberal::Years.view(year))
+        end
       end
 
       # --- 2035 -------------------------------------------------------------------------
@@ -467,8 +509,9 @@ module Partiduo
       # contrôles de cohérence (`ready?`), l'empreinte et l'état de
       # l'exercice : recalculées à chaque lecture tant qu'il est ouvert,
       # inchangées une fois figé (DECISIONS D-LIB2-005). C'est la requête que
-      # lit `partiduo-teledec` pour transmettre la déclaration ; la
-      # transmission, publiée par `tax_return.transmitted`, fige l'exercice.
+      # lit `partiduo-teledec` pour transmettre la déclaration, une fois
+      # l'exercice clôturé (D-LIB5-003) ; la transmission, publiée par
+      # `tax_return.transmitted`, verrouille l'exercice.
       def self.tax_return(actor : Actor, year : Int32) : TaxReturnView
         Guard.authorize!(actor, READ, module_code: MODULE_CODE)
         Partiduo::Liberal::TaxReturn.prepare(year)

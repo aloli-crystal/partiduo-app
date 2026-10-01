@@ -109,12 +109,12 @@ describe_module "LIBERAL", "Livre-journal libéral modifiable tant que l'exercic
     reversal.number.should start_with("J2026-")
   end
 
-  it "fige l'exercice dont la 2035 est transmise, même non clôturé, et le libère au rejet de ce dépôt" do
+  it "verrouille l'exercice dont la 2035 est transmise, même non clôturé, et le rend clôturé au rejet de ce dépôt" do
     L.setup(years: [2025, 2026])
     old = L.receipt("2025-06-10", "1000")
     transmit(2025)
     year = Api.year(L.system, 2025)
-    {year.state, year.reference, year.frozen?}.should eq({"transmitted", "liasse:2025", true})
+    {year.state, year.reference, year.frozen?}.should eq({"locked", "liasse:2025", true})
     year.transmitted_at.should_not be_nil
     year.frozen_fingerprint.should eq(Api.tax_return(L.system, 2025).fingerprint)
     Api.line(L.system, old.id).locked.should be_true
@@ -136,7 +136,11 @@ describe_module "LIBERAL", "Livre-journal libéral modifiable tant que l'exercic
     reject(2025, "liasse:autre")
     Api.year(L.system, 2025).reference.should eq("liasse:2025")
     reject(2025)
-    Api.year(L.system, 2025).state.should eq("open")
+    # Rejet : verrou levé, l'exercice reste clôturé (D-LIB5-002) ; il se rouvre.
+    Api.year(L.system, 2025).state.should eq("closed")
+    Api.update_line(L.actor, old.id, L.input("2025-06-10", "1100", "RECEIPTS")).error_keys
+      .should eq(["liberal.errors.line.change.year_closed"])
+    Api.reopen_year(L.actor, 2025).value!.open?.should be_true
     Api.update_line(L.actor, old.id, L.input("2025-06-10", "1100", "RECEIPTS")).success?.should be_true
   end
 
@@ -162,7 +166,7 @@ describe_module "LIBERAL", "Livre-journal libéral modifiable tant que l'exercic
     L.expense("2026-02-04", "20", "OFFICE")
     Api.update_line(L.actor, current.id, L.input("2026-01-21", "2600", "RECEIPTS")).value!
     Api.tax_return(L.system, 2025).fingerprint.should eq(second.fingerprint)
-    Api.tax_return(L.system, 2025).exercise.state.should eq("transmitted")
+    Api.tax_return(L.system, 2025).exercise.state.should eq("locked")
     Api.tax_return(L.system, 2025).controls.map(&.key).should_not contain("liberal.controls.year_open")
     Api.tax_return(L.system, 2026).amount("receipts").should eq(L.d("2600"))
     Api.tax_return(L.system, 2026).exercise.open?.should be_true

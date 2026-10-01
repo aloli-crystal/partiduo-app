@@ -12193,7 +12193,12 @@ transmission de sa 2035 (en pratique le même jour) ; ensuite la ligne est
 intangible et se corrige par contre-passation datée dans un exercice
 ouvert. Deux exercices ouverts à la fois sont le cas normal.
 
-=== D-LIB2-001 — Exercice d'une ligne : son année civile ; modifiable jusqu'au figement (liberal ; remplace D-LIB-001 pour l'intangibilité)
+=== D-LIB2-001 — Exercice d'une ligne : son année civile ; modifiable jusqu'au figement (liberal ; remplace D-LIB-001 pour l'intangibilité ; complétée par D-LIB5-001)
+
+*Statut.* Complétée par D-LIB5-001 (1er octobre 2026) : l'exercice est
+ouvert, clôturé par le professionnel (réversible) ou verrouillé par la
+transmission de la 2035 ; la clôture au socle reste un verrou de plus
+(D-LIB5-004).
 
 *Contexte.* ADR-007 D6 prévoyait un module « sur le même modèle que
 `micro` » ; D-LIB-001 avait repris D-MIC-003 (intangible dès
@@ -12281,7 +12286,13 @@ n'en a plus et ses écritures se soldent ; `spec/modules/events_spec.cr`.
 *Alternative écartée.* Celles de D-MIC2-003 (appel direct, republication
 avec révision, suppression d'écriture, écart toléré).
 
-=== D-LIB2-003 — Figement par la transmission : événement `tax_return.transmitted` publié par `partiduo-teledec` (amendement d'ADR-003 D7)
+=== D-LIB2-003 — Figement par la transmission : événement `tax_return.transmitted` publié par `partiduo-teledec` (amendement d'ADR-003 D7 ; rejet remplacé par D-LIB5-002)
+
+*Statut.* Le rejet est remplacé par D-LIB5-002 (1er octobre 2026) : il
+rend l'exercice *clôturé* (réversible), non plus ouvert ; la transmission
+*verrouille* l'exercice, définitivement, et se fait sur un exercice clôturé
+(D-LIB5-003). Les deux événements sont adoptés par l'utilisateur le
+1er octobre 2026.
 
 *Contexte.* La transmission de la 2035 relève de `partiduo-teledec`
 (ADR-007 D4), qui lit déjà `Api::Liberal.tax_return` (D-TDC-002). Lui
@@ -12313,8 +12324,8 @@ préparation (`teledec.errors.filing.changed`) ; une modification entre la
 lecture et la transmission est sérialisée par le verrou consultatif.
 Specs : `partiduo-teledec/spec/teledec/liberal_freeze_spec.cr`.
 
-*Amendement.* ADR-003 D7 (liste fermée des événements), adopté le
-30 septembre 2026 par extension de D-MIC2-003.
+*Amendement.* ADR-003 D7 (liste fermée des événements), adopté par
+l'utilisateur le 1er octobre 2026 (D-LIB5-002).
 
 *Alternative écartée.* `Api::Liberal.mark_transmitted` appelé par
 l'extension (comme `Micro.mark_declared` par `partiduo-urssaf`) : appel de
@@ -12340,7 +12351,10 @@ l'immobilisation redevient modifiable ou cessible. Événements
 *Alternative écartée.* Seule la contre-passation la même année (D-LIB-005) :
 plus restrictif que le livre-journal sans raison.
 
-=== D-LIB2-005 — 2035 préparée à la demande, figée avec l'exercice (liberal ; remplace « rien n'est figé » de D-LIB-007)
+=== D-LIB2-005 — 2035 préparée à la demande, figée avec l'exercice (liberal ; remplace « rien n'est figé » de D-LIB-007 ; complétée par D-LIB5-001)
+
+*Statut.* Complétée par D-LIB5-001 : la clôture par le professionnel fige
+aussi la 2035 (empreinte gardée), la réouverture la libère.
 
 *Choix.* La 2035 reste une requête (`tax_return`), recalculée à chaque
 lecture tant que l'exercice est ouvert (`TaxReturnView#exercise`). Figé,
@@ -12356,7 +12370,10 @@ ouverte ».
 *Alternative écartée.* Copier la 2035 en base au figement : un état de
 plus, alors que les sources sont intangibles et l'empreinte suffit.
 
-=== D-LIB2-006 — Interface : en-tête d'exercice, Modifier et Supprimer, cadenas et « Contre-passer » (interface)
+=== D-LIB2-006 — Interface : en-tête d'exercice, Modifier et Supprimer, cadenas et « Contre-passer » (interface ; complétée par D-LIB5-005)
+
+*Statut.* Complétée par D-LIB5-005 : « Clôturer l'exercice », « Rouvrir
+l'exercice », en-tête « 2035 transmise le … — verrouillé ».
 
 *Choix.* Comme D-MIC2-005. Livre-journal, recettes et dépenses (mode
 complet et mode simplifié) : en-tête de groupe de l'exercice
@@ -12848,3 +12865,181 @@ l'avant-dernier mois émise et envoyée d'un clic puis réglée, celle du mois
 dernier proposée, bons du mois en cours à facturer. Bases de test :
 `partiduo_test_bl_app`, `partiduo_test_bl_ui`, `partiduo_test_bl_einv`,
 `partiduo_test_bl_demo`, supprimées à la fin.
+
+== Exercice libéral : clôture réversible, verrou à la transmission (1er octobre 2026)
+
+Décision de l'utilisateur du 1er octobre 2026 : « Le libéral doit pouvoir
+clôturer son exercice, et le dé-clôturer ; une fois que c'est envoyé ⇒
+verrou ! » D-LIB2 figeait l'exercice au premier de deux événements, la
+clôture au socle (irréversible, geste de la Comptabilité) ou la
+transmission de la 2035 ; le professionnel n'avait pas de clôture à lui.
+L'exercice libéral a désormais trois états, propres au module.
+
+=== D-LIB5-001 — Trois états de l'exercice : ouvert, clôturé (réversible), verrouillé (liberal ; complète D-LIB2-001 et D-LIB2-005)
+
+*Choix.*
+
+* *Ouvert* (`open`) : lignes, immobilisations, cessions, réintégrations et
+  déductions se saisissent, se modifient et se suppriment (D-LIB2-001).
+* *Clôturé* (`closed`) : `close_year(actor, year)` fige l'exercice
+  (déclencheurs), garde l'empreinte de sa 2035 ; `reopen_year(actor,
+  year)` le rouvre tant que la 2035 n'est pas transmise. Refus traduits :
+  `year.close.future` (année à venir), `year.close.already`,
+  `year.close.locked`, `year.reopen.locked`, `year.reopen.core_closed`,
+  `year.reopen.open`, `year.invalid` ; une ligne d'un exercice clôturé :
+  `line.change.year_closed`, `line.date.year_closed`.
+* *Verrouillé* (`locked`) : 2035 transmise (D-LIB5-002), définitif ;
+  correction par contre-passation datée dans un exercice ouvert.
+
+*Droit.* `liberal.register.write`, celui de la saisie : la clôture ne fait
+que retirer, réversiblement, ce que ce droit permet (modifier et supprimer
+les lignes), et la réouverture le rend ; c'est le geste du professionnel
+qui tient son livre-journal, pas un paramétrage. `liberal.settings.write`
+(natures, table de correspondance) aurait laissé le professionnel
+dépendre d'un droit de configuration pour finir son année, ou donné ce
+droit à qui n'en a pas besoin. Le verrou, lui, ne se lève par aucun droit.
+
+*Trace.* `liberal_year` : `state`, `closed_at`, `closed_by_id` (clôture en
+vigueur), `reopened_at`, `reopened_by_id` (dernière réouverture) ;
+`liberal_year_change` garde chaque passage (`closed`, `reopened`,
+`locked`, `unlocked`), qui et quand, avec la référence du dépôt ; rien ne
+s'y efface. Contrat : `YearView` (`state`, `closed_by`, `reopened_by`,
+`core_closed_at`, `closable?`, `reopenable?`, `locked?`), `year_history`
+(`YearChangeView`).
+
+Migration liberal 0006 : colonnes et historique, contrainte
+`liberal_year_state_check` (`open` sans date de clôture, `locked` si et
+seulement si transmise), `liberal_register_guard` et
+`liberal_adjustment_guard` refusent toute écriture dans un exercice dont
+l'état n'est pas `open` (au lieu d'une année seulement transmise),
+`liberal_year_guard` refuse en base de rouvrir un exercice verrouillé ou de
+supprimer un exercice clôturé ; une année transmise avant la migration
+devient `locked`, clôturée à la date de sa transmission. Retour :
+déclencheurs de la migration 0003. Le verrou consultatif
+`hashtext('liberal_year')` sérialise clôture, réouverture et transmission
+avec les écritures en cours.
+
+Specs : `spec/liberal/year_closing_spec.cr` (ouvert → clôturé → ouvert →
+clôturé → verrouillé, chaque passage tracé ; refus de rouvrir un exercice
+verrouillé, par le contrat comme en base ; rejet → clôturé ; deux exercices
+indépendants ; refus sans objet ; droit de saisie),
+`spec/liberal/changes_spec.cr`, `spec/liberal/access_spec.cr`.
+
+*Alternative écartée.* Rouvrir par une permission dédiée : un droit de plus
+pour un geste que la saisie couvre déjà.
+
+=== D-LIB5-002 — Verrou par la transmission ; le rejet rend l'exercice clôturé (liberal ; remplace le rejet de D-LIB2-003 ; événements adoptés)
+
+*Choix.* `tax_return.transmitted` verrouille l'exercice (`locked`, date,
+référence du dépôt, empreintes) ; `tax_return.rejected` du même dépôt lève
+le verrou et rend l'exercice *clôturé*, non plus ouvert : le professionnel
+le rouvre pour corriger, le clôture et renvoie. Une transmission notée sur
+un exercice encore ouvert (réouverture concurrente, ou extension qui
+n'exigerait pas la clôture) le clôture d'office, au nom de l'auteur de la
+transmission, puis le verrouille : l'abonné ne refuse jamais, la
+transmission a déjà eu lieu.
+
+*Amendement.* Les deux événements `tax_return.transmitted` et
+`tax_return.rejected` (ADR-003 D7) sont *adoptés par l'utilisateur le
+1er octobre 2026* ; ADR-003 D7 et D-LIB2-003 le disent désormais, au lieu
+de « par extension de D-MIC2-003 ».
+
+=== D-LIB5-003 — La 2035 se transmet sur un exercice clôturé : `partiduo-teledec` l'exige (teledec)
+
+*Choix.* Exiger la clôture plutôt que clôturer d'office : la clôture est
+un geste conscient du professionnel, qui voit et peut encore rouvrir ce
+qu'il va déclarer ; une clôture d'office à l'envoi passerait inaperçue et
+ferait d'un clic d'envoi un verrou sur des lignes encore en chantier. Côté
+`partiduo-teledec` (`Teledec::TaxReturns.open_year_errors`, lecture de
+`Liberal.year`) : une liasse qui joint la 2035 d'un exercice ouvert porte le
+contrôle bloquant `teledec.controls.liberal_year_open` ; `transmit` et
+`record_outcome` (transmission notée à la main) refusent avec
+`teledec.errors.filing.liberal_year_open` (fr, en, nl). Côté module : le
+contrôle `liberal.controls.year_open` (avertissement de la 2035) dit
+désormais « exercice non clôturé : le clôturer avant de transmettre » ; il
+disparaît une fois l'exercice clôturé, même si le socle ne l'est pas.
+Rouvert après la préparation puis corrigé, l'exercice doit être de nouveau
+clôturé, et la liasse préparée de nouveau (empreinte changée).
+
+Specs : `partiduo-teledec/spec/teledec/liberal_freeze_spec.cr` (refus d'un
+exercice ouvert, par l'API comme à la main ; verrou ; rejet → clôturé,
+rouvert, corrigé, renvoyé ; dépôt noté à la main avec la Comptabilité),
+`liberal_only_spec.cr`.
+
+*Alternative écartée.* Clôture d'office à la transmission (gardée
+seulement comme filet de l'abonné, D-LIB5-002).
+
+=== D-LIB5-004 — Clôture au socle et Comptabilité (liberal, comptabilité)
+
+*Choix.* La clôture de l'exercice libéral est propre au module : elle ne
+clôt aucune période du socle et ne publie aucun événement ; la
+Comptabilité n'a rien à passer (les écritures de trésorerie suivent déjà
+chaque ligne) et peut encore passer ses écritures d'inventaire.
+La clôture au socle (`close_fiscal_year`, ou toutes les périodes de
+l'année closes, en pratique par la Comptabilité) reste un verrou de plus :
+l'exercice est alors *clôturé* (`core_closed_at`) et le module ne le
+rouvre pas (`year.reopen.core_closed`) — une période close au socle ne se
+rouvre jamais par le libéral ; une période close au milieu d'un exercice
+ouvert fige les lignes de cette période seulement. Quand la Comptabilité
+est active, le professionnel clôture et rouvre son exercice librement tant
+que le comptable n'a pas clos les périodes ; ensuite seul le verrou du
+socle compte, puis celui de la transmission.
+
+*Réouverture.* Rien à défaire : les écritures restent en vigueur ; les
+lignes redeviennent modifiables et l'abonné de la Comptabilité suit leurs
+modifications et suppressions (`liberal.*.updated`, `liberal.*.deleted`,
+D-LIB2-002). Spec : `spec/integration/liberal_changes_spec.cr` (clôture et
+réouverture sans écriture, modification et suppression suivies après
+réouverture, invariant « une écriture en vigueur par ligne », verrou, socle
+clos non rouvert).
+
+*Limite.* Un encaissement de la Facturation daté dans un exercice figé est
+inscrit à la date du jour (D-LIB2-001) ; si l'exercice en cours est
+lui-même clôturé (cessation d'activité), il n'est pas inscrit et l'échec
+est consigné : rouvrir l'exercice, puis saisir la recette.
+
+=== D-LIB5-005 — Interface : « Clôturer l'exercice », « Rouvrir l'exercice », verrou (interface ; complète D-LIB2-006)
+
+*Choix.* Livre-journal (mode complet), recettes et dépenses (mode
+simplifié) et 2035 : bouton « Clôturer l'exercice » (exercice ouvert) ou
+« Rouvrir l'exercice » (clôturé par le module, 2035 non transmise), parmi
+les actions de la page, avec confirmation (`data-pd-confirm`, ce que
+change le geste) et nom accessible avec l'année (« Clôturer l'exercice
+2026 ») ; rien pour un exercice verrouillé ou clos au socle, ni sans le
+droit de saisie. POST `/liberal/years/<année>/close` et `/reopen`, retour à
+la page d'origine (`next`, chemin du site), message de succès ou refus du
+contrat. En-tête d'exercice : « ouvert, modifiable », « clôturé le … par
+… », « 2035 transmise le … — verrouillé », cadenas dès qu'il est clôturé ;
+2035 : état en tête (« Clôturez l'exercice avant de transmettre la
+2035 », « … rouvrez l'exercice tant que la 2035 n'est pas transmise »,
+« … avec l'exercice du dossier », « … — exercice verrouillé »), rubrique
+« Clôtures et réouvertures » (date, opération, auteur). Ligne d'un
+exercice clôturé : explication et refus « le rouvrir pour modifier la
+ligne ». Tableau de bord : « clôturez l'exercice, puis déposez-la ».
+Icône Lucide `lock-open` ajoutée. fr, en, nl ; boutons de page (44 px au
+téléphone). Spec : `partiduo-ui-bulma/spec/ui/liberal_year_closing_spec.cr`.
+
+Démonstration (`partiduo-demo`, dossier `liberal`) : exercice précédent
+clôturé puis sa 2035 transmise au TELEDEC simulé (verrouillé), exercice en
+cours ouvert.
+
+Bases de test : `partiduo_test_lib5_app`, `partiduo_test_lib5_ui`,
+`partiduo_test_lib5_teledec`, `partiduo_test_lib5_demo`, supprimées à la
+fin.
+
+*Vérification.* `partiduo-app` : `scripts/specs-modules.sh --order random`,
+huit configurations vertes (dont `liberal` : 834 exemples, et
+`liberal,accounting` : 1 102 exemples) ; `partiduo-ui-bulma` : 403
+exemples verts ; `partiduo-teledec` : 248 exemples verts (8 en attente :
+suite du stage, sans réseau) ; `partiduo-demo` : spec verte (7 exemples) ;
+Ameba sans remarque ; planche d'icônes à jour. Vérifié dans le navigateur
+intégré sur le dossier `liberal` de `partiduo-demo` (thème sombre) :
+dépenses 2026 « ouvert, modifiable » ; « Clôturer l'exercice »
+(confirmation) → « clôturé le … par Camille Rivière », cadenas,
+« Contre-passer » à la place de Modifier et Supprimer ; « Rouvrir
+l'exercice » → de nouveau ouvert ; reclôturé depuis la 2035, historique
+« Clôtures et réouvertures » ; 2025 « 2035 transmise le … — verrouillé »,
+sans bouton « Rouvrir » ni « Clôturer », historique « Clôture » puis
+« 2035 transmise : exercice verrouillé » ; au téléphone (375 px), pas de
+défilement horizontal de la page, bouton de 44 px au nom accessible
+« Rouvrir l'exercice 2026 ».
