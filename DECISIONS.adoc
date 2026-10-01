@@ -13651,3 +13651,124 @@ garde le droit facultatif (repli sans lui, dépôt au greffe refusé par
 (suite du stage et exploration en attente : sans réseau dans le bac à
 sable) ; Ameba sans remarque ; `crystal tool format`. Bases
 `partiduo_test_tdc11_*`, supprimées.
+
+=== D-TDC12-001 — Droit `liste-declarations` demandé par l'adaptateur, facultatif (T12:teledec ; complète D-TDC11-003)
+
+*Contexte.* Troisième exploration du stage (1er octobre 2026) : les droits
+`stage/liste-declarations` et `stage/mes-declarations` sont *accordés*,
+seuls ou avec ceux de l'adaptateur ; la réponse du jeton n'a pas de champ
+`scope`.
+
+*Choix.* `liste-declarations` rejoint les droits de l'adaptateur réel
+(`HttpTransport::SCOPES`), *facultatif* comme `nouvelle-declaration`
+(`OPTIONAL_SCOPES`) : sur `invalid_scope`, le jeton est redemandé sans
+les droits facultatifs, et seul ce qui les exige s'en passe. Lecture de la
+liste par `GET /service/declarations?siren=…&email=…` (paramètres de la
+documentation « API - Liste des déclarations » ; `email` : compte de
+l'entreprise en marque blanche), `HttpTransport#declarations` : 404 =
+liste vide, droit absent = `teledec.errors.transport.scope`. Chaque
+déclaration est réduite à `Remote::Formats::Listed` (identifiant, type,
+dates, statut, libellé) : les liens temporaires de la réponse
+(`lienDeclaration`, PDF, EDI, accusé : ils portent un jeton) ne sont ni
+gardés ni journalisés. `mes-declarations` (route navigateur) n'est pas
+demandé : l'adaptateur n'en a pas l'usage.
+
+*Vérification.* Specs : droit demandé, repli sans lui si refusé (le dépôt
+introuvable reste alors `notfound`, liste jamais interrogée) ; aucun jeton
+de la liste dans le dépôt ni dans son historique.
+
+=== D-TDC12-002 — La DAS2 est suivie sous la déclaration `liasse` de son année (T12:teledec)
+
+*Contexte.* Sur le stage, après le dépôt d'une DAS2 seule (ISRS, régime
+dans l'identité), `GET /service/declarations` liste aussitôt *une*
+déclaration de type `Liasse`, exercice 2025 (`dateDebut` 2025-01-01,
+`dateFin` 2025-12-31), statut `Created` : chez TELEDEC, la DAS2 est
+rattachée à la déclaration « Liasse » de l'exercice. `declaration-status`
+répond 400 avec `formulaire=Liasse` (« utilisez … "liasse" pour une liasse
+fiscale ») et 404 avec `formulaire=DAS2` ; `formulaire=liasse` n'a pas été
+essayé. Une liasse par l'API Balance n'est pas listée (aussitôt ni 30 s
+après) : elle n'existerait qu'à l'ouverture de son lien. L'ouverture du
+lien de la DAS2 (303 vers `/declaration/<id>`, page « Mes déclarations »)
+ne change ni le suivi (404 sous `DAS2`) ni la liste (`Created`).
+
+*Choix.* Le suivi d'une DAS2 interroge `declaration-status` avec
+`formulaire=liasse` et `date_fin` au 31 décembre de son année civile
+(`Remote::Formats.tracking`), comptes-rendus de même ; un 400 y vaut
+« introuvable » (sauf « Utilisateur non trouvé », qui reste une erreur de
+compte). Les comptes-rendus et rappels d'une DAS2 sont admis sous le type
+`Part` ou `Liasse` (`DECLARATION_TYPES`). Dans la liste, la DAS2 se cherche
+sous le type `Liasse` et la date de fin de son suivi (`LISTED_TYPES`,
+`find_listed`). Le simulateur reproduit ce rattachement (404 sous `DAS2`,
+400 sous `Liasse`, DAS2 trouvée sous `liasse`).
+
+*Limite.* Si l'entreprise dépose aussi sa liasse de la même année par
+TELEDEC, DAS2 et liasse partagent sans doute la même déclaration : son
+état vaut pour les deux ; la liste, ambiguë (deux déclarations du même
+type et de la même date), ne tranche alors pas (`find_listed` rend `nil`).
+Le simulateur suppose que le suivi sous `liasse` rend alors le dernier des
+deux dépôts (ce que la démonstration `partiduo-demo` exerce : liasse puis
+DAS2 de 2025, toutes deux accusées). À confirmer (quatrième série,
+D-TDC12-004) ; si les comptes-rendus de la déclaration partagée portent la
+référence de la liasse, la DAS2 resterait en attente (référence d'un autre
+envoi) : à revoir alors.
+
+=== D-TDC12-003 — Secours par la liste des déclarations pour tout dépôt introuvable par le suivi ; état `Created` (T12:teledec ; complète D-TDC11-002)
+
+*Choix.* Tout dépôt que `declaration-status` ne trouve pas (404, ou 400
+pour la DAS2) est cherché dans la liste des déclarations de l'entreprise
+(droit `liste-declarations` présent) : déclaration du type de sa sorte et
+de la date de fin de son suivi, *une seule* (plusieurs, par exemple des
+acomptes d'IS d'un même exercice, la liste ne portant pas d'échéance :
+rien n'est conclu). Son `status` devient l'état brut du dépôt et son `id`
+l'identifiant de la déclaration ; accepté ou rejeté d'après la liste, les
+comptes-rendus sont relevés comme d'habitude (accusé, motif). Liste
+absente, refusée, illisible ou sans la déclaration : `notfound`, jamais une
+erreur (le motif est journalisé par sa seule clé). Même mécanisme pour la
+liasse, le greffe et toute autre sorte.
+
+Tables d'états (`Api::REMOTE_STATUSES`, `teledec.remote_statuses.*`) :
+`created` (« Créée chez TELEDEC, à finaliser », observé sur le stage) et
+`waitingpayment` (« En attente du paiement », cité par la documentation de
+l'API delta) s'ajoutent ; la documentation de la liste ne donne
+qu'`Accepted` en exemple, les autres valeurs (`NotCompleted`, `Sent`,
+`Rejected`…) sont celles du suivi. `Created` est un état en attente
+(`Formats.state`). L'invite « Déclaration à finaliser chez TELEDEC :
+ouvrez-la… » s'affiche tant que l'état est `notfound` ou `created`
+(`Api::AWAITING_STATUSES`).
+
+*Vérification.* Specs (TELEDEC simulé : route `GET /service/declarations`,
+droit exigé, `Created` avant l'ouverture du lien, liasse non listée avant,
+liens temporaires dans la réponse) : DAS2 suivie sous `liasse` ; DAS2
+introuvable → `created`, identifiant de la déclaration noté, aucun lien
+gardé, puis `readytobesent` une fois le lien ouvert ; dépôt jamais suivi
+mais accepté d'après la liste → accusé conservé ; liasse ni suivie ni
+listée → `notfound` puis `notcompleted` ; ambiguïtés de la liste ; écran
+(`created` et `notfound` avec l'invite). Suite du stage : l'exemple DAS2
+vérifie, si le suivi échoue, qu'une déclaration `Liasse` de l'exercice est
+listée.
+
+=== D-TDC12-004 — Exploration du stage, quatrième série (T12:teledec ; remplace D-TDC11-003)
+
+*Choix.* La troisième série (sections 8 à 10), tranchée par D-TDC12-001
+et D-TDC12-002, est retirée de `spec/integration/exploration_spec.cr` (un
+commentaire y renvoie). Deux sections la remplacent, mêmes règles (stage
+seulement, rien vers la DGFiP, entreprises fictives distinctes
+`998<série>70` et `71`, journal expurgé, tableau en fin d'exécution,
+fichier 0600) :
+
+. *Suivi DAS2* (S0 à S2) : DAS2 déposée, puis `declaration-status` avec
+  `formulaire=liasse` et `date_fin=2025-12-31` aussitôt, puis le suivi de
+  l'adaptateur (liasse, secours par la liste) : état, statut brut,
+  identifiant de la déclaration.
+. *Liasse ouverte* (B0 à B3) : liasse par l'API Balance déposée
+  (`creation-entreprise` avant), ouverture de son adresse (`GET` seuls,
+  redirections suivies, garde « stage seulement », rien cliqué), puis
+  liste et `declaration-status` (`formulaire=liasse`) aussitôt et 10 s
+  après.
+
+*Vérification.* `partiduo-teledec` : exemples verts en ordre aléatoire
+(suite du stage et exploration en attente : sans réseau dans le bac à
+sable) ; Ameba sans remarque ; `crystal tool format`. Commande :
+`TELEDEC_EXPLORATION=1 DATABASE_URL=… crystal spec
+spec/integration/exploration_spec.cr`. Bases `partiduo_test_tdc12_*`,
+supprimées.

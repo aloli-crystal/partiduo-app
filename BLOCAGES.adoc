@@ -1403,3 +1403,22 @@ libéral sans Comptabilité et sans balance. En attente : l'amorce du greffe
 (droit `stage/nouvelle-declaration` non attribué par TELEDEC : question en
 attente) et les rappels (suite lancée sans tunnel ; comportement confirmé
 par TELEDEC : envoi, acceptation, rejet).
+
+== Troisième exploration du stage (B-TDC-004, T12:teledec)
+
+*B-TDC-004 mis à jour* (DECISIONS D-TDC12-001 à D-TDC12-004) :
+
+* *Liste des déclarations* — levé : droits `stage/liste-declarations` et
+  `stage/mes-declarations` accordés ; `liste-declarations` est demandé par
+  l'adaptateur (facultatif) et la liste sert de secours au suivi.
+* *Suivi de la DAS2* — en partie levé : TELEDEC rattache la DAS2 à la
+  déclaration « Liasse » de l'exercice (listée `Created` aussitôt après le
+  dépôt) ; l'adaptateur la suit sous `formulaire=liasse` et, à défaut, par
+  la liste. *Reste* : confirmer que `declaration-status` la trouve sous
+  `liasse` (quatrième série, S1 et S2) et ce que deviennent DAS2 et liasse
+  d'une même année dans une seule déclaration.
+* *Liasse par l'API Balance* — non listée aussitôt ni 30 s après :
+  créée, semble-t-il, à l'ouverture de son lien. *Reste* : quatrième
+  série (B0 à B3 : lien ouvert, puis liste et suivi).
+* *Greffe* — inchangé : droit `stage/nouvelle-declaration` en attente de
+  TELEDEC (D-TDC11-004).
