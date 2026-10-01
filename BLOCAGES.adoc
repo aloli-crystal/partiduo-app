@@ -1345,3 +1345,28 @@ posée aussi).
 * *DAS2 seule* — toujours refusée par le stage ; dix variantes à essayer
   par la suite d'exploration (`TELEDEC_EXPLORATION=1`, D-TDC9-007) avant
   toute nouvelle question à TELEDEC.
+
+== Première exploration du stage (B-TDC-004, T10:teledec)
+
+*B-TDC-004 mis à jour* (DECISIONS D-TDC10-001 à D-TDC10-003) :
+
+* *DAS2 seule* — levé pour l'IS réel simplifié : acceptée avec
+  `identity.fullRegimeFiscal: "ISRS"` dans la payload, désormais envoyé
+  par l'adaptateur (D-TDC10-002). *Reste* : les autres régimes, refusés
+  localement (message traduit : à déposer avec un formulaire principal du
+  régime, sur le site de TELEDEC) tant que la deuxième série (D11 à D14)
+  n'a pas montré que le régime dans la payload leur suffit. La DAS2 jointe
+  à une CA3 néant, acceptée, est écartée (fausse déclaration).
+* *Création BICRS* — « Misformatted JSON » : cause probable, la forme
+  `SARL` en clair au lieu du code `SRL` dans la variante ; à confirmer
+  (B1 à B8).
+* *Greffe* — toujours non joué : le service des jetons n'accorde pas
+  `nouvelle-declaration`, que TELEDEC dit avoir activé. La deuxième série
+  (J1 à J5) présente plusieurs noms du droit et affiche la réponse ; si
+  aucun ne passe, question à TELEDEC (nom exact du droit, client
+  concerné).
+* *Suivi après dépôt* — 404 « declaration not found » pour les dépôts
+  acceptés (DAS2, liasse) : délai ou paramètres, départagés par la
+  deuxième série (S1 à S18).
+* *Liasse sans `creation-entreprise`* — `#CREATION-AUTO OUI` ne suffit
+  pas (suivi « Utilisateur non trouvé ») : la création préalable reste.

@@ -13446,3 +13446,96 @@ passent dans `spec/support/sandbox.cr`, partagés. Commande :
 (suite du stage et exploration en attente : sans réseau dans le bac à
 sable) ; Ameba sans remarque ; `crystal tool format`. Base
 `partiduo_test_tdc9_main`, supprimée.
+
+== TELEDEC : première exploration du stage, DAS2 (T10:teledec)
+
+Résultats de la suite d'exploration du stage (D-TDC9-007) lancée par
+l'utilisateur le 1er octobre 2026 (tableau expurgé) ; code dans
+`partiduo-teledec` ; préfixe `D-TDC10-`.
+
+=== D-TDC10-001 — Résultats de la première exploration (T10:teledec)
+
+*Constat.* Refus de la DAS2 seule, message complet de TELEDEC : aucun
+formulaire de TVA, de paiement ou de liasse ; « un des formulaires
+principaux permettant l'identification du régime de l'entreprise n'est pas
+présent », suivi de la liste des formulaires principaux par régime :
+`ISRN` : 3310CA3, 3514, 3519, 2065 et 2050, 2257, 2258 ; `ISRS` :
+3517SCA12, DAS2, 2065 sans le 2050 ; paiement de l'IS : 2571, 2572 ;
+`BICRS` : 2031 ; `BNCDC` : 2035 ; `BICMS` : 2036. Variantes :
+
+* D1 (adaptateur d'alors : entreprise `ISRS`, DAS2 seule, millésime 2026),
+  D2 (sans `period.millesime`), D3 (entreprise sans `fullRegimeFiscal`), D5
+  (entreprise `ISRN`), D7 (période réduite), D8 (après une CA3 néant
+  déposée), D10 (bloc minimal) : *refusées*.
+* *D4 — `identity.fullRegimeFiscal: "ISRS"` dans la payload de la DAS2 :
+  acceptée* (lien rendu).
+* D6 (entreprise `BICRS`) : refusée « Misformatted JSON ». La variante
+  envoyait la forme `SARL` en clair à `creation-entreprise`, où TELEDEC
+  attend son code `SRL` (l'adaptateur, lui, la traduit) : cause probable,
+  isolée par la deuxième série (D-TDC10-003).
+* D9 (DAS2 jointe à une CA3 néant dans la même payload) : acceptée, mais
+  *écartée* : ce serait une fausse déclaration de TVA.
+* Greffe G1 à G5 : non jouées, le service des jetons n'accorde pas le droit
+  `nouvelle-declaration` (TELEDEC dit l'avoir activé).
+* Liasse : L1 (`#CREATION-AUTO OUI` sans `creation-entreprise`) acceptée,
+  mais suivi 400 « Utilisateur non trouvé pour l'email fourni » ; L2
+  (témoin, entreprise créée avant) acceptée. `creation-entreprise` reste
+  donc appelée avant la première liasse (D-TDC9-004 inchangée).
+* Suivi : 404 « declaration not found » juste après chaque dépôt accepté
+  (DAS2 D4, liasse L2) : délai ou paramètres faux, à départager
+  (D-TDC10-003).
+
+=== D-TDC10-002 — DAS2 seule : régime dans l'identité, IS réel simplifié seulement (T10:teledec ; remplace la partie DAS2 de D-TDC6-001 et la marque blanche de D-TDC9-005)
+
+*Choix.* La DAS2 part seule avec `identity.fullRegimeFiscal` = régime de
+l'entreprise (`Formats.das2_regime`), seul cas prouvé sur le stage (D4) ;
+les autres déclarations en marque blanche ne le portent toujours pas
+(TELEDEC le déduit de leurs formulaires). D'après la liste de TELEDEC, la
+DAS2 n'est formulaire principal qu'à l'`ISRS` : pour un autre régime,
+*refus local traduit* avant tout envoi (`teledec.errors.transport.das2_alone` :
+« DAS2 seule non acceptée par TELEDEC pour le régime X : à déposer avec
+un formulaire principal du régime (…) », formulaires de la liste ;
+`das2_alone_unlisted` pour un régime que la liste ne nomme pas, `BICRN`,
+`RF72S`), et sans régime choisi (`das2_tax_system`) ; le même refus est un
+contrôle bloquant dès la préparation (`teledec.controls.*`), fr, en, nl.
+*Jamais* de déclaration vide ou néant ajoutée pour accompagner la DAS2
+(D9 écartée). Si la deuxième série montre que le régime dans la payload
+suffit pour d'autres régimes, `DAS2_ALONE_REGIMES` s'élargira.
+
+*Vérification.* Specs du format (régime `ISRS` envoyé, refus par régime,
+traductions), de la préparation (contrôles bloquants) et du schéma
+`DAS2-2026` ; exemple DAS2 de la suite du stage corrigé (régime vérifié
+avant l'appel).
+
+=== D-TDC10-003 — Exploration du stage, deuxième série (T10:teledec ; complète D-TDC9-007)
+
+*Choix.* Nouvelles sections de `spec/integration/exploration_spec.cr`,
+mêmes règles (stage seulement, rien vers la DGFiP, entreprises fictives
+distinctes, journal expurgé, tableau en fin d'exécution, fichier 0600) :
+
+. *DAS2 hors ISRS* (D11 à D14) : `identity.fullRegimeFiscal` `ISRN`,
+  `BICRS`, `BICRN`, `BNCDC`, entreprise créée au même régime (forme
+  codée : `SAS`, `SRL`, `EI`) ; un refus de création est nommé comme tel.
+. *Création BICRS* (B1 à B8, création seule) : forme `SARL` en clair
+  (comme D6) ou `SRL`, `SAS`, `EI`, sans `legalForm`, sans
+  `regimeFiscalTVA`, témoin `ISRS` + `SARL` en clair, `BICRN`.
+. *Jeton du greffe* (J1 à J5) : `stage/nouvelle-declaration` avec ou sans
+  les autres droits, `nouvelle-declaration` sans préfixe,
+  `stage/nouvelle_declaration`, `stage/nouvelleDeclaration` ; réponse du
+  service des jetons affichée sans le jeton (statut, erreur, droits
+  annoncés) ; G1 à G5 rejouées avec le premier nom accordé.
+. *Suivi* (S0 à S18) : DAS2 `ISRS` et liasse acceptées, relues avec les
+  paramètres de l'adaptateur après 0, 10, 30 et 60 s, puis avec
+  `date_echeance`, `formulaire` `Part`/`das2`/`2065`/`2033`, `date_fin` à
+  l'échéance ou au format `31/12/2025`, SIRET, email du partenaire ou
+  sans email ; enfin `GET /service/declarations` (liens retirés) pour voir
+  sous quelles dates et quel formulaire TELEDEC range le dépôt.
+
+Commande inchangée : `TELEDEC_EXPLORATION=1 DATABASE_URL=… crystal spec
+spec/integration/exploration_spec.cr` (environ deux minutes de plus,
+attentes du suivi comprises).
+
+*Vérification.* `partiduo-teledec` : exemples verts en ordre aléatoire
+(suite du stage et exploration en attente : sans réseau dans le bac à
+sable) ; Ameba sans remarque ; `crystal tool format`. Bases
+`partiduo_test_tdc10_*`, supprimées.
