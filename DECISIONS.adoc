@@ -9710,7 +9710,7 @@ fichiers orphelins et ne signale pas les pièces manquantes.
 `instance` échouerait à la sauvegarde préalable (le binaire de l'ancienne
 version n'a pas `backup-plan`) ; aucune instance n'est déployée, sans effet.
 
-=== D-CLI-007 — Certificat Let's Encrypt par instance, vhost d'amorçage (chemins FreeBSD : D-PKG-002)
+=== D-CLI-007 — Certificat Let's Encrypt par instance, vhost d'amorçage (chemins FreeBSD : D-PKG-002 ; certbot remplacé par acme.sh : D-PKG-007)
 
 *Contexte.* ADR-001 D2 retient un certificat *par instance* ; les gabarits du
 lot 0 pointaient sur un certificat générique `*.<domaine>`.
@@ -13112,7 +13112,8 @@ paquet range ses fichiers statiques à côté du serveur),
 à une minute tirée du port pour étaler le parc), le vhost
 `/usr/local/etc/nginx/partiduo/<dossier>.conf` et le certificat
 (`/usr/local/etc/letsencrypt`, webroot `/usr/local/www/letsencrypt`,
-`--deploy-hook 'service nginx reload'`). La ligne de commande Marten par
+`--deploy-hook 'service nginx reload'` ; certbot remplacé par acme.sh,
+certificat dans `/usr/local/etc/ssl/acme` : D-PKG-007). La ligne de commande Marten par
 défaut est celle du paquet.
 
 *Limite.* Le durcissement de l'unité systemd (`ProtectSystem`,
@@ -13226,3 +13227,37 @@ Une seule administration et un seul exécutant par serveur : leurs variantes
 doublures (installation rejouable, `cli` avec paquet détecté, explicite ou
 contradictoire, service, sauvegarde, retrait), typage. Rien n'a encore
 tourné sur un serveur FreeBSD.
+
+=== D-PKG-007 — Certificats des instances par acme.sh, comme le parc beryl
+
+*Contexte.* D-CLI-007 et D-PKG-002 obtenaient le certificat de chaque
+instance par certbot (`py-certbot`, renouvellement par `periodic`). Les
+serveurs FreeBSD sont gérés par beryl, qui a remplacé certbot par acme.sh
+(recette `acme` : pas de Python sur les serveurs) ; certbot n'y est plus
+installé. D-CLI-007 et D-PKG-002 sont révisées sur ce point.
+
+*Choix.* Partiduo émet, installe, renouvelle et retire le certificat de
+chaque instance (toujours un par instance, ADR-001 D2, défi HTTP-01 par le
+webroot `/usr/local/www/letsencrypt`) par acme.sh, avec les conventions de
+la primitive beryl `acme-cert` : `/usr/local/sbin/acme.sh`, home
+`/usr/local/etc/acme.sh` (celui du cron de renouvellement de la recette
+`acme`, installé par beryl et non par Partiduo), clé `ec-256`. `INSTALL.txt`
+vérifie d'abord la présence d'acme.sh (avec l'include nginx), puis : vhost
+d'amorçage, `--register-account -m <adresse>` si `--acme-email`,
+`--issue --server letsencrypt -d <hôte> -w <webroot>` dont le code 2
+(certificat encore valide) vaut réussite — l'équivalent de
+`--keep-until-expiring`, qui préserve le quota —, `--install-cert --ecc`
+vers `/usr/local/etc/ssl/acme/<hôte>/fullchain.pem` et `privkey.pem` avec
+`--reloadcmd 'service nginx reload'` (persisté, rejoué par le cron), vhost
+définitif pointant sur ces fichiers. `--acme-staging` devient
+`--server letsencrypt_test`. Le retrait (`partiduo-fleet retire`, enveloppe
+racine de `partiduo-admin`) fait `acme.sh --remove -d <hôte> --ecc` puis
+supprime `/usr/local/etc/ssl/acme/<hôte>`. Dans `partiduo-admin`, l'outil
+`CERTBOT` des enveloppes devient `ACME_SH` (surchargeable dans
+`helpers.conf`), et l'échéance se lit sur le nouveau `fullchain.pem`.
+
+*Vérification.* Branche `freebsd` : `spec/deploy/scripts_spec.cr` (sans
+base) ; dans `partiduo-admin`, `sh -n` et shellcheck des enveloppes, essai
+réel des gestes avec une doublure d'acme.sh (installation, rejeu sans
+réémission, retrait, échéance), typage. Ni acme.sh ni Let's Encrypt n'ont
+encore été essayés sur un serveur FreeBSD.

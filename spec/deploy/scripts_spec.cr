@@ -67,7 +67,8 @@ describe "bin/partiduo-provision" do
       File.exists?(File.join(dir, "dupont", "partiduo-dupont.service")).should be_false
 
       # Un certificat Let's Encrypt par instance (ADR-001 D2), obtenu en HTTP-01.
-      vhost.should contain("ssl_certificate     /usr/local/etc/letsencrypt/live/dupont.partiduo.localhost/fullchain.pem;")
+      vhost.should contain("ssl_certificate     /usr/local/etc/ssl/acme/dupont.partiduo.localhost/fullchain.pem;")
+      vhost.should contain("ssl_certificate_key /usr/local/etc/ssl/acme/dupont.partiduo.localhost/privkey.pem;")
       vhost.should contain("location ^~ /.well-known/acme-challenge/ {\n    root /usr/local/www/letsencrypt;")
       acme = File.read(File.join(dir, "dupont", "dupont.acme.nginx.conf"))
       acme.should contain("server_name dupont.partiduo.localhost;")
@@ -76,22 +77,35 @@ describe "bin/partiduo-provision" do
       install = File.read(File.join(dir, "dupont", "INSTALL.txt"))
       install.should start_with("# Installation")
       install.should contain("\nset -eu\n")
-      install.should contain("certbot certonly --webroot -w /usr/local/www/letsencrypt -d dupont.partiduo.localhost " \
-                             "--cert-name dupont.partiduo.localhost --keep-until-expiring")
-      install.should contain("--deploy-hook 'service nginx reload'")
+      # Par acme.sh, comme le parc beryl (D-PKG-007) : émission, puis installation
+      # avec le rechargement de nginx que le cron d'acme.sh rejoue au renouvellement.
+      install.should contain("/usr/local/sbin/acme.sh --issue --server letsencrypt -d dupont.partiduo.localhost " \
+                             "-w /usr/local/www/letsencrypt --home /usr/local/etc/acme.sh --keylength ec-256 || rc=$?")
+      # Code 2 : certificat encore valide, pas de réémission (quota).
+      install.should contain(%(if [ "$rc" != 0 ] && [ "$rc" != 2 ]; then))
+      install.should contain("install -d -m 755 /usr/local/etc/ssl/acme/dupont.partiduo.localhost\n")
+      install.should contain("/usr/local/sbin/acme.sh --install-cert -d dupont.partiduo.localhost --ecc --home /usr/local/etc/acme.sh \\\n" \
+                             "  --fullchain-file /usr/local/etc/ssl/acme/dupont.partiduo.localhost/fullchain.pem " \
+                             "--key-file /usr/local/etc/ssl/acme/dupont.partiduo.localhost/privkey.pem \\\n" \
+                             "  --reloadcmd 'service nginx reload'")
+      install.should_not contain("certbot")
       # Service FreeBSD : une instance de plus pour le script rc.d du paquet.
       install.should contain("*) sysrc partiduo_instances+=\" dupont\" ;;")
       install.should contain("service partiduo start dupont")
       install.should contain("install -m 644 partiduo-dupont.cron /usr/local/etc/cron.d/partiduo-dupont")
       install.should contain("/usr/local/etc/nginx/partiduo/dupont.conf")
       install.should_not contain("systemctl")
-      # Prérequis nginx vérifié avant toute modification.
+      # Prérequis (acme.sh, include nginx) vérifiés avant toute modification.
+      install.should contain("if [ ! -x /usr/local/sbin/acme.sh ]; then")
+      install.index!("/usr/local/sbin/acme.sh ]").should be < install.index!("install -d -o root")
       install.index!("include partiduo/*.conf").should be < install.index!("install -d -o root")
-      install.should contain("--register-unsafely-without-email")
-      install.should_not contain("--test-cert")
-      # Vhost d'amorçage avant certbot, vhost définitif après.
-      install.index!("dupont.acme.nginx.conf").should be < install.index!("certbot certonly")
-      install.index!("certbot certonly").should be < install.index!("install -m 644 dupont.nginx.conf")
+      # Sans adresse, pas d'enregistrement explicite du compte ACME.
+      install.should_not contain("--register-account")
+      install.should_not contain("letsencrypt_test")
+      # Vhost d'amorçage avant l'émission, installation, puis vhost définitif.
+      install.index!("dupont.acme.nginx.conf").should be < install.index!("acme.sh --issue")
+      install.index!("acme.sh --issue").should be < install.index!("acme.sh --install-cert")
+      install.index!("acme.sh --install-cert").should be < install.index!("install -m 644 dupont.nginx.conf")
 
       # Le port suivant est libre.
       _, second, _ = sh("bin/partiduo-provision", "--dry-run", "--name=X", "--regime=fr", "--output-dir", dir, "martin")
@@ -106,8 +120,10 @@ describe "bin/partiduo-provision" do
       code.should eq(0)
       output.should contain("certificat Let's Encrypt pour durand.partiduo.localhost (autorité de test)")
       install = File.read(File.join(dir, "durand", "INSTALL.txt"))
-      install.should contain("--email ops@aloli.example --test-cert")
-      install.should contain("-w /srv/acme")
+      install.should contain("/usr/local/sbin/acme.sh --register-account -m ops@aloli.example " \
+                             "--server letsencrypt_test --home /usr/local/etc/acme.sh\n")
+      install.should contain("acme.sh --issue --server letsencrypt_test -d durand.partiduo.localhost -w /srv/acme ")
+      install.index!("--register-account").should be < install.index!("acme.sh --issue")
       File.read(File.join(dir, "durand", "durand.nginx.conf")).should contain("root /srv/acme;")
     end
     sh("bin/partiduo-provision", "--dry-run", "--acme-email", "pas une adresse", "dossier").first.should eq(1)
@@ -193,6 +209,11 @@ describe "deploy/bin/partiduo-fleet" do
       _, retire, _ = sh("deploy/bin/partiduo-fleet", config, "retire", "gamma")
       retire.should contain("sysrc partiduo_instances-=gamma")
       retire.should contain("rm -f /usr/local/etc/nginx/partiduo/gamma.conf")
+      retire.should contain("sudo /usr/local/sbin/acme.sh --remove -d gamma.compta.example --ecc --home /usr/local/etc/acme.sh || true")
+      retire.should contain("sudo rm -rf /usr/local/etc/ssl/acme/gamma.compta.example")
+      retire.index!("nginx/partiduo/gamma.conf").should be < retire.index!("acme.sh --remove")
+      retire.index!("acme.sh --remove").should be < retire.index!("rm -rf /usr/local/etc/ssl/acme/")
+      retire.should_not contain("certbot")
 
       _, inventory, _ = sh("deploy/bin/partiduo-fleet", config, "inventory")
       inventory.lines.size.should eq(5)

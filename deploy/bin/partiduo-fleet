@@ -280,8 +280,10 @@ cmd_retire() {
   remote "$server" "$SUDO service $rc stop $dossier || true"
   remote "$server" "$SUDO sysrc ${rc}_instances-=$dossier && $SUDO rm -f /usr/local/etc/cron.d/partiduo-$dossier"
   remote "$server" "$SUDO rm -f /usr/local/etc/nginx/partiduo/$dossier.conf && $SUDO nginx -t && $SUDO service nginx reload"
-  # Le vhost retiré, le renouvellement du certificat échouerait.
-  remote "$server" "$SUDO certbot delete --cert-name $dossier.$PARTIDUO_DOMAIN --non-interactive || true"
+  # Le vhost retiré, le renouvellement du certificat échouerait : acme.sh
+  # l'oublie (fin du renouvellement), puis le certificat installé est supprimé.
+  remote "$server" "$SUDO /usr/local/sbin/acme.sh --remove -d $dossier.$PARTIDUO_DOMAIN --ecc --home /usr/local/etc/acme.sh || true"
+  remote "$server" "$SUDO rm -rf /usr/local/etc/ssl/acme/$dossier.$PARTIDUO_DOMAIN"
   local_run "sed -i.bak '/^$dossier[[:space:]]/d' '$INVENTORY' && rm -f '$INVENTORY.bak'"
 }
 

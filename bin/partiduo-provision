@@ -12,7 +12,9 @@
 #      quotidienne de l'instance, et des commandes d'installation sur un
 #      serveur FreeBSD (paquet partiduo-app ou partiduo-app-devel, script
 #      rc.d du paquet), dont l'obtention du certificat TLS Let's Encrypt de
-#      l'instance (ADR-001 D2 : un certificat par instance)
+#      l'instance par acme.sh (ADR-001 D2 : un certificat par instance ;
+#      acme.sh et son cron de renouvellement viennent de la recette beryl
+#      `acme`)
 #
 # Rien n'est installé sur le système : les fichiers générés et les commandes
 # d'installation sont écrits dans <sortie>/<dossier>/ (INSTALL.txt). Leur
@@ -71,13 +73,14 @@ Base et service :
   --system-user NOM       compte système du service (défaut : partiduo)
   --output-dir RÉP        où écrire les fichiers générés (défaut : ./tmp/instances)
 
-Certificat TLS (Let's Encrypt, un par instance, défi HTTP-01) :
+Certificat TLS (Let's Encrypt par acme.sh, un par instance, défi HTTP-01) :
   --acme-email ADRESSE    compte ACME (défaut : $PARTIDUO_ACME_EMAIL ; sans
-                          adresse, compte sans courriel)
+                          adresse, acme.sh enregistre un compte sans courriel)
   --acme-webroot RÉP      répertoire des défis servi par nginx
                           (défaut : /usr/local/www/letsencrypt)
-  --acme-staging          autorité de test de Let's Encrypt (--test-cert) :
-                          n'entame pas le quota de 50 certificats par semaine
+  --acme-staging          autorité de test de Let's Encrypt (acme.sh --server
+                          letsencrypt_test) : n'entame pas le quota de 50
+                          certificats par semaine
   --manage COMMANDE       ligne de commande Marten de la distribution
                           (défaut : $PARTIDUO_MANAGE, sinon celle du paquet,
                           /usr/local/bin/partiduo-manage ou partiduo-devel-manage,
@@ -379,16 +382,23 @@ render "$TEMPLATES/nginx-acme.conf.tmpl" "$INSTANCE_DIR/$DOSSIER.acme.nginx.conf
 render "$TEMPLATES/nginx-vhost.conf.tmpl" "$INSTANCE_DIR/$DOSSIER.nginx.conf"
 render "$TEMPLATES/partiduo-instance.cron.tmpl" "$INSTANCE_DIR/partiduo-$DOSSIER.cron"
 
-# Certificat de l'instance : compte ACME, autorité de test éventuelle. Un
-# certificat encore valide n'est pas réémis (--keep-until-expiring) : rejouer
-# l'installation n'entame pas le quota Let's Encrypt du domaine.
-if [ -n "$ACME_EMAIL" ]; then
-  ACME_ACCOUNT="--email $(quote "$ACME_EMAIL")"
+# Certificat de l'instance, par acme.sh (conventions du parc beryl, recette
+# `acme`) : autorité de production ou de test, compte ACME avec adresse
+# éventuel. Un certificat encore valide n'est pas réémis (acme.sh --issue
+# rend 2) : rejouer l'installation n'entame pas le quota Let's Encrypt du
+# domaine.
+ACME_SH=/usr/local/sbin/acme.sh
+ACME_HOME=/usr/local/etc/acme.sh
+ACME_CERT_DIR="/usr/local/etc/ssl/acme/$HOST"
+if [ "$ACME_STAGING" = 1 ]; then
+  ACME_SERVER=letsencrypt_test
 else
-  ACME_ACCOUNT="--register-unsafely-without-email"
+  ACME_SERVER=letsencrypt
 fi
-ACME_TEST=""
-[ "$ACME_STAGING" = 0 ] || ACME_TEST=" --test-cert"
+ACME_ACCOUNT=""
+[ -z "$ACME_EMAIL" ] ||
+  ACME_ACCOUNT="$ACME_SH --register-account -m $(quote "$ACME_EMAIL") --server $ACME_SERVER --home $ACME_HOME
+"
 echo "+ certificat Let's Encrypt pour $HOST ($([ "$ACME_STAGING" = 1 ] && echo 'autorité de test' || echo 'production'))"
 
 INSTALL="$INSTANCE_DIR/INSTALL.txt"
@@ -397,10 +407,16 @@ if [ "$DRY_RUN" = 0 ]; then
 # Installation de l'instance $DOSSIER ($HOST) — à exécuter sur le serveur,
 # en root, depuis ce répertoire (sh INSTALL.txt). partiduo-provision ne l'a
 # PAS fait. Le certificat TLS est propre à l'instance (ADR-001 D2) : le vhost
-# d'amorçage sert le défi ACME, certbot obtient le certificat, puis le vhost
-# définitif le remplace. Quota : 50 certificats par semaine pour le domaine.
+# d'amorçage sert le défi ACME, acme.sh obtient et installe le certificat,
+# puis le vhost définitif le remplace ; le cron d'acme.sh (recette beryl
+# \`acme\`) le renouvelle. Quota : 50 certificats par semaine pour le domaine.
 set -eu
-# Prérequis, vérifié avant toute modification : nginx lit les vhosts des instances.
+# Prérequis, vérifiés avant toute modification : acme.sh est installé (recette
+# beryl \`acme\`) et nginx lit les vhosts des instances.
+if [ ! -x $ACME_SH ]; then
+  echo "$ACME_SH absent : installez acme.sh (recette beryl « acme »), puis relancez." >&2
+  exit 1
+fi
 if ! grep -Eq '^[[:space:]]*include[[:space:]]+partiduo/\*\.conf;' /usr/local/etc/nginx/nginx.conf; then
   echo "nginx.conf : ajoutez « include partiduo/*.conf; » dans le bloc http, puis relancez." >&2
   exit 1
@@ -418,12 +434,21 @@ service $RC_NAME start $DOSSIER
 # Tâches quotidiennes (cron(8), champ utilisateur).
 install -d -m 755 /usr/local/etc/cron.d
 install -m 644 partiduo-$DOSSIER.cron /usr/local/etc/cron.d/partiduo-$DOSSIER
-# Certificat : vhost d'amorçage (défi HTTP-01), certbot, vhost définitif.
+# Certificat : vhost d'amorçage (défi HTTP-01), acme.sh, vhost définitif.
 install -d -m 755 $ACME_WEBROOT /usr/local/etc/nginx/partiduo
 install -m 644 $DOSSIER.acme.nginx.conf /usr/local/etc/nginx/partiduo/$DOSSIER.conf
-test -f /usr/local/etc/letsencrypt/live/$HOST/fullchain.pem || { nginx -t && service nginx reload; }
-certbot certonly --webroot -w $ACME_WEBROOT -d $HOST --cert-name $HOST --keep-until-expiring \\
-  --non-interactive --agree-tos $ACME_ACCOUNT$ACME_TEST --deploy-hook 'service nginx reload'
+test -f $ACME_CERT_DIR/fullchain.pem || { nginx -t && service nginx reload; }
+${ACME_ACCOUNT}rc=0
+$ACME_SH --issue --server $ACME_SERVER -d $HOST -w $ACME_WEBROOT --home $ACME_HOME --keylength ec-256 || rc=\$?
+# 0 : émis ; 2 : encore valide, rien à faire ; sinon : échec.
+if [ "\$rc" != 0 ] && [ "\$rc" != 2 ]; then
+  echo "acme.sh --issue : échec (code \$rc)" >&2
+  exit "\$rc"
+fi
+install -d -m 755 $ACME_CERT_DIR
+$ACME_SH --install-cert -d $HOST --ecc --home $ACME_HOME \\
+  --fullchain-file $ACME_CERT_DIR/fullchain.pem --key-file $ACME_CERT_DIR/privkey.pem \\
+  --reloadcmd 'service nginx reload'
 install -m 644 $DOSSIER.nginx.conf /usr/local/etc/nginx/partiduo/$DOSSIER.conf
 nginx -t && service nginx reload
 EOF

@@ -21,7 +21,8 @@ PG_OWNER=partiduo                   # rôle propriétaire des bases (CREATEDB)
 # (chemin relatif à ce fichier ; sans version : app).
 INVENTORY=inventory
 
-# Certificats TLS : un certificat Let's Encrypt par instance (ADR-001 D2).
+# Certificats TLS : un certificat Let's Encrypt par instance (ADR-001 D2),
+# obtenu par acme.sh (recette beryl `acme`, D-PKG-007).
 ACME_EMAIL=ops@partiduo.example       # compte ACME (demande de relèvement du quota)
 ACME_WEBROOT=/usr/local/www/letsencrypt  # défis HTTP-01, servis par nginx
 ACME_STAGING=0                        # 1 : autorité de test (n'entame pas le quota)

@@ -97,7 +97,8 @@ voulue (`partiduo-fleet provision` le fait à distance).
   commandes d'installation (script `sh`, `set -eu`) — *non exécutées*.
 
 `--version app|devel` (défaut `app`) choisit le paquet qui sert l'instance.
-`INSTALL.txt` vérifie d'abord que `nginx.conf` inclut `partiduo/*.conf`, puis
+`INSTALL.txt` vérifie d'abord que `acme.sh` est installé
+(`/usr/local/sbin/acme.sh`) et que `nginx.conf` inclut `partiduo/*.conf`, puis
 installe l'environnement (`/usr/local/etc/partiduo/<dossier>.env`,
 root:partiduo, 640), crée `/var/db/partiduo/<dossier>/media`, ajoute l'instance
 au script `rc.d` du paquet (`sysrc partiduo_instances+=" <dossier>"`,
@@ -108,27 +109,41 @@ port), puis le certificat.
 === Certificat TLS : un par instance
 
 ADR-001 D2 retient un certificat Let's Encrypt *par instance* (pas de
-certificat générique). `INSTALL.txt` :
+certificat générique). Il est obtenu par `acme.sh`, comme sur tout le parc
+beryl (pas de Python sur les serveurs, D-PKG-007), avec les conventions de la
+recette beryl `acme` : home `/usr/local/etc/acme.sh`, clé ECDSA (`ec-256`),
+certificat installé dans `/usr/local/etc/ssl/acme/<hôte>/`. `INSTALL.txt` :
 
 . installe le vhost d'amorçage (`/usr/local/etc/nginx/partiduo/<dossier>.conf`,
   HTTP seul, défis ACME sur `--acme-webroot`, défaut
   `/usr/local/www/letsencrypt`) et recharge nginx ;
-. `certbot certonly --webroot -d <dossier>.<domaine> --cert-name <dossier>.<domaine>
-  --keep-until-expiring --deploy-hook 'service nginx reload'` ;
-. installe le vhost définitif (`/usr/local/etc/letsencrypt/live/<dossier>.<domaine>/`)
-  et recharge nginx.
+. avec `--acme-email`, enregistre le compte ACME
+  (`acme.sh --register-account -m <adresse>`) ;
+. `acme.sh --issue --server letsencrypt -d <dossier>.<domaine> -w <webroot>
+  --home /usr/local/etc/acme.sh --keylength ec-256` : code 0, certificat émis ;
+  code 2, certificat encore valide, rien à faire ; tout autre code arrête
+  l'installation ;
+. `acme.sh --install-cert -d <dossier>.<domaine> --ecc --fullchain-file
+  /usr/local/etc/ssl/acme/<dossier>.<domaine>/fullchain.pem --key-file
+  …/privkey.pem --reloadcmd 'service nginx reload'` ;
+. installe le vhost définitif, qui pointe sur ces deux fichiers, et recharge
+  nginx.
 
-Le renouvellement est celui de certbot (`periodic` du paquet
-`py-certbot`), par le même webroot, que le vhost définitif continue de servir.
-`--acme-email` (ou `$PARTIDUO_ACME_EMAIL`) désigne le compte ACME — celui qui
-portera la demande de relèvement de quota (ADR-001 D2) ; sans adresse, compte
-sans courriel.
+Le renouvellement est celui du cron d'acme.sh installé par la recette beryl
+`acme` (`acme.sh --cron --home /usr/local/etc/acme.sh`, deux fois par jour),
+par le même webroot, que le vhost définitif continue de servir ; acme.sh
+rejoue alors le `reloadcmd` enregistré à l'installation. `--acme-email` (ou
+`$PARTIDUO_ACME_EMAIL`) désigne le compte ACME — celui qui portera la demande
+de relèvement de quota (ADR-001 D2) ; sans adresse, acme.sh enregistre un
+compte sans courriel.
 
 *Quota* : 50 nouveaux certificats par semaine pour `partiduo.app`, tous
-comptes confondus. `--keep-until-expiring` ne réémet pas un certificat valide
-quand on rejoue `INSTALL.txt` ; `--acme-staging` utilise l'autorité de test
-(`--test-cert`), hors quota, pour les essais. `partiduo-fleet retire` supprime
-le certificat de l'instance retirée (`certbot delete`).
+comptes confondus. `acme.sh --issue` ne réémet pas un certificat valide
+(code 2) quand on rejoue `INSTALL.txt` ; `--acme-staging` utilise l'autorité
+de test (`--server letsencrypt_test`), hors quota, pour les essais.
+`partiduo-fleet retire` arrête le renouvellement du certificat de l'instance
+retirée (`acme.sh --remove`) et supprime
+`/usr/local/etc/ssl/acme/<dossier>.<domaine>/`.
 
 `--dry-run` affiche les étapes sans rien exécuter. La ligne de commande Marten
 utilisée est `--manage`, sinon `$PARTIDUO_MANAGE`, sinon celle du paquet
@@ -236,7 +251,8 @@ déploiement et une stratégie de migration progressive ». La stratégie retenu
   authentification `peer` ;
 * l'utilisateur ssh de déploiement peut `sudo` (`security/sudo`) ;
 * nginx, dont `nginx.conf` inclut `partiduo/*.conf` dans le bloc `http` ;
-  `py-certbot` ; le DNS de `<dossier>.<domaine>` pointe sur le serveur
+  `acme.sh` (`/usr/local/sbin/acme.sh`) et son cron de renouvellement, par la
+  recette beryl `acme` ; le DNS de `<dossier>.<domaine>` pointe sur le serveur
   (défi HTTP-01) ;
 * `curl` pour le contrôle de santé.
 
