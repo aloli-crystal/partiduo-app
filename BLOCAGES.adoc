@@ -1310,3 +1310,14 @@ de test dans le domaine du partenaire, *liasse acceptée avec la source `API`*
 blanche avec son état. Restent à essayer sur le stage : la DAS2 et les
 relevés d'IS réels, une 2035 sans balance (libéral sans Comptabilité), les
 rappels avec le mot de passe partenaire, et le parcours greffe.
+
+== Stage de TELEDEC le 1er octobre 2026
+
+Suite d'intégration lancée par l'utilisateur depuis son poste : 9 exemples
+du stage réussis sur 10 joués, dont *la 2035 d'un libéral sans Comptabilité,
+sans balance*, acceptée depuis que le régime s'écrit `BNCDC`
+(D-TDC8-001). B-TDC-004 reste ouvert pour *la DAS2 seule*, toujours refusée
+(« aucun formulaire de TVA ou de paiement ou de liasse… ISRN : 3310CA3,
+3514, 3519… ») en attendant la réponse de TELEDEC
+(`.teledec-doc/QUESTIONS-EN-ATTENTE.adoc`), et pour les rappels (question
+posée aussi).
