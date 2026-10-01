@@ -15,7 +15,9 @@ module Partiduo
     # * limitation des tentatives : `failed_attempts`, `last_failed_at`,
     #   `locked_at` (voir `Throttle`) ;
     # * TOTP : `totp_secret` (base32), `last_otp_counter` (anti-rejeu, repassé
-    #   en `after:`), `totp_pending_secret` pendant l'enrôlement.
+    #   en `after:`), `totp_pending_secret` pendant l'enrôlement ;
+    # * `interface` : préférence d'interface de la personne (`simple` ou
+    #   `full`, `nil` tant qu'elle n'a rien choisi, DECISIONS D-AUTH-016).
     class User < MartenAuth::User
       ROLES = %w[member accountant]
 
@@ -41,6 +43,8 @@ module Partiduo
       field :passkey_prompt_dismissed_at, :date_time, null: true, blank: true
       field :last_login_at, :date_time, null: true, blank: true
       field :password_changed_at, :date_time, null: true, blank: true
+
+      field :interface, :string, max_size: 8, null: true, blank: true
 
       def accountant? : Bool
         role == "accountant"

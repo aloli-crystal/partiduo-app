@@ -121,7 +121,7 @@ nl:
       asset_over_depreciated: "Vast actief %{number} boven zijn basis afgeschreven"
       no_receipts: "Geen kasboekregel voor het jaar"
       no_fiscal_year: "Geen boekjaar van het dossier dekt %{year}"
-      year_open: "Het jaar %{year} is niet afgesloten: de aangifte kan nog wijzigen"
+      year_open: "Het boekjaar %{year} is niet afgesloten: de 2035 kan nog wijzigen; sluit het af vóór de indiening"
       frozen_changed: "De 2035 van %{year} is gewijzigd sinds het boekjaar werd vastgelegd (identificatie gewijzigd?): controleren vóór elke indiening"
     reversal_label: "Annulering van %{number}"
     export:
@@ -175,6 +175,16 @@ nl:
       no_control: "Geen afwijking"
       page: "Pagina %{page} van %{count}"
     errors:
+      year:
+        invalid: "Ongeldig jaar"
+        close:
+          future: "Het boekjaar %{year} is nog niet begonnen: het kan niet worden afgesloten"
+          already: "Het boekjaar %{year} is al afgesloten"
+          locked: "De 2035 van %{year} is ingediend: het boekjaar is vergrendeld"
+        reopen:
+          locked: "De 2035 van %{year} is ingediend: het boekjaar is vergrendeld en kan niet meer worden heropend; corrigeer met een tegenboeking in een open boekjaar"
+          core_closed: "Het boekjaar %{year} is afgesloten met het boekjaar van het dossier (afgesloten perioden): het kan hier niet worden heropend"
+          open: "Het boekjaar %{year} is open: niets te heropenen"
       line:
         nature:
           unknown: "Onbekende aard"
@@ -197,6 +207,7 @@ nl:
           future: "Toekomstige datum: boek alleen een uitgevoerde verrichting"
           closed_period: "De periode van deze datum is afgesloten: corrigeer met een tegenboeking in een open periode"
           transmitted: "De 2035 van %{year} is ingediend, het boekjaar is vastgelegd: corrigeer met een tegenboeking in een open boekjaar"
+          year_closed: "Het boekjaar %{year} is afgesloten: heropen het om er een regel in te boeken, of dateer de regel in een open boekjaar"
         reversal:
           is_reversal: "Een tegenboeking wordt niet tegengeboekt"
           already: "Deze regel is al tegengeboekt"
@@ -207,6 +218,7 @@ nl:
           reversed: "Tegengeboekte regel: verwijder eerst de tegenboeking"
           closed_period: "Afgesloten boekjaar of periode: de regel is definitief, corrigeer met een tegenboeking"
           transmitted: "De 2035 van %{year} is ingediend: de regel is definitief, corrigeer met een tegenboeking"
+          year_closed: "Het boekjaar %{year} is afgesloten: heropen het om de regel te wijzigen, of corrigeer met een tegenboeking"
         too_long: "Hoogstens %{max} tekens"
       nature:
         in_use: "Aard al gebruikt: alleen de omschrijving en de activering wijzigen"
@@ -245,15 +257,11 @@ nl:
       adjustment:
         year:
           invalid: "Ongeldig jaar"
-          closed: "Dit jaar heeft een afgesloten periode of de 2035 ervan is ingediend"
+          closed: "Dit jaar is afgesloten, vergrendeld of telt een afgesloten periode"
         kind:
           invalid: "Onbekende soort"
         label:
           blank: "Geef een omschrijving op"
-      settings:
-        interface:
-          unknown: "Onbekende interface"
-          accounting_inactive: "De boekhouding vereist dat de module Boekhouding actief is"
       form_line:
         year:
           closed: "Vastgelegd jaar: een afgesloten jaar gebruikt het; voeg een regel toe voor het volgende jaar"

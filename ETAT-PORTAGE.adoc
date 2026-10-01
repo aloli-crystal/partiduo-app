@@ -2900,3 +2900,23 @@ Décision de l'utilisateur dans la ligne de D-MIC2-001 (DECISIONS D-LIB2-001
   fige l'exercice ;
 * interface : en-tête d'exercice, Modifier et Supprimer, cadenas et
   « Contre-passer », mode simplifié et téléphone compris.
+
+== Clôture réversible de l'exercice libéral, verrou à la transmission (1er octobre 2026)
+
+Décision de l'utilisateur (DECISIONS D-LIB5-001 à D-LIB5-005). Fait :
+
+* trois états de l'exercice libéral : ouvert, clôturé par le professionnel
+  (`close_year`, réversible par `reopen_year` tant que la 2035 n'est pas
+  transmise), verrouillé à la transmission (`tax_return.transmitted`) ; le
+  rejet (`tax_return.rejected`) rend l'exercice clôturé ; historique des
+  passages, qui et quand (migration liberal 0006 : `liberal_year.state`,
+  `liberal_year_change`, déclencheurs) ;
+* clôture au socle gardée comme verrou de plus, jamais levé par le module ;
+  la Comptabilité n'a rien à passer à la clôture ni à défaire à la
+  réouverture ;
+* `partiduo-teledec` : la 2035 se transmet sur un exercice clôturé
+  (contrôle bloquant, refus traduit) ;
+* interface : « Clôturer l'exercice » et « Rouvrir l'exercice » sur le
+  livre-journal, les recettes, les dépenses et la 2035, en-tête d'état,
+  cadenas, historique ; démonstration : 2025 transmis (verrouillé), 2026
+  ouvert.

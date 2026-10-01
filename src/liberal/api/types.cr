@@ -72,35 +72,17 @@ module Partiduo
 
       # --- Paramètres ------------------------------------------------------------
 
-      # Interface du dossier (D-LIB3-001), pour tous ses utilisateurs :
-      # `simple` (recettes et dépenses, par défaut) ou `accounting`
-      # (comptabilité, seulement si le module Comptabilité est actif).
-      INTERFACE_SIMPLE     = "simple"
-      INTERFACE_ACCOUNTING = "accounting"
-      INTERFACES           = [INTERFACE_SIMPLE, INTERFACE_ACCOUNTING]
-
       # `profession` : profession exercée (identification de la 2035) ;
-      # `default_nature_id` : nature d'une recette issue de la Facturation ;
-      # `interface` : interface du dossier (`INTERFACES`), `nil` pour garder
-      # celle qui est enregistrée.
+      # `default_nature_id` : nature d'une recette issue de la Facturation.
       record SettingsInput,
         profession : String = "",
         activity_started_on : Time? = nil,
-        default_nature_id : Int64? = nil,
-        interface : String? = nil
+        default_nature_id : Int64? = nil
 
-      # `interface` : interface en vigueur — `accounting` seulement si elle
-      # est choisie et que le module Comptabilité est actif ; sinon
-      # `simple`, d'elle-même, sans rien réécrire.
       record SettingsView,
         profession : String,
         activity_started_on : Time?,
-        default_nature_id : Int64?,
-        interface : String = INTERFACE_SIMPLE do
-        def accounting_interface? : Bool
-          interface == INTERFACE_ACCOUNTING
-        end
-      end
+        default_nature_id : Int64?
 
       record NatureInput, code : String, label : String, kind : String, heading : String, enabled : Bool = true
 
@@ -144,9 +126,10 @@ module Partiduo
       record ReverseInput, id : Int64, date : Time, label : String = ""
 
       # Ligne du livre-journal. `reversed_by_id` : contre-passation qui
-      # l'annule ; `locked` : intangible — son exercice est figé (clôturé,
-      # ou 2035 transmise le `transmitted_at`) ou sa période du socle est
-      # close (DECISIONS D-LIB2-001) ; `modified_at` : dernière modification.
+      # l'annule ; `locked` : intangible — son exercice est clôturé ou
+      # verrouillé (2035 transmise le `transmitted_at`) ou sa période du socle
+      # est close (DECISIONS D-LIB2-001, D-LIB5-001) ; `modified_at` :
+      # dernière modification.
       record LineView,
         id : Int64,
         number : String,
@@ -364,34 +347,74 @@ module Partiduo
 
       # --- Exercices ---------------------------------------------------------------
 
-      # États d'un exercice (année civile de la 2035) : ouvert, clôturé au
-      # socle, 2035 transmise (DECISIONS D-LIB2-001).
-      YEAR_STATES = %w[open closed transmitted]
+      # États d'un exercice (année civile de la 2035, DECISIONS D-LIB5-001) :
+      # ouvert, clôturé (réversible), verrouillé (2035 transmise, définitif).
+      YEAR_STATES = %w[open closed locked]
 
-      # Exercice `year` : `state` (le premier des deux événements qui le
-      # figent), date de clôture au socle, date de transmission de la 2035
-      # et référence du dépôt, empreinte de la 2035 au figement.
+      # Exercice `year` (DECISIONS D-LIB5-001) :
+      #
+      # * `state` : `open` ; `closed` — clôturé par le professionnel
+      #   (`close_year`) ou au socle (toutes ses périodes closes,
+      #   `core_closed_at`) ; `locked` — 2035 transmise (`transmitted_at`,
+      #   `reference` du dépôt) ;
+      # * `closed_at`, `closed_by_id`, `closed_by` : clôture en vigueur du
+      #   module (à défaut, date de la clôture au socle) ;
+      # * `reopened_at`, `reopened_by_id`, `reopened_by` : dernière
+      #   réouverture ;
+      # * `frozen_fingerprint` : empreinte de la 2035 au figement.
       record YearView,
         year : Int32,
         state : String,
         closed_at : Time?,
         transmitted_at : Time?,
         reference : String,
-        frozen_fingerprint : String do
+        frozen_fingerprint : String,
+        closed_by_id : Int64? = nil,
+        closed_by : String = "",
+        reopened_at : Time? = nil,
+        reopened_by_id : Int64? = nil,
+        reopened_by : String = "",
+        core_closed_at : Time? = nil do
         def open? : Bool
           state == "open"
         end
 
-        # Clôturé ou 2035 transmise : lignes intangibles.
+        def closed? : Bool
+          state == "closed"
+        end
+
+        def locked? : Bool
+          state == "locked"
+        end
+
+        # Clôturé ou verrouillé : lignes intangibles.
         def frozen? : Bool
           !open?
         end
 
-        # Date du figement : clôture ou transmission, selon l'état.
+        # Se clôture : ouvert.
+        def closable? : Bool
+          open?
+        end
+
+        # Se rouvre : clôturé par le module, ni verrouillé ni clos au socle
+        # (une période close au socle ne se rouvre pas par le module).
+        def reopenable? : Bool
+          closed? && core_closed_at.nil?
+        end
+
+        # Date du figement : transmission si verrouillé, sinon clôture.
         def frozen_at : Time?
-          state == "transmitted" ? transmitted_at : closed_at
+          locked? ? transmitted_at : closed_at
         end
       end
+
+      # Passage d'un exercice d'un état à l'autre : `action` `closed`,
+      # `reopened`, `locked` (2035 transmise, `reference` du dépôt) ou
+      # `unlocked` (dépôt rejeté) ; qui et quand.
+      YEAR_ACTIONS = %w[closed reopened locked unlocked]
+
+      record YearChangeView, year : Int32, action : String, at : Time, user_id : Int64?, user : String, reference : String
 
       # --- Réintégrations et déductions ------------------------------------------
 

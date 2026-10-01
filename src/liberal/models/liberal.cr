@@ -4,15 +4,13 @@ module Partiduo
   module Liberal
     # Paramètres du professionnel libéral (une seule ligne, la première) :
     # profession exercée (cadre d'identification de la 2035), début
-    # d'activité, nature des recettes issues de la Facturation, interface
-    # du dossier (`simple` ou `accounting`, D-LIB3-001). Modèle interne :
-    # l'interface passe par `Partiduo::Api::Liberal`.
+    # d'activité, nature des recettes issues de la Facturation. Modèle
+    # interne : l'interface passe par `Partiduo::Api::Liberal`.
     class Settings < Marten::Model
       field :id, :big_int, primary_key: true, auto: true
       field :profession, :string, max_size: 100, blank: true, default: ""
       field :activity_started_on, :date, null: true, blank: true
       field :default_nature_id, :big_int, null: true, blank: true
-      field :interface, :string, max_size: 16, default: "simple"
 
       with_timestamp_fields
     end
@@ -150,21 +148,42 @@ module Partiduo
       db_unique_constraint :liberal_form_line_unique, field_names: [:millesime, :item]
     end
 
-    # État d'un exercice (année civile de la 2035) propre au module : 2035
-    # transmise (`transmitted_at`, `reference` du dépôt, empreinte transmise)
-    # — l'exercice est alors figé (déclencheurs) — et empreinte de la 2035
-    # préparée au moment du figement (`frozen_fingerprint`, `frozen_at`),
-    # par la transmission ou par la clôture au socle (DECISIONS D-LIB2-003).
-    # La clôture elle-même se lit sur les périodes du socle.
+    # État d'un exercice (année civile de la 2035) propre au module
+    # (DECISIONS D-LIB5-001) : `state` `open`, `closed` (clôturé par le
+    # professionnel, réversible : `closed_at`, `closed_by_id`) ou `locked`
+    # (2035 transmise : `transmitted_at`, `reference` du dépôt, empreinte
+    # transmise) ; dernière réouverture (`reopened_at`, `reopened_by_id`) ;
+    # empreinte de la 2035 préparée au moment du figement
+    # (`frozen_fingerprint`, `frozen_at`), par la clôture, la transmission ou
+    # la clôture au socle. Les déclencheurs refusent toute modification d'un
+    # exercice `closed` ou `locked`.
     class Year < Marten::Model
       field :id, :big_int, primary_key: true, auto: true
       field :year, :int, unique: true
+      field :state, :string, max_size: 8, default: "open"
+      field :closed_at, :date_time, null: true, blank: true
+      field :closed_by_id, :big_int, null: true, blank: true
+      field :reopened_at, :date_time, null: true, blank: true
+      field :reopened_by_id, :big_int, null: true, blank: true
       field :transmitted_at, :date_time, null: true, blank: true
       field :transmitted_by_id, :big_int, null: true, blank: true
       field :reference, :string, max_size: 128, blank: true, default: ""
       field :transmitted_fingerprint, :string, max_size: 64, blank: true, default: ""
       field :frozen_fingerprint, :string, max_size: 64, blank: true, default: ""
       field :frozen_at, :date_time, null: true, blank: true
+    end
+
+    # Historique des états d'un exercice (DECISIONS D-LIB5-001) : clôture
+    # (`closed`), réouverture (`reopened`), verrou par la transmission
+    # (`locked`, `reference` du dépôt), verrou levé par le rejet de ce dépôt
+    # (`unlocked`) ; qui (`user_id`) et quand (`at`). Rien ne s'y efface.
+    class YearChange < Marten::Model
+      field :id, :big_int, primary_key: true, auto: true
+      field :year, :int, index: true
+      field :action, :string, max_size: 16
+      field :at, :date_time
+      field :user_id, :big_int, null: true, blank: true
+      field :reference, :string, max_size: 128, blank: true, default: ""
     end
 
     # Facture émise, relevée à `invoice.issued` (charge utile seule, sans

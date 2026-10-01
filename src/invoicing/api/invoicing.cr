@@ -246,6 +246,8 @@ module Partiduo
             next Result(Nil).failure(Documents.error(FieldError::BASE, "document.in_use"))
           end
           Partiduo::Invoicing::DepositDeduction.filter(invoice_id: id).delete
+          # Bons repris libérés (D-INV2-002).
+          Partiduo::Invoicing::BilledDelivery.filter(invoice_id: id).delete
           Partiduo::Invoicing::Line.filter(document_id: id).delete
           # Journal en ajout seul, sauf les traces d'un brouillon (déclencheur).
           Partiduo::Invoicing::DocumentEvent.filter(document_id: id).delete
@@ -282,6 +284,12 @@ module Partiduo
       # mentions figées, empreinte, PDF/A-3 (Factur-X pour les documents
       # fiscaux), `invoice.issued` ou `credit_note.issued`. Un avoir exige
       # `invoicing.credit_note.issue`, les autres `invoicing.invoice.issue`.
+      # Une commande, un bon de livraison ou une facture qui ferait dépasser
+      # l'encours maximum HT du client est refusé (`credit_limit.exceeded`),
+      # sauf dérogation : `IssueInput#credit_override_reason` et permission
+      # `invoicing.credit_limit.override` (`credit_limit.override_denied`
+      # sinon), tracée (`credit_override`). La facture de bons de livraison
+      # les fait passer à l'état `invoiced`.
       def self.issue(actor : Actor, id : Int64, input : IssueInput = IssueInput.new) : Result(DocumentView)
         authorize!(actor, nil)
         kind = Documents.find(id).kind
@@ -566,6 +574,202 @@ module Partiduo
             {"error" => log_view.error}))
         end
         result
+      end
+
+      # --- Bons à facturer et facture récapitulative (D-INV2) ------------------------
+
+      # Bons de livraison émis et non facturés (liste « Bons à facturer »),
+      # filtrés par client et par période de livraison.
+      def self.delivery_notes_to_invoice(actor : Actor, query : ToInvoiceQuery = ToInvoiceQuery.new) : Array(ToInvoiceView)
+        authorize!(actor, READ)
+        Partiduo::Invoicing::DeliveryBilling.to_invoice(query)
+      end
+
+      # Facture un ou plusieurs bons de livraison émis, non facturés et
+      # libres, d'un même client et d'une même devise : brouillon de facture
+      # (un bon : transformation habituelle ; plusieurs : facture
+      # récapitulative, un groupe de lignes par bon, période de facturation).
+      # Refus : `delivery_notes.empty`, `.duplicate`, `.several_customers`,
+      # `.several_currencies`, `document.delivery_notes.invalid`,
+      # `.already_billed`, `.in_draft`.
+      def self.invoice_delivery_notes(actor : Actor, ids : Array(Int64)) : Result(DocumentView)
+        authorize!(actor, WRITE)
+        return transform(actor, ids.first, TransformInput.new("invoice")) if ids.size == 1
+        Transaction.run do
+          notes = ids.map { |id| Partiduo::Invoicing::Document.filter(id: id).lock.first }
+          errors = Partiduo::Invoicing::DeliveryBilling.selection_errors(notes, ids)
+          next Result(DocumentView).failure(errors) unless errors.empty?
+          found = notes.compact
+          input = Partiduo::Invoicing::DeliveryBilling.group_input(found)
+          lines, errors = Documents.check(input)
+          next Result(DocumentView).failure(errors) unless errors.empty?
+          document = Documents.save_draft!(input, lines, actor)
+          Documents.log(Documents.id_of(document.id), "created", actor, "",
+            {"delivery_notes" => found.map(&.number.to_s).join(",")})
+          found.each do |note|
+            Documents.log(Documents.id_of(note.id), "transformed", actor, "", {"into" => document.id.to_s, "kind" => "invoice"})
+          end
+          Result(DocumentView).success(Documents.view(document))
+        end
+      end
+
+      # --- Réglage client : rythme de facturation, encours maximum -----------------
+
+      # Réglage et encours HT d'un client (bons non facturés, reste dû).
+      def self.customer_billing(actor : Actor, customer_card_id : Int64) : CustomerBillingView
+        authorize!(actor, READ)
+        card = Partiduo::Invoicing::Configuration.card(customer_card_id) || raise NotFound.new("card", customer_card_id)
+        Partiduo::Invoicing::CreditControl.view(card)
+      end
+
+      # Rythme de facturation (`BILLING_RHYTHMS`) et encours maximum HT
+      # (`nil` : pas de plafond) d'un client. Paramètres de la Facturation.
+      def self.update_customer_billing(actor : Actor, customer_card_id : Int64,
+                                       input : CustomerBillingInput) : Result(CustomerBillingView)
+        authorize!(actor, SETTINGS)
+        card = Partiduo::Invoicing::Configuration.card(customer_card_id)
+        errors = Partiduo::Invoicing::CreditControl.errors(input, card)
+        return Result(CustomerBillingView).failure(errors) unless errors.empty? && card
+        Transaction.run do
+          Partiduo::Invoicing::CreditControl.save!(card.id, input)
+          Result(CustomerBillingView).success(Partiduo::Invoicing::CreditControl.view(card))
+        end
+      end
+
+      # Clients dont l'encours HT atteint `percent` % (défaut : 90) de leur
+      # encours maximum, du plus engagé au moins engagé (« À traiter »).
+      def self.credit_alerts(actor : Actor, percent : Int32 = CREDIT_ALERT_PERCENT) : Array(CustomerBillingView)
+        authorize!(actor, READ)
+        Partiduo::Invoicing::CreditControl.alerts(percent)
+      end
+
+      # Contrôle de l'encours pour un document (brouillon ou émis) : `nil`
+      # sans plafond pour le client, ou pour une facture d'acompte, un avoir.
+      def self.credit_check(actor : Actor, id : Int64) : CreditCheckView?
+        authorize!(actor, READ)
+        Partiduo::Invoicing::CreditControl.check(Documents.find(id))
+      end
+
+      # --- Fin de mois (D-INV2-007, D-INV2-008) --------------------------------------
+
+      # Prépare les factures récapitulatives du mois (`MonthlyInput`) :
+      # pour chaque client au rythme mensuel (ou le client désigné, quel que
+      # soit son rythme), un brouillon regroupant ses bons émis, non facturés
+      # et livrés au plus tard le dernier jour du mois ; jamais deux pour un
+      # client, un mois et une devise. Mode du dossier « émettre et envoyer »
+      # : chaque facture est aussitôt émise et envoyée par le canal de son
+      # client (`issue_and_send`) ; il faut alors `invoicing.invoice.issue` et
+      # `invoicing.invoice.send`.
+      def self.prepare_monthly_invoices(actor : Actor, input : MonthlyInput = MonthlyInput.new) : MonthlyRunView
+        authorize!(actor, WRITE)
+        month = Partiduo::Invoicing::MonthEnd.month_start(input.month || Partiduo::Config.today)
+        run_months(actor, [month], input.customer_card_id, input.trigger)
+      end
+
+      # Passage planifié de fin de mois au jour `today` (défaut : date du
+      # jour) : mois précédent s'il n'est pas clos (rattrapage), mois courant
+      # si c'est son dernier jour ; chaque mois traité est clos. Idempotent :
+      # à lancer chaque jour (`manage invoicing-month-end`).
+      def self.month_end(actor : Actor, today : Time? = nil) : MonthlyRunView
+        authorize!(actor, WRITE)
+        months = Partiduo::Invoicing::MonthEnd.due_months(today || Partiduo::Config.today)
+        run_months(actor, months, nil, "schedule")
+      end
+
+      private def self.run_months(actor : Actor, months : Array(Time), customer_id : Int64?, trigger : String) : MonthlyRunView
+        mode = Partiduo::Invoicing::Configuration.settings.monthly_billing_mode
+        if mode == "auto_send"
+          authorize!(actor, ISSUE)
+          authorize!(actor, SEND)
+        end
+        prepared = [] of Partiduo::Invoicing::MonthlyInvoice
+        skipped = 0
+        months.each do |month|
+          rows, count = Partiduo::Invoicing::MonthEnd.prepare!(month, customer_id, mode, actor)
+          prepared.concat(rows)
+          skipped += count
+          if trigger == "schedule" && customer_id.nil?
+            Transaction.run do
+              Partiduo::Invoicing::MonthEnd.close!(month, trigger, rows.size)
+              Result(Nil).success(nil)
+            end
+          end
+        end
+        if mode == "auto_send"
+          prepared.each do |row|
+            invoice_id = row.invoice_id || next
+            issue_and_send(actor, invoice_id.to_i64)
+          end
+        end
+        views = prepared.map do |row|
+          Partiduo::Invoicing::MonthEnd.view(Partiduo::Invoicing::MonthlyInvoice.filter(id: row.id).first || row)
+        end
+        MonthlyRunView.new(months, views, skipped)
+      end
+
+      # Factures de fin de mois encore en brouillon (« À traiter »).
+      def self.monthly_proposals(actor : Actor) : Array(MonthlyInvoiceView)
+        authorize!(actor, READ)
+        Partiduo::Invoicing::MonthEnd.proposals.map { |row| Partiduo::Invoicing::MonthEnd.view(row) }
+      end
+
+      # Émet une facture (si elle est en brouillon) puis l'envoie par son
+      # canal : courriel à l'adresse du client ; plateforme (relevée par
+      # l'extension de transmission) ; papier et portail public (à remettre
+      # puis marquer envoyé). L'émission refusée est un échec ; une facture
+      # émise dont l'envoi n'a pas pu se faire est un succès qui le dit
+      # (`DispatchView#action`). Met à jour la facture de fin de mois qu'elle
+      # est, le cas échéant.
+      def self.issue_and_send(actor : Actor, id : Int64, input : IssueInput = IssueInput.new) : Result(DispatchView)
+        authorize!(actor, ISSUE)
+        document = Documents.find(id)
+        unless document.kind.in?("invoice", "deposit_invoice")
+          return Result(DispatchView).failure(Documents.error(FieldError::BASE, "dispatch.kind"))
+        end
+        if document.draft?
+          issued = issue(actor, id, input)
+          if issued.failure?
+            keys = issued.errors.map(&.key).uniq!.join(", ")
+            Transaction.run do
+              Partiduo::Invoicing::MonthEnd.record_outcome(id, "failed", keys)
+              Result(Nil).success(nil)
+            end
+            return Result(DispatchView).failure(issued.errors)
+          end
+        end
+        outcome = dispatch(actor, Documents.view(Documents.find(id)))
+        status = outcome.action == "emailed" || outcome.action == "already_sent" ? "sent" : "issued"
+        error = outcome.action.in?("email_missing", "email_failed", "send_denied") ? "invoicing.dispatch.#{outcome.action}" : ""
+        Transaction.run do
+          Partiduo::Invoicing::MonthEnd.record_outcome(id, status, error)
+          Result(Nil).success(nil)
+        end
+        Result(DispatchView).success(outcome)
+      end
+
+      # Émet et envoie toutes les factures de fin de mois proposées.
+      def self.issue_and_send_proposals(actor : Actor) : Array(Result(DispatchView))
+        authorize!(actor, ISSUE)
+        Partiduo::Invoicing::MonthEnd.proposals.compact_map(&.invoice_id).map { |id| issue_and_send(actor, id.to_i64) }
+      end
+
+      private def self.dispatch(actor : Actor, view : DocumentView) : DispatchView
+        return DispatchView.new(view, "already_sent") if view.sent_at
+        case view.issue_channel
+        when "platform"      then DispatchView.new(view, "platform")
+        when "paper"         then DispatchView.new(view, "to_print")
+        when "public_portal" then DispatchView.new(view, "public_portal")
+        else
+          return DispatchView.new(view, "send_denied") unless actor.can?(SEND)
+          address = view.customer.email.strip
+          return DispatchView.new(view, "email_missing") if address.empty?
+          sent = send_document(actor, view.id, SendInput.new(to: [address]))
+          if sent.failure?
+            DispatchView.new(view, "email_failed", sent.errors.map { |error| error.params["error"]? || error.key }.join(", "))
+          else
+            DispatchView.new(Documents.view(Documents.find(view.id)), "emailed", address)
+          end
+        end
       end
 
       # --- Transmission au comptable (Facturation seule) ---------------------------

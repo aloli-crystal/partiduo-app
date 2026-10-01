@@ -174,6 +174,50 @@ describe "Profession libérale et Comptabilité — modification dans un exercic
     end
   end
 
+  it "clôture et rouvre l'exercice sans toucher aux écritures, puis suit les modifications (D-LIB5-004)" do
+    with_active_modules("liberal,accounting") do
+      L.setup(years: [2025, 2026])
+      kept = L.expense("2025-03-10", "800", "RENT")
+      gone = L.receipt("2025-03-12", "1500")
+      changed = L.receipt("2025-04-02", "300")
+      sources = [kept, gone, changed].map { |line| "liberal:#{line.kind}:#{line.id}" }
+      counts = sources.map { |source| I.entries(source).size }
+      expect_synchronized
+      # Clôture : aucune écriture passée ni extournée ; modification refusée.
+      Lib.close_year(L.actor, 2025).value!
+      sources.map { |source| I.entries(source).size }.should eq(counts)
+      Lib.update_line(L.actor, changed.id, L.input("2025-04-02", "350", "RECEIPTS")).error_keys
+        .should eq(["liberal.errors.line.change.year_closed"])
+      expect_synchronized
+      # Réouverture : rien à défaire ; la Comptabilité suit ensuite les
+      # modifications et les suppressions (D-LIB2-002).
+      Lib.reopen_year(L.actor, 2025).value!
+      sources.map { |source| I.entries(source).size }.should eq(counts)
+      Lib.update_line(L.actor, changed.id, L.input("2025-04-03", "350", "RECEIPTS")).value!
+      Lib.delete_line(L.actor, gone.id).value!
+      live("liberal:receipt:#{changed.id}").first.amount.should eq(L.d("350"))
+      expect_synchronized(["liberal:receipt:#{gone.id}"])
+      # Reclôture puis transmission : verrouillé, écritures inchangées.
+      Lib.close_year(L.actor, 2025).value!
+      after = sources.map { |source| I.entries(source).size }
+      Partiduo::Api::Transaction.run do
+        Partiduo::Events.publish("tax_return.transmitted", {"form" => "2035", "year" => "2025", "reference" => "liasse:2025",
+                                                            "fingerprint" => Lib.tax_return(L.system, 2025).fingerprint})
+        Partiduo::Api::Result(Nil).success(nil)
+      end
+      Lib.reopen_year(L.actor, 2025).error_keys.should eq(["liberal.errors.year.reopen.locked"])
+      sources.map { |source| I.entries(source).size }.should eq(after)
+      expect_synchronized(["liberal:receipt:#{gone.id}"])
+      # La Comptabilité clôt ses périodes 2026 : clôturé au socle, le module
+      # ne le rouvre pas.
+      L.receipt("2026-01-10", "50")
+      L.close_year(2026)
+      Lib.year(L.system, 2026).closed?.should be_true
+      Lib.reopen_year(L.actor, 2026).error_keys.should eq(["liberal.errors.year.reopen.core_closed"])
+      expect_synchronized(["liberal:receipt:#{gone.id}"])
+    end
+  end
+
   it "refuse de modifier une recette issue de la Facturation, laissée à ses écritures" do
     with_active_modules("liberal,invoicing,accounting") do
       setup = I.setup

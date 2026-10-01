@@ -22,12 +22,12 @@ module Partiduo
         errors
       end
 
-      # Une période close du socle chevauche l'année, ou sa 2035 est
-      # transmise.
+      # Une période close du socle chevauche l'année, ou l'exercice est
+      # clôturé ou verrouillé (D-LIB5-001).
       def self.closed?(year : Int32) : Bool
         Partiduo::Api::Core.periods(Partiduo::Api::Actor.system).any? do |period|
           period.closed? && period.starts_on <= Time.utc(year, 12, 31) && period.ends_on >= Time.utc(year, 1, 1)
-        end || Years.transmitted?(year)
+        end || Years.held?(year)
       end
 
       def self.views(rows : Array(Adjustment)) : Array(Api::AdjustmentView)

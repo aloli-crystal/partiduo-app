@@ -19,8 +19,14 @@ Partiduo::Modules.register do
   permission "invoicing.settings.manage"
   # Transmission au comptable (ADR-006 D4).
   permission "invoicing.export.read"
+  # Dérogation à l'encours maximum HT d'un client, motif obligatoire
+  # (DECISIONS D-INV2-009).
+  permission "invoicing.credit_limit.override"
 
   menu "INV_DOCUMENTS", parent: "BILLING", order: 10, route: "invoicing:documents", permission: "invoicing.invoice.read"
+  # Bons de livraison émis non facturés, facture récapitulative, fin de mois
+  # (DECISIONS D-INV2-010).
+  menu "INV_TO_INVOICE", parent: "BILLING", order: 15, route: "invoicing:to_invoice", permission: "invoicing.invoice.read"
   menu "INV_NEW_INVOICE", parent: "BILLING", order: 20, route: "invoicing:invoice_new", permission: "invoicing.invoice.write"
   menu "INV_PAYMENTS", parent: "BILLING", order: 30, route: "invoicing:payments", permission: "invoicing.payment.record"
   menu "INV_REMINDERS", parent: "BILLING", order: 40, route: "invoicing:reminders", permission: "invoicing.reminder.send"

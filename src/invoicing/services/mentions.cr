@@ -54,7 +54,10 @@ module Partiduo
         settings : Api::SettingsView,
         currency_code : String,
         payment_terms : String = "",
-        payment_terms_days : Int32 = 30
+        payment_terms_days : Int32 = 30,
+        billing_period_start : Time? = nil,
+        billing_period_end : Time? = nil,
+        delivery_note_numbers : Array(String) = [] of String
 
       def self.iso(date : Time?) : String
         date.try(&.to_s("%Y-%m-%d")) || ""
@@ -88,7 +91,10 @@ module Partiduo
 
       private def self.date_mentions(context : Context, add) : Nil
         add.call("dates.issue", {"date" => iso(context.issue_date)}) if context.issue_date
-        if context.kind.in?("invoice", "deposit_invoice", "credit_note", "delivery_note") && context.delivery_date
+        if (from = context.billing_period_start) && (upto = context.billing_period_end)
+          # Facture récapitulative : livraisons de la période (D-INV2-003).
+          add.call("dates.delivery_period", {"from" => iso(from), "to" => iso(upto)})
+        elsif context.kind.in?("invoice", "deposit_invoice", "credit_note", "delivery_note") && context.delivery_date
           add.call("dates.delivery", {"date" => iso(context.delivery_date)})
         end
         if context.kind == "quote" && context.validity_date
@@ -108,6 +114,11 @@ module Partiduo
                                              "date"   => iso(context.credited_date)})
         end
         add.call("deposit.invoice", none) if context.kind == "deposit_invoice"
+        if context.kind == "invoice" && context.delivery_note_numbers.size >= 2
+          # Facture récapitulative (art. 289-I-3 du CGI ; en Belgique,
+          # facture périodique) : bons de livraison regroupés.
+          add.call("delivery_notes.summary.#{context.regime}", {"numbers" => context.delivery_note_numbers.join(", ")})
+        end
         context.deductions.each do |deduction|
           add.call("deposit.deducted", {"number" => deduction.deposit_number, "amount" => amount(deduction.amount),
                                         "currency" => context.currency_code})

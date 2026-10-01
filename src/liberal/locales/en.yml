@@ -121,7 +121,7 @@ en:
       asset_over_depreciated: "Fixed asset %{number} depreciated beyond its cost"
       no_receipts: "No cash book line for the year"
       no_fiscal_year: "No financial year of the file covers %{year}"
-      year_open: "Year %{year} is not closed: the return may still change"
+      year_open: "Year %{year} is not closed: the 2035 may still change; close it before filing"
       frozen_changed: "The %{year} 2035 has changed since the year was frozen (identification edited?): check before any filing"
     reversal_label: "Cancellation of %{number}"
     export:
@@ -175,6 +175,16 @@ en:
       no_control: "No issue"
       page: "Page %{page} of %{count}"
     errors:
+      year:
+        invalid: "Invalid year"
+        close:
+          future: "Year %{year} has not started: it cannot be closed"
+          already: "Year %{year} is already closed"
+          locked: "The %{year} 2035 has been filed: the year is locked"
+        reopen:
+          locked: "The %{year} 2035 has been filed: the year is locked and can no longer be reopened; correct with a reversal in an open year"
+          core_closed: "Year %{year} is closed with the file's financial year (closed periods): it cannot be reopened here"
+          open: "Year %{year} is open: nothing to reopen"
       line:
         nature:
           unknown: "Unknown nature"
@@ -197,6 +207,7 @@ en:
           future: "Future date: only record a completed transaction"
           closed_period: "This date's period is closed: correct with a reversal in an open period"
           transmitted: "The %{year} 2035 has been filed, the year is frozen: correct with a reversal in an open year"
+          year_closed: "Year %{year} is closed: reopen it to record a line there, or date the line in an open year"
         reversal:
           is_reversal: "A reversal cannot be reversed"
           already: "This line has already been reversed"
@@ -207,6 +218,7 @@ en:
           reversed: "Reversed line: delete its reversal first"
           closed_period: "Closed year or period: the line is final, correct it with a reversal"
           transmitted: "The %{year} 2035 has been filed: the line is final, correct it with a reversal"
+          year_closed: "Year %{year} is closed: reopen it to change the line, or correct it with a reversal"
         too_long: "%{max} characters at most"
       nature:
         in_use: "Nature already used: only the label and activation can change"
@@ -245,15 +257,11 @@ en:
       adjustment:
         year:
           invalid: "Invalid year"
-          closed: "This year has a closed period or its 2035 has been filed"
+          closed: "This year is closed, locked or has a closed period"
         kind:
           invalid: "Unknown kind"
         label:
           blank: "Enter a label"
-      settings:
-        interface:
-          unknown: "Unknown interface"
-          accounting_inactive: "Accounting requires the Accounting module to be active"
       form_line:
         year:
           closed: "Frozen year: a closed year uses it; add a line for the following year"

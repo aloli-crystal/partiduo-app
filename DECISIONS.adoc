@@ -12212,7 +12212,12 @@ transmission de sa 2035 (en pratique le même jour) ; ensuite la ligne est
 intangible et se corrige par contre-passation datée dans un exercice
 ouvert. Deux exercices ouverts à la fois sont le cas normal.
 
-=== D-LIB2-001 — Exercice d'une ligne : son année civile ; modifiable jusqu'au figement (liberal ; remplace D-LIB-001 pour l'intangibilité)
+=== D-LIB2-001 — Exercice d'une ligne : son année civile ; modifiable jusqu'au figement (liberal ; remplace D-LIB-001 pour l'intangibilité ; complétée par D-LIB5-001)
+
+*Statut.* Complétée par D-LIB5-001 (1er octobre 2026) : l'exercice est
+ouvert, clôturé par le professionnel (réversible) ou verrouillé par la
+transmission de la 2035 ; la clôture au socle reste un verrou de plus
+(D-LIB5-004).
 
 *Contexte.* ADR-007 D6 prévoyait un module « sur le même modèle que
 `micro` » ; D-LIB-001 avait repris D-MIC-003 (intangible dès
@@ -12300,7 +12305,13 @@ n'en a plus et ses écritures se soldent ; `spec/modules/events_spec.cr`.
 *Alternative écartée.* Celles de D-MIC2-003 (appel direct, republication
 avec révision, suppression d'écriture, écart toléré).
 
-=== D-LIB2-003 — Figement par la transmission : événement `tax_return.transmitted` publié par `partiduo-teledec` (amendement d'ADR-003 D7)
+=== D-LIB2-003 — Figement par la transmission : événement `tax_return.transmitted` publié par `partiduo-teledec` (amendement d'ADR-003 D7 ; rejet remplacé par D-LIB5-002)
+
+*Statut.* Le rejet est remplacé par D-LIB5-002 (1er octobre 2026) : il
+rend l'exercice *clôturé* (réversible), non plus ouvert ; la transmission
+*verrouille* l'exercice, définitivement, et se fait sur un exercice clôturé
+(D-LIB5-003). Les deux événements sont adoptés par l'utilisateur le
+1er octobre 2026.
 
 *Contexte.* La transmission de la 2035 relève de `partiduo-teledec`
 (ADR-007 D4), qui lit déjà `Api::Liberal.tax_return` (D-TDC-002). Lui
@@ -12332,8 +12343,8 @@ préparation (`teledec.errors.filing.changed`) ; une modification entre la
 lecture et la transmission est sérialisée par le verrou consultatif.
 Specs : `partiduo-teledec/spec/teledec/liberal_freeze_spec.cr`.
 
-*Amendement.* ADR-003 D7 (liste fermée des événements), adopté le
-30 septembre 2026 par extension de D-MIC2-003.
+*Amendement.* ADR-003 D7 (liste fermée des événements), adopté par
+l'utilisateur le 1er octobre 2026 (D-LIB5-002).
 
 *Alternative écartée.* `Api::Liberal.mark_transmitted` appelé par
 l'extension (comme `Micro.mark_declared` par `partiduo-urssaf`) : appel de
@@ -12359,7 +12370,10 @@ l'immobilisation redevient modifiable ou cessible. Événements
 *Alternative écartée.* Seule la contre-passation la même année (D-LIB-005) :
 plus restrictif que le livre-journal sans raison.
 
-=== D-LIB2-005 — 2035 préparée à la demande, figée avec l'exercice (liberal ; remplace « rien n'est figé » de D-LIB-007)
+=== D-LIB2-005 — 2035 préparée à la demande, figée avec l'exercice (liberal ; remplace « rien n'est figé » de D-LIB-007 ; complétée par D-LIB5-001)
+
+*Statut.* Complétée par D-LIB5-001 : la clôture par le professionnel fige
+aussi la 2035 (empreinte gardée), la réouverture la libère.
 
 *Choix.* La 2035 reste une requête (`tax_return`), recalculée à chaque
 lecture tant que l'exercice est ouvert (`TaxReturnView#exercise`). Figé,
@@ -12375,7 +12389,10 @@ ouverte ».
 *Alternative écartée.* Copier la 2035 en base au figement : un état de
 plus, alors que les sources sont intangibles et l'empreinte suffit.
 
-=== D-LIB2-006 — Interface : en-tête d'exercice, Modifier et Supprimer, cadenas et « Contre-passer » (interface)
+=== D-LIB2-006 — Interface : en-tête d'exercice, Modifier et Supprimer, cadenas et « Contre-passer » (interface ; complétée par D-LIB5-005)
+
+*Statut.* Complétée par D-LIB5-005 : « Clôturer l'exercice », « Rouvrir
+l'exercice », en-tête « 2035 transmise le … — verrouillé ».
 
 *Choix.* Comme D-MIC2-005. Livre-journal, recettes et dépenses (mode
 complet et mode simplifié) : en-tête de groupe de l'exercice
@@ -12442,7 +12459,11 @@ dans le paramètre du dossier. » La bascule personnelle de D-UI-075 est
 retirée ; l'interface se règle une fois, pour tout le dossier, dans les
 paramètres de la profession libérale.
 
-=== D-LIB3-001 — Interface du dossier dans les paramètres du module (liberal)
+=== D-LIB3-001 — Interface du dossier dans les paramètres du module (liberal) (remplacée par D-UI-077)
+
+*Statut.* *Remplacée par D-UI-077* (30 septembre 2026) : l'interface est
+une préférence de chaque utilisateur (D-AUTH-016) ; la migration liberal
+0005 reprend le réglage du dossier puis retire `liberal_settings.interface`.
 
 *Contexte.* L'interface (recettes et dépenses, ou comptabilité) vaut pour
 tous les utilisateurs du dossier : elle se range avec les autres paramètres
@@ -12473,7 +12494,11 @@ désactivée ensuite, la vue rend `simple` d'elle-même, sans réécrire la
 valeur enregistrée : réactivée, le dossier retrouve son choix tant qu'il ne
 l'a pas changé. Référence : `doc/api/liberal.adoc`, section « Paramètres ».
 
-=== D-UI-076 — Interface réglée dans les paramètres du dossier ; bascule personnelle du seul comptable (interface)
+=== D-UI-076 — Interface réglée dans les paramètres du dossier ; bascule personnelle du seul comptable (interface) (remplacée par D-UI-077)
+
+*Statut.* *Remplacée par D-UI-077* (30 septembre 2026) : l'interface est
+une préférence de chaque utilisateur, réglée dans ses préférences, plus un
+réglage du dossier ; le cookie `partiduo_mode` n'est plus utilisé.
 
 *Contexte.* D-UI-075 laissait chaque utilisateur de la profession libérale
 basculer depuis son menu (cookie `partiduo_mode`). L'utilisateur veut un
@@ -12519,6 +12544,524 @@ dépenses » au téléphone (375 px), menu réduit rétabli, sans défilement
 horizontal ; champ relié à son libellé et à son aide (`aria-describedby`).
 Bases de test : `partiduo_test_lib3_app`, `partiduo_test_lib3_ui`,
 `partiduo_test_lib3_demo`, supprimées à la fin.
+
+== Interface, préférence de chaque utilisateur (30 septembre 2026)
+
+Décision de l'utilisateur (30 septembre 2026) : le choix de l'interface se
+fait *par utilisateur* — « le professionnel préfèrera certainement le mode
+Recettes et dépenses et le comptable le mode Comptabilité ». Le réglage du
+dossier (D-LIB3-001, D-UI-076) est retiré ; chacun règle sa préférence,
+enregistrée par le cœur avec son compte, jamais dans un cookie.
+
+=== D-AUTH-016 — Préférences de l'utilisateur, enregistrées avec son compte (auth)
+
+*Contexte.* Une préférence personnelle doit suivre la personne d'un
+appareil à l'autre : ni cookie, ni réglage du dossier. Le socle n'avait pas
+d'endroit pour une préférence d'utilisateur hors de la langue.
+
+*Choix.* Colonne `auth_user.interface` (migration auth 0003), `NULL` tant
+que la personne n'a rien choisi, contrainte `CHECK (interface IS NULL OR
+interface IN ('simple', 'full'))`. Contrat `Partiduo::Api::Auth` :
+
+* `INTERFACE_SIMPLE`, `INTERFACE_FULL`, `INTERFACES` ;
+* `preferences(actor) : PreferencesView` — `interface` *en vigueur* (celle
+  qui est choisie, sinon le défaut du rôle : `full` pour le comptable,
+  `simple` pour un utilisateur de la société), `interface_chosen`,
+  `full_interface?` ;
+* `update_preferences(actor, PreferencesInput)` — `interface` `nil` garde la
+  préférence enregistrée ; refus `auth.errors.preferences.interface_invalid`
+  d'une valeur inconnue (fr, en, nl) ; mise à jour ciblée de la seule
+  colonne.
+
+Accès : acteur authentifié, même sous le niveau exigé (comme la sécurité du
+compte, `Guard.authorize_account!`) ; chacun ne lit et ne change que les
+siennes (l'utilisateur de l'acteur), jamais celles d'un autre ; refus à
+l'acteur anonyme ou technique. Aucune permission : une préférence ne change
+que la présentation, les droits restent ceux du profil. Le cœur ne sait
+rien des modules : l'interface décide si elle peut appliquer la préférence
+(module actif) sans la réécrire. Référence : `doc/api/auth.adoc`.
+
+*Migration du réglage de dossier.* La migration liberal 0005 (qui dépend
+de auth 0003) transmet `accounting` de `liberal_settings.interface` comme
+préférence `full` aux utilisateurs de la société qui n'ont rien choisi (le
+comptable y est par défaut), retire la contrainte puis la colonne. La
+migration 0004 n'est pas réécrite.
+
+*Alternative écartée.* Une table clé-valeur de préférences : une colonne
+typée et contrainte suffit tant qu'il n'y a qu'une préférence, et reste
+lisible dans le modèle comme la langue.
+
+=== D-UI-077 — Interface réglée dans les préférences de chaque utilisateur (interface)
+
+*Contexte.* D-UI-076 faisait de l'interface de la profession libérale un
+réglage du dossier ; l'utilisateur la veut personnelle (D-AUTH-016).
+
+*Choix.*
+
+* Écran `account_preferences` (`/account/preferences`), ouvert à toute
+  session authentifiée comme la sécurité du compte, joint depuis le menu de
+  l'utilisateur juste après « Sécurité du compte » (icône Lucide
+  `sliders-horizontal` ajoutée à la planche). Champ « Interface »
+  (`Form::Field` `select`, libellé associé, aide reliée par
+  `aria-describedby`, erreurs sous le champ) dans le vocabulaire du module :
+  « Recettes et dépenses » ou « Comptabilité » (profession libérale), « Mode
+  simplifié » ou « Mode complet » (comptable d'une micro-entreprise). Tant
+  que rien n'est choisi, l'introduction le dit (défaut du rôle). Sans choix
+  possible, pas de formulaire : l'interface appliquée et la raison
+  (Comptabilité inactive, préférence conservée qui reviendra avec le
+  module ; micro-entreprise en mode simplifié pour la société ; dossier
+  sans mode simplifié). Une interface non offerte est refusée (422).
+* Raccourci du menu de l'utilisateur (« Passer à la comptabilité », « Passer
+  aux recettes et dépenses », « Passer au mode simplifié/complet ») :
+  `POST /mode` (`interface_mode`) *enregistre* la préférence par le
+  contrat, même effet que l'écran ; 403 à qui n'a pas le choix ou pour une
+  interface autre que celle proposée.
+* `PartiduoUi::SimpleMode` : `Choice` (module du mode simplifié, interfaces
+  offertes, préférences du contrat), calculé une fois par requête ;
+  `interfaces(module, rôle, comptabilité active)` : profession libérale,
+  `full` seulement avec la Comptabilité active ; micro-entreprise, `full`
+  au seul comptable (ses utilisateurs de la société restent en mode
+  simplifié, ADR-007 D3) ; `choose(préférence, offertes)` : la préférence si
+  elle est offerte, sinon `simple`, sans rien effacer. Le cookie
+  `partiduo_mode` n'est plus lu ni écrit, pour personne, comptable compris.
+* Écran `liberal:settings` : le champ « Interface » est retiré (et, côté
+  contrat, `SettingsInput#interface`, `SettingsView#interface`,
+  `accounting_interface?`, `interfaces(actor)`).
+* Le mode ne change que la présentation : les droits restent ceux du
+  contrat, toute route permise reste joignable.
+
+*Vérification.* `partiduo-app` : `scripts/specs-modules.sh --order random`,
+huit configurations vertes (dont `liberal` : 807 exemples, et
+`liberal,accounting` : 1 075 exemples ; spec `spec/auth/preferences_spec.cr`) ;
+`partiduo-ui-bulma` : 392 exemples verts en ordre aléatoire, garde-fous
+`interface_boundary` et `api_boundary` compris ; `partiduo-demo` : spec
+verte (6 exemples) ; Ameba sans remarque dans les trois dépôts. Reprise de
+la migration liberal 0005 essayée sur une copie de la base de démonstration
+(dossier en `accounting` : l'utilisatrice passe à `full`, la colonne
+disparaît). Vérifié dans le navigateur intégré sur le dossier `liberal` de
+`partiduo-demo`, en thème sombre : « Préférences » dans le menu de
+l'utilisatrice, sous « Sécurité du compte » ; recettes et dépenses par
+défaut ; « Comptabilité » enregistrée, menu complet ; déconnexion puis
+reconnexion : comptabilité retrouvée, aucun cookie `partiduo_mode` ; retour
+aux recettes et dépenses par le raccourci du menu, enregistré (écran des
+préférences à jour) ; au téléphone (375 px), sans défilement horizontal ;
+champ relié à son libellé et à son aide ; plus de champ « Interface » dans
+les paramètres de la profession libérale. Bases de test :
+`partiduo_test_lib4_app`, `partiduo_test_lib4_ui`, `partiduo_test_lib4_demo`,
+supprimées à la fin.
+
+== Facture récapitulative et facturation mensuelle des bons de livraison (30 septembre 2026)
+
+Demande de l'utilisateur : facturer en une fois les livraisons d'un même
+client au cours d'un mois (art. 289-I-3 du CGI : livraisons multiples à un
+même client au cours d'un même mois, facture au plus tard à la fin du mois),
+choisir ce rythme client par client, voir le livré non facturé, préparer (ou
+émettre et envoyer) les factures de fin de mois ; puis un encours maximum HT
+par client. Contrat : link:doc/api/invoicing.adoc[] (§ Bons à facturer,
+facture récapitulative, fin de mois). Préfixe : `D-INV2-`. ADR-006 D5
+complété (partiduo-docs).
+
+=== D-INV2-001 — Facture de plusieurs bons par le contrat : `invoice_delivery_notes` (facturation)
+
+*Contexte.* `TRANSFORMATIONS` fait d'un bon de livraison *une* facture
+(`source_id` unique), et rien n'empêchait d'en tirer deux factures.
+
+*Choix.* `Api::Invoicing.invoice_delivery_notes(actor, ids)` : un bon, la
+transformation habituelle (document source, « Issu du bon de livraison
+BL-… ») ; plusieurs, une *facture récapitulative* sans document source :
+pour chaque bon, du premier livré au dernier, une ligne de titre « Bon de
+livraison BL-2026-0003 du 03/09/2026 », ses lignes, un sous-total (s'il n'a
+pas ses propres titres). Client, devise, langue, adresse de livraison et
+canal du premier bon ; catégorie d'opération commune, ou `mixed` ; acomptes
+ouverts des chaînes des bons déduits. Contrôles, les bons verrouillés :
+sélection non vide et sans doublon, bons émis, même client, même devise, ni
+facturés ni repris par un autre brouillon. La transformation d'un bon en
+facture suit les mêmes contrôles (refus `already_billed`, `in_draft`).
+`TRANSFORMATIONS` est inchangé : la facture de plusieurs bons n'est pas une
+transformation d'un document.
+
+*Alternative écartée.* Plusieurs `source_id` (tableau) sur le document :
+casse la chaîne documentaire (`source`, `derived`) que lisent la mention
+d'origine, le Stock (D-STK-010) et les acomptes.
+
+=== D-INV2-002 — Lien bon ↔ facture : ligne qui cite son bon, table unique et figée, état « facturé » (facturation, migration invoicing 0006)
+
+*Choix.*
+
+* `invoicing_line.delivery_note_id` (`LineInput#delivery_note_id`,
+  `LineView#delivery_note_id`) : bon de livraison dont la ligne d'une
+  facture est issue ; une facture seulement (`invoice_only`), un bon émis du
+  même client et de la même devise. L'interface le garde dans un champ caché
+  de chaque ligne.
+* `invoicing_billed_delivery (invoice_id, delivery_note_id UNIQUE)` :
+  recalculée à chaque enregistrement du brouillon depuis ses lignes et son
+  document source (retirer le groupe d'un bon le libère ; supprimer le
+  brouillon aussi) ; un bon n'est repris que par *une* facture, brouillon ou
+  émise (index unique) ; lignes figées avec la facture émise
+  (`invoicing_child_guard('invoice_id')`).
+* État `invoiced` du bon (contrainte d'état élargie ; colonne modifiable d'un
+  document émis) posé à l'émission de la facture, *avant* `invoice.issued`,
+  tracé dans le journal du bon (`invoiced`). `DocumentView#delivery_notes`
+  (facture) et `#billed_in` (bon).
+* Reprise : chaque facture déjà tirée d'un bon (`source_id`) reçoit son
+  lien (la facture émise d'abord ; déclencheur suspendu le temps de
+  l'insertion, dans la transaction de la migration) ; ses bons émis passent
+  à `invoiced`.
+* Une facture créditée par avoir ne rend pas ses bons « à facturer » : la
+  livraison a eu lieu ; une nouvelle facture se fait à la main.
+
+*Alternative écartée.* Un indicateur « facturé » par ligne de bon
+(livraison partielle facturée ligne à ligne) : modèle plus lourd, sans
+demande ; la limite de D-STK-010 (livraison partielle d'une chaîne) reste.
+
+=== D-INV2-003 — Dates : période de facturation (BG-14), bon et livraison par ligne (BG-26, BT-127), mentions (facturation)
+
+*Choix.* Facture de plusieurs livraisons : `billing_period_start` et
+`billing_period_end` (colonnes du document, contrainte « les deux ou aucune,
+début ≤ fin », figées par le déclencheur d'intangibilité) = première et
+dernière livraison ; `delivery_date` = dernière. XML CII :
+`BillingSpecifiedPeriod` en tête, *au lieu de*
+`ActualDeliverySupplyChainEvent` (BT-72, date unique) ; sur chaque ligne
+issue d'un bon, `IncludedNote` = numéro du bon (BT-127) et
+`BillingSpecifiedPeriod` = sa date de livraison (BG-26) ; UBL de
+`partiduo-einvoicing` : `cac:InvoicePeriod` en tête et par ligne, `cbc:Note`.
+Mentions : `dates.delivery_period` (« Livraisons du … au … ») au lieu de
+`dates.delivery`, et `delivery_notes.summary.fr` (« Facture récapitulative
+des livraisons (art. 289-I-3 du CGI) : bons de livraison … » ; `.be` sans
+article). La facture d'un seul bon prend la date de livraison du bon (et
+non plus sa date d'émission). Empreinte : la période et le bon de chaque
+ligne n'y entrent que s'ils existent — les empreintes antérieures ne
+changent pas.
+
+*Alternative écartée.* BT-72 = dernière livraison seule : la facture ne
+dirait plus que les livraisons s'étalent sur le mois.
+
+=== D-INV2-004 — Rythme de facturation : réglage client de la Facturation, pas la fiche du socle (facturation)
+
+*Contexte.* La fiche client est au socle, partagée par la Comptabilité, le
+micro, la profession libérale, qui n'ont pas de bons de livraison.
+
+*Choix.* Table `invoicing_customer (card_id UNIQUE → cards_card ON DELETE
+CASCADE, billing_rhythm, credit_limit)` : accessoire de la fiche, comme
+`stock_item` (D-STK-002) ; pas de ligne = `per_delivery`, pas de plafond.
+`customer_billing` (lecture), `update_customer_billing`
+(`invoicing.settings.manage`). L'interface l'affiche dans une rubrique
+« Facturation » de la fiche client quand le module est actif.
+
+*Alternative écartée.* Colonne de `cards_card` (comme `pdf_copy`) : le socle
+porterait un réglage de la seule Facturation.
+
+=== D-INV2-005 — Encours HORS TAXES, dans la devise du dossier (facturation)
+
+*Choix.* Encours HT = bons de livraison émis non facturés (HT) + part HT
+restant due des factures et factures d'acompte émises non annulées : HT ×
+reste dû ÷ TTC, le reste dû étant TTC − acomptes déduits − règlements −
+avoirs (un règlement partiel ou un avoir réduit la part HT au prorata). Le
+plafond est un montant HT (précision de l'utilisateur). Documents en devise
+étrangère : convertis au cours du socle à leur date (comme le FEC,
+D-2F-009) ; sans cours, comptés à leur montant nominal et signalés
+(`unconverted`). Devis, commandes et brouillons n'entrent pas dans
+l'encours ; ils sont contrôlés à leur émission (D-INV2-009).
+
+*Alternative écartée.* Encours TTC (première formulation de la demande) :
+remplacé à la demande de l'utilisateur ; un plafond HT se compare au
+chiffre d'affaires et ne dépend pas des taux.
+
+=== D-INV2-006 — Stock et Comptabilité : lignes issues d'un bon, sans module Stock (stock, intégration)
+
+*Choix.* `Stock::Feeds` : pour une facture dont des lignes citent un bon,
+ces lignes ne sortent pas (le bon les a sorties), les autres (ajoutées à la
+facture) sortent ; sans ligne citant un bon, la règle de D-STK-004 et
+D-STK-010 (chaîne livrée) s'applique. Règle inchangée : le bon de livraison
+ne bouge le stock que si le module Stock est actif pour le dossier ;
+saisi, émis et facturé de même sans lui (spec
+`spec/stock/feeds_spec.cr`) ; les articles non suivis (prestations) ne
+bougent jamais. Comptabilité : la facture récapitulative publie
+`invoice.issued` comme toute facture, et l'écriture de vente est celle de
+toute facture (spec `spec/integration/invoicing_accounting_spec.cr`) ; un
+bon de livraison n'en produit aucune.
+
+=== D-INV2-007 — Fin de mois : préparation idempotente, préparer et proposer ou émettre et envoyer (facturation)
+
+*Choix.* `prepare_monthly_invoices` : pour chaque client au rythme
+`monthly` (ou le client désigné, quel que soit son rythme : « Facturer le
+mois »), un brouillon par devise qui regroupe ses bons émis, non facturés,
+libres, livrés au plus tard le dernier jour du mois — les bons oubliés d'un
+mois précédent compris. `invoicing_monthly_invoice (month, customer_id,
+currency_code) UNIQUE`, sous verrou consultatif : *jamais deux* factures
+pour un client, un mois et une devise ; un brouillon supprimé laisse la
+trace (le mois n'est pas repris pour ce client, la décision de l'utilisateur
+est respectée) ; une préparation refusée (`failed`, sans facture) est
+reprise au passage suivant. Paramètres du dossier
+(`monthly_billing_mode`) : `propose` (défaut) — les brouillons attendent
+dans « À traiter », émis et envoyés d'un clic, un par un ou tous
+(`issue_and_send`, `issue_and_send_proposals`) ; `auto_send` — chaque
+facture est aussitôt émise et envoyée par le canal de son client :
+courriel (adresse de la fiche), plateforme agréée (relevée par
+`partiduo-einvoicing`, copie PDF après le dépôt, mécanismes existants),
+papier (à imprimer puis marquer envoyé). Une émission refusée (SIREN
+manquant, encours) laisse le brouillon proposé, motif affiché.
+
+*Limite connue.* Un bon livré le dernier jour après le passage du soir
+entre dans la facture du mois suivant ; « Facturer ces bons » reste
+possible à tout moment.
+
+=== D-INV2-008 — Déclenchement : commande `manage invoicing_month_end`, quotidienne et idempotente, rattrapage (facturation, instance)
+
+*Contexte.* Le cœur n'a aucun mécanisme de tâches périodiques : les
+relances sont proposées depuis l'écran, les synchronisations des
+extensions à la demande ; la planification de `partiduo-admin` vise le
+parc (sauvegardes), pas les données d'un dossier.
+
+*Choix.* `month_end(actor, today)` et la commande
+`partiduo-manage invoicing_month_end [--date AAAA-MM-JJ] [--month AAAA-MM
+[--customer CODE]]`, *à lancer chaque jour par le planificateur de
+l'instance* : le mois précédent tant qu'il n'est pas clos (rattrapage d'un
+jour manqué, instance arrêtée), le mois courant le jour de sa fin ; chaque
+mois ainsi traité est clos (`invoicing_month_close`). Réponse JSON ;
+module Facturation inactif : rien, code 0. La ligne de planification par
+instance (cron) est écrite par la session qui porte le déploiement
+(passage des serveurs à FreeBSD) : `deploy/`, `bin/partiduo-provision` et
+`deploy/bin/partiduo-fleet` ne sont pas modifiés ici.
+
+*Alternative écartée.* Un minuteur dans le serveur web : plusieurs
+processus par instance le déclencheraient chacun, et un arrêt le ferait
+manquer sans rattrapage.
+
+=== D-INV2-009 — Encours maximum HT : refus à l'émission, dérogation motivée et tracée, alerte à 90 % (facturation)
+
+*Choix.* Contrôle à l'émission d'une commande, d'un bon de livraison et
+d'une facture (`CREDIT_CONTROLLED_KINDS`) : montant ajouté = HT du document
+(facture de bons : HT − bons repris, déjà comptés ; acomptes déduits
+retranchés). Au-delà du plafond, refus
+`invoicing.errors.credit_limit.exceeded` (encours actuel, montant,
+plafond, dépassement), sauf `IssueInput#credit_override_reason` (motif
+obligatoire, 500 caractères) et nouvelle permission
+`invoicing.credit_limit.override` (accordée aux profils ACCOUNTANT
+existants par la migration ; le profil comptable invité ne l'a pas) ;
+dérogation tracée dans le journal du document (`credit_override` : motif,
+montants). Devis : avertissement seulement (`controlled` faux). À la
+création d'un brouillon, l'écran avertit (`credit_check`). Facture
+d'acompte et avoir : non contrôlés (l'acompte réduit le risque). « À
+traiter » : clients à 90 % de leur plafond et plus (`credit_alerts`).
+
+*Alternative écartée.* Contrôle dès l'enregistrement du brouillon : un
+brouillon n'engage rien et doit pouvoir se préparer.
+
+=== D-INV2-010 — Interface : Bons à facturer, fiche client, dérogation, paramètres, « À traiter » (interface)
+
+*Choix.* Menu Facturation « Bons à facturer » (`INV_TO_INVOICE`,
+`invoicing:to_invoice`) : filtre par client et période de livraison, cases
+à cocher, « Facturer ces bons », encours HT / plafond de chaque client,
+bon repris par un brouillon signalé ; factures de fin de mois proposées
+(« Émettre et envoyer », « Tout émettre et envoyer ») ; « Facturer le
+mois » (clients mensuels, ou le client filtré). Fiche client : rubrique
+« Facturation » (rythme, encours maximum HT, encours HT, livré non
+facturé, reste dû HT), jauge accessible (nom accessible et état écrit en
+toutes lettres, jamais la seule couleur), « Modifier » (réglage client),
+« Facturer le mois de ce client ». Brouillon au-delà du plafond :
+avertissement chiffré, formulaire de dérogation (motif) pour qui a la
+permission. Paramètres de la Facturation : groupe « Facturation mensuelle
+des bons de livraison ». Tableau de bord, « À traiter » : factures du mois
+à émettre, clients proches du plafond. Conventions de `partiduo-ui-bulma` :
+cibles de 44 px, propriétés logiques, jetons de couleur (thème sombre),
+fr/en/nl. Spec : `partiduo-ui-bulma/spec/ui/delivery_billing_spec.cr`.
+
+=== D-INV2-011 — Aucun nouvel événement (ADR-003 D7 inchangé)
+
+*Choix.* Le Stock relit la facture et ses bons par le contrat depuis
+l'abonné d'`invoice.issued` (D-STK-001, amendement adopté) ; les bons sont
+marqués `invoiced` avant l'événement. `delivery_note.issued` et
+`invoice.issued` gardent leur charge utile. Aucun amendement d'ADR-003 D7
+n'est proposé.
+
+=== D-INV2-012 — Démonstration et bases de test (tests)
+
+*Choix.* Dossier `atelier` de `partiduo-demo` : client « Décoration Val de
+Loire » au rythme mensuel, encours maximum 4 200 € HT, trois bons par mois
+sur les trois derniers mois, fin de mois planifiée, facture de
+l'avant-dernier mois émise et envoyée d'un clic puis réglée, celle du mois
+dernier proposée, bons du mois en cours à facturer. Bases de test :
+`partiduo_test_bl_app`, `partiduo_test_bl_ui`, `partiduo_test_bl_einv`,
+`partiduo_test_bl_demo`, supprimées à la fin.
+
+== Exercice libéral : clôture réversible, verrou à la transmission (1er octobre 2026)
+
+Décision de l'utilisateur du 1er octobre 2026 : « Le libéral doit pouvoir
+clôturer son exercice, et le dé-clôturer ; une fois que c'est envoyé ⇒
+verrou ! » D-LIB2 figeait l'exercice au premier de deux événements, la
+clôture au socle (irréversible, geste de la Comptabilité) ou la
+transmission de la 2035 ; le professionnel n'avait pas de clôture à lui.
+L'exercice libéral a désormais trois états, propres au module.
+
+=== D-LIB5-001 — Trois états de l'exercice : ouvert, clôturé (réversible), verrouillé (liberal ; complète D-LIB2-001 et D-LIB2-005)
+
+*Choix.*
+
+* *Ouvert* (`open`) : lignes, immobilisations, cessions, réintégrations et
+  déductions se saisissent, se modifient et se suppriment (D-LIB2-001).
+* *Clôturé* (`closed`) : `close_year(actor, year)` fige l'exercice
+  (déclencheurs), garde l'empreinte de sa 2035 ; `reopen_year(actor,
+  year)` le rouvre tant que la 2035 n'est pas transmise. Refus traduits :
+  `year.close.future` (année à venir), `year.close.already`,
+  `year.close.locked`, `year.reopen.locked`, `year.reopen.core_closed`,
+  `year.reopen.open`, `year.invalid` ; une ligne d'un exercice clôturé :
+  `line.change.year_closed`, `line.date.year_closed`.
+* *Verrouillé* (`locked`) : 2035 transmise (D-LIB5-002), définitif ;
+  correction par contre-passation datée dans un exercice ouvert.
+
+*Droit.* `liberal.register.write`, celui de la saisie : la clôture ne fait
+que retirer, réversiblement, ce que ce droit permet (modifier et supprimer
+les lignes), et la réouverture le rend ; c'est le geste du professionnel
+qui tient son livre-journal, pas un paramétrage. `liberal.settings.write`
+(natures, table de correspondance) aurait laissé le professionnel
+dépendre d'un droit de configuration pour finir son année, ou donné ce
+droit à qui n'en a pas besoin. Le verrou, lui, ne se lève par aucun droit.
+
+*Trace.* `liberal_year` : `state`, `closed_at`, `closed_by_id` (clôture en
+vigueur), `reopened_at`, `reopened_by_id` (dernière réouverture) ;
+`liberal_year_change` garde chaque passage (`closed`, `reopened`,
+`locked`, `unlocked`), qui et quand, avec la référence du dépôt ; rien ne
+s'y efface. Contrat : `YearView` (`state`, `closed_by`, `reopened_by`,
+`core_closed_at`, `closable?`, `reopenable?`, `locked?`), `year_history`
+(`YearChangeView`).
+
+Migration liberal 0006 : colonnes et historique, contrainte
+`liberal_year_state_check` (`open` sans date de clôture, `locked` si et
+seulement si transmise), `liberal_register_guard` et
+`liberal_adjustment_guard` refusent toute écriture dans un exercice dont
+l'état n'est pas `open` (au lieu d'une année seulement transmise),
+`liberal_year_guard` refuse en base de rouvrir un exercice verrouillé ou de
+supprimer un exercice clôturé ; une année transmise avant la migration
+devient `locked`, clôturée à la date de sa transmission. Retour :
+déclencheurs de la migration 0003. Le verrou consultatif
+`hashtext('liberal_year')` sérialise clôture, réouverture et transmission
+avec les écritures en cours.
+
+Specs : `spec/liberal/year_closing_spec.cr` (ouvert → clôturé → ouvert →
+clôturé → verrouillé, chaque passage tracé ; refus de rouvrir un exercice
+verrouillé, par le contrat comme en base ; rejet → clôturé ; deux exercices
+indépendants ; refus sans objet ; droit de saisie),
+`spec/liberal/changes_spec.cr`, `spec/liberal/access_spec.cr`.
+
+*Alternative écartée.* Rouvrir par une permission dédiée : un droit de plus
+pour un geste que la saisie couvre déjà.
+
+=== D-LIB5-002 — Verrou par la transmission ; le rejet rend l'exercice clôturé (liberal ; remplace le rejet de D-LIB2-003 ; événements adoptés)
+
+*Choix.* `tax_return.transmitted` verrouille l'exercice (`locked`, date,
+référence du dépôt, empreintes) ; `tax_return.rejected` du même dépôt lève
+le verrou et rend l'exercice *clôturé*, non plus ouvert : le professionnel
+le rouvre pour corriger, le clôture et renvoie. Une transmission notée sur
+un exercice encore ouvert (réouverture concurrente, ou extension qui
+n'exigerait pas la clôture) le clôture d'office, au nom de l'auteur de la
+transmission, puis le verrouille : l'abonné ne refuse jamais, la
+transmission a déjà eu lieu.
+
+*Amendement.* Les deux événements `tax_return.transmitted` et
+`tax_return.rejected` (ADR-003 D7) sont *adoptés par l'utilisateur le
+1er octobre 2026* ; ADR-003 D7 et D-LIB2-003 le disent désormais, au lieu
+de « par extension de D-MIC2-003 ».
+
+=== D-LIB5-003 — La 2035 se transmet sur un exercice clôturé : `partiduo-teledec` l'exige (teledec)
+
+*Choix.* Exiger la clôture plutôt que clôturer d'office : la clôture est
+un geste conscient du professionnel, qui voit et peut encore rouvrir ce
+qu'il va déclarer ; une clôture d'office à l'envoi passerait inaperçue et
+ferait d'un clic d'envoi un verrou sur des lignes encore en chantier. Côté
+`partiduo-teledec` (`Teledec::TaxReturns.open_year_errors`, lecture de
+`Liberal.year`) : une liasse qui joint la 2035 d'un exercice ouvert porte le
+contrôle bloquant `teledec.controls.liberal_year_open` ; `transmit` et
+`record_outcome` (transmission notée à la main) refusent avec
+`teledec.errors.filing.liberal_year_open` (fr, en, nl). Côté module : le
+contrôle `liberal.controls.year_open` (avertissement de la 2035) dit
+désormais « exercice non clôturé : le clôturer avant de transmettre » ; il
+disparaît une fois l'exercice clôturé, même si le socle ne l'est pas.
+Rouvert après la préparation puis corrigé, l'exercice doit être de nouveau
+clôturé, et la liasse préparée de nouveau (empreinte changée).
+
+Specs : `partiduo-teledec/spec/teledec/liberal_freeze_spec.cr` (refus d'un
+exercice ouvert, par l'API comme à la main ; verrou ; rejet → clôturé,
+rouvert, corrigé, renvoyé ; dépôt noté à la main avec la Comptabilité),
+`liberal_only_spec.cr`.
+
+*Alternative écartée.* Clôture d'office à la transmission (gardée
+seulement comme filet de l'abonné, D-LIB5-002).
+
+=== D-LIB5-004 — Clôture au socle et Comptabilité (liberal, comptabilité)
+
+*Choix.* La clôture de l'exercice libéral est propre au module : elle ne
+clôt aucune période du socle et ne publie aucun événement ; la
+Comptabilité n'a rien à passer (les écritures de trésorerie suivent déjà
+chaque ligne) et peut encore passer ses écritures d'inventaire.
+La clôture au socle (`close_fiscal_year`, ou toutes les périodes de
+l'année closes, en pratique par la Comptabilité) reste un verrou de plus :
+l'exercice est alors *clôturé* (`core_closed_at`) et le module ne le
+rouvre pas (`year.reopen.core_closed`) — une période close au socle ne se
+rouvre jamais par le libéral ; une période close au milieu d'un exercice
+ouvert fige les lignes de cette période seulement. Quand la Comptabilité
+est active, le professionnel clôture et rouvre son exercice librement tant
+que le comptable n'a pas clos les périodes ; ensuite seul le verrou du
+socle compte, puis celui de la transmission.
+
+*Réouverture.* Rien à défaire : les écritures restent en vigueur ; les
+lignes redeviennent modifiables et l'abonné de la Comptabilité suit leurs
+modifications et suppressions (`liberal.*.updated`, `liberal.*.deleted`,
+D-LIB2-002). Spec : `spec/integration/liberal_changes_spec.cr` (clôture et
+réouverture sans écriture, modification et suppression suivies après
+réouverture, invariant « une écriture en vigueur par ligne », verrou, socle
+clos non rouvert).
+
+*Limite.* Un encaissement de la Facturation daté dans un exercice figé est
+inscrit à la date du jour (D-LIB2-001) ; si l'exercice en cours est
+lui-même clôturé (cessation d'activité), il n'est pas inscrit et l'échec
+est consigné : rouvrir l'exercice, puis saisir la recette.
+
+=== D-LIB5-005 — Interface : « Clôturer l'exercice », « Rouvrir l'exercice », verrou (interface ; complète D-LIB2-006)
+
+*Choix.* Livre-journal (mode complet), recettes et dépenses (mode
+simplifié) et 2035 : bouton « Clôturer l'exercice » (exercice ouvert) ou
+« Rouvrir l'exercice » (clôturé par le module, 2035 non transmise), parmi
+les actions de la page, avec confirmation (`data-pd-confirm`, ce que
+change le geste) et nom accessible avec l'année (« Clôturer l'exercice
+2026 ») ; rien pour un exercice verrouillé ou clos au socle, ni sans le
+droit de saisie. POST `/liberal/years/<année>/close` et `/reopen`, retour à
+la page d'origine (`next`, chemin du site), message de succès ou refus du
+contrat. En-tête d'exercice : « ouvert, modifiable », « clôturé le … par
+… », « 2035 transmise le … — verrouillé », cadenas dès qu'il est clôturé ;
+2035 : état en tête (« Clôturez l'exercice avant de transmettre la
+2035 », « … rouvrez l'exercice tant que la 2035 n'est pas transmise »,
+« … avec l'exercice du dossier », « … — exercice verrouillé »), rubrique
+« Clôtures et réouvertures » (date, opération, auteur). Ligne d'un
+exercice clôturé : explication et refus « le rouvrir pour modifier la
+ligne ». Tableau de bord : « clôturez l'exercice, puis déposez-la ».
+Icône Lucide `lock-open` ajoutée. fr, en, nl ; boutons de page (44 px au
+téléphone). Spec : `partiduo-ui-bulma/spec/ui/liberal_year_closing_spec.cr`.
+
+Démonstration (`partiduo-demo`, dossier `liberal`) : exercice précédent
+clôturé puis sa 2035 transmise au TELEDEC simulé (verrouillé), exercice en
+cours ouvert.
+
+Bases de test : `partiduo_test_lib5_app`, `partiduo_test_lib5_ui`,
+`partiduo_test_lib5_teledec`, `partiduo_test_lib5_demo`, supprimées à la
+fin.
+
+*Vérification.* `partiduo-app` : `scripts/specs-modules.sh --order random`,
+huit configurations vertes (dont `liberal` : 834 exemples, et
+`liberal,accounting` : 1 102 exemples) ; `partiduo-ui-bulma` : 403
+exemples verts ; `partiduo-teledec` : 248 exemples verts (8 en attente :
+suite du stage, sans réseau) ; `partiduo-demo` : spec verte (7 exemples) ;
+Ameba sans remarque ; planche d'icônes à jour. Vérifié dans le navigateur
+intégré sur le dossier `liberal` de `partiduo-demo` (thème sombre) :
+dépenses 2026 « ouvert, modifiable » ; « Clôturer l'exercice »
+(confirmation) → « clôturé le … par Camille Rivière », cadenas,
+« Contre-passer » à la place de Modifier et Supprimer ; « Rouvrir
+l'exercice » → de nouveau ouvert ; reclôturé depuis la 2035, historique
+« Clôtures et réouvertures » ; 2025 « 2035 transmise le … — verrouillé »,
+sans bouton « Rouvrir » ni « Clôturer », historique « Clôture » puis
+« 2035 transmise : exercice verrouillé » ; au téléphone (375 px), pas de
+défilement horizontal de la page, bouton de 44 px au nom accessible
+« Rouvrir l'exercice 2026 ».
 
 == Déploiement FreeBSD par paquets (branche `freebsd`, 30 septembre 2026)
 

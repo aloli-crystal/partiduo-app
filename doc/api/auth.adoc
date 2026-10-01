@@ -34,6 +34,16 @@ obligatoire » (palier CNIL à 50 bits), 71 octets au plus, ni nom ni adresse ;
 BCrypt par `authn`. Dès qu'une passkey ou un TOTP est actif, le mot de passe
 exige un second facteur.
 
+|Préférences (D-AUTH-016)
+|Réglages personnels, enregistrés avec le compte (`auth_user.interface`,
+migration auth 0003) : ils suivent la personne d'un appareil à l'autre,
+jamais un cookie. `interface` : `simple` (recettes et dépenses, mode
+simplifié) ou `full` (comptabilité, mode complet) ; tant que rien n'est
+choisi, défaut du rôle (`full` pour le comptable, `simple` sinon).
+Chacun ne lit et ne change que les siennes ; une présentation seulement,
+les droits restent ceux du profil. L'interface décide si elle peut
+l'appliquer (module actif) sans la réécrire (D-UI-077).
+
 |Tentatives
 |Temporisation à partir du 3ᵉ échec (5 s, doublée, plafond 15 min), blocage au
 10ᵉ ; déblocage par l'administrateur, par jeton, ou par remise à zéro du mot
@@ -216,6 +226,10 @@ Chaque fonction prend l'acteur en premier argument, sauf `actor(jeton)` et
 `finish_passkey_registration`, `rename_passkey`
 |authentifié, même sous le niveau exigé (`begin_`/`confirm_totp_enrollment` : niveau 2 si un TOTP est déjà actif)
 |vues, `Result`
+
+|`preferences`, `update_preferences(actor, PreferencesInput)`
+|authentifié, même sous le niveau exigé ; chacun les siennes seulement
+|`PreferencesView`, `Result(PreferencesView)` (D-AUTH-016)
 
 |`disable_totp`, `regenerate_recovery_codes`, `remove_passkey`
 |authentifié, niveau 2 (`ElevationRequired`)

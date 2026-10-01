@@ -57,6 +57,7 @@ module Partiduo
           pdf_copy_enabled: row.pdf_copy_enabled.nil? ? true : row.pdf_copy_enabled!,
           pdf_copy_from: row.pdf_copy_from,
           pdf_copy_until: row.pdf_copy_until,
+          monthly_billing_mode: row.monthly_billing_mode.presence || "propose",
         )
       end
 
@@ -118,6 +119,9 @@ module Partiduo
         if (from = input.pdf_copy_from) && (upto = input.pdf_copy_until) && from > upto
           errors << error("pdf_copy_until", "pdf_copy_period")
         end
+        unless Api::MONTHLY_BILLING_MODES.includes?(input.monthly_billing_mode)
+          errors << error("monthly_billing_mode", "monthly_billing_mode")
+        end
         errors
       end
 
@@ -149,6 +153,7 @@ module Partiduo
         row.pdf_copy_enabled = input.pdf_copy_enabled
         row.pdf_copy_from = input.pdf_copy_from.try(&.at_beginning_of_day)
         row.pdf_copy_until = input.pdf_copy_until.try(&.at_beginning_of_day)
+        row.monthly_billing_mode = input.monthly_billing_mode
         row.save!
         view(row)
       end

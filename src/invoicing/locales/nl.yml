@@ -20,12 +20,15 @@ nl:
         manage: "Facturatie-instellingen beheren"
       export:
         read: "Aan de boekhouder bezorgen"
+      credit_limit:
+        override: "Afwijken van de kredietlimiet van een klant"
     menu:
       inv_documents: "Offertes en facturen"
       inv_new_invoice: "Nieuwe factuur"
       inv_payments: "Betalingen"
       inv_reminders: "Herinneringen"
       inv_export: "Bezorging aan de boekhouder"
+      inv_to_invoice: "Te factureren leveringsbonnen"
       inv_templates: "Documentsjablonen"
       inv_settings: "Facturatie-instellingen"
     kinds:
@@ -47,6 +50,7 @@ nl:
       partially_paid: "Gedeeltelijk betaald"
       paid: "Betaald"
       overdue: "Achterstallig"
+      invoiced: "Gefactureerd"
     channels:
       none: "Niet gekozen"
       platform: "Erkend platform"
@@ -66,6 +70,23 @@ nl:
       from_invoice: "Op basis van factuur %{number}"
       from_deposit_invoice: "Op basis van voorschotfactuur %{number}"
       from_credit_note: "Op basis van creditnota %{number}"
+    delivery_notes:
+      group_title: "Leveringsbon %{number} van %{date}"
+    billing_rhythms:
+      per_delivery: "Bij elke levering"
+      monthly: "Maandelijkse verzamelfactuur"
+    monthly_modes:
+      propose: "Voorbereiden en voorstellen"
+      auto_send: "Automatisch uitreiken en verzenden"
+    dispatch:
+      emailed: "Factuur per e-mail verzonden naar %{to}"
+      email_missing: "Factuur uitgereikt: de klant heeft geen e-mailadres, verzend ze zelf"
+      email_failed: "Factuur uitgereikt, maar de verzending per e-mail is mislukt"
+      send_denied: "Factuur uitgereikt: verzenden per e-mail vereist de verzendrechten"
+      platform: "Factuur uitgereikt: bezorging via het erkende platform"
+      to_print: "Factuur uitgereikt: afdrukken en overhandigen, daarna als verzonden markeren"
+      public_portal: "Factuur uitgereikt: op het openbare portaal plaatsen, daarna als verzonden markeren"
+      already_sent: "Factuur al verzonden"
     deposit:
       line: "Voorschot van %{percent} % op %{number}"
     mentions:
@@ -85,6 +106,7 @@ nl:
         issue: "Uitreikingsdatum: %{date}"
         delivery: "Datum van levering of dienstverrichting: %{date}"
         due: "Vervaldatum: %{date}"
+        delivery_period: "Leveringen van %{from} tot %{to}"
       quote:
         validity: "Offerte geldig tot %{date}"
       delivery_address: "Leveringsadres: %{address}"
@@ -120,6 +142,10 @@ nl:
       deposit:
         invoice: "Voorschotfactuur"
         deducted: "Voorschot %{number} afgetrokken: %{amount} %{currency}"
+      delivery_notes:
+        summary:
+          fr: "Verzamelfactuur van leveringen (art. 289-I-3 van het Franse belastingwetboek): leveringsbonnen %{numbers}"
+          be: "Verzamelfactuur van leveringen: leveringsbonnen %{numbers}"
       payment:
         terms:
           net: "Betalingsvoorwaarden: %{days} dagen netto vanaf de factuurdatum"
@@ -210,6 +236,7 @@ nl:
         journal_code: "Dagboekcode: hoofdletters en cijfers, hoogstens acht"
         account: "Rekeningnummer: cijfers en hoofdletters, hoogstens twintig"
         pdf_copy_period: "Het einde van de periode voor de pdf-kopie ligt vóór het begin"
+        monthly_billing_mode: "Onbekende wijze van maandelijkse facturatie"
       document:
         kind:
           immutable: "De aard van een document verandert niet"
@@ -262,6 +289,13 @@ nl:
           exceeds: "De globale korting overschrijdt het totaal van de lijnen"
         issued: "Uitgereikt document: het kan niet gewijzigd of verwijderd worden; verbeter het met een creditnota"
         in_use: "Dit ontwerp wordt door een ander document vermeld"
+        delivery_notes:
+          invoice_only: "Alleen een factuur neemt leveringsbonnen over"
+          invalid: "Dit document is geen uitgereikte leveringsbon"
+          other_customer: "Leveringsbon %{number} is van een andere klant"
+          other_currency: "Leveringsbon %{number} is in een andere munt"
+          already_billed: "Leveringsbon %{number} is al gefactureerd"
+          in_draft: "Leveringsbon %{number} is al opgenomen in een ontwerpfactuur"
       discount:
         kind: "Onbekend kortingstype"
         negative: "De korting kan niet negatief zijn"
@@ -291,6 +325,20 @@ nl:
           required: "Kies een btw-tarief"
         discount:
           exceeds: "De korting overschrijdt het lijnbedrag"
+      delivery_notes:
+        empty: "Selecteer minstens één leveringsbon"
+        duplicate: "Leveringsbon twee keer geselecteerd"
+        several_customers: "De geselecteerde leveringsbonnen zijn van meerdere klanten"
+        several_currencies: "De geselecteerde leveringsbonnen zijn in meerdere munten"
+      customer_billing:
+        rhythm: "Onbekend facturatieritme"
+        credit_limit: "Kredietlimiet excl. btw: een positief bedrag, tot op de cent"
+      credit_limit:
+        exceeded: "Kredietlimiet excl. btw van %{customer} overschreden: huidig uitstaand bedrag %{exposure} %{currency}, document %{amount} %{currency}, limiet %{limit} %{currency}, overschrijding %{excess} %{currency}"
+        override_denied: "Kredietlimiet excl. btw van %{customer} overschreden met %{excess} %{currency}: afwijken vereist de rechten om van de kredietlimiet af te wijken"
+        reason_too_long: "Reden van de afwijking: hoogstens %{max} tekens"
+      dispatch:
+        kind: "Alleen een factuur of voorschotfactuur wordt met één klik uitgereikt en verzonden"
       issue:
         already_issued: "Dit document is al uitgereikt"
         no_line: "Voeg minstens één lijn met bedrag toe"

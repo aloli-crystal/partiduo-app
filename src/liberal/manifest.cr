@@ -17,7 +17,7 @@ Partiduo::Modules.register do
   permission "liberal.register.read"
   # Saisie, modification et suppression dans un exercice ouvert,
   # contre-passation, immobilisations et cessions, réintégrations et
-  # déductions de l'année.
+  # déductions de l'année ; clôture et réouverture de l'exercice (D-LIB5-001).
   permission "liberal.register.write"
   # Paramètres, natures, table de correspondance des lignes de la 2035.
   permission "liberal.settings.write"
@@ -35,10 +35,10 @@ Partiduo::Modules.register do
   on("payment.matched") { |event| Partiduo::Liberal::Feeds.on_event(event) }
   on("payment.unmatched") { |event| Partiduo::Liberal::Feeds.on_event(event) }
 
-  # Exercice figé (DECISIONS D-LIB2-003) : 2035 transmise par l'extension
-  # qui la dépose (retirée si le dépôt est rejeté) ; clôture au socle, dont
-  # l'empreinte de la 2035 est gardée. Jamais de refus : la transmission a
-  # déjà eu lieu.
+  # Exercice verrouillé (DECISIONS D-LIB2-003, D-LIB5-002) : 2035 transmise
+  # par l'extension qui la dépose ; le rejet de ce dépôt rend l'exercice
+  # clôturé (réversible) ; clôture au socle, dont l'empreinte de la 2035 est
+  # gardée. Jamais de refus : la transmission a déjà eu lieu.
   on("tax_return.transmitted") { |event| Partiduo::Liberal::Years.on_event(event) }
   on("tax_return.rejected") { |event| Partiduo::Liberal::Years.on_event(event) }
   on("period.closed") { |event| Partiduo::Liberal::Years.on_event(event) }

@@ -109,6 +109,8 @@ en:
         locale_invalid: "Language not available."
         profile_unknown: "Unknown profile."
         access_ends_on_past: "The access end date has already passed."
+      preferences:
+        interface_invalid: "Unknown interface."
       ledger:
         access_invalid: "Unknown right (W, R or X)."
       profile:

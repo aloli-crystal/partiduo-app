@@ -296,8 +296,9 @@ immobilisation modifiée, ou immobilisation, contre-passation ou cession (`dispo
 (DECISIONS D-LIB2-004)
 |`tax_return.transmitted`, `tax_return.rejected` |`form`, `year`, `reference` |Déclaration
 fiscale annuelle transmise, ou son dépôt rejeté, publié par l'extension qui la transmet
-(`partiduo-teledec`) ; clé facultative `fingerprint`. Le module liberal fige l'exercice de la 2035,
-ou le libère (DECISIONS D-LIB2-003)
+(`partiduo-teledec`) ; clé facultative `fingerprint`. Le module liberal verrouille l'exercice de la
+2035, ou le rend clôturé (réversible) au rejet ; adoptés par l'utilisateur le 1er octobre 2026
+(DECISIONS D-LIB2-003, D-LIB5-002)
 |===
 
 Un abonné peut refuser l'opération publiée en levant

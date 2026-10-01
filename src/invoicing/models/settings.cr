@@ -41,6 +41,10 @@ module Partiduo
       field :pdf_copy_enabled, :bool, default: true
       field :pdf_copy_from, :date, null: true, blank: true
       field :pdf_copy_until, :date, null: true, blank: true
+      # Facturation mensuelle des bons de livraison (migration `0006`) :
+      # `propose` (brouillons proposés dans « À traiter ») ou `auto_send`
+      # (émis et envoyés par le canal de chaque client).
+      field :monthly_billing_mode, :string, max_size: 16, default: "propose"
 
       with_timestamp_fields
     end

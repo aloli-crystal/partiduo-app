@@ -20,12 +20,15 @@ fr:
         manage: "Gérer les paramètres de facturation"
       export:
         read: "Transmettre au comptable"
+      credit_limit:
+        override: "Déroger à l'encours maximum d'un client"
     menu:
       inv_documents: "Devis et factures"
       inv_new_invoice: "Nouvelle facture"
       inv_payments: "Règlements"
       inv_reminders: "Relances"
       inv_export: "Transmission au comptable"
+      inv_to_invoice: "Bons à facturer"
       inv_templates: "Modèles de documents"
       inv_settings: "Paramètres de facturation"
     kinds:
@@ -47,6 +50,7 @@ fr:
       partially_paid: "Partiellement payé"
       paid: "Payé"
       overdue: "En retard"
+      invoiced: "Facturé"
     channels:
       none: "Non choisi"
       platform: "Plateforme agréée"
@@ -66,6 +70,23 @@ fr:
       from_invoice: "Issu de la facture %{number}"
       from_deposit_invoice: "Issu de la facture d'acompte %{number}"
       from_credit_note: "Issu de l'avoir %{number}"
+    delivery_notes:
+      group_title: "Bon de livraison %{number} du %{date}"
+    billing_rhythms:
+      per_delivery: "À chaque livraison"
+      monthly: "Récapitulative mensuelle"
+    monthly_modes:
+      propose: "Préparer et proposer"
+      auto_send: "Émettre et envoyer automatiquement"
+    dispatch:
+      emailed: "Facture envoyée par courriel à %{to}"
+      email_missing: "Facture émise : le client n'a pas d'adresse électronique, envoyez-la vous-même"
+      email_failed: "Facture émise, mais l'envoi par courriel a échoué"
+      send_denied: "Facture émise : l'envoi par courriel demande la permission d'envoyer"
+      platform: "Facture émise : transmission par la plateforme agréée"
+      to_print: "Facture émise : à imprimer et à remettre, puis à marquer envoyée"
+      public_portal: "Facture émise : à déposer sur le portail public, puis à marquer envoyée"
+      already_sent: "Facture déjà envoyée"
     deposit:
       line: "Acompte de %{percent} % sur %{number}"
     mentions:
@@ -85,6 +106,7 @@ fr:
         issue: "Date d'émission : %{date}"
         delivery: "Date de livraison ou d'exécution de la prestation : %{date}"
         due: "Date d'échéance : %{date}"
+        delivery_period: "Livraisons du %{from} au %{to}"
       quote:
         validity: "Devis valable jusqu'au %{date}"
       delivery_address: "Adresse de livraison : %{address}"
@@ -120,6 +142,10 @@ fr:
       deposit:
         invoice: "Facture d'acompte"
         deducted: "Acompte %{number} déduit : %{amount} %{currency}"
+      delivery_notes:
+        summary:
+          fr: "Facture récapitulative des livraisons (art. 289-I-3 du CGI) : bons de livraison %{numbers}"
+          be: "Facture récapitulative des livraisons : bons de livraison %{numbers}"
       payment:
         terms:
           net: "Conditions de paiement : %{days} jours nets à compter de la date de la facture"
@@ -210,6 +236,7 @@ fr:
         journal_code: "Code de journal : lettres majuscules et chiffres, huit au plus"
         account: "Numéro de compte : chiffres et lettres majuscules, vingt au plus"
         pdf_copy_period: "La fin de la période de copie PDF précède son début"
+        monthly_billing_mode: "Mode de facturation mensuelle inconnu"
       document:
         kind:
           immutable: "La nature d'un document ne change pas"
@@ -262,6 +289,13 @@ fr:
           exceeds: "La remise globale dépasse le total des lignes"
         issued: "Document émis : il ne se modifie ni ne se supprime ; corrigez-le par un avoir"
         in_use: "Ce brouillon est cité par un autre document"
+        delivery_notes:
+          invoice_only: "Seule une facture reprend des bons de livraison"
+          invalid: "Ce document n'est pas un bon de livraison émis"
+          other_customer: "Le bon de livraison %{number} est celui d'un autre client"
+          other_currency: "Le bon de livraison %{number} est dans une autre devise"
+          already_billed: "Le bon de livraison %{number} est déjà facturé"
+          in_draft: "Le bon de livraison %{number} est déjà repris dans un brouillon de facture"
       discount:
         kind: "Type de remise inconnu"
         negative: "La remise ne peut être négative"
@@ -291,6 +325,20 @@ fr:
           required: "Choisissez un taux de TVA"
         discount:
           exceeds: "La remise dépasse le montant de la ligne"
+      delivery_notes:
+        empty: "Sélectionnez au moins un bon de livraison"
+        duplicate: "Bon de livraison sélectionné deux fois"
+        several_customers: "Les bons de livraison sélectionnés sont ceux de plusieurs clients"
+        several_currencies: "Les bons de livraison sélectionnés sont dans plusieurs devises"
+      customer_billing:
+        rhythm: "Rythme de facturation inconnu"
+        credit_limit: "Encours maximum HT : montant positif, au centime près"
+      credit_limit:
+        exceeded: "Encours maximum HT de %{customer} dépassé : encours actuel %{exposure} %{currency}, document %{amount} %{currency}, plafond %{limit} %{currency}, dépassement %{excess} %{currency}"
+        override_denied: "Encours maximum HT de %{customer} dépassé de %{excess} %{currency} : la dérogation demande la permission de déroger à l'encours maximum"
+        reason_too_long: "Motif de la dérogation : %{max} caractères au plus"
+      dispatch:
+        kind: "Seule une facture ou une facture d'acompte s'émet et s'envoie d'un clic"
       issue:
         already_issued: "Ce document est déjà émis"
         no_line: "Ajoutez au moins une ligne chiffrée"

@@ -159,9 +159,10 @@ module Partiduo
         controls << control("siren_missing", "error") unless identity.siren.matches?(/\A\d{9}\z/)
         controls << control("profession_missing", "warning") if identity.profession.strip.empty?
         controls.concat(amount_controls(year, totals, lines, rows))
-        # 2035 transmise : l'exercice est figé, l'avertissement « année
-        # ouverte » n'a plus d'objet.
-        controls.concat(period_controls(year)) unless exercise.state == "transmitted"
+        # Exercice clôturé ou verrouillé : l'avertissement « exercice non
+        # clôturé » n'a plus d'objet (D-LIB5-003) ; « pas d'exercice au socle »
+        # non plus une fois la 2035 transmise.
+        controls.concat(period_controls(year, exercise))
         controls
       end
 
@@ -227,14 +228,15 @@ module Partiduo
       end
 
       # Année sans exercice ou pas encore close.
-      def self.period_controls(year : Int32) : Array(Api::ControlView)
+      def self.period_controls(year : Int32, exercise : Api::YearView) : Array(Api::ControlView)
         controls = [] of Api::ControlView
+        return controls if exercise.locked?
         periods = Partiduo::Api::Core.periods(Partiduo::Api::Actor.system).select do |period|
           period.starts_on <= Time.utc(year, 12, 31) && period.ends_on >= Time.utc(year, 1, 1)
         end
         if periods.empty?
           controls << control("no_fiscal_year", "warning", {"year" => year.to_s})
-        elsif !periods.all?(&.closed?)
+        elsif exercise.open?
           controls << control("year_open", "warning", {"year" => year.to_s})
         end
         controls

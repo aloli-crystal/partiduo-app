@@ -38,7 +38,21 @@ module Partiduo
       # liste fermée : l'interface a un libellé pour chacune (D-CPY-007).
       DOCUMENT_EVENT_ACTIONS = %w[created updated transformed issued accepted refused credited payment
         payment_removed reminder emailed email_failed channel_changed marked_sent platform_deposited
-        platform_deposit_ignored pdf_copy_sent pdf_copy_failed]
+        platform_deposit_ignored pdf_copy_sent pdf_copy_failed invoiced credit_override]
+      # Rythme de facturation des bons de livraison d'un client (réglage
+      # client de la Facturation) : une facture par livraison (défaut) ou une
+      # facture récapitulative de fin de mois (art. 289-I-3 du CGI).
+      BILLING_RHYTHMS = %w[per_delivery monthly]
+      # Fin de mois (paramètres du dossier) : préparer et proposer les
+      # brouillons, ou émettre et envoyer par le canal de chaque client.
+      MONTHLY_BILLING_MODES = %w[propose auto_send]
+      # Documents dont l'émission est contrôlée par l'encours maximum du
+      # client ; le devis n'est jamais bloqué (avertissement seulement).
+      CREDIT_CONTROLLED_KINDS = %w[order delivery_note invoice]
+      # Dérogation à l'encours maximum, motif obligatoire, tracée.
+      CREDIT_OVERRIDE = "invoicing.credit_limit.override"
+      # Seuil d'alerte de l'encours (« À traiter »), en pourcentage du plafond.
+      CREDIT_ALERT_PERCENT = 90
       # Code UNTDID 1001 du document Factur-X (BT-3).
       TYPE_CODES = {"invoice" => "380", "credit_note" => "381", "deposit_invoice" => "386"}
 
@@ -65,7 +79,8 @@ module Partiduo
         unit_price : BigDecimal? = nil,
         discount_kind : String = "none",
         discount_value : BigDecimal = BigDecimal.new(0),
-        vat_rate_id : Int64? = nil
+        vat_rate_id : Int64? = nil,
+        delivery_note_id : Int64? = nil
 
       # Saisie d'un document (brouillon) ; décrit le document entier, lignes
       # comprises (remplacées à chaque enregistrement).
@@ -94,7 +109,12 @@ module Partiduo
       #   délai des paramètres (jours nets, sans mention particulière) ;
       #   `on_receipt` n'a pas de délai ;
       # * `delivery_address` : une adresse vide (ni ligne ni ville) n'en
-      #   donne aucune (même adresse que la facturation).
+      #   donne aucune (même adresse que la facturation) ;
+      # * lignes d'une facture : `LineInput#delivery_note_id` cite le bon de
+      #   livraison émis et non facturé du même client dont la ligne est
+      #   issue ; une facture qui en cite plusieurs est *récapitulative* :
+      #   sa date de livraison est la dernière, sa période de facturation
+      #   (BG-14) va de la première à la dernière livraison.
       record DocumentInput,
         kind : String,
         customer_card_id : Int64,
@@ -130,7 +150,10 @@ module Partiduo
       record ChannelInput, channel : String, b2c : Bool? = nil
 
       # Émission : `issue_date` remplace la date prévue du brouillon.
-      record IssueInput, issue_date : Time? = nil
+      # `credit_override_reason` : motif de la dérogation à l'encours maximum
+      # du client (permission `invoicing.credit_limit.override`), tracé dans
+      # le journal du document ; sans objet si le plafond n'est pas dépassé.
+      record IssueInput, issue_date : Time? = nil, credit_override_reason : String? = nil
 
       # Règlement saisi (Comptabilité inactive seulement, ADR-006 D3).
       record PaymentInput,
@@ -188,7 +211,8 @@ module Partiduo
         bank_account : String = "",
         pdf_copy_enabled : Bool = true,
         pdf_copy_from : Time? = nil,
-        pdf_copy_until : Time? = nil
+        pdf_copy_until : Time? = nil,
+        monthly_billing_mode : String = "propose"
 
       # Modèle de mise en page : ni mention, ni montant, seulement l'aspect.
       record LayoutInput,
@@ -217,7 +241,8 @@ module Partiduo
         vat_rate_id : Int64?,
         vat_percent : BigDecimal,
         vat_category : String,
-        net_amount : BigDecimal do
+        net_amount : BigDecimal,
+        delivery_note_id : Int64? = nil do
         def priced? : Bool
           kind.in?("item", "free")
         end
@@ -313,6 +338,17 @@ module Partiduo
 
       record DeductionView, deposit_id : Int64, deposit_number : String, amount : BigDecimal
 
+      # Bon de livraison facturé par une facture : numéro, dates d'émission
+      # et de livraison, montants (groupe de lignes d'une facture
+      # récapitulative).
+      record DeliveryNoteRefView,
+        id : Int64,
+        number : String,
+        issue_date : Time?,
+        delivery_date : Time?,
+        total_net : BigDecimal,
+        total_gross : BigDecimal
+
       record DocumentView,
         id : Int64,
         kind : String,
@@ -358,9 +394,18 @@ module Partiduo
         issue_channel : String = "",
         b2c : Bool = false,
         payment_terms : String = "",
-        payment_terms_days : Int32? = nil do
+        payment_terms_days : Int32? = nil,
+        billing_period_start : Time? = nil,
+        billing_period_end : Time? = nil,
+        delivery_notes : Array(DeliveryNoteRefView) = [] of DeliveryNoteRefView,
+        billed_in : LinkView? = nil do
         def draft? : Bool
           number.nil?
+        end
+
+        # Facture qui regroupe plusieurs livraisons (période de facturation).
+        def summary_invoice? : Bool
+          !billing_period_start.nil?
         end
 
         # Canal d'émission et marquage B2C modifiables : document fiscal pas
@@ -478,7 +523,8 @@ module Partiduo
         bank_account : String,
         pdf_copy_enabled : Bool = true,
         pdf_copy_from : Time? = nil,
-        pdf_copy_until : Time? = nil do
+        pdf_copy_until : Time? = nil,
+        monthly_billing_mode : String = "propose" do
         # Copie PDF due à la date `on` (ADR-004 D9) : option active et date
         # dans la période ; une période vide sera posée au premier envoi par
         # la plateforme (un an).
@@ -510,7 +556,7 @@ module Partiduo
             sales_journal_code: sales_journal_code, bank_journal_code: bank_journal_code,
             customer_account: customer_account, sales_account: sales_account, vat_account: vat_account,
             bank_account: bank_account, pdf_copy_enabled: pdf_copy_enabled, pdf_copy_from: pdf_copy_from,
-            pdf_copy_until: pdf_copy_until,
+            pdf_copy_until: pdf_copy_until, monthly_billing_mode: monthly_billing_mode,
           )
         end
       end
@@ -614,6 +660,165 @@ module Partiduo
 
       # Fichier produit (PDF, XML, CSV, FEC, ZIP).
       record FileView, filename : String, content_type : String, content : Bytes
+
+      # --- Bons à facturer, facture récapitulative, encours ------------------------
+
+      # Montant arrondi au centime, en décimal à deux chiffres après le point
+      # (`12000.00`) : paramètre d'un message, formaté par qui l'affiche.
+      def self.fixed(value : BigDecimal) : String
+        cents = (value * 100).round(0, mode: :ties_away).to_big_i
+        sign = cents < 0 ? "-" : ""
+        cents = cents.abs
+        "#{sign}#{cents // 100}.#{(cents % 100).to_s.rjust(2, '0')}"
+      end
+
+      # Filtre de la liste « Bons à facturer » : client, période de
+      # livraison (bornes comprises).
+      record ToInvoiceQuery,
+        customer_card_id : Int64? = nil,
+        from : Time? = nil,
+        to : Time? = nil,
+        limit : Int32 = 500
+
+      # Bon de livraison émis et non facturé ; `draft_invoice_id` : brouillon
+      # de facture qui le reprend déjà (le bon n'est alors pas sélectionnable
+      # pour une autre facture).
+      record ToInvoiceView,
+        id : Int64,
+        number : String,
+        customer_card_id : Int64,
+        customer_name : String,
+        issue_date : Time,
+        delivery_date : Time,
+        currency_code : String,
+        total_net : BigDecimal,
+        total_gross : BigDecimal,
+        draft_invoice_id : Int64?,
+        billing_rhythm : String
+
+      # Réglage client de la Facturation. `credit_limit` : encours maximum
+      # HT dans la devise du dossier, deux décimales ; `nil` : pas de plafond.
+      record CustomerBillingInput, billing_rhythm : String = "per_delivery", credit_limit : BigDecimal? = nil
+
+      # Réglage et encours d'un client, HORS TAXES, dans la devise du dossier
+      # (`currency_code`) :
+      #
+      # * `unbilled_*` : bons de livraison émis non facturés (HT ; TTC pour
+      #   l'affichage) ;
+      # * `receivable_net` : part HT restant due des factures et factures
+      #   d'acompte émises, non annulées — HT × reste dû ÷ TTC, le reste dû
+      #   étant TTC − acomptes déduits − règlements − avoirs ;
+      # * `exposure` : encours HT = `unbilled_net` + `receivable_net` ;
+      # * `unconverted` : documents en devise étrangère sans cours du socle à
+      #   leur date, comptés à leur montant nominal (signalés à l'écran).
+      record CustomerBillingView,
+        customer_card_id : Int64,
+        customer_name : String,
+        billing_rhythm : String,
+        credit_limit : BigDecimal?,
+        currency_code : String,
+        unbilled_count : Int32,
+        unbilled_net : BigDecimal,
+        unbilled_gross : BigDecimal,
+        receivable_net : BigDecimal,
+        unconverted : Int32 do
+        def exposure : BigDecimal
+          unbilled_net + receivable_net
+        end
+
+        # Part du plafond atteinte, en pourcentage entier (arrondi à
+        # l'inférieur) ; `nil` sans plafond ou pour un plafond nul.
+        def percent_used : Int32?
+          limit = credit_limit
+          return if limit.nil? || limit <= 0
+          (exposure * 100 / limit).to_i
+        end
+
+        def exceeded? : Bool
+          (limit = credit_limit) ? exposure > limit : false
+        end
+
+        def near_limit? : Bool
+          (percent_used || 0) >= CREDIT_ALERT_PERCENT
+        end
+
+        def monthly? : Bool
+          billing_rhythm == "monthly"
+        end
+      end
+
+      # Contrôle de l'encours HT pour un document : encours actuel du client,
+      # montant HT que le document y ajoute (devise du dossier ; pour une
+      # facture tirée de bons de livraison, déjà comptés, la seule
+      # différence ; acomptes déduits retranchés), plafond HT. `controlled` : l'émission est refusée au-delà
+      # (commande, bon de livraison, facture) ; faux pour un devis
+      # (avertissement seulement).
+      record CreditCheckView,
+        customer_card_id : Int64,
+        customer_name : String,
+        currency_code : String,
+        exposure : BigDecimal,
+        amount : BigDecimal,
+        credit_limit : BigDecimal,
+        controlled : Bool do
+        def projected : BigDecimal
+          exposure + amount
+        end
+
+        def exceeded? : Bool
+          projected > credit_limit
+        end
+
+        def excess : BigDecimal
+          exceeded? ? projected - credit_limit : BigDecimal.new(0)
+        end
+
+        # Paramètres des messages d'avertissement et de refus (montants en
+        # décimal canonique, formatés par qui les affiche).
+        def params : Hash(String, String)
+          {"customer" => customer_name, "exposure" => Invoicing.fixed(exposure), "amount" => Invoicing.fixed(amount),
+           "limit" => Invoicing.fixed(credit_limit), "excess" => Invoicing.fixed(excess), "currency" => currency_code}
+        end
+      end
+
+      # Fin de mois : `month` (un jour quelconque du mois, défaut : mois de la
+      # date du jour) ; `customer_card_id` : un seul client, quel que soit
+      # son rythme (« Facturer le mois »), sinon tous les clients au rythme
+      # mensuel ; `trigger` : `manual` ou `schedule`.
+      record MonthlyInput, month : Time? = nil, customer_card_id : Int64? = nil, trigger : String = "manual"
+
+      # Facture de fin de mois préparée (ou tentée) pour un client.
+      # `status` : `proposed`, `issued`, `sent`, `failed` ; `error` : clé de
+      # traduction (`invoicing.errors.…`) et paramètres, s'il y a lieu ;
+      # `dispatch` : suite de l'émission automatique (`DispatchView#action`).
+      record MonthlyInvoiceView,
+        id : Int64,
+        month : Time,
+        customer_card_id : Int64,
+        customer_name : String,
+        currency_code : String,
+        invoice_id : Int64?,
+        invoice_number : String?,
+        total_gross : BigDecimal,
+        mode : String,
+        status : String,
+        error : String,
+        created_at : Time
+
+      # Résultat d'un passage de fin de mois : mois traités, factures
+      # préparées, clients écartés (`skipped` : déjà facturés ce mois-ci).
+      record MonthlyRunView,
+        months : Array(Time),
+        prepared : Array(MonthlyInvoiceView),
+        skipped : Int32
+
+      # Suite donnée à une facture émise d'un clic, selon son canal :
+      # `emailed` (courriel envoyé au client), `email_missing` (pas
+      # d'adresse), `email_failed` (échec du transport, tracé),
+      # `platform` (relevée par l'extension de transmission, dépôt selon son
+      # propre mécanisme ; copie PDF après le dépôt), `to_print` (papier : PDF
+      # à imprimer et à marquer envoyé), `public_portal` (dépôt à la main).
+      record DispatchView, document : DocumentView, action : String, detail : String = ""
     end
   end
 end

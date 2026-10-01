@@ -263,14 +263,14 @@ module Partiduo
         ids = rows.map(&.pk!.as(Int64))
         reversals = Asset.filter(reversal_of_id__in: ids).to_a.to_h { |row| {row.reversal_of_id!.to_i64, row.pk!.as(Int64)} }
         closed = Registers.closed_periods
-        transmitted = Years.transmitted
+        held = Years.held
         frozen = Years.frozen
         disposals = Disposal.filter(asset_id__in: ids).to_a.to_h do |row|
-          {row.asset_id!.to_i64, disposal_view(row, locked?(row.date!, closed, transmitted))}
+          {row.asset_id!.to_i64, disposal_view(row, locked?(row.date!, closed, held))}
         end
         rows.map do |row|
           acquired_on = row.acquired_on!
-          locked = locked?(acquired_on, closed, transmitted) || frozen.any?(&.>=(acquired_on.year))
+          locked = locked?(acquired_on, closed, held) || frozen.any?(&.>=(acquired_on.year))
           id = row.pk!.as(Int64)
           Api::AssetView.new(id: id, number: row.number.to_s, label: row.label.to_s, category: row.category.to_s,
             acquired_on: row.acquired_on!, service_on: row.service_on!, amount: row.amount!,
@@ -282,8 +282,8 @@ module Partiduo
         end
       end
 
-      private def self.locked?(date : Time, closed : Array({Time, Time}), transmitted : Hash(Int32, Time)) : Bool
-        transmitted.has_key?(date.year) || Registers.locked?(date, closed)
+      private def self.locked?(date : Time, closed : Array({Time, Time}), held : Hash(Int32, String)) : Bool
+        held.has_key?(date.year) || Registers.locked?(date, closed)
       end
 
       def self.view(row : Asset) : Api::AssetView

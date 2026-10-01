@@ -22,3 +22,6 @@ require "../liberal/migrations/**"
 
 # Commandes de gestion du cœur (`provision`).
 require "../core/commands/**"
+
+# Fin de mois de la Facturation (`invoicing_month_end`, D-INV2-008).
+require "../invoicing/commands/**"

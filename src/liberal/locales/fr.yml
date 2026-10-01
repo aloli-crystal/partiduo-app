@@ -121,7 +121,7 @@ fr:
       asset_over_depreciated: "Immobilisation %{number} amortie au-delà de sa base"
       no_receipts: "Aucune ligne au livre-journal pour l'année"
       no_fiscal_year: "Aucun exercice du dossier ne couvre %{year}"
-      year_open: "L'année %{year} n'est pas close : la déclaration peut encore changer"
+      year_open: "L'exercice %{year} n'est pas clôturé : la 2035 peut encore changer ; le clôturer avant de la transmettre"
       frozen_changed: "La 2035 de %{year} a changé depuis que l'exercice est figé (identification modifiée ?) : vérifier avant tout dépôt"
     reversal_label: "Annulation de %{number}"
     export:
@@ -175,6 +175,16 @@ fr:
       no_control: "Aucune anomalie"
       page: "Page %{page} sur %{count}"
     errors:
+      year:
+        invalid: "Année invalide"
+        close:
+          future: "L'exercice %{year} n'a pas commencé : il ne se clôture pas"
+          already: "L'exercice %{year} est déjà clôturé"
+          locked: "La 2035 de %{year} est transmise : l'exercice est verrouillé"
+        reopen:
+          locked: "La 2035 de %{year} est transmise : l'exercice est verrouillé et ne se rouvre plus ; corriger par une contre-passation dans un exercice ouvert"
+          core_closed: "L'exercice %{year} est clôturé avec l'exercice du dossier (périodes closes) : il ne se rouvre pas ici"
+          open: "L'exercice %{year} est ouvert : rien à rouvrir"
       line:
         nature:
           unknown: "Nature inconnue"
@@ -197,6 +207,7 @@ fr:
           future: "Date à venir : n'inscrire qu'une opération faite"
           closed_period: "La période de cette date est close : corriger par une contre-passation dans une période ouverte"
           transmitted: "La 2035 de %{year} est transmise, l'exercice est figé : corriger par une contre-passation dans un exercice ouvert"
+          year_closed: "L'exercice %{year} est clôturé : le rouvrir pour y inscrire une ligne, ou dater la ligne dans un exercice ouvert"
         reversal:
           is_reversal: "Une contre-passation ne se contre-passe pas"
           already: "Cette ligne est déjà contre-passée"
@@ -207,6 +218,7 @@ fr:
           reversed: "Ligne contre-passée : supprimer d'abord sa contre-passation"
           closed_period: "Exercice clôturé ou période close : la ligne est intangible, la corriger par une contre-passation"
           transmitted: "La 2035 de %{year} est transmise : la ligne est intangible, la corriger par une contre-passation"
+          year_closed: "L'exercice %{year} est clôturé : le rouvrir pour modifier la ligne, ou la corriger par une contre-passation"
         too_long: "%{max} caractères au plus"
       nature:
         in_use: "Nature déjà employée : seuls le libellé et l'activation changent"
@@ -245,15 +257,11 @@ fr:
       adjustment:
         year:
           invalid: "Année invalide"
-          closed: "Cette année compte une période close ou sa 2035 est transmise"
+          closed: "Cette année est clôturée, verrouillée ou compte une période close"
         kind:
           invalid: "Sorte inconnue"
         label:
           blank: "Indiquer un libellé"
-      settings:
-        interface:
-          unknown: "Interface inconnue"
-          accounting_inactive: "La comptabilité suppose le module Comptabilité actif"
       form_line:
         year:
           closed: "Millésime figé : une année close l'emploie ; ajoutez une ligne au millésime suivant"

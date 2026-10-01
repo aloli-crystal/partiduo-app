@@ -20,12 +20,15 @@ en:
         manage: "Manage invoicing settings"
       export:
         read: "Send to the accountant"
+      credit_limit:
+        override: "Override a customer's credit limit"
     menu:
       inv_documents: "Quotes and invoices"
       inv_new_invoice: "New invoice"
       inv_payments: "Payments"
       inv_reminders: "Reminders"
       inv_export: "Send to the accountant"
+      inv_to_invoice: "Delivery notes to invoice"
       inv_templates: "Document templates"
       inv_settings: "Invoicing settings"
     kinds:
@@ -47,6 +50,7 @@ en:
       partially_paid: "Partially paid"
       paid: "Paid"
       overdue: "Overdue"
+      invoiced: "Invoiced"
     channels:
       none: "Not chosen"
       platform: "Approved platform"
@@ -66,6 +70,23 @@ en:
       from_invoice: "From invoice %{number}"
       from_deposit_invoice: "From deposit invoice %{number}"
       from_credit_note: "From credit note %{number}"
+    delivery_notes:
+      group_title: "Delivery note %{number} of %{date}"
+    billing_rhythms:
+      per_delivery: "Each delivery"
+      monthly: "Monthly summary invoice"
+    monthly_modes:
+      propose: "Prepare and propose"
+      auto_send: "Issue and send automatically"
+    dispatch:
+      emailed: "Invoice emailed to %{to}"
+      email_missing: "Invoice issued: the customer has no email address, send it yourself"
+      email_failed: "Invoice issued, but sending by email failed"
+      send_denied: "Invoice issued: sending by email requires the send permission"
+      platform: "Invoice issued: transmitted through the approved platform"
+      to_print: "Invoice issued: print and hand it over, then mark it sent"
+      public_portal: "Invoice issued: upload it to the public portal, then mark it sent"
+      already_sent: "Invoice already sent"
     deposit:
       line: "Deposit of %{percent}% on %{number}"
     mentions:
@@ -85,6 +106,7 @@ en:
         issue: "Issue date: %{date}"
         delivery: "Date of supply of goods or services: %{date}"
         due: "Due date: %{date}"
+        delivery_period: "Deliveries from %{from} to %{to}"
       quote:
         validity: "Quote valid until %{date}"
       delivery_address: "Delivery address: %{address}"
@@ -120,6 +142,10 @@ en:
       deposit:
         invoice: "Deposit invoice"
         deducted: "Deposit %{number} deducted: %{amount} %{currency}"
+      delivery_notes:
+        summary:
+          fr: "Summary invoice for deliveries (art. 289-I-3 of the French tax code): delivery notes %{numbers}"
+          be: "Summary invoice for deliveries: delivery notes %{numbers}"
       payment:
         terms:
           net: "Payment terms: %{days} days net from the invoice date"
@@ -210,6 +236,7 @@ en:
         journal_code: "Journal code: capital letters and digits, eight at most"
         account: "Account number: digits and capital letters, twenty at most"
         pdf_copy_period: "The end of the PDF copy period is before its start"
+        monthly_billing_mode: "Unknown monthly invoicing mode"
       document:
         kind:
           immutable: "A document's type cannot change"
@@ -262,6 +289,13 @@ en:
           exceeds: "The overall discount exceeds the lines total"
         issued: "Issued document: it can be neither changed nor deleted; correct it with a credit note"
         in_use: "This draft is referred to by another document"
+        delivery_notes:
+          invoice_only: "Only an invoice takes over delivery notes"
+          invalid: "This document is not an issued delivery note"
+          other_customer: "Delivery note %{number} belongs to another customer"
+          other_currency: "Delivery note %{number} is in another currency"
+          already_billed: "Delivery note %{number} is already invoiced"
+          in_draft: "Delivery note %{number} is already taken over by a draft invoice"
       discount:
         kind: "Unknown discount type"
         negative: "The discount cannot be negative"
@@ -291,6 +325,20 @@ en:
           required: "Choose a VAT rate"
         discount:
           exceeds: "The discount exceeds the line amount"
+      delivery_notes:
+        empty: "Select at least one delivery note"
+        duplicate: "Delivery note selected twice"
+        several_customers: "The selected delivery notes belong to several customers"
+        several_currencies: "The selected delivery notes are in several currencies"
+      customer_billing:
+        rhythm: "Unknown invoicing rhythm"
+        credit_limit: "Credit limit excl. VAT: a positive amount, to the cent"
+      credit_limit:
+        exceeded: "Credit limit excl. VAT of %{customer} exceeded: current exposure %{exposure} %{currency}, document %{amount} %{currency}, limit %{limit} %{currency}, excess %{excess} %{currency}"
+        override_denied: "Credit limit excl. VAT of %{customer} exceeded by %{excess} %{currency}: overriding it requires the credit limit override permission"
+        reason_too_long: "Override reason: %{max} characters at most"
+      dispatch:
+        kind: "Only an invoice or a deposit invoice is issued and sent in one click"
       issue:
         already_issued: "This document is already issued"
         no_line: "Add at least one priced line"
