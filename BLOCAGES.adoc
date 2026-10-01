@@ -1392,3 +1392,14 @@ posée aussi).
 * *Greffe* — toujours non joué : `stage/nouvelle-declaration` refusé
   (`invalid_scope`) ; question posée à TELEDEC (D-TDC11-004).
 
+
+== Stage de TELEDEC, suite complète verte (1er octobre 2026, fin de matinée)
+
+Suite d'intégration lancée par l'utilisateur : 10 exemples réussis, aucun
+échec, 2 en attente. Acceptés sur le stage : jeton, entreprise de test,
+liasse avec balance (source `API`), CA3 en marque blanche (sans millésime),
+*DAS2 seule avec le régime dans l'identité*, acompte d'IS 2571, 2035 d'un
+libéral sans Comptabilité et sans balance. En attente : l'amorce du greffe
+(droit `stage/nouvelle-declaration` non attribué par TELEDEC : question en
+attente) et les rappels (suite lancée sans tunnel ; comportement confirmé
+par TELEDEC : envoi, acceptation, rejet).
