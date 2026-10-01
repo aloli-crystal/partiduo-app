@@ -3,7 +3,7 @@
 module Partiduo
   module Invoicing
     # Document commercial (ADR-006 D5) : devis, commande, bon de livraison,
-    # facture, facture d'acompte, avoir. L'application d'origine n'en a pas : ses devis et
+    # facture, facture d'acompte, avoir, bon de retour (D-INV3-001). L'application d'origine n'en a pas : ses devis et
     # bons de commande sont des « actions » du suivi (`action_gestion`) et sa
     # facture une écriture du journal de ventes (`jrn` + `quant_sold`).
     #
@@ -84,6 +84,9 @@ module Partiduo
       # pour tout autre document.
       field :billing_period_start, :date, null: true, blank: true
       field :billing_period_end, :date, null: true, blank: true
+      # Motif d'un bon de retour (`Api::Invoicing::RETURN_REASONS`, migration
+      # `0007`) ; vide pour toute autre nature.
+      field :return_reason, :string, max_size: 16, blank: true, default: ""
 
       with_timestamp_fields
 
@@ -117,6 +120,9 @@ module Partiduo
       # Bon de livraison dont la ligne d'une facture est issue (migration
       # `0006`) : groupe de lignes d'une facture récapitulative.
       field :delivery_note_id, :big_int, null: true, blank: true
+      # Bon de retour dont la ligne d'une facture (déduction, quantité
+      # négative) ou d'un avoir est issue (migration `0007`, D-INV3-003).
+      field :return_note_id, :big_int, null: true, blank: true
     end
 
     # Bon de livraison facturé par une facture, brouillon ou émise (migration
@@ -127,6 +133,16 @@ module Partiduo
       field :id, :big_int, primary_key: true, auto: true
       field :invoice, :many_to_one, to: Partiduo::Invoicing::Document, related: :billed_deliveries, on_delete: :cascade
       field :delivery_note, :one_to_one, to: Partiduo::Invoicing::Document, related: :billed_in
+    end
+
+    # Bon de retour repris par une facture (déduction) ou un avoir, brouillon
+    # ou émis (migration `0007`, D-INV3-003) : un bon ne l'est qu'une fois
+    # (index unique sur `return_note_id`) ; figé avec le document émis.
+    # Recalculé à chaque enregistrement du brouillon, depuis ses lignes.
+    class BilledReturn < Marten::Model
+      field :id, :big_int, primary_key: true, auto: true
+      field :document, :many_to_one, to: Partiduo::Invoicing::Document, related: :billed_returns, on_delete: :cascade
+      field :return_note, :one_to_one, to: Partiduo::Invoicing::Document, related: :returned_in
     end
 
     # Acompte déduit d'une facture (facture d'acompte émise, déduite une

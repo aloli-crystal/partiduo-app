@@ -61,13 +61,18 @@ module Partiduo
         MonthClose.create!(month: month_start(month), trigger: trigger, prepared: prepared, created_at: Time.utc)
       end
 
-      # Bons à regrouper pour le mois : `{client, devise} => bons`.
+      # Bons à regrouper pour le mois : `{client, devise} => bons` — bons de
+      # livraison émis non facturés et bons de retour émis non repris
+      # (D-INV3-003), libres, datés au plus tard du dernier jour du mois.
       def self.candidates(month : Time, customer_id : Int64?) : Hash({Int64, String}, Array(Document))
-        records = Document.filter(kind: "delivery_note", status: "issued", delivery_date__lte: month_last_day(month))
+        records = Document.filter(kind__in: %w[delivery_note return_note], status: "issued",
+          delivery_date__lte: month_last_day(month))
         records = records.filter(customer_id: customer_id) if customer_id
         notes = records.order(:delivery_date, :number).to_a
-        held = notes.empty? ? Set(Int64).new : BilledDelivery.filter(delivery_note_id__in: notes.map { |note| Documents.id_of(note.id) }).to_a
+        ids = notes.map { |note| Documents.id_of(note.id) }
+        held = ids.empty? ? Set(Int64).new : BilledDelivery.filter(delivery_note_id__in: ids).to_a
           .map { |row| Documents.id_of(row.delivery_note_id) }.to_set
+        held.concat(BilledReturn.filter(return_note_id__in: ids).to_a.map { |row| Documents.id_of(row.return_note_id) }) unless ids.empty?
         notes = notes.reject { |note| held.includes?(Documents.id_of(note.id)) }
         unless customer_id
           monthly = CustomerBilling.filter(billing_rhythm: "monthly").to_a.map(&.card_id!.to_i64).to_set
@@ -107,9 +112,14 @@ module Partiduo
                                    actor : Partiduo::Api::Actor) : MonthlyInvoice
         row = MonthlyInvoice.new(month: month, customer_id: customer, currency_code: currency, mode: mode,
           created_by_id: actor.user_id)
-        input = DeliveryBilling.group_input(notes)
-        lines, errors = Documents.check(input)
-        if errors.empty?
+        # Retours du mois déduits ; s'ils l'emportent, avoir récapitulatif
+        # (D-INV3-004).
+        input, errors = Returns.summary_input(notes)
+        lines = [] of Documents::ResolvedLine
+        if input && errors.empty?
+          lines, errors = Documents.check(input)
+        end
+        if input && errors.empty?
           document = Documents.save_draft!(input, lines, actor)
           Documents.log(Documents.id_of(document.id), "created", actor, "",
             {"month" => month.to_s("%Y-%m"), "delivery_notes" => notes.map(&.number.to_s).join(",")})
@@ -142,6 +152,7 @@ module Partiduo
           currency_code: row.currency_code!, invoice_id: invoice.try { |document| Documents.id_of(document.id) },
           invoice_number: invoice.try(&.number), total_gross: invoice.try(&.total_gross!) || BigDecimal.new(0),
           mode: row.mode!, status: row.status!, error: row.error.to_s, created_at: row.created_at || Time.utc,
+          invoice_kind: invoice.try(&.kind) || "invoice",
         )
       end
 

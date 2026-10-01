@@ -6,7 +6,8 @@ module Partiduo
     # maximum) et encours d'un client, HORS TAXES (DECISIONS D-INV2-005,
     # D-INV2-009) :
     #
-    # * encours HT = bons de livraison émis non facturés (HT) + part HT
+    # * encours HT = bons de livraison émis non facturés (HT) − bons de
+    #   retour émis non repris (HT, D-INV3-006) + part HT
     #   restant due des factures et factures d'acompte émises non annulées
     #   (HT × reste dû ÷ TTC ; reste dû = TTC − acomptes déduits −
     #   règlements − avoirs : un règlement partiel ou un avoir réduit la part
@@ -92,6 +93,13 @@ module Partiduo
           net += converted_net
           gross += converted_gross
         end
+        returns = Document.filter(customer_id: card.id, kind: "return_note", status: "issued").to_a
+        returned = ZERO
+        returns.each do |note|
+          converted, ok = to_base(note.total_net!, note.currency_code!, note.issue_date, base)
+          unconverted += 1 unless ok
+          returned += converted
+        end
         open_invoices(card.id).each do |invoice|
           remaining = remaining_net(invoice)
           next unless remaining > 0
@@ -104,6 +112,7 @@ module Partiduo
           billing_rhythm: setting.try(&.billing_rhythm.presence) || "per_delivery",
           credit_limit: setting.try(&.credit_limit), currency_code: base, unbilled_count: unbilled.size,
           unbilled_net: net, unbilled_gross: gross, receivable_net: receivable, unconverted: unconverted,
+          returns_count: returns.size, returns_net: returned,
         )
       end
 
@@ -157,6 +166,12 @@ module Partiduo
             note = Document.filter(id: billed.delivery_note_id).first
             next unless note && note.status == "issued"
             amount -= to_base(note.total_net!, note.currency_code!, note.issue_date, base)[0]
+          end
+          # Bons de retour déduits : déjà retranchés de l'encours (D-INV3-006).
+          BilledReturn.filter(document_id: document_id).to_a.each do |billed|
+            note = Document.filter(id: billed.return_note_id).first
+            next unless note && note.status == "issued"
+            amount += to_base(note.total_net!, note.currency_code!, note.issue_date, base)[0]
           end
         end
         Api::CreditCheckView.new(

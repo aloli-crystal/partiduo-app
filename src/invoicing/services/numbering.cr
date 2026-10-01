@@ -19,10 +19,11 @@ module Partiduo
         "invoice"         => "F",
         "deposit_invoice" => "FA",
         "credit_note"     => "AV",
+        "return_note"     => "BR",
       }
 
       # Chiffre de la série dans la communication structurée belge.
-      SERIES_DIGIT = {"F" => 1, "FA" => 2, "AV" => 3, "D" => 4, "C" => 5, "BL" => 6}
+      SERIES_DIGIT = {"F" => 1, "FA" => 2, "AV" => 3, "D" => 4, "C" => 5, "BL" => 6, "BR" => 7}
 
       record Allocation, series : String, year : Int32, sequence : Int32, number : String
 

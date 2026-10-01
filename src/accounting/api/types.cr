@@ -69,11 +69,12 @@ module Partiduo
 
       # Usages des comptes par défaut, héritiers de `parm_code` (CUSTOMER,
       # SUPPLIER, BANQUE, CAISSE, VENTE, VIREMENT_INTERNE, COMPTE_COURANT,
-      # COMPTE_TVA, DNA, TVA_DNA, TVA_DED_IMPOT, DEP_PRIV). Libellé :
+      # COMPTE_TVA, DNA, TVA_DNA, TVA_DED_IMPOT, DEP_PRIV) ; `bank_fees` :
+      # frais bancaires d'un paiement rejeté (D-INV3-008). Libellé :
       # `accounting.default_accounts.<code>`.
       DEFAULT_ACCOUNT_CODES = %w[
         customer supplier bank cash sales internal_transfer current_account
-        vat non_deductible non_deductible_vat vat_deductible_tax private_expense
+        vat non_deductible non_deductible_vat vat_deductible_tax private_expense bank_fees
       ]
 
       # --- Plan comptable ------------------------------------------------------

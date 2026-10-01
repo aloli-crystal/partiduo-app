@@ -20,6 +20,7 @@ module Partiduo
           level: reminder.level!.to_i32, status: reminder.status!, proposed_on: reminder.proposed_on!,
           due_date: document.due_date, days_late: reminder.days_late!.to_i32, balance: reminder.balance!,
           interest: reminder.interest!, indemnity: reminder.indemnity!, sent_at: reminder.sent_at,
+          payment_rejection_id: reminder.payment_rejection_id.try(&.to_i64),
         )
       end
 
@@ -46,6 +47,25 @@ module Partiduo
           proposed << view(reminder, document)
         end
         proposed
+      end
+
+      # Relance proposée aussitôt après un rejet de paiement (D-INV3-009) :
+      # niveau suivant le plus haut déjà proposé (1 sans relance), même si la
+      # facture n'est pas encore échue ; `nil` si les trois niveaux sont
+      # pris (l'alerte « À traiter » demeure). Jamais envoyée sans
+      # validation.
+      def self.propose_after_rejection!(document : Document) : Reminder?
+        balance = Payments.balance(document)
+        return unless balance > 0
+        document_id = Documents.id_of(document.id)
+        last = Reminder.filter(document_id: document_id).order("-level").first.try(&.level!.to_i32) || 0
+        level = last + 1
+        return if level > 3
+        on = Documents.today
+        days = document.due_date.try { |due| Math.max((on - due).total_days.to_i32, 0) } || 0
+        interest, indemnity = penalties(document, balance, days, level, Configuration.settings)
+        Reminder.create!(document_id: document_id, level: level, status: "proposed", proposed_on: on,
+          days_late: days, balance: balance, interest: interest, indemnity: indemnity)
       end
 
       def self.penalties(document : Document, balance : BigDecimal, days : Int32, level : Int32,
@@ -79,6 +99,9 @@ module Partiduo
           "total"     => Output.format_amount(view.total_claimed, locale, document.currency_code!),
           "seller"    => Documents.seller(document).name,
         }
+        if rejection = reminder.payment_rejection_id.try { |id| PaymentRejection.filter(id: id).first }
+          return rejection_message(rejection, document, params, view)
+        end
         I18n.with_locale(locale) do
           subject = settings.reminder_subject.presence.try { |text| interpolate(text, params) } ||
                     I18n.t("invoicing.reminders.subject.level#{view.level}", params)
@@ -86,6 +109,27 @@ module Partiduo
                  I18n.t("invoicing.reminders.body.level#{view.level}", params)
           if view.interest > 0 || view.indemnity > 0
             body = "#{body}\n\n#{I18n.t("invoicing.reminders.penalties", params)}"
+          end
+          {subject, body}
+        end
+      end
+
+      # Relance d'un règlement rejeté : le courriel rappelle le règlement, son
+      # rejet et son motif (textes livrés, dans la langue du document).
+      private def self.rejection_message(rejection : PaymentRejection, document : Document,
+                                         params : Hash(String, String), view : Api::ReminderView) : {String, String}
+        locale = document.locale!
+        payment = Payment.filter(id: rejection.payment_id).first!
+        I18n.with_locale(locale) do
+          all = params.merge({
+            "paid_on" => Output.format_date(payment.paid_on!, locale),
+            "amount"  => Output.format_amount(rejection.amount!, locale, document.currency_code!),
+            "reason"  => I18n.t("invoicing.rejection_reasons.#{rejection.reason}"),
+          })
+          subject = I18n.t("invoicing.reminders.rejected.subject", all)
+          body = I18n.t("invoicing.reminders.rejected.body", all)
+          if view.interest > 0 || view.indemnity > 0
+            body = "#{body}\n\n#{I18n.t("invoicing.reminders.penalties", all)}"
           end
           {subject, body}
         end

@@ -57,7 +57,9 @@ module Partiduo
         payment_terms_days : Int32 = 30,
         billing_period_start : Time? = nil,
         billing_period_end : Time? = nil,
-        delivery_note_numbers : Array(String) = [] of String
+        delivery_note_numbers : Array(String) = [] of String,
+        return_note_numbers : Array(String) = [] of String,
+        return_reason : String = ""
 
       def self.iso(date : Time?) : String
         date.try(&.to_s("%Y-%m-%d")) || ""
@@ -77,6 +79,7 @@ module Partiduo
         customer_mentions(context, add)
         date_mentions(context, add)
         fiscal_mentions(context, add) if Api::FISCAL_KINDS.includes?(context.kind)
+        return_mentions(context, add)
         mentions
       end
 
@@ -103,6 +106,23 @@ module Partiduo
         terms_mention(context, add) if context.kind.in?("quote", "order")
       end
 
+      # Retours de marchandises (D-INV3-001 à D-INV3-005) : date et motif du
+      # bon de retour ; bons de retour déduits d'une facture ou crédités par
+      # un avoir ; livraisons imputées d'un avoir récapitulatif.
+      private def self.return_mentions(context : Context, add) : Nil
+        if context.kind == "return_note"
+          add.call("dates.return", {"date" => iso(context.delivery_date)}) if context.delivery_date
+          add.call("return_note.reason.#{context.return_reason}", {} of String => String) unless context.return_reason.empty?
+        end
+        unless context.return_note_numbers.empty?
+          code = context.kind == "credit_note" ? "credited" : "deducted"
+          add.call("return_notes.#{code}", {"numbers" => context.return_note_numbers.join(", ")})
+        end
+        if context.kind == "credit_note" && !context.delivery_note_numbers.empty?
+          add.call("delivery_notes.offset", {"numbers" => context.delivery_note_numbers.join(", ")})
+        end
+      end
+
       private def self.fiscal_mentions(context : Context, add) : Nil
         none = {} of String => String
         category = context.operation_category
@@ -119,6 +139,7 @@ module Partiduo
           # facture périodique) : bons de livraison regroupés.
           add.call("delivery_notes.summary.#{context.regime}", {"numbers" => context.delivery_note_numbers.join(", ")})
         end
+
         context.deductions.each do |deduction|
           add.call("deposit.deducted", {"number" => deduction.deposit_number, "amount" => amount(deduction.amount),
                                         "currency" => context.currency_code})

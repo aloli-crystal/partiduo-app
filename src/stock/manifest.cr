@@ -31,5 +31,7 @@ Partiduo::Modules.register do
   on("delivery_note.issued") { |event| Partiduo::Stock::Feeds.on_event(event) }
   on("invoice.issued") { |event| Partiduo::Stock::Feeds.on_event(event) }
   on("credit_note.issued") { |event| Partiduo::Stock::Feeds.on_event(event) }
+  # Bon de retour émis : entrée en stock (D-INV3-002).
+  on("return_note.issued") { |event| Partiduo::Stock::Feeds.on_event(event) }
   on("entry.posted") { |event| Partiduo::Stock::Feeds.on_event(event) }
 end

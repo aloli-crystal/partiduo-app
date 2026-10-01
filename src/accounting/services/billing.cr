@@ -16,10 +16,15 @@ module Partiduo
     # * `credit_note.issued` : même écriture en négatif, lettrée avec la
     #   ligne client de la facture créditée.
     # * `payment.recorded` : encaissement au journal financier (caisse pour
-    #   un règlement en espèces), lettré avec la facture.
+    #   un règlement en espèces), lettré avec la facture ;
+    # * `payment.rejected` : contre-passation de l'encaissement rejeté
+    #   (D-INV3-008) — son lettrage est défait (`payment.unmatched`), une
+    #   écriture inverse est passée au même journal financier à la date du
+    #   rejet et lettrée avec lui, les autres règlements de la facture sont
+    #   relettrés ; frais bancaires au compte par défaut `bank_fees`.
     #
     # Référence de l'écriture (`source`) : `invoice:<id>`, `credit_note:<id>`,
-    # `payment:<id>` ; une source déjà comptabilisée ne l'est pas deux fois
+    # `payment:<id>`, `payment_rejection:<id>` (frais : `…:fees`) ; une source déjà comptabilisée ne l'est pas deux fois
     # (index unique `accounting_entry_source`, migration 0004). Une écriture
     # extournée libère sa référence : l'événement redevient à comptabiliser
     # (D-2F-010).
@@ -58,6 +63,7 @@ module Partiduo
       def self.source_of(name : String, payload : Hash(String, String)) : String
         case name
         when "payment.recorded"   then "payment:#{payload["payment_id"]?}"
+        when "payment.rejected"   then "payment_rejection:#{payload["rejection_id"]?}"
         when "credit_note.issued" then payload["source"]? || "credit_note:#{payload["credit_note_id"]?}"
         else                           payload["source"]? || "invoice:#{payload["invoice_id"]?}"
         end
@@ -125,6 +131,8 @@ module Partiduo
             post_document(actor, name, payload, source)
           when "payment.recorded"
             post_payment(actor, payload, source)
+          when "payment.rejected"
+            post_rejection(actor, payload, source)
           else
             raise ArgumentError.new("événement non comptabilisable : #{name}")
           end
@@ -161,6 +169,87 @@ module Partiduo
         result = AccApi.post_financial(actor, input)
         return Partiduo::Api::Result(Array(Int64)).failure(result.errors) if result.failure?
         Partiduo::Api::Result(Array(Int64)).success(result.value!.map(&.id))
+      end
+
+      # Règlement rejeté (D-INV3-008) : l'encaissement — écriture `payment:<id>`
+      # d'un règlement saisi, sinon la ligne de banque lettrée avec la
+      # facture pour ce montant — est contre-passé à la date du rejet, au
+      # même journal : délettrage (`payment.unmatched`), écriture inverse
+      # lettrée avec lui, relettrage des autres règlements de la facture
+      # (`payment.matched`) ; frais au compte `bank_fees`.
+      private def self.post_rejection(actor : Partiduo::Api::Actor, payload : Hash(String, String),
+                                      source : String) : Partiduo::Api::Result(Array(Int64))
+        result = Partiduo::Api::Result(Array(Int64))
+        errors = [] of FieldError
+        customer = customer(payload["customer_card_id"]?, errors)
+        date = parse_date(payload["rejected_on"]?)
+        errors << FieldError.new("date", "accounting.errors.billing.date_missing") if date.nil?
+        return result.failure(errors) unless errors.empty? && customer && date
+        amount = decimal(payload["amount"]?)
+        line = rejected_line(payload, customer.id, amount)
+        return result.failure(FieldError.base("accounting.errors.billing.rejection.payment_not_found")) unless line
+        entry = Entry.filter(id: line.entry_id).first!
+        group = [] of EntryLine
+        if matching_id = line.matching_id.try(&.as(Int).to_i64)
+          group = EntryLine.filter(matching_id: matching_id).to_a
+          Matchings.unmatch!(matching_id, actor)
+        end
+        number = payload["number"]?.to_s
+        label = "#{I18n.t("accounting.billing.rejection_label")} #{number}".strip
+        posted = AccApi.post_financial(actor, AccApi::FinancialInput.new(
+          ledger_id: entry.ledger_id.as(Int).to_i64, date: date, source: source,
+          lines: [AccApi::PaymentLineInput.new(amount: -amount, card: customer.code, label: label,
+            match_line_ids: [line.pk!.as(Int64)])],
+        ))
+        return result.failure(posted.errors) if posted.failure?
+        ids = posted.value!.map(&.id)
+        rematch(actor, group.reject { |other| other.pk == line.pk })
+        fees = decimal(payload["fees"]?)
+        if fees > 0
+          account = DefaultAccount.filter(code: "bank_fees").first.try(&.account)
+          return result.failure(FieldError.base("accounting.errors.billing.rejection.no_fees_account")) unless account
+          charged = AccApi.post_financial(actor, AccApi::FinancialInput.new(
+            ledger_id: entry.ledger_id.as(Int).to_i64, date: date, source: "#{source}:fees",
+            lines: [AccApi::PaymentLineInput.new(amount: -fees, account: account.number.to_s,
+              label: "#{I18n.t("accounting.billing.rejection_fees_label")} #{number}".strip)],
+          ))
+          return result.failure(charged.errors) if charged.failure?
+          ids.concat(charged.value!.map(&.id))
+        end
+        result.success(ids)
+      end
+
+      # Ligne du client de l'encaissement rejeté : celle de l'écriture
+      # `payment:<id>` (règlement saisi dans la Facturation), sinon, parmi
+      # les lignes de journaux financiers lettrées avec la facture, au crédit
+      # du client, celle de ce montant — de la date du règlement de
+      # préférence, la plus récente sinon.
+      private def self.rejected_line(payload : Hash(String, String), customer_id : Int64, amount : BigDecimal) : EntryLine?
+        account_id = CardAccount.filter(card_id: customer_id).first.try(&.account_id)
+        if payload["source"]? == "manual"
+          entry = live_entries(["payment:#{payload["payment_id"]?}"]).first || return
+          return EntryLine.filter(entry_id: entry.pk).to_a.find { |line| line.card_id == customer_id && line.account_id == account_id }
+        end
+        invoice = sale_entry("invoice:#{payload["invoice_id"]?}") || return
+        matching_id = third_party_line(invoice, customer_id).try(&.matching_id) || return
+        financial = Ledger.filter(kind: "financial").map(&.pk!.as(Int64)).to_set
+        candidates = EntryLine.filter(matching_id: matching_id, side: "credit").to_a.select do |line|
+          entry = Entry.filter(id: line.entry_id).first
+          entry && financial.includes?(entry.ledger_id.as(Int).to_i64) && (line.currency_amount || line.amount!) == amount
+        end
+        paid_on = parse_date(payload["paid_on"]?)
+        candidates.max_by? do |line|
+          entry = Entry.filter(id: line.entry_id).first!
+          {entry.date == paid_on ? 1 : 0, line.pk!.as(Int64)}
+        end
+      end
+
+      # Relettre ce qui reste d'un lettrage défait (autres règlements de la
+      # facture), s'il y a encore un débit et un crédit.
+      private def self.rematch(actor : Partiduo::Api::Actor, lines : Array(EntryLine)) : Nil
+        return if lines.size < 2
+        checked, errors = Matchings.validate(lines.map(&.pk!.as(Int64)))
+        Matchings.match!(actor, checked) if errors.empty?
       end
 
       # --- Entrées ---------------------------------------------------------------------

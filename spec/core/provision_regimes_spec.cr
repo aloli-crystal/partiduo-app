@@ -107,7 +107,7 @@ end
 describe_module "ACCOUNTING", "Provisionnement : plan comptable selon le régime" do
   it "charge le PCG français (mod2) avec l'instance française" do
     provision_instance
-    Partiduo::Api::Accounting.chart(system).size.should eq(169)
+    Partiduo::Api::Accounting.chart(system).size.should eq(170)
     Partiduo::Api::Accounting.ledgers(system).map(&.code).should eq(%w[A01 F01 O01 V01])
     Partiduo::Api::Accounting.default_account(system, "customer").try(&.number).should eq("410")
   end
@@ -126,14 +126,33 @@ describe_module "ACCOUNTING", "Provisionnement : plan comptable selon le régime
       .should eq({"Résultat de l'exercice (bénéfice)", "12", Partiduo::Api::Accounting::AccountKind::Liability, true})
     accounts.account(system, "129").label.should eq("Résultat de l'exercice (perte)")
     exec.call(Migration::Accounting::V0012::FORWARD) # rejouée : rien de plus
-    numbers.call.size.should eq(169)
+    numbers.call.size.should eq(170)
 
     # Retour : les comptes ajoutés disparaissent ; un compte déjà présent reste.
     exec.call(Migration::Accounting::V0012::BACKWARD)
     numbers.call.should_not contain("120")
-    numbers.call.size.should eq(167)
+    numbers.call.size.should eq(168)
     exec.call(Migration::Accounting::V0012::BACKWARD)
     numbers.call.should contain("108")
+  end
+
+  it "pose le compte de frais bancaires d'une instance déjà provisionnée (migration 0013, D-INV3-008)" do
+    provision_instance
+    accounts = Partiduo::Api::Accounting
+    accounts.default_account(system, "bank_fees").try(&.number).should eq("627")
+    exec = ->(sql : String) { Marten::DB::Connection.default.open(&.exec(sql)) }
+    exec.call("DELETE FROM accounting_default_account WHERE code = 'bank_fees'")
+    accounts.delete_account(system, accounts.account(system, "627").id).value!
+    exec.call("CREATE TABLE IF NOT EXISTS accounting_bank_fees_account_added (account_id bigint PRIMARY KEY)")
+    exec.call(Migration::Accounting::V0013::FORWARD_ACCOUNT)
+    exec.call(Migration::Accounting::V0013::FORWARD_DEFAULT)
+    fees = accounts.account(system, "627")
+    {fees.label, fees.parent_number, fees.direct_use}.should eq({"Services bancaires et assimilés", "62", true})
+    accounts.default_account(system, "bank_fees").try(&.number).should eq("627")
+    exec.call(Migration::Accounting::V0013::FORWARD_DEFAULT) # rejouée : rien de plus
+    exec.call(Migration::Accounting::V0013::BACKWARD)
+    accounts.default_account(system, "bank_fees").should be_nil
+    expect_raises(Partiduo::Api::NotFound) { accounts.account(system, "627") }
   end
 
   it "n'ajoute pas 120 ni 129 au PCMN d'une instance belge (migration 0012)" do
@@ -147,5 +166,6 @@ describe_module "ACCOUNTING", "Provisionnement : plan comptable selon le régime
     Partiduo::Api::Accounting.chart(system).size.should eq(504)
     Partiduo::Api::Accounting.ledgers(system).map(&.name).should contain("Verkopen")
     Partiduo::Api::Accounting.default_account(system, "customer").try(&.number).should eq("400")
+    Partiduo::Api::Accounting.default_account(system, "bank_fees").try(&.number).should eq("657")
   end
 end

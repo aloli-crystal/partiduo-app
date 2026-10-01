@@ -38,6 +38,7 @@ en:
       invoice: "Invoice"
       deposit_invoice: "Deposit invoice"
       credit_note: "Credit note"
+      return_note: "Return note"
     statuses:
       draft: "Draft"
       sent: "Sent"
@@ -51,6 +52,7 @@ en:
       paid: "Paid"
       overdue: "Overdue"
       invoiced: "Invoiced"
+      returned: "Settled"
     channels:
       none: "Not chosen"
       platform: "Approved platform"
@@ -70,6 +72,7 @@ en:
       from_invoice: "From invoice %{number}"
       from_deposit_invoice: "From deposit invoice %{number}"
       from_credit_note: "From credit note %{number}"
+      from_return_note: "From return note %{number}"
     delivery_notes:
       group_title: "Delivery note %{number} of %{date}"
     billing_rhythms:
@@ -107,6 +110,7 @@ en:
         delivery: "Date of supply of goods or services: %{date}"
         due: "Due date: %{date}"
         delivery_period: "Deliveries from %{from} to %{to}"
+        return: "Date the goods were returned: %{date}"
       quote:
         validity: "Quote valid until %{date}"
       delivery_address: "Delivery address: %{address}"
@@ -146,6 +150,7 @@ en:
         summary:
           fr: "Summary invoice for deliveries (art. 289-I-3 of the French tax code): delivery notes %{numbers}"
           be: "Summary invoice for deliveries: delivery notes %{numbers}"
+        offset: "Deliveries offset against returns: delivery notes %{numbers}"
       payment:
         terms:
           net: "Payment terms: %{days} days net from the invoice date"
@@ -160,6 +165,16 @@ en:
           fr: "Late payment interest at the European Central Bank's most recent refinancing rate plus 10 percentage points (art. L441-10 of the French Commercial Code)"
           be: "Late payment interest at the rate set by the Belgian Act of 2 August 2002 on combating late payment in commercial transactions"
         indemnity: "Fixed compensation for recovery costs in case of late payment: %{amount} %{currency}"
+      return_note:
+        reason:
+          damaged: "Reason for return: damaged goods"
+          defective: "Reason for return: defective goods"
+          wrong_item: "Reason for return: delivery error"
+          excess: "Reason for return: excess or unsold quantity"
+          other: "Reason for return: see notes"
+      return_notes:
+        deducted: "Returned goods deducted: return notes %{numbers}"
+        credited: "Credit note for returned goods: return notes %{numbers}"
     pdf:
       draft: "Draft"
       number: "No."
@@ -204,6 +219,9 @@ en:
         level2: "Hello,\n\nDespite our first reminder, invoice %{number}, due on %{due_date}, remains unpaid for %{balance} (%{days} days late). Please settle it without delay.\n\nKind regards,\n%{seller}"
         level3: "Dear Sir or Madam,\n\nInvoice %{number}, due on %{due_date}, remains unpaid for %{balance} despite our reminders. We hereby give you formal notice to pay %{total} in total.\n\n%{seller}"
       penalties: "Late payment interest: %{interest}; fixed compensation for recovery costs: %{indemnity}; total due: %{total}."
+      rejected:
+        subject: "Payment rejected: invoice %{number}"
+        body: "Hello,\n\nYour payment of %{paid_on} for %{amount} on invoice %{number} was returned unpaid by the bank (%{reason}). The invoice remains due for %{balance}. Please settle it again.\n\nKind regards,\n%{seller}"
     pdf_copy:
       banner: "Copy — the original is the electronic invoice sent through the approved platform"
       file_suffix: "copy"
@@ -223,6 +241,7 @@ en:
       sales_journal: "Sales journal"
       csv_name: "sales-and-receipts-journal"
       archive_name: "invoices"
+      payment_rejected: "Rejected payment"
     errors:
       settings:
         days: "Enter a number of days between 0 and %{max}"
@@ -290,12 +309,24 @@ en:
         issued: "Issued document: it can be neither changed nor deleted; correct it with a credit note"
         in_use: "This draft is referred to by another document"
         delivery_notes:
-          invoice_only: "Only an invoice takes over delivery notes"
+          invoice_only: "Only an invoice or a summary credit note takes delivery notes"
           invalid: "This document is not an issued delivery note"
           other_customer: "Delivery note %{number} belongs to another customer"
           other_currency: "Delivery note %{number} is in another currency"
           already_billed: "Delivery note %{number} is already invoiced"
           in_draft: "Delivery note %{number} is already taken over by a draft invoice"
+        return_reason:
+          return_note_only: "Only a return note has a reason for return"
+          invalid: "Unknown reason for return"
+        return_note:
+          origin_invalid: "The origin of a return must be an issued delivery note or invoice"
+        return_notes:
+          invoice_or_credit_only: "Only an invoice or a credit note takes return notes"
+          invalid: "This document is not an issued return note"
+          other_customer: "Return note %{number} belongs to another customer"
+          other_currency: "Return note %{number} is in another currency"
+          already_settled: "Return note %{number} is already settled"
+          in_draft: "Return note %{number} is already taken by a draft"
       discount:
         kind: "Unknown discount type"
         negative: "The discount cannot be negative"
@@ -338,7 +369,7 @@ en:
         override_denied: "Credit limit excl. VAT of %{customer} exceeded by %{excess} %{currency}: overriding it requires the credit limit override permission"
         reason_too_long: "Override reason: %{max} characters at most"
       dispatch:
-        kind: "Only an invoice or a deposit invoice is issued and sent in one click"
+        kind: "Only an invoice, a deposit invoice or a month-end credit note is issued and sent in one click"
       issue:
         already_issued: "This document is already issued"
         no_line: "Add at least one priced line"
@@ -349,6 +380,7 @@ en:
         credit_before_invoice: "A credit note cannot predate the invoice it corrects"
         future: "The issue date cannot be later than today (%{date}): the allocated number is final"
         customer_siren_required: "Customer %{customer} is a business established in France: enter its SIREN on its card before issuing"
+        return_reason_required: "Enter the reason for return before issuing"
       pdf_copy:
         not_platform: "Only an invoice issued through the approved platform has a PDF copy"
         render_failed: "PDF copy not produced (non-compliant PDF/A-3): %{detail}"
@@ -401,3 +433,44 @@ en:
           type: "The logo must be a PNG or JPEG image"
           not_found: "Logo not found"
         in_use: "This layout is used by documents"
+      return_note:
+        quantity_negative: "A return note brings back positive quantities"
+        exceeds_origin: "“%{description}”: return beyond the quantity of %{origin} (%{delivered}, already returned: %{returned})"
+      return_notes:
+        no_invoice_to_credit: "No invoice of this customer can be credited with these returns: choose the invoice to credit"
+      payment_rejection:
+        already_rejected: "This payment is already rejected"
+        document:
+          invalid: "Only a payment of an issued invoice can be rejected"
+        date:
+          before_payment: "The rejection cannot precede the payment (%{date})"
+          future: "The rejection date cannot be later than today"
+        reason:
+          invalid: "Unknown rejection reason"
+        reason_text:
+          required: "Specify the reason"
+          too_long: "%{max} characters at most"
+        fees:
+          negative: "Charges cannot be negative"
+          scale: "Amount to the cent"
+          required: "Enter the charges to rebill"
+        fees_vat_rate:
+          required: "Choose the VAT rate of the charges invoice"
+          invalid: "VAT rate not found or disabled"
+    return_notes:
+      group_title: "Return note %{number} of %{date}"
+    return_reasons:
+      damaged: "Damaged goods"
+      defective: "Defective goods"
+      wrong_item: "Delivery error"
+      excess: "Excess or unsold quantity"
+      other: "Other reason"
+    rejection_reasons:
+      insufficient_funds: "Insufficient funds"
+      account_closed: "Account closed"
+      stopped: "Stopped or revoked"
+      disputed: "Disputed by the debtor"
+      invalid_details: "Wrong bank details"
+      other: "Other reason"
+    payment_rejections:
+      fees_line: "Bank charges for the rejected payment of %{date} (invoice %{number}, %{reason})"

@@ -40,6 +40,7 @@ module Partiduo
           when "payment.recorded"  then payment_recorded(event)
           when "payment.matched"   then payment_matched(event)
           when "payment.unmatched" then payment_unmatched(event)
+          when "payment.rejected"  then payment_rejected(event)
           end
           Partiduo::Api::Result(Nil).success(nil)
         end
@@ -105,6 +106,24 @@ module Partiduo
       # qui en a absorbé d'autres (fusion) ne publie que son surplus, et le
       # défaire rouvre toute la facture. Sans facture citée, celles du seul
       # lettrage défait.
+      # Règlement saisi rejeté par la banque (D-INV3-008) : sa recette
+      # (`payment:<id>`) est contre-passée à la date du rejet (la date du
+      # jour si la période est close). Un règlement venu d'un lettrage l'est
+      # par `payment.unmatched`, que publie la Comptabilité.
+      def self.payment_rejected(event : Partiduo::Events::Event) : Nil
+        return unless event["source"]? == "manual"
+        date = parse_date(event["rejected_on"]?) || Partiduo::Config.today
+        Receipt.filter(source: "payment:#{event["payment_id"]}", reversal_of_id__isnull: true).order(:id).each do |row|
+          next if Receipt.filter(reversal_of_id: row.pk).exists?
+          input = Api::ReverseInput.new(row.pk!.as(Int64), Math.max(date, row.date!))
+          errors = Registers.reverse_errors(row, input, manual: false)
+          input = Api::ReverseInput.new(row.pk!.as(Int64), Math.max(Partiduo::Config.today, row.date!)) unless errors.empty?
+          errors = Registers.reverse_errors(row, input, manual: false)
+          raise "contre-passation refusée : #{errors.map(&.key).join(", ")}" unless errors.empty?
+          Registers.reverse_receipt!(row, input, event.actor_user_id, manual: false)
+        end
+      end
+
       def self.payment_unmatched(event : Partiduo::Events::Event) : Nil
         today = Partiduo::Config.today
         invoices = event["sources"]?.to_s.split(',').map(&.strip).select(&.matches?(/\Ainvoice:\d+\z/))
