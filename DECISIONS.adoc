@@ -14024,6 +14024,9 @@ catégories (BR-O), et rien ne garantit une prochaine facture.
 
 === D-INV3-011 — Deux événements nouveaux, amendement d'ADR-003 D7 proposé
 
+*Amendement adopté le 1er octobre 2026* : ADR-003 D7 porte `return_note.issued`
+et `payment.rejected`.
+
 *Choix.* `return_note.issued` (D-INV3-002) et `payment.rejected`
 (D-INV3-008, journalisé) sont ajoutés à `Partiduo::Events::SCHEMA`, comme
 l'ont été `delivery_note.issued` et `payment.unmatched` : *proposition
