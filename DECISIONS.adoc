@@ -13485,7 +13485,11 @@ présent », suivi de la liste des formulaires principaux par régime :
   (DAS2 D4, liasse L2) : délai ou paramètres faux, à départager
   (D-TDC10-003).
 
-=== D-TDC10-002 — DAS2 seule : régime dans l'identité, IS réel simplifié seulement (T10:teledec ; remplace la partie DAS2 de D-TDC6-001 et la marque blanche de D-TDC9-005)
+=== D-TDC10-002 — DAS2 seule : régime dans l'identité, IS réel simplifié seulement (T10:teledec ; remplace la partie DAS2 de D-TDC6-001 et la marque blanche de D-TDC9-005 ; remplacée par D-TDC11-001)
+
+*Statut.* *Remplacée par D-TDC11-001* : le régime dans l'identité suffit
+pour tous les régimes essayés ; les refus locaux `das2_alone` et
+`das2_alone_unlisted` sont retirés.
 
 *Choix.* La DAS2 part seule avec `identity.fullRegimeFiscal` = régime de
 l'entreprise (`Formats.das2_regime`), seul cas prouvé sur le stage (D4) ;
@@ -13539,3 +13543,111 @@ attentes du suivi comprises).
 (suite du stage et exploration en attente : sans réseau dans le bac à
 sable) ; Ameba sans remarque ; `crystal tool format`. Bases
 `partiduo_test_tdc10_*`, supprimées.
+
+=== D-TDC11-001 — DAS2 seule : régime de l'entreprise dans l'identité, pour tous les régimes (T11:teledec ; remplace D-TDC10-002)
+
+*Contexte.* Deuxième exploration du stage (1er octobre 2026) : la DAS2
+seule est acceptée pour *tous* les régimes essayés dès que
+`identity.fullRegimeFiscal` est dans la payload — D1 et D4 `ISRS`, D11
+`ISRN` (SAS), D12 `BICRS` (SRL), D13 `BICRN` (SRL), D14 `BNCDC` (EI) — et
+refusée sans lui. La liste « formulaires principaux par régime » du
+message de refus de TELEDEC était donc trompeuse. « Misformatted JSON » de
+la création BICRS : seulement avec la forme `SARL` en clair (B1, B7), que
+l'adaptateur traduit déjà en `SRL` ; aucun problème en production.
+
+*Choix.* La DAS2 part seule avec le régime de l'entreprise dans son
+identité, quel qu'il soit (`Formats.das2_regime`) ; `DAS2_ALONE_REGIMES`,
+`PRINCIPAL_FORMS`, les refus `das2_alone` et `das2_alone_unlisted` et
+leurs contrôles sont retirés (fr, en, nl). Reste le refus local
+`das2_tax_system` (transport et contrôle bloquant dès la préparation) si
+aucun régime n'est choisi, puisque TELEDEC refuse alors la DAS2 seule.
+Le TELEDEC simulé des specs refuse une DAS2 sans régime connu dans
+l'identité et l'accepte avec. Jamais de déclaration néant ajoutée.
+
+*Vérification.* Specs du format (six régimes, refus sans régime,
+traductions), de la préparation (tout régime accepté, contrôle sans
+régime), du simulateur (DAS2 sans régime ou de régime inconnu refusée,
+`BNCDC` acceptée) et du schéma `DAS2-2026`.
+
+=== D-TDC11-002 — Suivi : un 404 juste après le dépôt est une attente de finalisation chez TELEDEC (T11:teledec)
+
+*Contexte.* Sur le stage, `declaration-status` répond 404 « declaration
+not found » pour la DAS2 et la liasse acceptées, à 0, 10, 30 et 60 s et
+avec toutes les variantes de paramètres (`formulaire` `Part` ou `das2`
+refusés : « code court sans suffixe… ou "liasse" » ; date au format
+JJ/MM/AAAA refusée ; email obligatoire), alors que la CA3 et le 2571 sont
+trouvés. `GET /service/declarations` : 403 (droit `liste-declarations`
+absent du jeton, que l'adaptateur ne demande pas). Hypothèse : le dépôt n'existe chez TELEDEC qu'une fois
+son lien ouvert (troisième série, D-TDC11-003).
+
+*Choix.* L'adaptateur traitait déjà le 404 en attente (`pending`, état
+brut `notfound`) sans erreur ; son libellé devient « En attente de
+finalisation chez TELEDEC » (fr, en, nl), et la fiche du dépôt transmis
+ajoute sous l'état une invite (`data-teledec-awaiting`) : ouvrir la
+déclaration chez TELEDEC (bouton du lien) pour la finaliser, puis
+actualiser le statut plus tard ; le suivi existant (bouton et
+actualisation de tous les dépôts) la relit. Le TELEDEC simulé peut cacher
+un dépôt au suivi jusqu'à l'ouverture de son lien
+(`hidden_until_opened`, `open_link`). L'exemple DAS2 de la suite du stage
+n'exige plus que le suivi trouve le dépôt aussitôt (`settled_status!` avec
+`awaiting`) ; il échoue toujours sur `CompleteWithErrors`.
+
+*Vérification.* Spec d'écran : DAS2 transmise, suivi en 404 → dépôt
+transmis, état `notfound`, aucune erreur, invite et lien affichés ; lien
+ouvert → `readytobesent`, invite retirée.
+
+=== D-TDC11-003 — Exploration du stage, troisième série (T11:teledec ; complète D-TDC10-003)
+
+*Choix.* Trois sections de plus dans
+`spec/integration/exploration_spec.cr`, mêmes règles (stage seulement,
+rien vers la DGFiP, entreprises fictives distinctes `998<série>60` à `62`,
+journal expurgé, tableau en fin d'exécution, fichier 0600) :
+
+. *Jetons* (T0 à T4) : jeton sans paramètre `scope` (tous les droits du
+  partenaire selon la documentation), `stage/liste-declarations` avec les
+  droits de l'adaptateur ou seul, `stage/mes-declarations` de même ;
+  réponse du service des jetons affichée sans le jeton.
+. *Liste* (L0 à L3), si `liste-declarations` est accordé (demandé avec
+  les droits de l'adaptateur, sinon jeton sans droit nommé qui l'annonce) :
+  DAS2 et liasse déposées, puis aussitôt `GET /service/declarations`
+  (liens retirés) ; `declaration-status` avec exactement les valeurs
+  listées (`formulaire` s'il existe, sinon `declarationType`, puis le code
+  de l'adaptateur ; `dateFin` ; échéance si listée) ; liste relue 30 s
+  après.
+. *Lien ouvert* (O0 à O4) : DAS2 déposée, suivi et liste avant ; simple
+  `GET` de l'adresse rendue, redirections suivies avec leurs cookies,
+  *sur le stage seulement* (toute autre adresse, production comprise,
+  n'est pas ouverte), rien cliqué ni envoyé ; puis suivi et liste aussitôt
+  et 10 s après.
+
+Le jeton du stage relevé le 28 septembre sans paramètre `scope` annonçait
+déjà `stage/liste-declarations` et `stage/mes-declarations` : le 403 de la
+deuxième série vient probablement de ce que l'adaptateur ne demande pas ce
+droit ; T0 et T1 le départageront.
+
+`liste-declarations` n'est *pas* ajouté aux droits de l'adaptateur réel :
+la série n'a pas encore été jouée (pas de réseau dans le bac à sable). Si
+elle montre le droit accordé, l'ajouter comme droit facultatif
+(`OPTIONAL_SCOPES`, repli sans lui sur `invalid_scope`, comme
+`nouvelle-declaration`).
+
+*Vérification.* Exemple hors ligne : aucun lien hors du stage n'est
+ouvert. Commande inchangée : `TELEDEC_EXPLORATION=1 DATABASE_URL=… crystal
+spec spec/integration/exploration_spec.cr`.
+
+=== D-TDC11-004 — Greffe : droit `stage/nouvelle-declaration` refusé, question à TELEDEC (T11:teledec)
+
+*Contexte.* Le service des jetons répond `invalid_scope` pour
+`stage/nouvelle-declaration` (nom exact de la documentation
+« Authentification par access token ») et toutes les variantes (J1 à J5) :
+le droit n'est pas attribué à notre client du stage.
+
+*Choix.* Question à TELEDEC (liste des questions en attente, hors dépôt) :
+attribuer le droit au stage et dire s'il l'est en production. L'adaptateur
+garde le droit facultatif (repli sans lui, dépôt au greffe refusé par
+`teledec.errors.transport.scope`).
+
+*Vérification.* `partiduo-teledec` : exemples verts en ordre aléatoire
+(suite du stage et exploration en attente : sans réseau dans le bac à
+sable) ; Ameba sans remarque ; `crystal tool format`. Bases
+`partiduo_test_tdc11_*`, supprimées.

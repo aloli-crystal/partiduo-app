@@ -1370,3 +1370,25 @@ posée aussi).
   deuxième série (S1 à S18).
 * *Liasse sans `creation-entreprise`* — `#CREATION-AUTO OUI` ne suffit
   pas (suivi « Utilisateur non trouvé ») : la création préalable reste.
+
+== Deuxième exploration du stage (B-TDC-004, T11:teledec)
+
+*B-TDC-004 mis à jour* (DECISIONS D-TDC11-001 à D-TDC11-004) :
+
+* *DAS2 seule* — levé pour tous les régimes : acceptée avec le régime de
+  l'entreprise dans l'identité (`ISRS`, `ISRN`, `BICRS`, `BICRN`,
+  `BNCDC`), refusée sans lui ; les refus locaux par régime sont retirés
+  (D-TDC11-001).
+* *Création BICRS* — levé : « Misformatted JSON » seulement avec la forme
+  `SARL` en clair, que l'adaptateur traduit en `SRL`.
+* *Suivi après dépôt* — DAS2 et liasse toujours introuvables par
+  `declaration-status` (404) juste après le dépôt, quels que soient le
+  délai et les paramètres ; traité comme une attente de finalisation chez
+  TELEDEC (D-TDC11-002). *Reste* : jouer la troisième série
+  (D-TDC11-003 : droit `liste-declarations`, liste après dépôt, lien
+  ouvert) pour savoir si le dépôt n'existe qu'une fois le lien ouvert, et
+  ajouter `liste-declarations` aux droits facultatifs de l'adaptateur s'il
+  est accordé.
+* *Greffe* — toujours non joué : `stage/nouvelle-declaration` refusé
+  (`invalid_scope`) ; question posée à TELEDEC (D-TDC11-004).
+
