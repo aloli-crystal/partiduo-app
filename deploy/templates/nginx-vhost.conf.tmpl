@@ -2,10 +2,11 @@
 # Instance Partiduo {{DOSSIER}} — généré par partiduo-provision. Installé dans
 # /usr/local/etc/nginx/partiduo/{{DOSSIER}}.conf (nginx.conf : include partiduo/*.conf;).
 # Certificat : un certificat Let's Encrypt propre à l'instance (ADR-001 D2),
-# obtenu par acme.sh en HTTP-01 sur {{ACME_WEBROOT}} et installé dans
-# /usr/local/etc/ssl/acme/{{HOST}}/ (voir INSTALL.txt et nginx-acme.conf.tmpl,
-# le vhost d'amorçage). Le cron d'acme.sh (recette beryl `acme`) le renouvelle
-# et recharge nginx.
+# obtenu par acme.sh (utilisateur acme) en HTTP-01 sur {{ACME_WEBROOT}} et
+# laissé dans son CERT_HOME, /var/db/acme/certs/{{HOST}}_ecc/ (conventions du
+# port FreeBSD security/acme.sh ; voir INSTALL.txt et nginx-acme.conf.tmpl, le
+# vhost d'amorçage). Le cron d'acme.sh (/usr/local/etc/cron.d/acme, recette
+# beryl `acme`) le renouvelle et recharge nginx par sudo.
 
 server {
   listen      80;
@@ -29,8 +30,8 @@ server {
   http2       on;
   server_name {{HOST}};
 
-  ssl_certificate     /usr/local/etc/ssl/acme/{{HOST}}/fullchain.pem;
-  ssl_certificate_key /usr/local/etc/ssl/acme/{{HOST}}/privkey.pem;
+  ssl_certificate     /var/db/acme/certs/{{HOST}}_ecc/fullchain.cer;
+  ssl_certificate_key /var/db/acme/certs/{{HOST}}_ecc/{{HOST}}.key;
 
   add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
 

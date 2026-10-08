@@ -24,13 +24,16 @@ la création d'une instance et l'exploitation du parc, sur le modèle de
 
 |`partiduo-app-devel`
 |branche `development`
-|`/usr/local/lib/partiduo-devel/`, script `rc.d` `partiduo_devel`
+|les mêmes emplacements
 |===
 
-Les deux *cohabitent* sur un serveur ; chaque instance est servie par l'un ou
-l'autre (sa *version*, `app` ou `devel`). Chaque paquet contient le serveur,
-la ligne de commande Marten (`partiduo-manage`, aussi
-`/usr/local/bin/partiduo-manage` ou `partiduo-devel-manage`), le
+Une seule version par serveur : les deux paquets s'installent aux mêmes
+emplacements et s'excluent (`CONFLICTS_INSTALL`). La version de
+développement va sur le serveur de test, la version stable sur les serveurs
+de production ; la *version* d'une instance (`app` ou `devel`) n'est que le
+paquet attendu sur son serveur. Chaque paquet contient le serveur, la ligne
+de commande Marten (`partiduo-manage`, aussi
+`/usr/local/bin/partiduo-manage`), le
 convertisseur PDF de MODELES, les gabarits, traductions et fichiers statiques
 (rangés à côté des programmes), `partiduo-provision` et ses gabarits. Le
 compte système `partiduo` est créé à l'installation.
@@ -96,9 +99,12 @@ voulue (`partiduo-fleet provision` le fait à distance).
   `<dossier>.nginx.conf`, `partiduo-<dossier>.cron` et `INSTALL.txt`, les
   commandes d'installation (script `sh`, `set -eu`) — *non exécutées*.
 
-`--version app|devel` (défaut `app`) choisit le paquet qui sert l'instance.
-`INSTALL.txt` vérifie d'abord que `acme.sh` est installé
-(`/usr/local/sbin/acme.sh`) et que `nginx.conf` inclut `partiduo/*.conf`, puis
+`--version app|devel` (défaut `app`) nomme le paquet qui sert l'instance
+(`partiduo-app` ou `partiduo-app-devel`) ; les chemins, le script `rc.d` et
+la ligne de commande sont les mêmes pour les deux.
+`INSTALL.txt` vérifie d'abord que `acme.sh` est installé selon les conventions
+du port (`/usr/local/sbin/acme.sh`, utilisateur `acme`, règle
+`/usr/local/etc/sudoers.d/acme`) et que `nginx.conf` inclut `partiduo/*.conf`, puis
 installe l'environnement (`/usr/local/etc/partiduo/<dossier>.env`,
 root:partiduo, 640), crée `/var/db/partiduo/<dossier>/media`, ajoute l'instance
 au script `rc.d` du paquet (`sysrc partiduo_instances+=" <dossier>"`,
@@ -110,44 +116,55 @@ port), puis le certificat.
 
 ADR-001 D2 retient un certificat Let's Encrypt *par instance* (pas de
 certificat générique). Il est obtenu par `acme.sh`, comme sur tout le parc
-beryl (pas de Python sur les serveurs, D-PKG-007), avec les conventions de la
-recette beryl `acme` : home `/usr/local/etc/acme.sh`, clé ECDSA (`ec-256`),
-certificat installé dans `/usr/local/etc/ssl/acme/<hôte>/`. `INSTALL.txt` :
+beryl (pas de Python sur les serveurs, D-PKG-007), avec les conventions du
+port FreeBSD `security/acme.sh` que suit la recette beryl `acme` : acme.sh
+tourne sous l'utilisateur `acme` (`su -m acme -c …`), *jamais en root* ; home
+`/var/db/acme/.acme.sh` ; clé ECDSA (`ec-256`) ; certificat laissé dans le
+`CERT_HOME` `/var/db/acme/certs`, soit
+`/var/db/acme/certs/<dossier>.<domaine>_ecc/fullchain.cer` et
+`<dossier>.<domaine>.key`, sans copie ailleurs. `INSTALL.txt` :
 
+. donne le webroot (`--acme-webroot`, défaut `/usr/local/www/letsencrypt`) à
+  `acme:acme`, qui y écrit les défis ;
 . installe le vhost d'amorçage (`/usr/local/etc/nginx/partiduo/<dossier>.conf`,
-  HTTP seul, défis ACME sur `--acme-webroot`, défaut
-  `/usr/local/www/letsencrypt`) et recharge nginx ;
+  HTTP seul, défis ACME sur le webroot) et recharge nginx — nginx refuse un
+  vhost HTTPS dont le certificat n'existe pas encore ;
 . avec `--acme-email`, enregistre le compte ACME
   (`acme.sh --register-account -m <adresse>`) ;
 . `acme.sh --issue --server letsencrypt -d <dossier>.<domaine> -w <webroot>
-  --home /usr/local/etc/acme.sh --keylength ec-256` : code 0, certificat émis ;
-  code 2, certificat encore valide, rien à faire ; tout autre code arrête
-  l'installation ;
-. `acme.sh --install-cert -d <dossier>.<domaine> --ecc --fullchain-file
-  /usr/local/etc/ssl/acme/<dossier>.<domaine>/fullchain.pem --key-file
-  …/privkey.pem --reloadcmd 'service nginx reload'` ;
-. installe le vhost définitif, qui pointe sur ces deux fichiers, et recharge
-  nginx.
+  --home /var/db/acme/.acme.sh --cert-home /var/db/acme/certs --keylength
+  ec-256` : code 0, certificat émis ; code 2, certificat encore valide, rien à
+  faire ; tout autre code arrête l'installation (journal
+  `/var/log/acme.sh.log`) ;
+. `acme.sh --install-cert -d <dossier>.<domaine> --ecc --home … --cert-home …
+  --reloadcmd '/usr/local/bin/sudo /usr/sbin/service nginx reload'` : aucune
+  copie, acme.sh enregistre seulement la commande de rechargement (chemins
+  absolus : le cron n'a qu'un `PATH` réduit ; sudo limité à cette commande par
+  la recette `acme`) ;
+. installe le vhost définitif, qui lit le certificat dans `CERT_HOME`, et
+  recharge nginx.
 
-Le renouvellement est celui du cron d'acme.sh installé par la recette beryl
-`acme` (`acme.sh --cron --home /usr/local/etc/acme.sh`, deux fois par jour),
-par le même webroot, que le vhost définitif continue de servir ; acme.sh
-rejoue alors le `reloadcmd` enregistré à l'installation. `--acme-email` (ou
-`$PARTIDUO_ACME_EMAIL`) désigne le compte ACME — celui qui portera la demande
-de relèvement de quota (ADR-001 D2) ; sans adresse, acme.sh enregistre un
-compte sans courriel.
+Le renouvellement est celui du cron d'acme.sh posé par la recette beryl
+`acme` (`/usr/local/etc/cron.d/acme`, ligne `acme.sh-cron.d` du port :
+utilisateur `acme`, `lockf`, `acme.sh --cron --home /var/db/acme/.acme.sh`,
+chaque nuit), par le même webroot, que le vhost définitif continue de servir ;
+acme.sh rejoue alors le `reloadcmd` enregistré à l'installation.
+`--acme-email` (ou ``, lettres, chiffres et `._%+-`
+seulement : l'adresse passe dans la commande confiée à `su`) désigne le compte
+ACME — celui qui portera la demande de relèvement de quota (ADR-001 D2) ; sans
+adresse, acme.sh enregistre un compte sans courriel.
 
 *Quota* : 50 nouveaux certificats par semaine pour `partiduo.app`, tous
 comptes confondus. `acme.sh --issue` ne réémet pas un certificat valide
 (code 2) quand on rejoue `INSTALL.txt` ; `--acme-staging` utilise l'autorité
 de test (`--server letsencrypt_test`), hors quota, pour les essais.
 `partiduo-fleet retire` arrête le renouvellement du certificat de l'instance
-retirée (`acme.sh --remove`) et supprime
-`/usr/local/etc/ssl/acme/<dossier>.<domaine>/`.
+retirée (`acme.sh --remove`, sous l'utilisateur `acme`) et supprime
+`/var/db/acme/certs/<dossier>.<domaine>_ecc/`.
 
 `--dry-run` affiche les étapes sans rien exécuter. La ligne de commande Marten
 utilisée est `--manage`, sinon `$PARTIDUO_MANAGE`, sinon celle du paquet
-(`/usr/local/bin/partiduo-manage` ou `partiduo-devel-manage`), sinon
+(`/usr/local/bin/partiduo-manage`), sinon
 `bin/partiduo-manage` à côté du script, sinon `crystal run manage.cr --`
 (développement). C'est la ligne de commande de la distribution (interface +
 cœur + extensions) : elle connaît les migrations *et* les extensions.
@@ -179,7 +196,7 @@ cp deploy/fleet.conf.example deploy/fleet.conf       # domaine, chemins, comptes
 cp deploy/inventory.example deploy/inventory         # « <dossier> <serveur> [app|devel] »
 
 deploy/bin/partiduo-fleet provision deploy@srv1 exemple-sarl --name="Exemple SARL" --regime=fr
-deploy/bin/partiduo-fleet provision deploy@srv1 recette --version devel --name=Recette --regime=fr
+deploy/bin/partiduo-fleet provision deploy@test recette --version devel --name=Recette --regime=fr
 deploy/bin/partiduo-fleet status
 ----
 
@@ -192,11 +209,11 @@ version par `partiduo-fleet` (`build`, `upload`, `upgrade`, `rollback`,
 
 [source]
 ----
-/usr/local/lib/partiduo/                 # paquet partiduo-app (…-devel : partiduo-devel/)
+/usr/local/lib/partiduo/                 # paquet partiduo-app ou partiduo-app-devel
 ├── bin/partiduo-server, partiduo-manage, partiduo-modeles-pdf, partiduo-provision
 ├── deploy/templates/                    # gabarits de partiduo-provision
 └── share/partiduo/{artifacts,assets}/   # gabarits HTML, traductions, fichiers statiques
-/usr/local/etc/rc.d/partiduo             # rc.d du paquet (…-devel : partiduo_devel)
+/usr/local/etc/rc.d/partiduo             # rc.d du paquet (partiduo_instances)
 /usr/local/etc/partiduo/<dossier>.env    # root:partiduo, 640
 /usr/local/etc/cron.d/partiduo-<dossier> # tâches quotidiennes
 /usr/local/etc/nginx/partiduo/<dossier>.conf
@@ -232,27 +249,30 @@ déploiement et une stratégie de migration progressive ». La stratégie retenu
   d'administration) ;
 * *beryl met les paquets à jour* (`pkg upgrade`), serveur par serveur, sur
   tout le parc (instances et administration) ; le paquet est partagé par
-  les instances de sa version sur un serveur ;
+  toutes les instances d'un serveur ;
 * *le script `rc.d` migre chaque instance à son démarrage*
   (`partiduo-manage migrate` avant le serveur) : après `pkg upgrade`,
   `service partiduo restart` suffit ; une instance dont la migration échoue
   ne démarre pas, et son journal (`/var/log/partiduo/<dossier>.log`) dit
   pourquoi ;
 * une instance de recette sert à éprouver la branche `development` : elle est
-  servie par `partiduo-app-devel`, sur le même serveur que des instances de
-  production si l'on veut.
+  servie par `partiduo-app-devel`, sur le serveur de test, qui n'a que ce
+  paquet (une seule version par serveur).
 
 === Prérequis d'un serveur
 
 * FreeBSD 15, dépôt `pkg.aloli.net` activé (beryl, recette `pkg-repo-aloli`) ;
-  paquet `partiduo-app` (et/ou `partiduo-app-devel`) ;
+  paquet `partiduo-app` (`partiduo-app-devel` sur le serveur de test : l'un
+  ou l'autre, jamais les deux) ;
 * PostgreSQL 18, joint *par socket Unix* (`PG_SOCKET`, défaut `/tmp`) ; un
   rôle `partiduo` avec `CREATEDB` (`provision` le crée au besoin),
   authentification `peer` ;
 * l'utilisateur ssh de déploiement peut `sudo` (`security/sudo`) ;
 * nginx, dont `nginx.conf` inclut `partiduo/*.conf` dans le bloc `http` ;
-  `acme.sh` (`/usr/local/sbin/acme.sh`) et son cron de renouvellement, par la
-  recette beryl `acme` ; le DNS de `<dossier>.<domaine>` pointe sur le serveur
+  `acme.sh` (`/usr/local/sbin/acme.sh`), son utilisateur `acme`, son cron de
+  renouvellement (`/usr/local/etc/cron.d/acme`) et la règle sudo de
+  rechargement de nginx (`/usr/local/etc/sudoers.d/acme`), par la recette beryl
+  `acme` ; le DNS de `<dossier>.<domaine>` pointe sur le serveur
   (défi HTTP-01) ;
 * `curl` pour le contrôle de santé.
 

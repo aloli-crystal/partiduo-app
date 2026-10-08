@@ -67,8 +67,10 @@ describe "bin/partiduo-provision" do
       File.exists?(File.join(dir, "dupont", "partiduo-dupont.service")).should be_false
 
       # Un certificat Let's Encrypt par instance (ADR-001 D2), obtenu en HTTP-01.
-      vhost.should contain("ssl_certificate     /usr/local/etc/ssl/acme/dupont.partiduo.localhost/fullchain.pem;")
-      vhost.should contain("ssl_certificate_key /usr/local/etc/ssl/acme/dupont.partiduo.localhost/privkey.pem;")
+      # Certificat laissé dans le CERT_HOME d'acme.sh (conventions du port FreeBSD).
+      vhost.should contain("ssl_certificate     /var/db/acme/certs/dupont.partiduo.localhost_ecc/fullchain.cer;")
+      vhost.should contain("ssl_certificate_key /var/db/acme/certs/dupont.partiduo.localhost_ecc/dupont.partiduo.localhost.key;")
+      vhost.should_not contain("/usr/local/etc/ssl/acme")
       vhost.should contain("location ^~ /.well-known/acme-challenge/ {\n    root /usr/local/www/letsencrypt;")
       acme = File.read(File.join(dir, "dupont", "dupont.acme.nginx.conf"))
       acme.should contain("server_name dupont.partiduo.localhost;")
@@ -77,17 +79,24 @@ describe "bin/partiduo-provision" do
       install = File.read(File.join(dir, "dupont", "INSTALL.txt"))
       install.should start_with("# Installation")
       install.should contain("\nset -eu\n")
-      # Par acme.sh, comme le parc beryl (D-PKG-007) : émission, puis installation
-      # avec le rechargement de nginx que le cron d'acme.sh rejoue au renouvellement.
-      install.should contain("/usr/local/sbin/acme.sh --issue --server letsencrypt -d dupont.partiduo.localhost " \
-                             "-w /usr/local/www/letsencrypt --home /usr/local/etc/acme.sh --keylength ec-256 || rc=$?")
+      # Par acme.sh, comme le parc beryl (D-PKG-007), sous l'utilisateur acme
+      # (conventions du port FreeBSD) : émission dans CERT_HOME, puis
+      # enregistrement du rechargement de nginx (sudo) que le cron d'acme.sh
+      # (/usr/local/etc/cron.d/acme) rejoue au renouvellement.
+      install.should contain("su -m acme -c \"/usr/local/sbin/acme.sh --issue --server letsencrypt -d dupont.partiduo.localhost " \
+                             "-w /usr/local/www/letsencrypt --home /var/db/acme/.acme.sh --cert-home /var/db/acme/certs " \
+                             "--keylength ec-256\" || rc=$?")
       # Code 2 : certificat encore valide, pas de réémission (quota).
       install.should contain(%(if [ "$rc" != 0 ] && [ "$rc" != 2 ]; then))
-      install.should contain("install -d -m 755 /usr/local/etc/ssl/acme/dupont.partiduo.localhost\n")
-      install.should contain("/usr/local/sbin/acme.sh --install-cert -d dupont.partiduo.localhost --ecc --home /usr/local/etc/acme.sh \\\n" \
-                             "  --fullchain-file /usr/local/etc/ssl/acme/dupont.partiduo.localhost/fullchain.pem " \
-                             "--key-file /usr/local/etc/ssl/acme/dupont.partiduo.localhost/privkey.pem \\\n" \
-                             "  --reloadcmd 'service nginx reload'")
+      install.should contain("su -m acme -c \"/usr/local/sbin/acme.sh --install-cert -d dupont.partiduo.localhost --ecc " \
+                             "--home /var/db/acme/.acme.sh --cert-home /var/db/acme/certs \\\n" \
+                             "  --reloadcmd '/usr/local/bin/sudo /usr/sbin/service nginx reload'\"")
+      install.should_not contain("--fullchain-file")
+      install.should contain("test -f /var/db/acme/certs/dupont.partiduo.localhost_ecc/fullchain.cer ||")
+      # Défis écrits par acme.sh : le webroot lui appartient.
+      install.should contain("install -d -o acme -g acme -m 755 /usr/local/www/letsencrypt\n")
+      install.should_not contain("/usr/local/etc/acme.sh")
+      install.should_not contain("/usr/local/etc/ssl/acme")
       install.should_not contain("certbot")
       # Service FreeBSD : une instance de plus pour le script rc.d du paquet.
       install.should contain("*) sysrc partiduo_instances+=\" dupont\" ;;")
@@ -95,9 +104,12 @@ describe "bin/partiduo-provision" do
       install.should contain("install -m 644 partiduo-dupont.cron /usr/local/etc/cron.d/partiduo-dupont")
       install.should contain("/usr/local/etc/nginx/partiduo/dupont.conf")
       install.should_not contain("systemctl")
-      # Prérequis (acme.sh, include nginx) vérifiés avant toute modification.
+      # Prérequis (acme.sh et conventions du port, include nginx) vérifiés avant
+      # toute modification.
       install.should contain("if [ ! -x /usr/local/sbin/acme.sh ]; then")
       install.index!("/usr/local/sbin/acme.sh ]").should be < install.index!("install -d -o root")
+      install.should contain("if ! id acme >/dev/null 2>&1 || [ ! -f /usr/local/etc/sudoers.d/acme ]; then")
+      install.index!("sudoers.d/acme ]").should be < install.index!("install -d -o root")
       install.index!("include partiduo/*.conf").should be < install.index!("install -d -o root")
       # Sans adresse, pas d'enregistrement explicite du compte ACME.
       install.should_not contain("--register-account")
@@ -120,13 +132,16 @@ describe "bin/partiduo-provision" do
       code.should eq(0)
       output.should contain("certificat Let's Encrypt pour durand.partiduo.localhost (autorité de test)")
       install = File.read(File.join(dir, "durand", "INSTALL.txt"))
-      install.should contain("/usr/local/sbin/acme.sh --register-account -m ops@aloli.example " \
-                             "--server letsencrypt_test --home /usr/local/etc/acme.sh\n")
+      install.should contain("su -m acme -c \"/usr/local/sbin/acme.sh --register-account -m ops@aloli.example " \
+                             "--server letsencrypt_test --home /var/db/acme/.acme.sh\"\n")
       install.should contain("acme.sh --issue --server letsencrypt_test -d durand.partiduo.localhost -w /srv/acme ")
       install.index!("--register-account").should be < install.index!("acme.sh --issue")
       File.read(File.join(dir, "durand", "durand.nginx.conf")).should contain("root /srv/acme;")
     end
     sh("bin/partiduo-provision", "--dry-run", "--acme-email", "pas une adresse", "dossier").first.should eq(1)
+    # Rien que le shell de l'utilisateur acme interpréterait (su -m acme -c).
+    sh("bin/partiduo-provision", "--dry-run", "--acme-email", "ops$(id)@aloli.example", "dossier").first.should eq(1)
+    sh("bin/partiduo-provision", "--dry-run", "--acme-email", "ops;id@aloli.example", "dossier").first.should eq(1)
     sh("bin/partiduo-provision", "--dry-run", "--acme-webroot", "relatif", "dossier").first.should eq(1)
   end
 
@@ -148,16 +163,17 @@ describe "bin/partiduo-provision" do
     end
   end
 
-  it "sert l'instance par partiduo-app-devel (--version devel)" do
+  it "sert l'instance par partiduo-app-devel (--version devel), aux emplacements de partiduo-app" do
     with_tmpdir do |dir|
       code, output, _ = sh("bin/partiduo-provision", "--skip-createdb", "--manage", "true", "--name=X", "--regime=fr",
         "--output-dir", dir, "--port", "8230", "--version", "devel", "recette")
       code.should eq(0)
       output.should contain("paquet partiduo-app-devel)")
       install = File.read(File.join(dir, "recette", "INSTALL.txt"))
-      install.should contain("sysrc partiduo_devel_instances+=\" recette\"")
-      install.should contain("service partiduo_devel start recette")
-      File.read(File.join(dir, "recette", "partiduo-recette.cron")).should contain("/usr/local/lib/partiduo-devel/bin/partiduo-manage")
+      install.should contain("sysrc partiduo_instances+=\" recette\"")
+      install.should contain("service partiduo start recette")
+      install.should_not contain("partiduo_devel")
+      File.read(File.join(dir, "recette", "partiduo-recette.cron")).should contain("/usr/local/lib/partiduo/bin/partiduo-manage")
     end
     sh("bin/partiduo-provision", "--dry-run", "--version", "beta", "dossier").first.should eq(1)
   end
@@ -176,7 +192,7 @@ describe "deploy/bin/partiduo-fleet" do
   it "planifie sauvegardes, restauration et retrait sans rien exécuter ; la mise à jour relève de beryl" do
     with_tmpdir do |dir|
       File.write(File.join(dir, "inventory"),
-        "# parc\nalpha deploy@srv1\nbeta deploy@srv1 app\nrecette deploy@srv1 devel\ngamma deploy@srv2\n")
+        "# parc\nalpha deploy@srv1\nbeta deploy@srv1 app\nrecette deploy@test devel\ngamma deploy@srv2\n")
       File.write(File.join(dir, "fleet.conf"), "INVENTORY=inventory\nPARTIDUO_DOMAIN=compta.example\n")
       config = "--config=#{File.join(dir, "fleet.conf")}"
 
@@ -202,17 +218,18 @@ describe "deploy/bin/partiduo-fleet" do
 
       # Restauration : base, puis pièces jointes de la même sauvegarde.
       _, restore, _ = sh("deploy/bin/partiduo-fleet", config, "restore", "recette", "/var/backups/partiduo/recette/x.dump")
-      restore.should contain("service partiduo_devel stop recette")
+      restore.should contain("service partiduo stop recette")
       restore.index!("pg_restore").should be < restore.index!("tar -C \"$PARTIDUO_MEDIA_ROOT\" -xzf \"$a\"")
       restore.should contain("a=${f%.dump}.media.tar.gz")
 
       _, retire, _ = sh("deploy/bin/partiduo-fleet", config, "retire", "gamma")
       retire.should contain("sysrc partiduo_instances-=gamma")
       retire.should contain("rm -f /usr/local/etc/nginx/partiduo/gamma.conf")
-      retire.should contain("sudo /usr/local/sbin/acme.sh --remove -d gamma.compta.example --ecc --home /usr/local/etc/acme.sh || true")
-      retire.should contain("sudo rm -rf /usr/local/etc/ssl/acme/gamma.compta.example")
+      retire.should contain("sudo su -m acme -c '/usr/local/sbin/acme.sh --remove -d gamma.compta.example --ecc " \
+                            "--home /var/db/acme/.acme.sh --cert-home /var/db/acme/certs' || true")
+      retire.should contain("sudo rm -rf /var/db/acme/certs/gamma.compta.example_ecc")
       retire.index!("nginx/partiduo/gamma.conf").should be < retire.index!("acme.sh --remove")
-      retire.index!("acme.sh --remove").should be < retire.index!("rm -rf /usr/local/etc/ssl/acme/")
+      retire.index!("acme.sh --remove").should be < retire.index!("rm -rf /var/db/acme/certs/")
       retire.should_not contain("certbot")
 
       _, inventory, _ = sh("deploy/bin/partiduo-fleet", config, "inventory")
@@ -226,12 +243,13 @@ describe "deploy/bin/partiduo-fleet" do
     with_tmpdir do |dir|
       File.write(File.join(dir, "fleet.conf"), "INVENTORY=inventory\nPARTIDUO_DOMAIN=compta.example\n")
       code, output, _ = sh("deploy/bin/partiduo-fleet", "--config=#{File.join(dir, "fleet.conf")}", "provision",
-        "deploy@srv1", "recette", "--version", "devel", "--name=Recette SARL", "--regime=fr")
+        "deploy@test", "recette", "--version", "devel", "--name=Recette SARL", "--regime=fr")
       code.should eq(0)
-      output.should contain("/usr/local/lib/partiduo-devel/bin/partiduo-provision --version=devel")
+      output.should contain("pkg info -q -e partiduo-app-devel && test -x /usr/local/lib/partiduo/bin/partiduo-provision")
+      output.should contain("/usr/local/lib/partiduo/bin/partiduo-provision --version=devel")
       output.should contain("--data-dir=/var/db/partiduo --etc-dir=/usr/local/etc/partiduo")
       output.should contain("'--name=Recette SARL'")
-      output.should contain("printf '%s %s %s\\n' 'recette' 'deploy@srv1' 'devel'")
+      output.should contain("printf '%s %s %s\\n' 'recette' 'deploy@test' 'devel'")
     end
   end
 end

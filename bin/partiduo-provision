@@ -67,7 +67,8 @@ Base et service :
                           port et nouvelle clé secrète
   --port N                port HTTP local de l'instance (défaut : premier libre dès 8101)
   --version app|devel     paquet qui sert l'instance (défaut : app) : partiduo-app
-                          (script rc.d partiduo) ou partiduo-app-devel (partiduo_devel)
+                          ou partiduo-app-devel ; les deux ont les mêmes emplacements
+                          (script rc.d partiduo), seul le nom du paquet change
   --data-dir RÉP          données des instances (défaut : /var/db/partiduo)
   --etc-dir RÉP           fichiers d'environnement (défaut : /usr/local/etc/partiduo)
   --system-user NOM       compte système du service (défaut : partiduo)
@@ -83,7 +84,7 @@ Certificat TLS (Let's Encrypt par acme.sh, un par instance, défi HTTP-01) :
                           certificats par semaine
   --manage COMMANDE       ligne de commande Marten de la distribution
                           (défaut : $PARTIDUO_MANAGE, sinon celle du paquet,
-                          /usr/local/bin/partiduo-manage ou partiduo-devel-manage,
+                          /usr/local/bin/partiduo-manage,
                           sinon bin/partiduo-manage, sinon « crystal run manage.cr -- »)
 
   --dry-run               affiche les étapes sans rien exécuter ni écrire
@@ -264,19 +265,23 @@ for code in $(printf '%s' "$MODULES,$EXTENSIONS" | tr ',' ' '); do
 done
 
 if [ -n "$ACME_EMAIL" ]; then
-  printf '%s' "$ACME_EMAIL" | grep -Eq '^[^@[:space:]'"'"'"]+@[^@[:space:]'"'"'"]+\.[^@[:space:]'"'"'"]+$' ||
+  # Caractères sûrs seulement : l'adresse passe dans la commande que su(1)
+  # confie au shell de l'utilisateur acme (INSTALL.txt).
+  printf '%s' "$ACME_EMAIL" | grep -Eq '^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$' ||
     die "adresse ACME invalide : « $ACME_EMAIL »"
 fi
 printf '%s' "$ACME_WEBROOT" | grep -Eq '^/[A-Za-z0-9_./-]*$' || die "répertoire ACME invalide : « $ACME_WEBROOT »"
 
-# Paquet qui sert l'instance ; chaque version est installée dans son propre
-# répertoire (aloli-ports, finance/partiduo-app).
+# Paquet qui sert l'instance : partiduo-app ou partiduo-app-devel, exclusifs
+# l'un de l'autre et installés aux mêmes emplacements (aloli-ports,
+# finance/partiduo-app) ; seul le nom du paquet dépend de la version.
 case "$VERSION" in
-  app) PACKAGE=partiduo-app; PACKAGE_NAME=partiduo; RC_NAME=partiduo ;;
-  devel) PACKAGE=partiduo-app-devel; PACKAGE_NAME=partiduo-devel; RC_NAME=partiduo_devel ;;
+  app) PACKAGE=partiduo-app ;;
+  devel) PACKAGE=partiduo-app-devel ;;
   *) die "version invalide : « $VERSION » (app ou devel)" ;;
 esac
-PACKAGE_MANAGE="/usr/local/lib/$PACKAGE_NAME/bin/partiduo-manage"
+RC_NAME=partiduo
+PACKAGE_MANAGE=/usr/local/lib/partiduo/bin/partiduo-manage
 printf '%s' "$DATA_DIR" | grep -Eq '^/[A-Za-z0-9_./-]*$' || die "répertoire de données invalide : « $DATA_DIR »"
 printf '%s' "$ETC_DIR" | grep -Eq '^/[A-Za-z0-9_./-]*$' || die "répertoire d'environnement invalide : « $ETC_DIR »"
 
@@ -285,8 +290,8 @@ case "$PORT" in '' | *[!0-9]*) die "port invalide : « $PORT »" ;; esac
 [ "$PORT" -ge 1024 ] && [ "$PORT" -le 65535 ] || die "port hors limites : $PORT"
 
 if [ -z "$MANAGE" ]; then
-  if [ -x "/usr/local/bin/$PACKAGE_NAME-manage" ]; then
-    MANAGE="/usr/local/bin/$PACKAGE_NAME-manage"
+  if [ -x /usr/local/bin/partiduo-manage ]; then
+    MANAGE=/usr/local/bin/partiduo-manage
   elif [ -x "$ROOT/bin/partiduo-manage" ]; then
     MANAGE="$ROOT/bin/partiduo-manage"
   else
@@ -382,14 +387,23 @@ render "$TEMPLATES/nginx-acme.conf.tmpl" "$INSTANCE_DIR/$DOSSIER.acme.nginx.conf
 render "$TEMPLATES/nginx-vhost.conf.tmpl" "$INSTANCE_DIR/$DOSSIER.nginx.conf"
 render "$TEMPLATES/partiduo-instance.cron.tmpl" "$INSTANCE_DIR/partiduo-$DOSSIER.cron"
 
-# Certificat de l'instance, par acme.sh (conventions du parc beryl, recette
-# `acme`) : autorité de production ou de test, compte ACME avec adresse
-# éventuel. Un certificat encore valide n'est pas réémis (acme.sh --issue
-# rend 2) : rejouer l'installation n'entame pas le quota Let's Encrypt du
-# domaine.
+# Certificat de l'instance, par acme.sh selon les conventions du port FreeBSD
+# security/acme.sh (recette beryl `acme`) : acme.sh tourne sous l'utilisateur
+# `acme` (su -m), jamais en root ; home /var/db/acme/.acme.sh, celui du cron
+# de renouvellement (/usr/local/etc/cron.d/acme) ; certificat laissé dans
+# CERT_HOME (/var/db/acme/certs/<hôte>_ecc/, clé EC), où le vhost le lit ;
+# nginx rechargé par sudo (règle /usr/local/etc/sudoers.d/acme, chemins
+# absolus : le PATH du cron est limité). Autorité de production ou de test,
+# compte ACME avec adresse éventuel. Un certificat encore valide n'est pas
+# réémis (acme.sh --issue rend 2) : rejouer l'installation n'entame pas le
+# quota Let's Encrypt du domaine.
 ACME_SH=/usr/local/sbin/acme.sh
-ACME_HOME=/usr/local/etc/acme.sh
-ACME_CERT_DIR="/usr/local/etc/ssl/acme/$HOST"
+ACME_USER=acme
+ACME_HOME=/var/db/acme/.acme.sh
+ACME_CERT_HOME=/var/db/acme/certs
+ACME_CERT_DIR="$ACME_CERT_HOME/${HOST}_ecc"
+ACME_SUDOERS=/usr/local/etc/sudoers.d/acme
+ACME_RELOADCMD="/usr/local/bin/sudo /usr/sbin/service nginx reload"
 if [ "$ACME_STAGING" = 1 ]; then
   ACME_SERVER=letsencrypt_test
 else
@@ -397,7 +411,7 @@ else
 fi
 ACME_ACCOUNT=""
 [ -z "$ACME_EMAIL" ] ||
-  ACME_ACCOUNT="$ACME_SH --register-account -m $(quote "$ACME_EMAIL") --server $ACME_SERVER --home $ACME_HOME
+  ACME_ACCOUNT="su -m $ACME_USER -c \"$ACME_SH --register-account -m $(quote "$ACME_EMAIL") --server $ACME_SERVER --home $ACME_HOME\"
 "
 echo "+ certificat Let's Encrypt pour $HOST ($([ "$ACME_STAGING" = 1 ] && echo 'autorité de test' || echo 'production'))"
 
@@ -407,14 +421,21 @@ if [ "$DRY_RUN" = 0 ]; then
 # Installation de l'instance $DOSSIER ($HOST) — à exécuter sur le serveur,
 # en root, depuis ce répertoire (sh INSTALL.txt). partiduo-provision ne l'a
 # PAS fait. Le certificat TLS est propre à l'instance (ADR-001 D2) : le vhost
-# d'amorçage sert le défi ACME, acme.sh obtient et installe le certificat,
-# puis le vhost définitif le remplace ; le cron d'acme.sh (recette beryl
-# \`acme\`) le renouvelle. Quota : 50 certificats par semaine pour le domaine.
+# d'amorçage sert le défi ACME, acme.sh (utilisateur $ACME_USER, conventions
+# du port FreeBSD) obtient le certificat dans $ACME_CERT_HOME, puis le vhost
+# définitif le remplace ; le cron d'acme.sh (/usr/local/etc/cron.d/acme,
+# recette beryl \`acme\`) le renouvelle. Quota : 50 certificats par semaine
+# pour le domaine.
 set -eu
-# Prérequis, vérifiés avant toute modification : acme.sh est installé (recette
-# beryl \`acme\`) et nginx lit les vhosts des instances.
+# Prérequis, vérifiés avant toute modification : acme.sh installé selon les
+# conventions du port (recette beryl \`acme\` : utilisateur $ACME_USER, règle
+# sudo de rechargement de nginx) et nginx lit les vhosts des instances.
 if [ ! -x $ACME_SH ]; then
   echo "$ACME_SH absent : installez acme.sh (recette beryl « acme »), puis relancez." >&2
+  exit 1
+fi
+if ! id $ACME_USER >/dev/null 2>&1 || [ ! -f $ACME_SUDOERS ]; then
+  echo "utilisateur $ACME_USER ou $ACME_SUDOERS absent : appliquez la recette beryl « acme », puis relancez." >&2
   exit 1
 fi
 if ! grep -Eq '^[[:space:]]*include[[:space:]]+partiduo/\*\.conf;' /usr/local/etc/nginx/nginx.conf; then
@@ -435,20 +456,22 @@ service $RC_NAME start $DOSSIER
 install -d -m 755 /usr/local/etc/cron.d
 install -m 644 partiduo-$DOSSIER.cron /usr/local/etc/cron.d/partiduo-$DOSSIER
 # Certificat : vhost d'amorçage (défi HTTP-01), acme.sh, vhost définitif.
-install -d -m 755 $ACME_WEBROOT /usr/local/etc/nginx/partiduo
+# Les défis sont écrits par acme.sh : le webroot appartient à $ACME_USER.
+install -d -o $ACME_USER -g $ACME_USER -m 755 $ACME_WEBROOT
+install -d -m 755 /usr/local/etc/nginx/partiduo
 install -m 644 $DOSSIER.acme.nginx.conf /usr/local/etc/nginx/partiduo/$DOSSIER.conf
-test -f $ACME_CERT_DIR/fullchain.pem || { nginx -t && service nginx reload; }
+test -f $ACME_CERT_DIR/fullchain.cer || { nginx -t && service nginx reload; }
 ${ACME_ACCOUNT}rc=0
-$ACME_SH --issue --server $ACME_SERVER -d $HOST -w $ACME_WEBROOT --home $ACME_HOME --keylength ec-256 || rc=\$?
+su -m $ACME_USER -c "$ACME_SH --issue --server $ACME_SERVER -d $HOST -w $ACME_WEBROOT --home $ACME_HOME --cert-home $ACME_CERT_HOME --keylength ec-256" || rc=\$?
 # 0 : émis ; 2 : encore valide, rien à faire ; sinon : échec.
 if [ "\$rc" != 0 ] && [ "\$rc" != 2 ]; then
-  echo "acme.sh --issue : échec (code \$rc)" >&2
+  echo "acme.sh --issue : échec (code \$rc, journal /var/log/acme.sh.log)" >&2
   exit "\$rc"
 fi
-install -d -m 755 $ACME_CERT_DIR
-$ACME_SH --install-cert -d $HOST --ecc --home $ACME_HOME \\
-  --fullchain-file $ACME_CERT_DIR/fullchain.pem --key-file $ACME_CERT_DIR/privkey.pem \\
-  --reloadcmd 'service nginx reload'
+# Sans copie : le certificat reste dans CERT_HOME, où le vhost le lit ;
+# acme.sh enregistre le reloadcmd, que son cron rejoue à chaque renouvellement.
+su -m $ACME_USER -c "$ACME_SH --install-cert -d $HOST --ecc --home $ACME_HOME --cert-home $ACME_CERT_HOME \\
+  --reloadcmd '$ACME_RELOADCMD'"
 install -m 644 $DOSSIER.nginx.conf /usr/local/etc/nginx/partiduo/$DOSSIER.conf
 nginx -t && service nginx reload
 EOF

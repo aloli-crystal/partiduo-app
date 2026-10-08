@@ -13065,7 +13065,7 @@ défilement horizontal de la page, bouton de 44 px au nom accessible
 
 == Déploiement FreeBSD par paquets (branche `freebsd`, 30 septembre 2026)
 
-=== D-PKG-001 — Serveurs FreeBSD ; Partiduo installé par paquet, deux versions qui cohabitent
+=== D-PKG-001 — Serveurs FreeBSD ; Partiduo installé par paquet, deux versions qui cohabitent (cohabitation remplacée par D-PKG-008 : une seule version par serveur)
 
 *Contexte.* Demande de l'utilisateur : ne pas réinventer la roue. ALOLI a son
 dépôt de paquets FreeBSD, `pkg.aloli.net`, construit par poudriere (beryl,
@@ -13113,7 +13113,8 @@ paquet range ses fichiers statiques à côté du serveur),
 `/usr/local/etc/nginx/partiduo/<dossier>.conf` et le certificat
 (`/usr/local/etc/letsencrypt`, webroot `/usr/local/www/letsencrypt`,
 `--deploy-hook 'service nginx reload'` ; certbot remplacé par acme.sh,
-certificat dans `/usr/local/etc/ssl/acme` : D-PKG-007). La ligne de commande Marten par
+certificat dans `/usr/local/etc/ssl/acme` : D-PKG-007 ; puis dans le `CERT_HOME` du port
+`/var/db/acme/certs`, acme.sh sous l'utilisateur `acme` : D-PKG-009). La ligne de commande Marten par
 défaut est celle du paquet.
 
 *Limite.* Le durcissement de l'unité systemd (`ProtectSystem`,
@@ -13196,7 +13197,7 @@ ensemble. ADR-008 D5 révisée (partiduo-docs, branche `freebsd`).
 format et typage des programmes et des 20 fichiers de specs ; specs non
 lancées (PostgreSQL inaccessible dans le bac à sable de la session).
 
-=== D-PKG-006 — Exécutant et administration sous FreeBSD ; paquet d'une instance lu dans `rc.conf`
+=== D-PKG-006 — Exécutant et administration sous FreeBSD ; paquet d'une instance lu dans `rc.conf` (paquet lu par `pkg` : D-PKG-008)
 
 *Contexte.* L'exécutant (`partiduo-agent`) et ses enveloppes racine
 (D-AFN-002) installaient les instances pour systemd et Debian ;
@@ -13228,7 +13229,7 @@ doublures (installation rejouable, `cli` avec paquet détecté, explicite ou
 contradictoire, service, sauvegarde, retrait), typage. Rien n'a encore
 tourné sur un serveur FreeBSD.
 
-=== D-PKG-007 — Certificats des instances par acme.sh, comme le parc beryl
+=== D-PKG-007 — Certificats des instances par acme.sh, comme le parc beryl (chemins et utilisateur remplacés par D-PKG-009 : conventions du port `security/acme.sh`)
 
 *Contexte.* D-CLI-007 et D-PKG-002 obtenaient le certificat de chaque
 instance par certbot (`py-certbot`, renouvellement par `periodic`). Les
@@ -13261,6 +13262,99 @@ base) ; dans `partiduo-admin`, `sh -n` et shellcheck des enveloppes, essai
 réel des gestes avec une doublure d'acme.sh (installation, rejeu sans
 réémission, retrait, échéance), typage. Ni acme.sh ni Let's Encrypt n'ont
 encore été essayés sur un serveur FreeBSD.
+
+=== D-PKG-008 — Une seule version par serveur : `partiduo-app-devel` aux emplacements de `partiduo-app`
+
+*Contexte.* Décision de l'utilisateur : une seule version de Partiduo par
+serveur ; les paquets `-devel` vont sur un serveur de test dédié. Dans
+`aloli-ports`, `finance/partiduo-app-devel` s'installe désormais aux mêmes
+emplacements que `finance/partiduo-app` (`/usr/local/lib/partiduo`,
+`/usr/local/bin/partiduo-manage` et `partiduo-provision`, script `rc.d`
+`partiduo`, variable `partiduo_instances`), et les deux s'excluent
+(`CONFLICTS_INSTALL`, fichiers communs), comme `partiduo-admin` et
+`partiduo-agent` et leurs variantes `-devel` (D-PKG-006). La cohabitation de
+D-PKG-001 (`/usr/local/lib/partiduo-devel`, `partiduo_devel`,
+`partiduo-devel-manage`, `partiduo_devel_instances`) disparaît.
+
+*Choix.* La distinction stable/développement ne désigne plus que le
+*paquet* (`partiduo-app` ou `partiduo-app-devel`), jamais un chemin, un nom
+de service ou de commande. `partiduo-provision --version app|devel` ne fait
+que nommer le paquet (commentaire de l'environnement, message) ;
+`INSTALL.txt`, la tâche cron et la ligne de commande Marten par défaut sont
+les mêmes pour les deux. `partiduo-fleet` garde la version de l'inventaire,
+qui devient le paquet *attendu* sur le serveur : `provision` vérifie qu'il
+est installé (`pkg info -e`) avant d'appeler `partiduo-provision`, et
+`status` l'interroge ; sauvegarde, restauration et retrait n'en dépendent
+plus. Dans `partiduo-admin`, les enveloppes lisent le paquet *installé*
+(`pkg info -e partiduo-app-devel`, sinon `partiduo-app`) au lieu de la liste
+de `rc.conf` qui déclare l'instance : un paquet explicite (création,
+restauration en instance neuve) qui n'est pas celui du serveur est refusé ;
+sans paquet explicite, l'instance doit figurer dans `partiduo_instances`.
+`Dossier.package` (D-PKG-005) reste, comme paquet attendu sur le serveur du
+dossier ; le protocole de l'exécutant ne change pas. En mode local, les
+outils `devel` de l'exécutant (`--manage-devel`, `--provision-devel`) sont
+vides par défaut (ceux de `app`).
+
+*Vérification.* `spec/deploy/scripts_spec.cr` (sans base). Dans
+`partiduo-admin` : `sh -n` et shellcheck des enveloppes, specs des
+enveloppes avec une doublure de `pkg` (paquet installé, absent ou
+contraire, instance non déclarée), typage de toute la suite. Rien n'a
+encore tourné sur un serveur FreeBSD.
+
+=== D-PKG-009 — Certificats des instances selon les conventions du port `security/acme.sh`
+
+*Contexte.* La recette beryl `acme` suit désormais les conventions du port
+FreeBSD `security/acme.sh` (`pkg-plist`, `pkg-message`,
+`account.conf.sample`, `acme.sh-cron.d`) : acme.sh tourne sous l'utilisateur
+`acme` créé par le paquet, jamais en root ; home `/var/db/acme/.acme.sh` (le
+paquet y relie les plugins `dnsapi`, `deploy`, `notify`) ; certificats dans
+`CERT_HOME=/var/db/acme/certs` ; `account.conf` avec
+`LOG_FILE='/var/log/acme.sh.log'` ; renouvellement par
+`/usr/local/etc/cron.d/acme` (utilisateur `acme`, `lockf`, `--home
+/var/db/acme/.acme.sh`) ; rechargement de nginx par sudo, règle
+`/usr/local/etc/sudoers.d/acme` limitée à `/usr/sbin/service nginx reload`.
+L'ancienne ligne de la crontab root (`--home /usr/local/etc/acme.sh`) est
+supprimée. Les gestes de D-PKG-007 (home `/usr/local/etc/acme.sh`, copie vers
+`/usr/local/etc/ssl/acme/<hôte>/`, acme.sh en root) laisseraient donc les
+certificats des instances sans renouvellement : ils expireraient sous
+90 jours.
+
+*Choix.* Mêmes gestes que la primitive beryl `acme-cert`. `INSTALL.txt`
+(`partiduo-provision`), l'enveloppe racine de `partiduo-admin` (`install`,
+`remove`, `cert`) et `partiduo-fleet retire` exécutent acme.sh par
+`su -m acme -c`, avec `--home /var/db/acme/.acme.sh` et `--cert-home
+/var/db/acme/certs`. Le certificat reste dans `CERT_HOME`
+(`/var/db/acme/certs/<hôte>_ecc/fullchain.cer` et `<hôte>.key`, clé EC) :
+`--install-cert` ne copie plus rien et n'enregistre que `--reloadcmd
+'/usr/local/bin/sudo /usr/sbin/service nginx reload'` (chemins absolus : le
+`PATH` du cron est réduit), rejoué par le cron. Le vhost définitif
+(`nginx-vhost.conf.tmpl`) lit le certificat dans `CERT_HOME`. Le webroot des
+défis (`/usr/local/www/letsencrypt`) appartient à `acme:acme`, comme dans la
+recette `partiduo-base` ; `INSTALL.txt` et l'enveloppe le posent ainsi.
+Prérequis vérifiés avant toute écriture, en plus de `acme.sh` et de l'include
+nginx : l'utilisateur `acme` et la règle sudo, signes d'une recette `acme`
+conforme au port. Le retrait fait `acme.sh --remove` sous `acme`, puis
+supprime `/var/db/acme/certs/<hôte>_ecc/` (`--remove` n'y touche pas).
+L'adresse du compte ACME (`--acme-email`) passant dans la commande confiée à
+`su`, `partiduo-provision` n'admet plus que lettres, chiffres et `._%+-` ;
+l'enveloppe cite chaque argument. Le vhost d'amorçage reste : nginx refuse un
+vhost HTTPS dont le certificat n'existe pas encore (le `:80` par défaut de
+`partiduo-base` servirait le défi, mais `partiduo-provision` ne suppose pas
+cette recette).
+
+*Limite.* Aucune migration des certificats déjà émis selon D-PKG-007 : a priori
+aucune instance n'a été installée (le serveur de test n'est pas encore
+monté), à vérifier avant le premier déploiement. Une
+instance émise sur l'ancien schéma garderait un vhost pointant sur
+`/usr/local/etc/ssl/acme/<hôte>/` et un certificat inconnu du home du port ;
+la rejouer (`sh INSTALL.txt`, ou `install` de l'enveloppe) réémettrait un
+certificat dans `CERT_HOME` et reposerait le vhost, l'ancien répertoire et
+l'ancien home restant à nettoyer à la main.
+
+*Vérification.* `spec/deploy/scripts_spec.cr` (sans base) ; dans
+`partiduo-admin`, specs des enveloppes avec des doublures d'acme.sh (émission
+dans `CERT_HOME`) et de `su`, refus sans règle sudo. Ni acme.sh sous `acme` ni
+Let's Encrypt n'ont encore tourné sur un serveur FreeBSD.
 
 == TELEDEC : réponses du 1er octobre 2026 (T9:teledec)
 

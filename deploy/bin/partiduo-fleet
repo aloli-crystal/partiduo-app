@@ -4,7 +4,9 @@
 # partiduo-fleet — exploitation du parc d'instances Partiduo sur des serveurs
 # FreeBSD, où Partiduo est installé par paquet (dépôt pkg.aloli.net, overlay
 # aloli-ports) : partiduo-app (branche production) ou partiduo-app-devel
-# (branche development), qui cohabitent. Provisionnement, état, sauvegardes,
+# (branche development), exclusifs l'un de l'autre et installés aux mêmes
+# emplacements : une seule version par serveur, la version de développement
+# sur le serveur de test. Provisionnement, état, sauvegardes,
 # retrait. La mise à jour des paquets relève de beryl (pkg upgrade) ; le
 # script rc.d migre chaque instance à son démarrage (D-PKG-003).
 #
@@ -105,16 +107,17 @@ remote() {
 }
 
 # --- Paquets ---------------------------------------------------------------------
-# Chaque version est installée dans son propre répertoire, avec son script
-# rc.d multi-instances (aloli-ports, finance/partiduo-app).
+# Les deux versions s'installent aux mêmes emplacements, avec le même script
+# rc.d multi-instances (aloli-ports, finance/partiduo-app) : la version ne
+# désigne que le paquet attendu sur le serveur.
 
 check_kind() {
   case "$1" in app | devel) ;; *) die "version invalide : « $1 » (app ou devel)" ;; esac
 }
 package_of() { [ "$1" = devel ] && echo partiduo-app-devel || echo partiduo-app; }
-home_of() { [ "$1" = devel ] && echo /usr/local/lib/partiduo-devel || echo /usr/local/lib/partiduo; }
-rc_of() { [ "$1" = devel ] && echo partiduo_devel || echo partiduo; }
-manage_of() { echo "$(home_of "$1")/bin/partiduo-manage"; }
+PACKAGE_HOME=/usr/local/lib/partiduo
+RC_NAME=partiduo
+PACKAGE_MANAGE="$PACKAGE_HOME/bin/partiduo-manage"
 
 # --- Inventaire -----------------------------------------------------------------
 # Une ligne par instance : « <dossier> <serveur ssh> [app|devel] [commentaire] ».
@@ -174,15 +177,14 @@ cmd_provision() {
     shift
   done
   check_kind "$kind"
-  home=$(home_of "$kind")
   work="/tmp/partiduo-provision-$dossier"
   acme=""
   [ -z "$ACME_EMAIL" ] || acme=" --acme-email=$ACME_EMAIL"
   [ "$ACME_STAGING" = 0 ] || acme="$acme --acme-staging"
   echo "# Provisionnement de $dossier sur $server, paquet $(package_of "$kind") ($(mode_label))"
-  remote "$server" "test -x $home/bin/partiduo-provision || { echo 'paquet $(package_of "$kind") absent' >&2; exit 1; }"
+  remote "$server" "pkg info -q -e $(package_of "$kind") && test -x $PACKAGE_HOME/bin/partiduo-provision || { echo 'paquet $(package_of "$kind") absent' >&2; exit 1; }"
   remote "$server" "$SUDO -u postgres createuser --createdb --no-superuser $PG_OWNER 2>/dev/null || true"
-  remote "$server" "$SUDO -u $SYSTEM_USER $home/bin/partiduo-provision --version=$kind" \
+  remote "$server" "$SUDO -u $SYSTEM_USER $PACKAGE_HOME/bin/partiduo-provision --version=$kind" \
     "--domain=$PARTIDUO_DOMAIN --owner=$PG_OWNER --pg-socket=$PG_SOCKET" \
     "--data-dir=$DATA_DIR --etc-dir=$ETC_DIR --system-user=$SYSTEM_USER --output-dir=$work" \
     "--acme-webroot=$ACME_WEBROOT$acme$args $dossier"
@@ -204,7 +206,7 @@ backup_cmd() {
   # pas l'option --ignore-failed-read de GNU tar).
   remote "$server" "$SUDO install -d -o $SYSTEM_USER -g $SYSTEM_USER -m 750 $BACKUP_DIR/$dossier" \
     "&& $SUDO -u $SYSTEM_USER sh -c '$(load_env "$dossier") && f=$BACKUP_DIR/$dossier/$label" \
-    "&& m=$(manage_of "$(kind_of "$dossier")")" \
+    "&& m=$PACKAGE_MANAGE" \
     "&& \$m instance backup-plan --list-file \$f.files.before >/dev/null" \
     "&& pg_dump -Fc -d \"\$DATABASE_URL\" -f \$f.dump" \
     "&& \$m instance backup-plan --list-file \$f.files.after >\$f.plan.json" \
@@ -238,7 +240,7 @@ cmd_status() {
     server=$(require_instance "$dossier")
     kind=$(kind_of "$dossier")
     remote "$server" "printf '%-24s %-20s %-16s %s\\n' $dossier $(package_of "$kind") \$(pkg query %v $(package_of "$kind"))" \
-      "\"\$($SUDO service $(rc_of "$kind") status $dossier 2>&1 | head -n 1)\""
+      "\"\$($SUDO service $RC_NAME status $dossier 2>&1 | head -n 1)\""
   done
 }
 
@@ -262,11 +264,10 @@ cmd_restore() {
   dossier="$1"
   check_dossier "$dossier"
   server=$(require_instance "$dossier")
-  rc=$(rc_of "$(kind_of "$dossier")")
   echo "# Restauration de $dossier depuis $2 ($(mode_label))"
-  remote "$server" "$SUDO service $rc stop $dossier"
+  remote "$server" "$SUDO service $RC_NAME stop $dossier"
   restore_cmd "$server" "$dossier" "$2"
-  remote "$server" "$SUDO service $rc start $dossier"
+  remote "$server" "$SUDO service $RC_NAME start $dossier"
 }
 
 cmd_retire() {
@@ -274,16 +275,17 @@ cmd_retire() {
   dossier="$1"
   check_dossier "$dossier"
   server=$(require_instance "$dossier")
-  rc=$(rc_of "$(kind_of "$dossier")")
   echo "# Retrait de $dossier ($(mode_label)) — la base et les pièces jointes sont conservées"
   backup_cmd "$server" "$dossier" "retire-\$(date +%Y%m%d-%H%M%S)"
-  remote "$server" "$SUDO service $rc stop $dossier || true"
-  remote "$server" "$SUDO sysrc ${rc}_instances-=$dossier && $SUDO rm -f /usr/local/etc/cron.d/partiduo-$dossier"
+  remote "$server" "$SUDO service $RC_NAME stop $dossier || true"
+  remote "$server" "$SUDO sysrc ${RC_NAME}_instances-=$dossier && $SUDO rm -f /usr/local/etc/cron.d/partiduo-$dossier"
   remote "$server" "$SUDO rm -f /usr/local/etc/nginx/partiduo/$dossier.conf && $SUDO nginx -t && $SUDO service nginx reload"
   # Le vhost retiré, le renouvellement du certificat échouerait : acme.sh
-  # l'oublie (fin du renouvellement), puis le certificat installé est supprimé.
-  remote "$server" "$SUDO /usr/local/sbin/acme.sh --remove -d $dossier.$PARTIDUO_DOMAIN --ecc --home /usr/local/etc/acme.sh || true"
-  remote "$server" "$SUDO rm -rf /usr/local/etc/ssl/acme/$dossier.$PARTIDUO_DOMAIN"
+  # l'oublie (fin du renouvellement), puis son répertoire est supprimé de
+  # CERT_HOME (acme.sh --remove n'y touche pas). acme.sh tourne sous
+  # l'utilisateur acme (conventions du port FreeBSD, recette beryl `acme`).
+  remote "$server" "$SUDO su -m acme -c '/usr/local/sbin/acme.sh --remove -d $dossier.$PARTIDUO_DOMAIN --ecc --home /var/db/acme/.acme.sh --cert-home /var/db/acme/certs' || true"
+  remote "$server" "$SUDO rm -rf /var/db/acme/certs/${dossier}.${PARTIDUO_DOMAIN}_ecc"
   local_run "sed -i.bak '/^$dossier[[:space:]]/d' '$INVENTORY' && rm -f '$INVENTORY.bak'"
 }
 
