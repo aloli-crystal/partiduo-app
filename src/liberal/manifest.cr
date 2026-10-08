@@ -34,6 +34,8 @@ Partiduo::Modules.register do
   on("payment.recorded") { |event| Partiduo::Liberal::Feeds.on_event(event) }
   on("payment.matched") { |event| Partiduo::Liberal::Feeds.on_event(event) }
   on("payment.unmatched") { |event| Partiduo::Liberal::Feeds.on_event(event) }
+  # Règlement saisi rejeté (D-INV3-008) : recette contre-passée.
+  on("payment.rejected") { |event| Partiduo::Liberal::Feeds.on_event(event) }
 
   # Exercice verrouillé (DECISIONS D-LIB2-003, D-LIB5-002) : 2035 transmise
   # par l'extension qui la dépose ; le rejet de ce dépôt rend l'exercice

@@ -38,6 +38,7 @@ fr:
       invoice: "Facture"
       deposit_invoice: "Facture d'acompte"
       credit_note: "Avoir"
+      return_note: "Bon de retour"
     statuses:
       draft: "Brouillon"
       sent: "Envoyé"
@@ -51,6 +52,7 @@ fr:
       paid: "Payé"
       overdue: "En retard"
       invoiced: "Facturé"
+      returned: "Repris"
     channels:
       none: "Non choisi"
       platform: "Plateforme agréée"
@@ -70,6 +72,7 @@ fr:
       from_invoice: "Issu de la facture %{number}"
       from_deposit_invoice: "Issu de la facture d'acompte %{number}"
       from_credit_note: "Issu de l'avoir %{number}"
+      from_return_note: "Issu du bon de retour %{number}"
     delivery_notes:
       group_title: "Bon de livraison %{number} du %{date}"
     billing_rhythms:
@@ -107,6 +110,7 @@ fr:
         delivery: "Date de livraison ou d'exécution de la prestation : %{date}"
         due: "Date d'échéance : %{date}"
         delivery_period: "Livraisons du %{from} au %{to}"
+        return: "Date de retour de la marchandise : %{date}"
       quote:
         validity: "Devis valable jusqu'au %{date}"
       delivery_address: "Adresse de livraison : %{address}"
@@ -146,6 +150,7 @@ fr:
         summary:
           fr: "Facture récapitulative des livraisons (art. 289-I-3 du CGI) : bons de livraison %{numbers}"
           be: "Facture récapitulative des livraisons : bons de livraison %{numbers}"
+        offset: "Livraisons imputées sur les retours : bons de livraison %{numbers}"
       payment:
         terms:
           net: "Conditions de paiement : %{days} jours nets à compter de la date de la facture"
@@ -160,6 +165,16 @@ fr:
           fr: "En cas de retard de paiement, pénalités au taux appliqué par la Banque centrale européenne à son opération de refinancement la plus récente, majoré de 10 points (art. L441-10 du Code de commerce)"
           be: "En cas de retard de paiement, intérêts de retard au taux prévu par la loi du 2 août 2002 concernant la lutte contre le retard de paiement dans les transactions commerciales"
         indemnity: "Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : %{amount} %{currency}"
+      return_note:
+        reason:
+          damaged: "Motif du retour : marchandise endommagée"
+          defective: "Motif du retour : marchandise défectueuse"
+          wrong_item: "Motif du retour : erreur de livraison"
+          excess: "Motif du retour : quantité en trop ou invendue"
+          other: "Motif du retour : voir les notes"
+      return_notes:
+        deducted: "Retours de marchandises déduits : bons de retour %{numbers}"
+        credited: "Avoir des retours de marchandises : bons de retour %{numbers}"
     pdf:
       draft: "Brouillon"
       number: "N°"
@@ -204,6 +219,9 @@ fr:
         level2: "Bonjour,\n\nMalgré notre premier rappel, la facture %{number} échue le %{due_date} reste impayée pour %{balance} (%{days} jours de retard). Merci de la régler sans délai.\n\nCordialement,\n%{seller}"
         level3: "Madame, Monsieur,\n\nLa facture %{number} échue le %{due_date} reste impayée pour %{balance} malgré nos rappels. Nous vous mettons en demeure de la régler, soit %{total} au total.\n\n%{seller}"
       penalties: "Pénalités de retard : %{interest} ; indemnité forfaitaire pour frais de recouvrement : %{indemnity} ; total dû : %{total}."
+      rejected:
+        subject: "Règlement rejeté : facture %{number}"
+        body: "Bonjour,\n\nVotre règlement du %{paid_on} de %{amount} pour la facture %{number} nous a été retourné impayé par la banque (%{reason}). La facture reste due pour %{balance}. Nous vous remercions de bien vouloir la régler à nouveau.\n\nCordialement,\n%{seller}"
     pdf_copy:
       banner: "Copie — l'original est la facture électronique transmise par la plateforme agréée"
       file_suffix: "copie"
@@ -223,6 +241,7 @@ fr:
       sales_journal: "Journal des ventes"
       csv_name: "journal-ventes-encaissements"
       archive_name: "factures"
+      payment_rejected: "Rejet du règlement"
     errors:
       settings:
         days: "Indiquez un nombre de jours entre 0 et %{max}"
@@ -290,12 +309,24 @@ fr:
         issued: "Document émis : il ne se modifie ni ne se supprime ; corrigez-le par un avoir"
         in_use: "Ce brouillon est cité par un autre document"
         delivery_notes:
-          invoice_only: "Seule une facture reprend des bons de livraison"
+          invoice_only: "Seuls une facture ou un avoir récapitulatif reprennent des bons de livraison"
           invalid: "Ce document n'est pas un bon de livraison émis"
           other_customer: "Le bon de livraison %{number} est celui d'un autre client"
           other_currency: "Le bon de livraison %{number} est dans une autre devise"
           already_billed: "Le bon de livraison %{number} est déjà facturé"
           in_draft: "Le bon de livraison %{number} est déjà repris dans un brouillon de facture"
+        return_reason:
+          return_note_only: "Seul un bon de retour a un motif de retour"
+          invalid: "Motif de retour inconnu"
+        return_note:
+          origin_invalid: "Le document d'origine du retour doit être un bon de livraison ou une facture émis"
+        return_notes:
+          invoice_or_credit_only: "Seuls une facture ou un avoir reprennent des bons de retour"
+          invalid: "Ce document n'est pas un bon de retour émis"
+          other_customer: "Le bon de retour %{number} est celui d'un autre client"
+          other_currency: "Le bon de retour %{number} est dans une autre devise"
+          already_settled: "Le bon de retour %{number} est déjà repris"
+          in_draft: "Le bon de retour %{number} est déjà repris dans un brouillon"
       discount:
         kind: "Type de remise inconnu"
         negative: "La remise ne peut être négative"
@@ -338,7 +369,7 @@ fr:
         override_denied: "Encours maximum HT de %{customer} dépassé de %{excess} %{currency} : la dérogation demande la permission de déroger à l'encours maximum"
         reason_too_long: "Motif de la dérogation : %{max} caractères au plus"
       dispatch:
-        kind: "Seule une facture ou une facture d'acompte s'émet et s'envoie d'un clic"
+        kind: "Seule une facture, une facture d'acompte ou un avoir de fin de mois s'émet et s'envoie d'un clic"
       issue:
         already_issued: "Ce document est déjà émis"
         no_line: "Ajoutez au moins une ligne chiffrée"
@@ -349,6 +380,7 @@ fr:
         credit_before_invoice: "Un avoir ne précède pas la facture qu'il corrige"
         future: "La date d'émission ne peut dépasser la date du jour (%{date}) : le numéro attribué est définitif"
         customer_siren_required: "Le client %{customer} est un professionnel établi en France : indiquez son SIREN sur sa fiche avant d'émettre"
+        return_reason_required: "Indiquez le motif du retour avant d'émettre"
       pdf_copy:
         not_platform: "Seule une facture émise par la plateforme agréée a une copie PDF"
         render_failed: "Copie PDF non produite (PDF/A-3 non conforme) : %{detail}"
@@ -401,3 +433,44 @@ fr:
           type: "Le logo doit être une image PNG ou JPEG"
           not_found: "Logo introuvable"
         in_use: "Ce modèle est utilisé par des documents"
+      return_note:
+        quantity_negative: "Un bon de retour rapporte des quantités positives"
+        exceeds_origin: "« %{description} » : retour au-delà de la quantité de %{origin} (%{delivered}, déjà rapporté : %{returned})"
+      return_notes:
+        no_invoice_to_credit: "Aucune facture de ce client ne peut être créditée de ces retours : choisissez la facture à créditer"
+      payment_rejection:
+        already_rejected: "Ce règlement est déjà rejeté"
+        document:
+          invalid: "Seul le règlement d'une facture émise se rejette"
+        date:
+          before_payment: "Le rejet ne précède pas le règlement (%{date})"
+          future: "La date du rejet ne peut dépasser la date du jour"
+        reason:
+          invalid: "Motif de rejet inconnu"
+        reason_text:
+          required: "Précisez le motif"
+          too_long: "%{max} caractères au plus"
+        fees:
+          negative: "Les frais ne peuvent être négatifs"
+          scale: "Montant au centime près"
+          required: "Indiquez les frais à refacturer"
+        fees_vat_rate:
+          required: "Choisissez le taux de TVA de la facture de frais"
+          invalid: "Taux de TVA introuvable ou désactivé"
+    return_notes:
+      group_title: "Bon de retour %{number} du %{date}"
+    return_reasons:
+      damaged: "Marchandise endommagée"
+      defective: "Marchandise défectueuse"
+      wrong_item: "Erreur de livraison"
+      excess: "Quantité en trop ou invendue"
+      other: "Autre motif"
+    rejection_reasons:
+      insufficient_funds: "Provision insuffisante"
+      account_closed: "Compte clos"
+      stopped: "Opposition ou révocation"
+      disputed: "Contestation du débiteur"
+      invalid_details: "Coordonnées bancaires erronées"
+      other: "Autre motif"
+    payment_rejections:
+      fees_line: "Frais bancaires de rejet du règlement du %{date} (facture %{number}, %{reason})"

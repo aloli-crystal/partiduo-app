@@ -95,6 +95,7 @@ fr:
       non_deductible_vat: "TVA non déductible"
       vat_deductible_tax: "TVA déductible par l'impôt"
       private_expense: "Dépenses à charge du gérant"
+      bank_fees: "Frais bancaires"
     initial_data:
       bank_card: "Banque"
       ledgers:
@@ -273,6 +274,9 @@ fr:
         already_posted: "Cet événement est déjà comptabilisé."
         not_dismissed: "Cet événement n'est pas écarté."
         reason_too_long: "%{max} caractères au plus."
+        rejection:
+          payment_not_found: "L'encaissement rejeté est introuvable : contre-passez-le à la main puis écartez l'opération."
+          no_fees_account: "Aucun compte de frais bancaires : choisissez-le dans les comptes par défaut."
       liberal:
         no_financial_ledger: "Aucun journal financier actif : créez-en un pour comptabiliser le livre-journal de la profession libérale."
         no_account: "Aucun compte pour %{key} : paramétrez-le pour la profession libérale."
@@ -620,3 +624,6 @@ fr:
         name: "Nom"
         code: "Code"
         vat: "TVA"
+    billing:
+      rejection_label: "Rejet du règlement"
+      rejection_fees_label: "Frais de rejet"

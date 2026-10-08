@@ -21,6 +21,7 @@ module Partiduo
         "invoice"         => "issued",
         "deposit_invoice" => "issued",
         "credit_note"     => "issued",
+        "return_note"     => "issued",
       }
 
       def self.error(field : String, key : String, params = {} of String => String) : FieldError
@@ -107,6 +108,8 @@ module Partiduo
         end
         errors.concat(deduction_errors(deductions))
         errors.concat(credit_note_errors(document, totals.total_gross, issue_date)) if document.kind == "credit_note"
+        # Bon de retour : motif, quantités au regard de l'origine (D-INV3-001).
+        errors.concat(Returns.issue_errors(document)) if document.kind == "return_note"
         if (due = document.due_date) && due < issue_date
           errors << error("due_date", "document.due_date.before_issue")
         end
@@ -216,6 +219,10 @@ module Partiduo
         document_id = Documents.id_of(document.id)
         case document.kind
         when "credit_note"
+          # Bons de retour crédités, livraisons imputées d'un avoir
+          # récapitulatif (D-INV3-004, D-INV3-005), avant l'événement.
+          DeliveryBilling.mark_invoiced!(document, actor)
+          Returns.mark_settled!(document, actor)
           credited = Documents.find(Documents.id_of(document.credited_id || raise "avoir sans facture"), lock: true)
           credited.credited_amount = credited.credited_amount! + document.total_gross!
           Payments.refresh_status(credited)
@@ -233,10 +240,21 @@ module Partiduo
             "number"           => document.number.to_s,
             "issue_date"       => document.issue_date.try(&.to_s("%Y-%m-%d")) || "",
           }, actor_user_id: actor.user_id)
+        when "return_note"
+          # Entrée en stock (module Stock, D-INV3-002) ; rien sans le Stock.
+          Partiduo::Events.publish("return_note.issued", {
+            "return_note_id" => document_id.to_s,
+            "number"         => document.number.to_s,
+            "issue_date"     => document.issue_date.try(&.to_s("%Y-%m-%d")) || "",
+          }, actor_user_id: actor.user_id)
         when "invoice", "deposit_invoice"
-          # Bons de livraison facturés (D-INV2-002), avant l'événement : le
-          # Stock lit la facture et ses bons.
-          DeliveryBilling.mark_invoiced!(document, actor) if document.kind == "invoice"
+          # Bons de livraison facturés (D-INV2-002) et bons de retour déduits
+          # (D-INV3-003), avant l'événement : le Stock lit la facture et ses
+          # bons.
+          if document.kind == "invoice"
+            DeliveryBilling.mark_invoiced!(document, actor)
+            Returns.mark_settled!(document, actor)
+          end
           # `deposit_sources` : factures d'acompte déduites (`invoice:<id>`),
           # pour que l'écriture de la facture finale extourne leurs ventes
           # (D-INT-004).
@@ -340,6 +358,11 @@ module Partiduo
         if lines.any?(&.delivery_note_id)
           content["line_delivery_notes"] = JSON::Any.new(lines.map { |line| JSON::Any.new(line.delivery_note_id.to_s) })
         end
+        # Bons de retour cités (D-INV3-003) : absents ailleurs.
+        if lines.any?(&.return_note_id)
+          content["line_return_notes"] = JSON::Any.new(lines.map { |line| JSON::Any.new(line.return_note_id.to_s) })
+        end
+        content["return_reason"] = JSON::Any.new(document.return_reason.to_s) unless document.return_reason.to_s.empty?
         sorted(JSON::Any.new(content)).to_json
       end
 

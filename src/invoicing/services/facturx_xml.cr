@@ -137,10 +137,20 @@ module Partiduo
         "REG" if code.starts_with?("seller.") || code.starts_with?("operation_category")
       end
 
+      # Bon cité par la ligne : de livraison (facture récapitulative) ou de
+      # retour (déduit d'une facture, crédité par un avoir).
+      def self.line_note(line : Api::LineView, view : Api::DocumentView) : Api::DeliveryNoteRefView?
+        if id = line.return_note_id
+          return view.return_notes.find(&.id.==(id))
+        end
+        view.summary_invoice? ? line.delivery_note_id.try { |note_id| view.delivery_notes.find(&.id.==(note_id)) } : nil
+      end
+
       private def self.line_item(xml : XML::Builder, line : Api::LineView, index : Int32, view : Api::DocumentView) : Nil
         # Ligne d'une facture récapitulative : bon de livraison (note BT-127)
-        # et date de sa livraison (période BG-26), D-INV2-003.
-        note = view.summary_invoice? ? line.delivery_note_id.try { |id| view.delivery_notes.find(&.id.==(id)) } : nil
+        # et date de sa livraison (période BG-26), D-INV2-003 ; bon de retour
+        # et date du retour pour une ligne déduite ou créditée, D-INV3-003.
+        note = line_note(line, view)
         xml.element("ram:IncludedSupplyChainTradeLineItem") do
           xml.element("ram:AssociatedDocumentLineDocument") do
             xml.element("ram:LineID") { xml.text index.to_s }

@@ -33,4 +33,6 @@ Partiduo::Modules.register do
   on("payment.recorded") { |event| Partiduo::Micro::Feeds.on_event(event) }
   on("payment.matched") { |event| Partiduo::Micro::Feeds.on_event(event) }
   on("payment.unmatched") { |event| Partiduo::Micro::Feeds.on_event(event) }
+  # Règlement saisi rejeté (D-INV3-008) : recette contre-passée.
+  on("payment.rejected") { |event| Partiduo::Micro::Feeds.on_event(event) }
 end

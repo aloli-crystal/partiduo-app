@@ -6,8 +6,10 @@ module Partiduo
     # Les commandes et requêtes sont dans `invoicing.cr` ; référence :
     # link:../../../doc/api/invoicing.adoc[].
     module Invoicing
-      # Natures de document, dans l'ordre de la chaîne documentaire.
-      KINDS = %w[quote order delivery_note invoice deposit_invoice credit_note]
+      # Natures de document, dans l'ordre de la chaîne documentaire ; le bon
+      # de retour (`return_note`, D-INV3-001) est le symétrique du bon de
+      # livraison : marchandise rapportée par le client.
+      KINDS = %w[quote order delivery_note invoice deposit_invoice credit_note return_note]
       # Documents fiscaux : PDF/A-3 Factur-X, série sans trou, intangibles.
       FISCAL_KINDS         = %w[invoice deposit_invoice credit_note]
       LINE_KINDS           = %w[item free note title subtotal]
@@ -19,12 +21,20 @@ module Partiduo
       MAX_PAYMENT_DAYS = 365
       PAYMENT_METHODS  = %w[transfer card cheque cash direct_debit other]
       QUOTE_DECISIONS  = %w[accepted refused]
+      # Motifs d'un bon de retour (D-INV3-001) : marchandise endommagée,
+      # défectueuse, erreur de livraison, quantité en trop ou invendue,
+      # autre (précisé dans les notes).
+      RETURN_REASONS = %w[damaged defective wrong_item excess other]
+      # Motifs d'un rejet de paiement (D-INV3-007) : provision insuffisante,
+      # compte clos, opposition ou révocation, contestation du débiteur,
+      # coordonnées bancaires erronées, autre (texte obligatoire).
+      REJECTION_REASONS = %w[insufficient_funds account_closed stopped disputed invalid_details other]
       # Transformations admises : nature source → natures produites.
       TRANSFORMATIONS = {
         "quote"           => %w[order delivery_note invoice deposit_invoice],
         "order"           => %w[delivery_note invoice deposit_invoice],
-        "delivery_note"   => %w[invoice],
-        "invoice"         => %w[credit_note],
+        "delivery_note"   => %w[invoice return_note],
+        "invoice"         => %w[credit_note return_note],
         "deposit_invoice" => %w[credit_note],
       }
       # Canaux d'émission d'un document fiscal (ADR-004 D9) : plateforme agréée
@@ -38,7 +48,7 @@ module Partiduo
       # liste fermée : l'interface a un libellé pour chacune (D-CPY-007).
       DOCUMENT_EVENT_ACTIONS = %w[created updated transformed issued accepted refused credited payment
         payment_removed reminder emailed email_failed channel_changed marked_sent platform_deposited
-        platform_deposit_ignored pdf_copy_sent pdf_copy_failed invoiced credit_override]
+        platform_deposit_ignored pdf_copy_sent pdf_copy_failed invoiced credit_override payment_rejected]
       # Rythme de facturation des bons de livraison d'un client (réglage
       # client de la Facturation) : une facture par livraison (défaut) ou une
       # facture récapitulative de fin de mois (art. 289-I-3 du CGI).
@@ -80,7 +90,8 @@ module Partiduo
         discount_kind : String = "none",
         discount_value : BigDecimal = BigDecimal.new(0),
         vat_rate_id : Int64? = nil,
-        delivery_note_id : Int64? = nil
+        delivery_note_id : Int64? = nil,
+        return_note_id : Int64? = nil
 
       # Saisie d'un document (brouillon) ; décrit le document entier, lignes
       # comprises (remplacées à chaque enregistrement).
@@ -114,7 +125,14 @@ module Partiduo
       #   livraison émis et non facturé du même client dont la ligne est
       #   issue ; une facture qui en cite plusieurs est *récapitulative* :
       #   sa date de livraison est la dernière, sa période de facturation
-      #   (BG-14) va de la première à la dernière livraison.
+      #   (BG-14) va de la première à la dernière livraison ;
+      # * lignes d'une facture ou d'un avoir : `LineInput#return_note_id` cite
+      #   le bon de retour émis et non repris du même client dont la ligne est
+      #   issue (facture : quantité négative, retour déduit ; avoir : retour
+      #   crédité) ; un avoir peut aussi citer des bons de livraison (avoir
+      #   récapitulatif, quantités négatives : D-INV3-004) ;
+      # * `return_reason` : motif d'un bon de retour (`RETURN_REASONS`),
+      #   obligatoire à l'émission ; refusé pour toute autre nature.
       record DocumentInput,
         kind : String,
         customer_card_id : Int64,
@@ -138,7 +156,8 @@ module Partiduo
         issue_channel : String? = nil,
         b2c : Bool? = nil,
         payment_terms : String? = nil,
-        payment_terms_days : Int32? = nil
+        payment_terms_days : Int32? = nil,
+        return_reason : String? = nil
 
       # Transformation d'un document émis en document suivant (lignes
       # recopiées, lien conservé). `deposit_percent` : pourcentage de la
@@ -242,7 +261,8 @@ module Partiduo
         vat_percent : BigDecimal,
         vat_category : String,
         net_amount : BigDecimal,
-        delivery_note_id : Int64? = nil do
+        delivery_note_id : Int64? = nil,
+        return_note_id : Int64? = nil do
         def priced? : Bool
           kind.in?("item", "free")
         end
@@ -398,7 +418,9 @@ module Partiduo
         billing_period_start : Time? = nil,
         billing_period_end : Time? = nil,
         delivery_notes : Array(DeliveryNoteRefView) = [] of DeliveryNoteRefView,
-        billed_in : LinkView? = nil do
+        billed_in : LinkView? = nil,
+        return_reason : String = "",
+        return_notes : Array(DeliveryNoteRefView) = [] of DeliveryNoteRefView do
         def draft? : Bool
           number.nil?
         end
@@ -431,7 +453,10 @@ module Partiduo
           "invoicing.kinds.#{kind}"
         end
 
+        # Bon de retour repris (déduit d'une facture ou crédité par un
+        # avoir) : état `invoiced`, libellé « Repris ».
         def status_key : String
+          return "invoicing.statuses.returned" if kind == "return_note" && effective_status == "invoiced"
           "invoicing.statuses.#{effective_status}"
         end
 
@@ -454,7 +479,67 @@ module Partiduo
         source : String,
         matching_id : String,
         recorded_by_id : Int64?,
-        created_at : Time
+        created_at : Time,
+        rejection : PaymentRejectionView? = nil do
+        def rejected? : Bool
+          !rejection.nil?
+        end
+      end
+
+      # Rejet d'un règlement (D-INV3-007) : chèque impayé, prélèvement
+      # rejeté, virement retourné.
+      #
+      # * `rejected_on` : date du rejet (pas avant le règlement, pas après la
+      #   date du jour) ;
+      # * `reason` : motif (`REJECTION_REASONS`) ; `reason_text` : précision,
+      #   obligatoire pour `other` (500 caractères au plus) ;
+      # * `fees` : frais bancaires du rejet (0 : aucun), au centime ;
+      # * `rebill_fees` : refacturer les frais au client — brouillon d'une
+      #   facture de frais à `fees_vat_rate_id` (taux du socle, obligatoire ;
+      #   en principe hors champ, catégorie O : D-INV3-010).
+      record PaymentRejectionInput,
+        rejected_on : Time,
+        reason : String,
+        reason_text : String? = nil,
+        fees : BigDecimal = BigDecimal.new(0),
+        rebill_fees : Bool = false,
+        fees_vat_rate_id : Int64? = nil
+
+      # Rejet enregistré, avec la facture et son client. `balance` : reste dû
+      # actuel de la facture ; `open` : la facture reste due (alerte « À
+      # traiter ») ; `end_of_month` : client à la facturation mensuelle ou
+      # facture payable en fin de mois (l'alerte rappelle son encours).
+      record PaymentRejectionView,
+        id : Int64,
+        payment_id : Int64,
+        document_id : Int64,
+        document_number : String,
+        customer_card_id : Int64,
+        customer_name : String,
+        currency_code : String,
+        paid_on : Time,
+        method : String,
+        payment_source : String,
+        amount : BigDecimal,
+        rejected_on : Time,
+        reason : String,
+        reason_text : String,
+        fees : BigDecimal,
+        fees_rebilled : Bool,
+        fees_invoice_id : Int64?,
+        reminder_id : Int64?,
+        recorded_by_id : Int64?,
+        created_at : Time,
+        balance : BigDecimal,
+        end_of_month : Bool do
+        def open? : Bool
+          balance > 0
+        end
+
+        def reason_key : String
+          "invoicing.rejection_reasons.#{reason}"
+        end
+      end
 
       record ReminderView,
         id : Int64,
@@ -469,7 +554,8 @@ module Partiduo
         balance : BigDecimal,
         interest : BigDecimal,
         indemnity : BigDecimal,
-        sent_at : Time? do
+        sent_at : Time?,
+        payment_rejection_id : Int64? = nil do
         def total_claimed : BigDecimal
           balance + interest + indemnity
         end
@@ -680,9 +766,13 @@ module Partiduo
         to : Time? = nil,
         limit : Int32 = 500
 
-      # Bon de livraison émis et non facturé ; `draft_invoice_id` : brouillon
-      # de facture qui le reprend déjà (le bon n'est alors pas sélectionnable
-      # pour une autre facture).
+      # Bon de livraison émis et non facturé, ou bon de retour émis et non
+      # repris (`kind` : `return_note`, montants *négatifs* : il réduit ce
+      # qui reste à facturer, D-INV3-002) ; `draft_invoice_id` : brouillon de
+      # facture (ou d'avoir) qui le reprend déjà (le bon n'est alors pas
+      # sélectionnable pour un autre document) ; `origin` : document
+      # d'origine d'un bon de retour (bon de livraison ou facture), s'il est
+      # connu.
       record ToInvoiceView,
         id : Int64,
         number : String,
@@ -694,7 +784,13 @@ module Partiduo
         total_net : BigDecimal,
         total_gross : BigDecimal,
         draft_invoice_id : Int64?,
-        billing_rhythm : String
+        billing_rhythm : String,
+        kind : String = "delivery_note",
+        origin : LinkView? = nil do
+        def return_note? : Bool
+          kind == "return_note"
+        end
+      end
 
       # Réglage client de la Facturation. `credit_limit` : encours maximum
       # HT dans la devise du dossier, deux décimales ; `nil` : pas de plafond.
@@ -708,7 +804,10 @@ module Partiduo
       # * `receivable_net` : part HT restant due des factures et factures
       #   d'acompte émises, non annulées — HT × reste dû ÷ TTC, le reste dû
       #   étant TTC − acomptes déduits − règlements − avoirs ;
-      # * `exposure` : encours HT = `unbilled_net` + `receivable_net` ;
+      # * `returns_*` : bons de retour émis et non repris (HT ; nombre), qui
+      #   viennent en déduction (D-INV3-006) ;
+      # * `exposure` : encours HT = `unbilled_net` − `returns_net` +
+      #   `receivable_net` ;
       # * `unconverted` : documents en devise étrangère sans cours du socle à
       #   leur date, comptés à leur montant nominal (signalés à l'écran).
       record CustomerBillingView,
@@ -721,9 +820,11 @@ module Partiduo
         unbilled_net : BigDecimal,
         unbilled_gross : BigDecimal,
         receivable_net : BigDecimal,
-        unconverted : Int32 do
+        unconverted : Int32,
+        returns_count : Int32 = 0,
+        returns_net : BigDecimal = BigDecimal.new(0) do
         def exposure : BigDecimal
-          unbilled_net + receivable_net
+          unbilled_net - returns_net + receivable_net
         end
 
         # Part du plafond atteinte, en pourcentage entier (arrondi à
@@ -791,6 +892,8 @@ module Partiduo
       # `status` : `proposed`, `issued`, `sent`, `failed` ; `error` : clé de
       # traduction (`invoicing.errors.…`) et paramètres, s'il y a lieu ;
       # `dispatch` : suite de l'émission automatique (`DispatchView#action`).
+      # `invoice_kind` : `invoice`, ou `credit_note` quand les retours du mois
+      # l'emportent sur les livraisons (avoir récapitulatif, D-INV3-004).
       record MonthlyInvoiceView,
         id : Int64,
         month : Time,
@@ -803,7 +906,8 @@ module Partiduo
         mode : String,
         status : String,
         error : String,
-        created_at : Time
+        created_at : Time,
+        invoice_kind : String = "invoice"
 
       # Résultat d'un passage de fin de mois : mois traités, factures
       # préparées, clients écartés (`skipped` : déjà facturés ce mois-ci).

@@ -13886,3 +13886,309 @@ chez TELEDEC qu'une fois son lien ouvert (`NotCompleted`, trouvée alors par
 `declaration-status` (ni `DAS2` ni `liasse`) mais figure dans la liste sous le
 type « Liasse » de l'exercice (`Created`) : le secours par la liste
 (D-TDC12-002) est donc le seul moyen de la suivre.
+
+== Retours de marchandises et paiements rejetés (1er octobre 2026)
+
+Décision de l'utilisateur du 1er octobre 2026 : enregistrer les retours de
+marchandises (bon de retour, déduction sur la facture ou la facture
+récapitulative, avoir) et les paiements rejetés (chèque impayé,
+prélèvement rejeté, virement retourné). Contrat : link:doc/api/invoicing.adoc[]
+(§ Retours de marchandises et paiements rejetés). Préfixe : `D-INV3-`.
+ADR-006 D5 complété (partiduo-docs). Migrations : invoicing `0007`,
+accounting `0013`.
+
+=== D-INV3-001 — Bon de retour : nature `return_note`, série `BR`, origine facultative, motif (facturation)
+
+*Choix.* Nouvelle nature `return_note`, symétrique du bon de livraison :
+série `BR` (table de compteurs, chiffre 7 de la communication structurée
+belge), émis, intangible, PDF, mentions (date d'émission ; « Date de retour
+de la marchandise », `dates.return`, la date de livraison du document
+servant de date du retour ; motif). Origine *facultative* : saisi
+librement, ou tiré d'un bon de livraison ou d'une facture émis
+(`TRANSFORMATIONS`, `source_id` : « Issu du bon de livraison BL-… ») ; ses
+lignes sont alors le *reliquat* de l'origine (quantités diminuées de ce
+que les bons de retour émis de la même origine ont déjà rapporté). Avec
+une origine, les quantités rapportées, cumulées par article (ou par
+désignation d'une ligne libre), ne dépassent pas celles de l'origine
+(`return_note.exceeds_origin`), contrôle refait à l'émission sous verrou de
+l'origine ; quantités positives. Motif `return_reason` (`damaged`,
+`defective`, `wrong_item`, `excess`, `other`, précisé dans les notes),
+colonne du document (contrainte : vide hors bon de retour), obligatoire à
+l'émission seulement (un brouillon tiré d'une origine n'en a pas encore).
+État `invoiced` (« Repris ») quand le document qui le reprend est émis.
+
+*Alternative écartée.* Bon de livraison à quantités négatives (D-STK-009
+le permet) : ni numérotation propre, ni motif, ni distinction dans les
+bons à facturer, et le cumul des retours d'une origine ne se contrôle pas.
+
+=== D-INV3-002 — Stock : entrée à l'émission du bon de retour, événement `return_note.issued` (stock ; amendement proposé d'ADR-003 D7)
+
+*Choix.* L'émission publie `return_note.issued` (`return_note_id`,
+`number`, `issue_date`) ; l'abonné du Stock (`Feeds.from_document`) inscrit
+une *entrée* des articles suivis, au dépôt par défaut (quantité signée
+positive, D-STK-009) ; sans module Stock, rien ; prestations non suivies
+sans effet. Le document qui reprend le bon (facture, avoir) ne bouge plus
+le stock pour les lignes qui citent un bon de livraison ou de retour
+(`Feeds.cites_note?`) ; ses autres lignes suivent la règle habituelle.
+
+*Amendement proposé.* `return_note.issued` s'ajoute à la liste fermée
+d'ADR-003 D7 (`Partiduo::Events::SCHEMA`), comme `delivery_note.issued`
+(D-STK-004) : *à faire adopter par l'utilisateur*. L'abonné relit le bon
+par le contrat (amendement d'ADR-006 D3 adopté le 29 septembre 2026,
+`DEPENDS_ON_ANY_READERS` inchangé).
+
+*Alternative écartée.* Publier `delivery_note.issued` pour un bon de
+retour : le nom de l'événement mentirait à tout autre abonné.
+
+=== D-INV3-003 — Retour non facturé : il réduit les bons à facturer, déduit en quantités négatives (facturation)
+
+*Choix.* Un bon de retour émis et non repris figure dans « Bons à
+facturer » (`delivery_notes_to_invoice`, `ToInvoiceView#kind` =
+`return_note`, montants *négatifs*, origine). Il se reprend dans une
+facture : groupe « Bon de retour BR-… du jj/mm/aaaa », ses lignes en
+quantités négatives (prix unitaire positif), sous-total ; ligne citant le
+bon (`invoicing_line.return_note_id`, `LineInput#return_note_id`), lien
+`invoicing_billed_return (document_id, return_note_id UNIQUE)` recalculé à
+chaque enregistrement du brouillon et figé avec le document émis (même
+garde que `invoicing_billed_delivery`) ; mention « Retours de marchandises
+déduits : bons de retour … » (`return_notes.deducted`) ; période de
+facturation (BG-14) du premier bon au dernier, retours compris.
+`invoice_delivery_notes` accepte bons de livraison et de retour mêlés ; la
+fin de mois (`prepare_monthly_invoices`, `month_end`) reprend les bons de
+retour du client mensuel émis au plus tard le dernier jour du mois, *une
+seule pièce* par client, mois et devise (D-INV2-007 inchangé). Empreinte :
+bons de retour des lignes et motif n'y entrent que s'ils existent.
+
+*Factur-X et UBL (EN 16931).* Facture (380) : quantité facturée négative
+(BT-129) admise, prix net (BT-146) positif comme l'exige BR-27, montant de
+ligne (BT-131) négatif ; totaux positifs. Numéro du bon de retour en note
+de ligne (BT-127), date du retour en période de ligne (BG-26), en CII
+(`facturx_xml`) comme en UBL (`partiduo-einvoicing`). Specs :
+`spec/invoicing/returns_spec.cr`, `partiduo-einvoicing`
+`spec/einvoicing/formats_spec.cr`.
+
+=== D-INV3-004 — Retours plus forts que les livraisons : avoir récapitulatif, jamais de facture négative (facturation)
+
+*Choix.* Quand le TTC des retours atteint ou dépasse celui des livraisons
+regroupées, la pièce préparée est un *avoir récapitulatif* (381) : retours
+en quantités positives, livraisons en quantités *négatives* (imputées :
+mention `delivery_notes.offset`), bons de livraison et de retour repris
+comme dans une facture. Un avoir référence une facture (contrainte en
+base, BG-3) : la facture d'origine des retours (citée, ou celle qui a
+facturé le bon de livraison cité), la plus récente qui peut encore être
+créditée du montant ; sinon la plus récente facture émise du client, même
+devise, qui le peut ; sinon refus `return_notes.no_invoice_to_credit`
+(fin de mois : préparation `failed`, motif à l'écran, reprise au passage
+suivant). `MonthlyInvoiceView#invoice_kind` = `credit_note` ; l'avoir de
+fin de mois s'émet et s'envoie d'un clic (`issue_and_send`, permission
+d'émettre un avoir).
+
+*Limites connues.* Un avoir ne crédite qu'une facture : des retours issus
+de plusieurs factures sont imputés sur une seule (la plus récente qui le
+peut), leurs numéros figurant dans la mention. Montant net nul (retours
+égaux aux livraisons) : l'avoir de montant nul est refusé à l'émission
+(`issue.total_not_positive`) ; le brouillon se supprime à la main.
+
+*Alternative écartée.* Facture de montant négatif (interdite en pratique
+et refusée par `issue.total_not_positive`) ; avoir « sur compte » sans
+facture (contraire à la contrainte `invoicing_document_credit_check` et à
+la mention obligatoire de la facture corrigée).
+
+=== D-INV3-005 — Hors facturation mensuelle : avoir d'un ou de plusieurs bons de retour (facturation)
+
+*Choix.* `credit_return_notes(actor, ids, credited_document_id = nil)` :
+brouillon d'avoir des bons de retour émis et non repris d'un même client et
+d'une même devise (un bon : ses lignes ; plusieurs : un groupe par bon),
+sur la facture donnée, ou, à défaut, celle que désigne la règle de
+D-INV3-004 ; mention « Avoir des retours de marchandises : bons de retour
+… » (`return_notes.credited`) en plus de la référence de la facture
+corrigée. Le stock n'est pas mouvementé une seconde fois (D-INV3-002).
+La transformation `return_note → credit_note` n'existe pas : l'avoir
+référencerait le bon au lieu de la facture.
+
+=== D-INV3-006 — Encours HT : bons de retour non repris en moins (facturation)
+
+*Choix.* Encours HT = bons de livraison émis non facturés − bons de retour
+émis non repris + part HT restant due (`CustomerBillingView#returns_count`,
+`#returns_net`, `#exposure`). Contrôle d'émission d'une facture qui reprend
+des bons de retour : montant ajouté = HT de la facture − bons de
+livraison repris + bons de retour repris (déjà retranchés), soit la seule
+différence. Un bon de retour n'est jamais contrôlé (il réduit le risque).
+
+=== D-INV3-007 — Rejet d'un règlement : mouvement inverse tracé, jamais d'effacement (facturation)
+
+*Choix.* `reject_payment(actor, payment_id, PaymentRejectionInput)`
+(permission `invoicing.payment.record`, Comptabilité active ou non) : date
+du rejet (pas avant le règlement, pas après la date du jour), motif
+(`insufficient_funds`, `account_closed`, `stopped`, `disputed`,
+`invalid_details`, `other` avec précision), frais bancaires facultatifs.
+Table `invoicing_payment_rejection` (un rejet par règlement, en ajout seul
+par le déclencheur `invoicing_append_only`) : le règlement *reste* (il
+n'est ni effacé ni modifié), désigné par son rejet (`PaymentView#rejection`)
+; `paid_amount` est diminué, le statut recalculé (la facture redevient due,
+« en retard » si l'échéance est passée), l'encours HT remonte d'autant.
+Trace `payment_rejected` dans le journal du document. L'abonné de
+`payment.unmatched` ne retire jamais un règlement rejeté (déjà retranché).
+
+*Alternative écartée.* Supprimer le règlement (comme D-2F-003 pour un
+délettrage) : le rejet est un fait bancaire daté qui doit rester lisible ;
+règlement négatif : contraire à `invoicing_payment_amount_check`.
+
+=== D-INV3-008 — Comptabilité : contre-passation datée, délettrage par `payment.unmatched`, frais `bank_fees` (comptabilité, micro, libéral ; amendement proposé d'ADR-003 D7)
+
+*Choix.* La Facturation publie `payment.rejected` (`payment_id`,
+`rejection_id`, `invoice_id`, `number`, `customer_card_id`, `amount`,
+`paid_on`, `rejected_on`, `method`, `source`, `matching_id`, `fees`,
+`reason`, `currency`), *journalisé* (`Events::JOURNALED`) : la Comptabilité
+le passe aussitôt, ou le rejoue par l'historique quand elle est activée
+plus tard (après l'encaissement `payment.recorded`). Son abonné
+(`Billing.post_rejection`, référence `payment_rejection:<id>`) :
+
+. retrouve l'encaissement : l'écriture `payment:<id>` d'un règlement saisi,
+  sinon, parmi les lignes de journaux financiers lettrées avec la facture,
+  la ligne au crédit du client de ce montant (date du règlement de
+  préférence) ;
+. défait son lettrage par le mécanisme existant (`Matchings.unmatch!`,
+  qui publie `payment.unmatched` : la Facturation et les registres
+  micro/libéral retirent ce qui venait du lettrage) ;
+. passe la *contre-passation* au même journal financier, à la date du
+  rejet (client au débit, banque au crédit), lettrée avec l'encaissement ;
+. relettre les autres règlements de la facture (`payment.matched` : la
+  Facturation les retrouve) ;
+. frais : écriture au même journal, compte par défaut `bank_fees` au débit
+  (référence `payment_rejection:<id>:fees`).
+
+Un échec (encaissement introuvable, période close) n'empêche jamais le
+rejet en Facturation : l'opération reste dans l'historique à
+comptabiliser, à passer ou à écarter (D-INT-003). Compte `bank_fees` :
+nouveau compte par défaut (`DEFAULT_ACCOUNT_CODES`), `627` « Services
+bancaires et assimilés » ajouté au plan FR (`chart_fr.yml`,
+`scripts/chart_from_legacy.cr`), `657` au PCMN ; migration accounting
+`0013` : `627` ajouté à une instance française existante, compte par
+défaut posé (fr et be). Micro-entreprise et profession libérale : la
+recette d'un règlement *saisi* (`payment:<id>`) est contre-passée à la date
+du rejet (date du jour si la période est close) ; celle d'un lettrage
+l'est par `payment.unmatched`.
+
+*Pourquoi une écriture inverse et non l'extourne (`cancel_entry`).*
+L'extourne libère la référence de l'écriture extournée (D-2F-010) :
+l'encaissement `payment:<id>` redeviendrait « à comptabiliser » dans
+l'historique ; elle effacerait aussi, à la date d'origine, un encaissement
+réellement intervenu. La contre-passation à la date du rejet garde la
+banque juste aux deux dates et le délettrage passe par le même mécanisme
+(`payment.unmatched`).
+
+*Amendement proposé.* `payment.rejected` s'ajoute à la liste fermée
+d'ADR-003 D7 : *à faire adopter par l'utilisateur*. Aucun mécanisme
+existant ne dit à la Comptabilité *quel* encaissement contre-passer ni ne
+porte les frais, et les registres micro/libéral n'ont pas d'autre moyen
+d'apprendre le rejet d'un règlement saisi. Spec :
+`spec/integration/payment_rejection_accounting_spec.cr`.
+
+=== D-INV3-009 — Relance proposée aussitôt, alerte « À traiter » (facturation)
+
+*Choix.* Le rejet propose une relance (`Reminder`, niveau suivant le plus
+haut déjà proposé, même si la facture n'est pas échue ; aucune si les
+trois niveaux sont pris), liée au rejet (`payment_rejection_id`) : son
+courriel, dans la langue du document, rappelle le règlement, sa date, son
+montant et le motif du rejet (« Règlement rejeté : facture … »), jamais
+envoyé sans validation. « À traiter » : `payment_rejections(actor,
+open_only: true)` — rejets dont la facture reste due ; `end_of_month` :
+client à la facturation mensuelle ou facture payable en fin de mois,
+l'alerte rappelle alors l'encours HT et le plafond du client. Transmission
+au comptable (Facturation seule) : mouvement inverse à la date du rejet.
+
+=== D-INV3-010 — Frais refacturés : brouillon d'une facture de frais à part (facturation)
+
+*Choix.* Sur demande (`rebill_fees`), le rejet crée le *brouillon* d'une
+facture de frais au client : une ligne libre (« Frais bancaires de rejet
+du règlement du … (facture F-…, motif) »), au taux choisi
+(`fees_vat_rate_id`, obligatoire), à émettre par l'utilisateur. En principe
+hors champ de la TVA (indemnité réparant un préjudice, non contrepartie
+d'une opération) : catégorie O, motif VATEX-EU-O. Les règles BR-O de
+l'EN 16931 interdisent de mêler une ligne de catégorie O à d'autres
+catégories sur une même facture : la facture séparée est donc la forme
+simple *et* conforme. Aucun taux hors champ n'est ajouté d'office aux
+référentiels (il retentirait sur les comptes de TVA et les déclarations) :
+l'interface propose un taux de catégorie O s'il existe ; la démonstration
+en crée un (`HC`).
+
+*Alternative écartée.* Ligne sur la prochaine facture : mélange des
+catégories (BR-O), et rien ne garantit une prochaine facture.
+
+=== D-INV3-011 — Deux événements nouveaux, amendement d'ADR-003 D7 proposé
+
+*Amendement adopté le 1er octobre 2026* : ADR-003 D7 porte `return_note.issued`
+et `payment.rejected`.
+
+*Choix.* `return_note.issued` (D-INV3-002) et `payment.rejected`
+(D-INV3-008, journalisé) sont ajoutés à `Partiduo::Events::SCHEMA`, comme
+l'ont été `delivery_note.issued` et `payment.unmatched` : *proposition
+d'amendement de la liste fermée d'ADR-003 D7, à faire adopter par
+l'utilisateur*. Les ADR ne sont pas modifiés pour ce point. Aucun autre
+événement : la déduction, l'avoir récapitulatif et l'avoir de retours
+passent par `invoice.issued` et `credit_note.issued`, inchangés.
+
+=== D-INV3-012 — Interface : bon de retour, Bons à facturer, « Faire l'avoir », rejet de paiement, « À traiter » (interface)
+
+*Choix* (`partiduo-ui-bulma`, spec `spec/ui/returns_rejections_spec.cr`) :
+
+* *Bon de retour* : « Créer un bon de retour » depuis un bon de livraison ou
+  une facture émis (ordre de `TRANSFORMATIONS`), ou nature « Bon de
+  retour » d'un document libre ; champ « Motif du retour » (vide par
+  défaut, exigé à l'émission), date libellée « Date du retour », ni canal
+  d'émission ni conditions de paiement ; chaque ligne garde le bon cité
+  dans un champ caché (`line-<n>-return_note`). Fiche : motif, date du
+  retour, « Repris par … », état « Repris » partout ; une facture ou un
+  avoir liste ses bons de retour repris.
+* *« Faire l'avoir »* (`invoicing:credit_returns`, POST
+  `/invoicing/to-invoice/credit-returns`) : depuis la fiche d'un bon de
+  retour émis non repris, ou pour les retours cochés dans « Bons à
+  facturer » (second bouton, présent s'il y a des retours) ; sans facture à
+  créditer trouvée, formulaire de choix parmi les factures émises non
+  annulées du client (la plus récente présélectionnée), ou, s'il n'en a
+  aucune, explication et renvoi à la déduction sur la prochaine facture.
+* *Bons à facturer* : nature écrite en toutes lettres sous chaque numéro,
+  montants négatifs des retours, lien vers l'origine ; nom accessible des
+  cases « Sélectionner : <nature> <numéro> » ; message adapté quand le
+  résultat est un avoir récapitulatif ; propositions de fin de mois
+  « Avoir · brouillon » ou « Facture · brouillon ». Fiche client, rubrique
+  Facturation : « Retours à reprendre » (nombre, HT, lien).
+* *Rejet de paiement* (`invoicing:payment_reject`, GET/POST
+  `/invoicing/documents/<id>/payments/<payment_id>/reject`) : bouton
+  « Enregistrer un rejet » (44 px, nom accessible désignant le règlement)
+  sur chaque règlement non rejeté de la fiche de la facture et de l'onglet
+  « Règlements reçus » de l'écran des règlements
+  (`invoicing:payments?view=received`) ; formulaire en deux groupes (rejet
+  : date, motif, précision ; frais bancaires : montant, « Refacturer les
+  frais au client », taux de TVA, présélection d'un taux de catégorie O
+  actif) ; introduction qui dit, Comptabilité active, que l'encaissement est
+  contre-passé et les frais comptabilisés. Règlement rejeté barré, « Rejeté
+  le … — motif » en toutes lettres, liens permanents vers la relance
+  proposée et la facture des frais.
+* *« À traiter »* : « N paiements rejetés à régulariser » (client, facture,
+  montant ; « fin de mois : encours HT X / plafond Y » pour un client
+  mensuel ou payable en fin de mois) ; relances : « Suite à un rejet de
+  paiement ». Historiques : libellé de `payment_rejected` (document) et de
+  `payment.rejected` (historique à comptabiliser).
+* Conventions de `partiduo-ui-bulma` : propriétés logiques, jetons de
+  couleur (thème sombre), cibles de 44 px, état jamais porté par la seule
+  couleur ; fr/en/nl.
+
+*Limite connue.* Le contrat n'a pas de requête de tous les règlements :
+l'onglet « Règlements reçus » relit les factures et acomptes (500 au plus
+par nature) puis leurs règlements.
+
+=== D-INV3-013 — Démonstration et bases de test (tests)
+
+*Choix.* Dossier `atelier` de `partiduo-demo` : le client mensuel
+« Décoration Val de Loire » rapporte le 25 du mois dernier une étagère au
+vernis rayé (bon de retour tiré de sa première livraison du mois, entrée
+en stock), déduite de sa facture récapitulative proposée ; le règlement
+le plus récent d'un autre client professionnel revient
+impayé le jour du chargement (provision insuffisante, 15 € de frais
+refacturés par un brouillon de facture au taux hors champ `HC`, catégorie
+O, créé par le dossier ; contre-passation et frais passés en banque ;
+relance proposée). Bases de test : `partiduo_test_ret_app`,
+`partiduo_test_ret_ui`, `partiduo_test_ret_einv`, `partiduo_test_ret_demo`,
+supprimées à la fin.

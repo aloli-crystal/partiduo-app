@@ -34,6 +34,7 @@ module Partiduo
           when "payment.recorded"  then payment_recorded(event)
           when "payment.matched"   then payment_matched(event)
           when "payment.unmatched" then payment_unmatched(event)
+          when "payment.rejected"  then payment_rejected(event)
           end
           Partiduo::Api::Result(Nil).success(nil)
         end
@@ -81,6 +82,24 @@ module Partiduo
           amount = amounts[source]? || next
           next unless amount > 0
           record(invoice_id, amount, date, "transfer", "matching:#{payload["matching_id"]}:#{source}", event.actor_user_id)
+        end
+      end
+
+      # Règlement saisi rejeté par la banque (D-INV3-008) : sa recette
+      # (`payment:<id>`) est contre-passée à la date du rejet (la date du
+      # jour si la période est close). Un règlement venu d'un lettrage l'est
+      # par `payment.unmatched`, que publie la Comptabilité.
+      def self.payment_rejected(event : Partiduo::Events::Event) : Nil
+        return unless event["source"]? == "manual"
+        date = parse_date(event["rejected_on"]?) || Partiduo::Config.today
+        Line.filter(source: "payment:#{event["payment_id"]}", reversal_of_id__isnull: true).order(:id).each do |row|
+          next if Line.filter(reversal_of_id: row.pk).exists?
+          input = Api::ReverseInput.new(row.pk!.as(Int64), Math.max(date, row.date!))
+          errors = Registers.reverse_errors(row, input, manual: false)
+          input = Api::ReverseInput.new(row.pk!.as(Int64), Math.max(Partiduo::Config.today, row.date!)) unless errors.empty?
+          errors = Registers.reverse_errors(row, input, manual: false)
+          raise "contre-passation refusée : #{errors.map(&.key).join(", ")}" unless errors.empty?
+          Registers.reverse!(row, input, event.actor_user_id, manual: false)
         end
       end
 

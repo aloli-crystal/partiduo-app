@@ -10,7 +10,10 @@ module Partiduo
     #   `invoice.issued` : sortie, sauf facture d'acompte, lignes issues d'un
     #   bon de livraison (facture d'un ou de plusieurs bons, facture
     #   récapitulative : D-INV2-006) et facture d'un document déjà livré ;
-    #   `credit_note.issued` : retour en stock ;
+    #   `credit_note.issued` : retour en stock ; `return_note.issued` (bon de
+    #   retour) : entrée en stock (D-INV3-002) ; les lignes d'une facture ou
+    #   d'un avoir qui citent un bon de livraison ou de retour ne bougent
+    #   pas (le bon l'a fait, D-INV3-005) ;
     # * Comptabilité — `entry.posted` d'un journal d'achats (entrée, coût
     #   unitaire = hors taxe ÷ quantité) ou de ventes (sortie), sauf écriture
     #   produite par la Facturation (`invoice:`, `credit_note:`), déjà
@@ -35,6 +38,7 @@ module Partiduo
           when "delivery_note.issued" then from_document(event["delivery_note_id"].to_i64)
           when "invoice.issued"       then from_document(event["invoice_id"].to_i64)
           when "credit_note.issued"   then from_document(event["credit_note_id"].to_i64)
+          when "return_note.issued"   then from_document(event["return_note_id"].to_i64)
           when "entry.posted"         then from_entry(event["entry_id"].to_i64)
           end
           Partiduo::Api::Result(Nil).success(nil)
@@ -48,7 +52,7 @@ module Partiduo
 
       def self.from_document(id : Int64) : Nil
         document = Partiduo::Api::Invoicing.document(system, id)
-        return unless document.kind.in?("delivery_note", "invoice", "credit_note")
+        return unless document.kind.in?("delivery_note", "invoice", "credit_note", "return_note")
         from_notes = from_notes?(document)
         return if document.kind == "invoice" && !from_notes && delivered?(document)
         source = "#{document.kind}:#{id}"
@@ -63,25 +67,29 @@ module Partiduo
           # Quantité signée vue du stock : la livraison et la facture sortent,
           # l'avoir rentre ; une ligne à quantité négative inverse le sens
           # (retour de marchandise, `$nNeg` de `Acc_Ledger_Sale::insert`).
-          signed = document.kind == "credit_note" ? line.quantity : -line.quantity
+          signed = document.kind.in?("credit_note", "return_note") ? line.quantity : -line.quantity
           next if signed.zero?
           Movements.create!(repository.pk!.as(Int64), item, signed > 0 ? "in" : "out", signed.abs, date,
             comment: comment, source: source, created_by_id: document.issued_by_id)
         end
       end
 
-      # Facture de bons de livraison (D-INV2-006) : les lignes qui citent un
-      # bon sont déjà sorties par lui, les autres (ajoutées à la facture)
-      # sortent.
+      # Facture ou avoir de bons de livraison ou de retour (D-INV2-006,
+      # D-INV3-005) : les lignes qui citent un bon ont déjà bougé avec lui,
+      # les autres (ajoutées au document) bougent.
       def self.from_notes?(document : Partiduo::Api::Invoicing::DocumentView) : Bool
-        document.kind == "invoice" && document.lines.any?(&.delivery_note_id)
+        document.kind.in?("invoice", "credit_note") && document.lines.any? { |line| cites_note?(line) }
+      end
+
+      def self.cites_note?(line : Partiduo::Api::Invoicing::LineView) : Bool
+        !line.delivery_note_id.nil? || !line.return_note_id.nil?
       end
 
       # Lignes d'articles `{fiche, ligne}` ; `skip_notes` : sans celles qui
       # citent un bon de livraison (déjà sorties par lui).
       private def self.item_lines(document : Partiduo::Api::Invoicing::DocumentView, skip_notes : Bool)
         document.lines.compact_map do |line|
-          next if skip_notes && line.delivery_note_id
+          next if skip_notes && cites_note?(line)
           line.item_card_id.try { |card_id| {card_id, line} } if line.kind == "item"
         end
       end

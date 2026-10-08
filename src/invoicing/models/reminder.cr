@@ -16,6 +16,9 @@ module Partiduo
       field :indemnity, :decimal, max_digits: 20, decimal_places: 4, default: BigDecimal.new(0)
       field :sent_at, :date_time, null: true, blank: true
       field :handled_by_id, :big_int, null: true, blank: true
+      # Rejet de paiement qui a fait proposer la relance (migration `0007`,
+      # D-INV3-009) ; le courriel le rappelle.
+      field :payment_rejection_id, :big_int, null: true, blank: true
 
       with_timestamp_fields
 

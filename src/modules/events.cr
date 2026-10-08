@@ -28,6 +28,17 @@ module Partiduo
       # Bon de livraison émis (lot 6) : sortie de stock (D-STK-004).
       "delivery_note.issued" => %w[delivery_note_id],
       "payment.recorded"     => %w[payment_id],
+      # Bon de retour émis (D-INV3-002, amendement proposé d'ADR-003 D7) :
+      # entrée en stock des marchandises rapportées.
+      "return_note.issued" => %w[return_note_id],
+      # Règlement rejeté par la banque (D-INV3-008, amendement proposé
+      # d'ADR-003 D7) : `rejection_id`, `invoice_id`, `number`,
+      # `customer_card_id`, `amount`, `paid_on`, `rejected_on`, `method`,
+      # `source` (`manual` ou `matching`), `matching_id`, `fees`, `reason`,
+      # `currency`. La Comptabilité contre-passe l'encaissement et passe les
+      # frais ; les registres micro et libéral contre-passent la recette
+      # d'un règlement saisi.
+      "payment.rejected" => %w[payment_id rejection_id invoice_id],
       # Décision du client sur un devis envoyé (`decide_quote`), publiée pour
       # la relation client (ADR-009 D5, amendement d'ADR-003 D7) : `decision`
       # vaut `accepted` ou `refused`.
@@ -103,7 +114,7 @@ module Partiduo
     # du socle (`modules_event_log`), qu'un abonné soit actif ou non : un
     # module activé plus tard y retrouve ce qu'il a manqué (ADR-006 D2,
     # D-INT-002).
-    JOURNALED = %w[invoice.issued credit_note.issued payment.recorded]
+    JOURNALED = %w[invoice.issued credit_note.issued payment.recorded payment.rejected]
 
     # Événement consigné dans le journal.
     record JournalEntry, id : Int64, name : String, payload : Hash(String, String), actor_user_id : Int64?,

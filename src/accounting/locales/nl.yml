@@ -95,6 +95,7 @@ nl:
       non_deductible_vat: "Niet-aftrekbare btw"
       vat_deductible_tax: "Btw aftrekbaar via de belastingen"
       private_expense: "Kosten ten laste van de zaakvoerder"
+      bank_fees: "Bankkosten"
     initial_data:
       bank_card: "Bank"
       ledgers:
@@ -273,6 +274,9 @@ nl:
         already_posted: "Deze gebeurtenis is al geboekt."
         not_dismissed: "Deze gebeurtenis is niet terzijde gelegd."
         reason_too_long: "Hoogstens %{max} tekens."
+        rejection:
+          payment_not_found: "De geweigerde ontvangst is niet gevonden: boek ze manueel terug en zet de bewerking opzij."
+          no_fees_account: "Geen rekening voor bankkosten: kies ze bij de standaardrekeningen."
       liberal:
         no_financial_ledger: "Geen actief financieel dagboek: maak er een aan om het kasboek van het vrij beroep te boeken."
         no_account: "Geen rekening voor %{key}: stel ze in voor het vrij beroep."
@@ -620,3 +624,6 @@ nl:
         name: "Naam"
         code: "Code"
         vat: "Btw"
+    billing:
+      rejection_label: "Geweigerde betaling"
+      rejection_fees_label: "Kosten van de weigering"

@@ -125,8 +125,12 @@ module Partiduo
       private def self.billing_view(outcome : Partiduo::Accounting::Billing::Outcome) : BillingEventView
         event = outcome.event
         payload = event.payload
-        date_text = event.name == "payment.recorded" ? payload["paid_on"]? : payload["issue_date"]?
-        amount_text = event.name == "payment.recorded" ? payload["amount"]? : payload["total_gross"]?
+        date_text = case event.name
+                    when "payment.recorded" then payload["paid_on"]?
+                    when "payment.rejected" then payload["rejected_on"]?
+                    else                         payload["issue_date"]?
+                    end
+        amount_text = event.name.starts_with?("payment.") ? payload["amount"]? : payload["total_gross"]?
         BillingEventView.new(
           event_id: event.id, event: event.name, source: outcome.source, number: payload["number"]?.to_s,
           date: date_text.try { |text| Time.parse_utc(text, "%Y-%m-%d") rescue nil },

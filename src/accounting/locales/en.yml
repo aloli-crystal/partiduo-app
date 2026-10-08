@@ -95,6 +95,7 @@ en:
       non_deductible_vat: "Non-deductible VAT"
       vat_deductible_tax: "VAT deductible from income tax"
       private_expense: "Expenses charged to the manager"
+      bank_fees: "Bank charges"
     initial_data:
       bank_card: "Bank"
       ledgers:
@@ -273,6 +274,9 @@ en:
         already_posted: "This event is already posted."
         not_dismissed: "This event is not dismissed."
         reason_too_long: "%{max} characters at most."
+        rejection:
+          payment_not_found: "The rejected receipt cannot be found: reverse it by hand, then dismiss the operation."
+          no_fees_account: "No bank charges account: choose one among the default accounts."
       liberal:
         no_financial_ledger: "No active financial journal: create one to post the liberal profession cash book."
         no_account: "No account for %{key}: configure it for the liberal profession."
@@ -620,3 +624,6 @@ en:
         name: "Name"
         code: "Code"
         vat: "VAT"
+    billing:
+      rejection_label: "Rejected payment"
+      rejection_fees_label: "Rejection charges"

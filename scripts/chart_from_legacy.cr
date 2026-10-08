@@ -58,6 +58,8 @@ FR_ADDITIONS = [
   # (D-CLO-002, amendement D-CLO-003).
   Account.new("120", "Résultat de l'exercice (bénéfice)", "12", "liability", true),
   Account.new("129", "Résultat de l'exercice (perte)", "12", "liability", true),
+  # Frais bancaires d'un paiement rejeté (D-INV3-008).
+  Account.new("627", "Services bancaires et assimilés", "62", "expense", true),
 ]
 
 # PCMN : « Réductions de valeur actées » (classes 2 à 5) en déduction d'actif.
@@ -239,7 +241,8 @@ be_demo_parents = %w[400 440 604 61 700 701 5500 4890]
 generate(legacy, "mod1", "be", ->(row : Array(String?)) { row[0].to_s.size >= 6 && be_demo_parents.includes?(row[2]) },
   [{"customer", "400"}, {"supplier", "440"}, {"bank", "550"}, {"cash", "57"}, {"sales", "70"},
    {"internal_transfer", "58"}, {"current_account", "56"}, {"vat", "451"}, {"non_deductible", "67"},
-   {"non_deductible_vat", "6740"}, {"vat_deductible_tax", "619000"}, {"private_expense", "4890"}],
+   {"non_deductible_vat", "6740"}, {"vat_deductible_tax", "619000"}, {"private_expense", "4890"},
+   {"bank_fees", "657"}],
   # Catégories du socle (codes de `Partiduo::Cards::Defaults`) : `fiche_def`
   # de mod1 (fd_class_base, fd_create_account).
   [{"CUSTOMER", "400", true}, {"SUPPLIER", "440", true}, {"BANK", "5500", true},
@@ -251,7 +254,7 @@ generate(legacy, "mod2", "fr", ->(row : Array(String?)) { row[0] == "4000001" },
   # COMPTE_TVA est vide dans mod2 : 44551 « TVA à décaisser », ajouté.
   [{"customer", "410"}, {"supplier", "400"}, {"bank", "51"}, {"cash", "53"}, {"sales", "707"},
    {"internal_transfer", "58"}, {"current_account", "455"}, {"vat", "44551"}, {"non_deductible", "67"},
-   {"private_expense", "4890"}],
+   {"private_expense", "4890"}, {"bank_fees", "627"}],
   # `fiche_def` de mod2 ; ses comptes de base 604 et 700 manquent au plan :
   # 60 (Achats) et 706 (Prestations de services, `fiche_def_ref` « Vente
   # Service ») les remplacent.

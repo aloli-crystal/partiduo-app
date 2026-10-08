@@ -26,9 +26,9 @@ module Partiduo
 
       # --- Contrôle des lignes d'une facture ------------------------------------------
 
-      # Bons cités par les lignes (`LineInput#delivery_note_id`) : facture
-      # seulement ; bons émis, du même client, de la même devise, ni facturés
-      # ni repris par une autre facture.
+      # Bons cités par les lignes (`LineInput#delivery_note_id`) : facture,
+      # ou avoir récapitulatif (D-INV3-004) ; bons émis, du même client, de
+      # la même devise, ni facturés ni repris par un autre document.
       def self.line_errors(input : Api::DocumentInput, current : Document?) : Array(FieldError)
         errors = [] of FieldError
         cited = {} of Int64 => Int32
@@ -36,7 +36,7 @@ module Partiduo
           line.delivery_note_id.try { |note_id| cited[note_id] ||= index }
         end
         return errors if cited.empty?
-        if input.kind != "invoice"
+        unless input.kind.in?("invoice", "credit_note")
           errors << error("lines", "document.delivery_notes.invoice_only")
           return errors
         end
@@ -69,10 +69,11 @@ module Partiduo
       # --- Lien bon ↔ facture ------------------------------------------------------------
 
       # Bons facturés par le brouillon `document` : ceux cités par ses lignes
-      # et son document source s'il est un bon de livraison. Le lien est
-      # recalculé (un groupe de lignes retiré libère son bon) ; la période de
-      # facturation (BG-14) d'une facture qui regroupe plusieurs livraisons
-      # va de la première à la dernière, qui devient sa date de livraison.
+      # et son document source s'il est un bon de livraison ; bons de retour
+      # repris (`Returns.sync!`). Le lien est recalculé (un groupe de lignes
+      # retiré libère son bon) ; la période de facturation (BG-14) d'une
+      # facture ou d'un avoir qui regroupe plusieurs livraisons ou retours va
+      # du premier au dernier, qui devient sa date de livraison.
       def self.sync!(document : Document) : Nil
         document_id = id_of(document.id)
         wanted = Line.filter(document_id: document_id).exclude(delivery_note_id: nil).to_a
@@ -81,7 +82,7 @@ module Partiduo
           source = Document.filter(id: source_id).first
           wanted << id_of(source_id) if source && source.kind == "delivery_note"
         end
-        wanted.clear unless document.kind == "invoice"
+        wanted.clear unless document.kind.in?("invoice", "credit_note")
         existing = BilledDelivery.filter(invoice_id: document_id).to_a
         existing.each do |row|
           row.delete unless wanted.includes?(id_of(row.delivery_note_id))
@@ -91,8 +92,9 @@ module Partiduo
           BilledDelivery.create!(invoice_id: document_id, delivery_note_id: note_id) unless kept.includes?(note_id)
         end
         notes = wanted.empty? ? [] of Document : Document.filter(id__in: wanted.to_a).to_a
-        if notes.size >= 2
-          dates = notes.map { |note| delivered_on(note) }
+        returns = Returns.sync!(document)
+        if notes.size + returns.size >= 2
+          dates = notes.map { |note| delivered_on(note) } + returns.map { |note| Returns.returned_on(note) }
           document.billing_period_start = dates.min
           document.billing_period_end = dates.max
           document.delivery_date = dates.max

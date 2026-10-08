@@ -457,6 +457,130 @@ Réponse JSON sur la sortie standard (`status`, `months`, `prepared`,
   `already_sent`. Libellés : `invoicing.dispatch.<action>`.
   `issue_and_send_proposals(actor)` : toutes les propositions.
 
+== Retours de marchandises et paiements rejetés (D-INV3)
+
+Décisions `D-INV3-001` à `D-INV3-013` dans `DECISIONS.adoc` (1er octobre
+2026).
+
+=== Bon de retour
+
+[source,crystal]
+----
+api = Partiduo::Api::Invoicing
+draft = api.transform(actor, bl.id, api::TransformInput.new("return_note")).value!   # reliquat de l'origine
+api.update_document(actor, draft.id, input.copy_with(return_reason: "damaged")).value!
+note = api.issue(actor, draft.id).value!                    # BR-2026-0001, `return_note.issued`
+api.delivery_notes_to_invoice(actor)                        # bons de livraison et de retour (montants négatifs)
+api.invoice_delivery_notes(actor, [bl1.id, bl2.id, note.id]) # facture, retour déduit ; avoir si les retours l'emportent
+api.credit_return_notes(actor, [note.id])                    # avoir des retours (hors facturation mensuelle)
+----
+
+* Nature `return_note` (série `BR`, communication structurée belge : chiffre
+  7), symétrique du bon de livraison. Créé librement (`create_document`) ou
+  tiré d'un bon de livraison ou d'une facture émis (`TRANSFORMATIONS`) :
+  `source` = document d'origine, lignes = reliquat (quantités diminuées de
+  ce que les bons de retour émis de la même origine ont déjà rapporté).
+* `DocumentInput#return_reason` (`RETURN_REASONS` : `damaged`, `defective`,
+  `wrong_item`, `excess`, `other`) : bon de retour seulement
+  (`invoicing.errors.document.return_reason.return_note_only`, `.invalid`),
+  obligatoire à l'émission (`invoicing.errors.issue.return_reason_required`).
+  Quantités positives (`invoicing.errors.return_note.quantity_negative`) ;
+  avec une origine, au plus égales à ce qu'elle a livré ou facturé, retours
+  déjà émis compris, par article (ou par désignation d'une ligne libre),
+  contrôlées à l'enregistrement et à l'émission
+  (`invoicing.errors.return_note.exceeds_origin`, paramètres `description`,
+  `origin`, `delivered`, `returned`).
+* Émission : numéro, mentions (« Date de retour de la marchandise »,
+  `dates.return` ; motif, `return_note.reason.<code>`), PDF, état `issued` ;
+  publie `return_note.issued` : *entrée en stock* si le module Stock est
+  actif, rien sinon. Repris par une facture ou un avoir émis : état
+  `invoiced` (libellé « Repris », `DocumentView#status_key`),
+  `DocumentView#billed_in`.
+* Encours HT : `CustomerBillingView#returns_count`, `#returns_net` (bons de
+  retour émis non repris), retranchés de `exposure`.
+
+=== Retours déduits, avoir récapitulatif, avoir des retours
+
+* `LineInput#return_note_id` / `LineView#return_note_id` : bon de retour dont
+  la ligne d'une facture (quantité négative) ou d'un avoir est issue ; refus
+  `invoicing.errors.document.return_notes.invoice_or_credit_only`, `.invalid`,
+  `.other_customer`, `.other_currency`, `.already_settled`, `.in_draft`. Un
+  bon de retour n'est repris qu'une fois (index unique), lien figé avec le
+  document émis. `DocumentView#return_notes` (facture, avoir).
+* `delivery_notes_to_invoice` : les bons de retour émis non repris y figurent
+  (`ToInvoiceView#kind` = `return_note`, montants *négatifs*, `origin`).
+* `invoice_delivery_notes(actor, ids)` accepte des bons de retour : un groupe
+  « Bon de retour BR-… du … » par bon, lignes en quantités négatives,
+  sous-total, mention « Retours de marchandises déduits : bons de retour … »
+  (`return_notes.deducted`) ; période de facturation (BG-14) du premier bon
+  au dernier. Si les retours l'emportent (TTC des retours ≥ TTC des
+  livraisons), le brouillon est un *avoir récapitulatif* : retours en
+  quantités positives, livraisons en quantités négatives (mention
+  `delivery_notes.offset`), sur la facture d'origine des retours, sinon la
+  plus récente facture émise du client qui peut en être créditée
+  (`invoicing.errors.return_notes.no_invoice_to_credit` sinon).
+* Fin de mois (`prepare_monthly_invoices`, `month_end`) : les bons de retour
+  du client mensuel émis au plus tard le dernier jour du mois sont repris de
+  même ; `MonthlyInvoiceView#invoice_kind` vaut `credit_note` pour un avoir
+  récapitulatif, émis et envoyé d'un clic comme une facture
+  (`issue_and_send`).
+* `credit_return_notes(actor, ids, credited_document_id = nil) :
+  Result(DocumentView)` (écriture) : brouillon d'avoir d'un ou de plusieurs
+  bons de retour d'un même client (un groupe par bon s'ils sont plusieurs),
+  sur la facture donnée ou, à défaut, comme ci-dessus ; mention
+  `return_notes.credited`.
+* Le stock n'est jamais mouvementé une seconde fois : les lignes d'une
+  facture ou d'un avoir qui citent un bon (de livraison ou de retour) ne
+  bougent pas.
+* Factur-X : quantité négative (BT-129) d'une facture (380) admise par
+  l'EN 16931, prix net (BT-146) positif (BR-27), montant de ligne négatif
+  (BT-131) ; numéro du bon en note de ligne (BT-127), date du retour en
+  période de ligne (BG-26) ; l'avoir récapitulatif est un 381 qui cite la
+  facture créditée (BG-3).
+
+=== Paiements rejetés
+
+[source,crystal]
+----
+api.reject_payment(actor, payment.id, api::PaymentRejectionInput.new(
+  rejected_on: Time.utc(2026, 9, 24), reason: "insufficient_funds",
+  fees: BigDecimal.new("12.50"), rebill_fees: true, fees_vat_rate_id: hors_champ.id))  # Result(PaymentRejectionView)
+api.payment_rejections(actor, open_only: true)       # « À traiter »
+----
+
+* `reject_payment(actor, payment_id, PaymentRejectionInput)` —
+  `invoicing.payment.record`, Comptabilité active ou non. Le règlement n'est
+  jamais effacé : il reste, désigné par son rejet (`PaymentView#rejection`,
+  `#rejected?`), et ne compte plus ; la facture redevient due (reste dû et
+  statut recalculés), l'encours HT remonte d'autant. Trace
+  `payment_rejected` dans le journal du document. Une relance est proposée
+  aussitôt (niveau suivant, même avant l'échéance ;
+  `ReminderView#payment_rejection_id`, courriel « Règlement rejeté »). Frais
+  refacturés (`rebill_fees`) : brouillon d'une *facture de frais* à part,
+  une ligne libre au taux `fees_vat_rate_id` (en principe hors champ,
+  catégorie O). Refus `invoicing.errors.payment_rejection.already_rejected`,
+  `.document.invalid`, `.date.before_payment`, `.date.future`,
+  `.reason.invalid`, `.reason_text.required`, `.reason_text.too_long`,
+  `.fees.negative`, `.fees.scale`, `.fees.required`,
+  `.fees_vat_rate.required`, `.fees_vat_rate.invalid`.
+* `REJECTION_REASONS` : `insufficient_funds`, `account_closed`, `stopped`,
+  `disputed`, `invalid_details`, `other` (précision obligatoire).
+* `payment_rejections(actor, open_only = false, customer_card_id = nil) :
+  Array(PaymentRejectionView)` (lecture) : `balance` (reste dû actuel),
+  `open?`, `end_of_month` (client à la facturation mensuelle ou facture
+  payable en fin de mois : l'alerte rappelle son encours et son plafond).
+* Publie `payment.rejected` (journalisé, rejoué par la Comptabilité activée
+  plus tard). Comptabilité active : l'encaissement est contre-passé au même
+  journal financier, à la date du rejet (référence
+  `payment_rejection:<id>`), après délettrage (`payment.unmatched`) ; les
+  autres règlements de la facture sont relettrés (`payment.matched`) ; frais
+  au compte par défaut `bank_fees` (`627` en France, `657` en Belgique ;
+  référence `payment_rejection:<id>:fees`). Micro-entreprise et profession
+  libérale : la recette d'un règlement saisi est contre-passée.
+* Transmission au comptable (Facturation seule) : mouvement inverse
+  (`payment_rejection`) à la date du rejet dans le journal des
+  encaissements.
+
 == Tableau de bord
 
 `summary(actor, on = aujourd'hui) : SummaryView` (lecture) : synthèse
@@ -489,6 +613,15 @@ transmission le relit par `document` avant d'envoyer)
 
 |`payment.recorded`
 |voir « Règlements »
+
+|`return_note.issued` (bon de retour émis ; amendement proposé d'ADR-003 D7)
+|`return_note_id`, `number`, `issue_date` ; entrée en stock (D-INV3-002)
+
+|`payment.rejected` (règlement rejeté ; amendement proposé d'ADR-003 D7)
+|`payment_id`, `rejection_id`, `invoice_id`, `number`, `customer_card_id`,
+`amount`, `paid_on`, `rejected_on`, `method`, `source` (`manual` ou
+`matching`), `matching_id`, `fees`, `reason`, `currency` ; journalisé
+(D-INV3-008)
 
 |`quote.decided` (décision du client sur un devis, `decide_quote`)
 |`quote_id`, `decision` (`accepted` ou `refused`), `customer_card_id`,

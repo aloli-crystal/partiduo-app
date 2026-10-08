@@ -246,8 +246,9 @@ module Partiduo
             next Result(Nil).failure(Documents.error(FieldError::BASE, "document.in_use"))
           end
           Partiduo::Invoicing::DepositDeduction.filter(invoice_id: id).delete
-          # Bons repris libérés (D-INV2-002).
+          # Bons repris libérés (D-INV2-002, D-INV3-003).
           Partiduo::Invoicing::BilledDelivery.filter(invoice_id: id).delete
+          Partiduo::Invoicing::BilledReturn.filter(document_id: id).delete
           Partiduo::Invoicing::Line.filter(document_id: id).delete
           # Journal en ajout seul, sauf les traces d'un brouillon (déclencheur).
           Partiduo::Invoicing::DocumentEvent.filter(document_id: id).delete
@@ -257,7 +258,9 @@ module Partiduo
       end
 
       # Transforme un document émis en document suivant (devis → commande →
-      # bon de livraison → facture → avoir ; commande → facture d'acompte) :
+      # bon de livraison → facture → avoir ; commande → facture d'acompte ;
+      # bon de livraison ou facture → bon de retour, quantités au plus égales
+      # à celles de l'origine, D-INV3-001) :
       # nouveau brouillon aux lignes recopiées, lien conservé. Un devis envoyé
       # devient accepté ; une facture tirée d'une commande déduit ses
       # factures d'acompte émises.
@@ -267,7 +270,7 @@ module Partiduo
           source = Documents.find(id, lock: true)
           document_input, errors = Documents.transform_input(source, input)
           next Result(DocumentView).failure(errors) unless errors.empty? && document_input
-          lines, errors = Documents.check(document_input)
+          lines, errors = Documents.check(document_input, nil, id)
           next Result(DocumentView).failure(errors) unless errors.empty?
           document = Documents.save_draft!(document_input, lines, actor, source_id: id)
           if source.kind == "quote" && source.status == "sent"
@@ -413,6 +416,41 @@ module Partiduo
           next Result(PaymentView).failure(errors) unless errors.empty? && document
           Result(PaymentView).success(Partiduo::Invoicing::Payments.record!(input, document, actor))
         end
+      end
+
+      # Enregistre le rejet d'un règlement (chèque impayé, prélèvement
+      # rejeté, virement retourné ; D-INV3-007) : le règlement reste, désigné
+      # par le rejet, et ne compte plus ; la facture redevient due ; relance
+      # proposée ; frais refacturés sur demande (brouillon d'une facture de
+      # frais) ; `payment.rejected` publié (Comptabilité active : la
+      # contre-passation de l'encaissement et les frais sont passés par son
+      # abonné). Permission `invoicing.payment.record`, Comptabilité active
+      # ou non. Refus : `payment_rejection.already_rejected`, `.document.invalid`,
+      # `.date.before_payment`, `.date.future`, `.reason.invalid`,
+      # `.reason_text.required`, `.reason_text.too_long`, `.fees.negative`,
+      # `.fees.scale`, `.fees.required`, `.fees_vat_rate.required`,
+      # `.fees_vat_rate.invalid`.
+      def self.reject_payment(actor : Actor, payment_id : Int64, input : PaymentRejectionInput) : Result(PaymentRejectionView)
+        authorize!(actor, PAY)
+        Transaction.run do
+          payment = Partiduo::Invoicing::Payment.filter(id: payment_id).first || raise NotFound.new("invoicing_payment", payment_id)
+          document = Documents.find(Documents.id_of(payment.document_id), lock: true)
+          errors = Partiduo::Invoicing::PaymentRejections.errors(input, payment, document)
+          next Result(PaymentRejectionView).failure(errors) unless errors.empty?
+          rejection = Partiduo::Invoicing::PaymentRejections.reject!(input, payment, document, actor)
+          Result(PaymentRejectionView).success(Partiduo::Invoicing::PaymentRejections.view(rejection))
+        rescue ex : Partiduo::Events::Refused
+          Result(PaymentRejectionView).failure(ex.errors)
+        end
+      end
+
+      # Rejets de paiement, du plus récent au plus ancien ; `open_only` :
+      # ceux dont la facture reste due (« À traiter ») ; `customer_card_id` :
+      # ceux d'un client.
+      def self.payment_rejections(actor : Actor, open_only : Bool = false,
+                                  customer_card_id : Int64? = nil) : Array(PaymentRejectionView)
+        authorize!(actor, READ)
+        Partiduo::Invoicing::PaymentRejections.list(open_only, customer_card_id)
       end
 
       def self.payments(actor : Actor, document_id : Int64) : Array(PaymentView)
@@ -580,9 +618,12 @@ module Partiduo
 
       # Bons de livraison émis et non facturés (liste « Bons à facturer »),
       # filtrés par client et par période de livraison.
+      # Bons de retour émis et non repris compris (`ToInvoiceView#kind`,
+      # montants négatifs, D-INV3-002), du plus ancien au plus récent.
       def self.delivery_notes_to_invoice(actor : Actor, query : ToInvoiceQuery = ToInvoiceQuery.new) : Array(ToInvoiceView)
         authorize!(actor, READ)
-        Partiduo::Invoicing::DeliveryBilling.to_invoice(query)
+        (Partiduo::Invoicing::DeliveryBilling.to_invoice(query) + Partiduo::Invoicing::Returns.to_invoice(query))
+          .sort_by! { |note| {note.delivery_date, note.number} }
       end
 
       # Facture un ou plusieurs bons de livraison émis, non facturés et
@@ -592,22 +633,68 @@ module Partiduo
       # Refus : `delivery_notes.empty`, `.duplicate`, `.several_customers`,
       # `.several_currencies`, `document.delivery_notes.invalid`,
       # `.already_billed`, `.in_draft`.
+      #
+      # Bons de retour compris dans la sélection (D-INV3-003, D-INV3-004) :
+      # déduits de la facture (groupe, quantités négatives) ; s'ils
+      # l'emportent sur les livraisons, le brouillon est un *avoir
+      # récapitulatif* (`return_notes.no_invoice_to_credit` sans facture à
+      # créditer) ; refus `document.return_notes.already_settled`,
+      # `.in_draft`.
       def self.invoice_delivery_notes(actor : Actor, ids : Array(Int64)) : Result(DocumentView)
         authorize!(actor, WRITE)
-        return transform(actor, ids.first, TransformInput.new("invoice")) if ids.size == 1
+        if ids.size == 1 && Partiduo::Invoicing::Document.filter(id: ids.first, kind: "delivery_note").exists?
+          return transform(actor, ids.first, TransformInput.new("invoice"))
+        end
         Transaction.run do
           notes = ids.map { |id| Partiduo::Invoicing::Document.filter(id: id).lock.first }
-          errors = Partiduo::Invoicing::DeliveryBilling.selection_errors(notes, ids)
+          errors = Partiduo::Invoicing::Returns.selection_errors(notes, ids)
           next Result(DocumentView).failure(errors) unless errors.empty?
           found = notes.compact
-          input = Partiduo::Invoicing::DeliveryBilling.group_input(found)
+          input, errors = Partiduo::Invoicing::Returns.summary_input(found)
+          next Result(DocumentView).failure(errors) unless errors.empty? && input
           lines, errors = Documents.check(input)
           next Result(DocumentView).failure(errors) unless errors.empty?
           document = Documents.save_draft!(input, lines, actor)
           Documents.log(Documents.id_of(document.id), "created", actor, "",
             {"delivery_notes" => found.map(&.number.to_s).join(",")})
           found.each do |note|
-            Documents.log(Documents.id_of(note.id), "transformed", actor, "", {"into" => document.id.to_s, "kind" => "invoice"})
+            Documents.log(Documents.id_of(note.id), "transformed", actor, "", {"into" => document.id.to_s, "kind" => document.kind!})
+          end
+          Result(DocumentView).success(Documents.view(document))
+        end
+      end
+
+      # --- Retours de marchandises (D-INV3) ---------------------------------------------
+
+      # Avoir d'un ou de plusieurs bons de retour émis et non repris d'un
+      # même client (hors facturation mensuelle, D-INV3-005) : brouillon
+      # d'avoir qui les cite (un groupe par bon s'ils sont plusieurs), sur la
+      # facture `credited_document_id`, ou, à défaut, la facture d'origine des
+      # bons (sinon la plus récente facture du client qui peut être créditée
+      # de ce montant). Le stock n'est pas mouvementé une seconde fois.
+      # Refus : `delivery_notes.empty`, `.duplicate`, `.several_customers`,
+      # `.several_currencies`, `document.return_notes.invalid`,
+      # `.already_settled`, `.in_draft`, `return_notes.no_invoice_to_credit`,
+      # et ceux de tout avoir (`document.credited.…`).
+      def self.credit_return_notes(actor : Actor, ids : Array(Int64), credited_document_id : Int64? = nil) : Result(DocumentView)
+        authorize!(actor, WRITE)
+        Transaction.run do
+          notes = ids.map { |id| Partiduo::Invoicing::Document.filter(id: id).lock.first }
+          if notes.any? { |note| note && note.kind != "return_note" }
+            next Result(DocumentView).failure(Documents.error("return_note_ids", "document.return_notes.invalid"))
+          end
+          errors = Partiduo::Invoicing::Returns.selection_errors(notes, ids)
+          next Result(DocumentView).failure(errors) unless errors.empty?
+          found = notes.compact
+          input, errors = Partiduo::Invoicing::Returns.credit_input(found, credited_document_id)
+          next Result(DocumentView).failure(errors) unless errors.empty? && input
+          lines, errors = Documents.check(input)
+          next Result(DocumentView).failure(errors) unless errors.empty?
+          document = Documents.save_draft!(input, lines, actor)
+          Documents.log(Documents.id_of(document.id), "created", actor, "",
+            {"return_notes" => found.map(&.number.to_s).join(",")})
+          found.each do |note|
+            Documents.log(Documents.id_of(note.id), "transformed", actor, "", {"into" => document.id.to_s, "kind" => "credit_note"})
           end
           Result(DocumentView).success(Documents.view(document))
         end
@@ -723,7 +810,11 @@ module Partiduo
       def self.issue_and_send(actor : Actor, id : Int64, input : IssueInput = IssueInput.new) : Result(DispatchView)
         authorize!(actor, ISSUE)
         document = Documents.find(id)
-        unless document.kind.in?("invoice", "deposit_invoice")
+        # Avoir récapitulatif de fin de mois (D-INV3-004) : émis et envoyé de
+        # même.
+        monthly_credit = document.kind == "credit_note" &&
+                         Partiduo::Invoicing::MonthlyInvoice.filter(invoice_id: id).exists?
+        unless document.kind.in?("invoice", "deposit_invoice") || monthly_credit
           return Result(DispatchView).failure(Documents.error(FieldError::BASE, "dispatch.kind"))
         end
         if document.draft?

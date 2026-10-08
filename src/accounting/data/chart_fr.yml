@@ -77,6 +77,7 @@ accounts:
   - ["603", "variations des stocks (approvisionnements et marchandises)", "6", expense, true]
   - ["61", "autres charges externes - Services extérieurs", "6", expense, false]
   - ["62", "autres charges externes - Autres services extérieurs", "6", expense, false]
+  - ["627", "Services bancaires et assimilés", "62", expense, true]
   - ["63", "Impôts, taxes et versements assimiles", "6", expense, false]
   - ["641", "Rémunérations du personnel", "6", expense, true]
   - ["644", "Rémunération du travail de l'exploitant", "6", expense, true]
@@ -184,6 +185,7 @@ default_accounts:
   current_account: "455"
   vat: "44551"
   non_deductible: "67"
+  bank_fees: "627"
 card_categories:
   CUSTOMER: {base_account: "410", create_account: true}
   SUPPLIER: {base_account: "400", create_account: true}

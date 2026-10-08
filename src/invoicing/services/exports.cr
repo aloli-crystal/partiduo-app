@@ -126,7 +126,30 @@ module Partiduo
               Movement.new(**base.merge({account: accounts[:customer], auxiliary: customer.code,
                                          account_label: I18n.t("invoicing.exports.accounts.customer"), debit: zero, credit: payment.amount!})),
             ]
-          end
+          end + rejection_movements(from, to)
+      end
+
+      # Règlements rejetés dans la période (D-INV3-008) : mouvement inverse à
+      # la date du rejet ; le règlement d'origine reste à sa date.
+      def self.rejection_movements(from : Time, to : Time) : Array(Movement)
+        settings = Configuration.settings
+        accounts = Configuration.accounts
+        zero = BigDecimal.new(0)
+        PaymentRejection.filter(rejected_on__gte: Documents.day(from), rejected_on__lte: Documents.day(to))
+          .order(:rejected_on, :id).flat_map do |rejection|
+          document = Documents.find(Documents.id_of(rejection.document_id))
+          customer = Documents.customer(document)
+          label = "#{I18n.t("invoicing.exports.payment_rejected")} #{document.number} #{customer.name}"
+          base = {journal: settings.bank_journal_code, date: rejection.rejected_on!, piece: document.number.to_s,
+                  kind: "payment_rejection", customer_code: customer.code, customer_name: customer.name, label: label,
+                  currency: document.currency_code!}
+          [
+            Movement.new(**base.merge({account: accounts[:customer], auxiliary: customer.code,
+                                       account_label: I18n.t("invoicing.exports.accounts.customer"), debit: rejection.amount!, credit: zero})),
+            Movement.new(**base.merge({account: accounts[:bank], auxiliary: "",
+                                       account_label: I18n.t("invoicing.exports.accounts.bank"), debit: zero, credit: rejection.amount!})),
+          ]
+        end
       end
 
       # Cellule texte d'un CSV : une valeur qui commence par `=`, `+`, `-`,

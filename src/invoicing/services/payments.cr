@@ -20,12 +20,15 @@ module Partiduo
       end
 
       def self.view(payment : Payment, document : Document) : Api::PaymentView
+        rejection = PaymentRejection.filter(payment_id: payment.id).first.try do |row|
+          PaymentRejections.view(row, payment, document)
+        end
         Api::PaymentView.new(
           id: Documents.id_of(payment.id), document_id: Documents.id_of(document.id),
           document_number: document.number.to_s, paid_on: payment.paid_on!, amount: payment.amount!,
           method: payment.method!, reference: payment.reference.to_s, source: payment.source!,
           matching_id: payment.matching_id.to_s, recorded_by_id: payment.recorded_by_id.try(&.to_i64),
-          created_at: payment.created_at!,
+          created_at: payment.created_at!, rejection: rejection,
         )
       end
 
@@ -137,7 +140,10 @@ module Partiduo
           next unless kind == "invoice" && document_id
           document = Document.filter(id: document_id).lock.first
           next if document.nil? || document.draft? || !PAYABLE_KINDS.includes?(document.kind)
+          # Un règlement rejeté (D-INV3-008) est déjà retranché et reste tracé.
+          rejected = PaymentRejection.filter(document_id: document_id).to_a.map { |row| Documents.id_of(row.payment_id) }
           removed = Payment.filter(document_id: document_id, source: "matching").order(:id).to_a
+            .reject { |payment| rejected.includes?(Documents.id_of(payment.id)) }
           next if removed.empty?
           amount = removed.sum(BigDecimal.new(0), &.amount!)
           Payment.filter(id__in: removed.map { |payment| Documents.id_of(payment.id) }).delete

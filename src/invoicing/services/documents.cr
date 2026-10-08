@@ -23,7 +23,8 @@ module Partiduo
         discount_kind : String,
         discount_value : BigDecimal,
         rate : Partiduo::Api::Vat::RateView?,
-        delivery_note_id : Int64? = nil do
+        delivery_note_id : Int64? = nil,
+        return_note_id : Int64? = nil do
         def data : Calculator::LineData
           Calculator::LineData.new(
             kind: kind, quantity: quantity, unit_price: unit_price, discount_kind: discount_kind,
@@ -56,7 +57,10 @@ module Partiduo
 
       # --- Contrôle d'une saisie --------------------------------------------------
 
-      def self.check(input : Api::DocumentInput, current : Document? = nil) : {Array(ResolvedLine), Array(FieldError)}
+      # `source_id` : document d'origine d'une transformation (bon de retour
+      # tiré d'un bon de livraison ou d'une facture : quantités contrôlées).
+      def self.check(input : Api::DocumentInput, current : Document? = nil,
+                     source_id : Int64? = nil) : {Array(ResolvedLine), Array(FieldError)}
         errors = kind_errors(input, current) + customer_errors(input) + header_errors(input)
         errors.concat(discount_errors("global_discount", input.global_discount_kind, input.global_discount_value))
         errors.concat(credit_errors(input, current))
@@ -64,6 +68,8 @@ module Partiduo
         errors.concat(Channels.input_errors(input))
         errors.concat(PaymentTerms.errors(input))
         errors.concat(DeliveryBilling.line_errors(input, current))
+        errors.concat(Returns.line_errors(input, current))
+        errors.concat(Returns.input_errors(input, current, source_id))
         lines = resolve_lines(input, errors)
         if errors.empty?
           totals = Calculator.compute(lines.map(&.data), input.global_discount_kind, input.global_discount_value)
@@ -245,7 +251,8 @@ module Partiduo
         if line.kind != "subtotal" && description.empty?
           errors << error("#{path}.description", "line.description.blank")
         end
-        {ResolvedLine.new(line.kind, nil, description, zero, "", zero, "none", zero, nil, line.delivery_note_id), errors}
+        {ResolvedLine.new(line.kind, nil, description, zero, "", zero, "none", zero, nil, line.delivery_note_id,
+          line.return_note_id), errors}
       end
 
       private def self.priced_line(line : Api::LineInput, path : String) : {ResolvedLine?, Array(FieldError)}
@@ -260,7 +267,8 @@ module Partiduo
         rate, rate_errors = line_rate(line.vat_rate_id || card.try(&.vat_rate_id), path)
         errors.concat(rate_errors)
         resolved = ResolvedLine.new(line.kind, card.try(&.id), description, line.quantity, unit_code,
-          unit_price || BigDecimal.new(0), line.discount_kind, line.discount_value, rate, line.delivery_note_id)
+          unit_price || BigDecimal.new(0), line.discount_kind, line.discount_value, rate, line.delivery_note_id,
+          line.return_note_id)
         if errors.empty? && discount_exceeds?(Calculator.line(resolved.data))
           errors << error("#{path}.discount_value", "line.discount.exceeds")
         end
@@ -364,6 +372,7 @@ module Partiduo
         document.payment_terms = input.payment_terms.presence || ""
         document.payment_terms_days = input.payment_terms_days
         document.delivery_address = delivery_address(input, customer).try { |value| Configuration.address_json(value) }
+        document.return_reason = input.kind == "return_note" ? input.return_reason.presence || "" : ""
 
         totals = Calculator.compute(lines.map(&.data), input.global_discount_kind, input.global_discount_value)
         store_totals(document, totals)
@@ -379,7 +388,7 @@ module Partiduo
             unit_price: line.unit_price, discount_kind: line.discount_kind, discount_value: line.discount_value,
             discount_amount: result.discount, vat_rate_id: line.rate.try(&.id),
             vat_percent: line.rate.try(&.rate) || BigDecimal.new(0), vat_category: line.rate.try(&.category) || "",
-            net_amount: result.net, delivery_note_id: line.delivery_note_id,
+            net_amount: result.net, delivery_note_id: line.delivery_note_id, return_note_id: line.return_note_id,
           )
         end
 
@@ -388,7 +397,8 @@ module Partiduo
           deposit = find(deposit_id)
           DepositDeduction.create!(invoice_id: document_id, deposit_id: deposit_id, amount: deposit.total_gross!)
         end
-        # Bons de livraison facturés et période de facturation (D-INV2-002).
+        # Bons de livraison facturés, bons de retour repris et période de
+        # facturation (D-INV2-002, D-INV3-003).
         DeliveryBilling.sync!(document)
         document
       end
@@ -504,7 +514,9 @@ module Partiduo
           currency_code: document.currency_code!, payment_terms: document.payment_terms.to_s,
           payment_terms_days: PaymentTerms.days(document),
           billing_period_start: document.billing_period_start, billing_period_end: document.billing_period_end,
-          delivery_note_numbers: document.kind == "invoice" ? DeliveryBilling.refs(id_of(document.id)).map(&.number) : [] of String,
+          delivery_note_numbers: document.kind.in?("invoice", "credit_note") ? DeliveryBilling.refs(id_of(document.id)).map(&.number) : [] of String,
+          return_note_numbers: document.kind.in?("invoice", "credit_note") ? Returns.refs(id_of(document.id)).map(&.number) : [] of String,
+          return_reason: document.return_reason.to_s,
         )
       end
 
@@ -550,7 +562,7 @@ module Partiduo
             discount_amount: result.discount, gross_amount: result.gross,
             vat_rate_id: line.vat_rate_id.try { |rate_id| id_of(rate_id) }, vat_percent: line.vat_percent!,
             vat_category: line.vat_category.to_s, net_amount: result.net,
-            delivery_note_id: line.delivery_note_id.try(&.to_i64),
+            delivery_note_id: line.delivery_note_id.try(&.to_i64), return_note_id: line.return_note_id.try(&.to_i64),
           )
         end.to_a
 
@@ -580,14 +592,27 @@ module Partiduo
           issue_channel: document.issue_channel.to_s, b2c: document.b2c!,
           payment_terms: document.payment_terms.to_s, payment_terms_days: document.payment_terms_days.try(&.to_i32),
           billing_period_start: document.billing_period_start, billing_period_end: document.billing_period_end,
-          delivery_notes: document.kind == "invoice" ? DeliveryBilling.refs(document_id) : [] of Api::DeliveryNoteRefView,
-          billed_in: document.kind == "delivery_note" ? DeliveryBilling.billed_in(document_id) : nil,
+          delivery_notes: document.kind.in?("invoice", "credit_note") ? DeliveryBilling.refs(document_id) : [] of Api::DeliveryNoteRefView,
+          billed_in: case document.kind
+          when "delivery_note" then DeliveryBilling.billed_in(document_id)
+          when "return_note"   then Returns.returned_in(document_id)
+          end,
+          return_reason: document.return_reason.to_s,
+          return_notes: document.kind.in?("invoice", "credit_note") ? Returns.refs(document_id) : [] of Api::DeliveryNoteRefView,
         )
       end
 
       # --- Transformation --------------------------------------------------------
 
       def self.transform_input(source : Document, input : Api::TransformInput) : {Api::DocumentInput?, Array(FieldError)}
+        document_input, errors = copied_input(source, input)
+        if document_input && input.kind == "return_note"
+          document_input = return_input(document_input, id_of(source.id))
+        end
+        {document_input, errors}
+      end
+
+      private def self.copied_input(source : Document, input : Api::TransformInput) : {Api::DocumentInput?, Array(FieldError)}
         errors = transform_errors(source, input)
         return {nil, errors} unless errors.empty?
         source_id = id_of(source.id)
@@ -623,6 +648,15 @@ module Partiduo
         {document_input, errors}
       end
 
+      # Bon de retour tiré d'un bon de livraison ou d'une facture
+      # (D-INV3-001) : reliquat de l'origine (ce qui n'est pas déjà
+      # rapporté), sans conditions de paiement ; la date du retour est celle
+      # de son émission, à défaut d'être saisie.
+      private def self.return_input(input : Api::DocumentInput, source_id : Int64) : Api::DocumentInput
+        input.copy_with(lines: Returns.remaining_lines(source_id, input.lines), payment_terms: nil,
+          payment_terms_days: nil, delivery_date: nil)
+      end
+
       # Lignes recopiées ; celles de la facture d'un bon de livraison citent
       # le bon (D-INV2-002).
       private def self.copied_lines(source : Document, input : Api::TransformInput, lines : Array(Line)) : Array(Api::LineInput)
@@ -653,6 +687,7 @@ module Partiduo
 
       # Ligne recopiée telle quelle (désignation, prix, taux figés) ;
       # `delivery_note_id` : bon de livraison que la ligne d'une facture cite.
+      # Les citations de la ligne d'origine ne sont pas recopiées.
       def self.line_input(line : Line, delivery_note_id : Int64? = nil) : Api::LineInput
         Api::LineInput.new(
           kind: line.kind!, item_card_id: line.item_id.try { |item_id| id_of(item_id) },

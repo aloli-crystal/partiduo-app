@@ -521,6 +521,7 @@ default_accounts:
   non_deductible: "67"
   non_deductible_vat: "6740"
   private_expense: "4890"
+  bank_fees: "657"
 card_categories:
   CUSTOMER: {base_account: "400", create_account: true}
   SUPPLIER: {base_account: "440", create_account: true}

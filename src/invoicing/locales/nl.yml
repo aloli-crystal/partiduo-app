@@ -38,6 +38,7 @@ nl:
       invoice: "Factuur"
       deposit_invoice: "Voorschotfactuur"
       credit_note: "Creditnota"
+      return_note: "Retourbon"
     statuses:
       draft: "Ontwerp"
       sent: "Verzonden"
@@ -51,6 +52,7 @@ nl:
       paid: "Betaald"
       overdue: "Achterstallig"
       invoiced: "Gefactureerd"
+      returned: "Verwerkt"
     channels:
       none: "Niet gekozen"
       platform: "Erkend platform"
@@ -70,6 +72,7 @@ nl:
       from_invoice: "Op basis van factuur %{number}"
       from_deposit_invoice: "Op basis van voorschotfactuur %{number}"
       from_credit_note: "Op basis van creditnota %{number}"
+      from_return_note: "Uit retourbon %{number}"
     delivery_notes:
       group_title: "Leveringsbon %{number} van %{date}"
     billing_rhythms:
@@ -107,6 +110,7 @@ nl:
         delivery: "Datum van levering of dienstverrichting: %{date}"
         due: "Vervaldatum: %{date}"
         delivery_period: "Leveringen van %{from} tot %{to}"
+        return: "Datum van terugzending van de goederen: %{date}"
       quote:
         validity: "Offerte geldig tot %{date}"
       delivery_address: "Leveringsadres: %{address}"
@@ -146,6 +150,7 @@ nl:
         summary:
           fr: "Verzamelfactuur van leveringen (art. 289-I-3 van het Franse belastingwetboek): leveringsbonnen %{numbers}"
           be: "Verzamelfactuur van leveringen: leveringsbonnen %{numbers}"
+        offset: "Leveringen verrekend met de retours: leveringsbonnen %{numbers}"
       payment:
         terms:
           net: "Betalingsvoorwaarden: %{days} dagen netto vanaf de factuurdatum"
@@ -160,6 +165,16 @@ nl:
           fr: "Verwijlintresten tegen de meest recente herfinancieringsrente van de Europese Centrale Bank, verhoogd met 10 procentpunten (art. L441-10 van het Franse Wetboek van Koophandel)"
           be: "Verwijlintresten tegen de rentevoet bepaald door de wet van 2 augustus 2002 betreffende de bestrijding van de betalingsachterstand bij handelstransacties"
         indemnity: "Forfaitaire vergoeding voor invorderingskosten bij laattijdige betaling: %{amount} %{currency}"
+      return_note:
+        reason:
+          damaged: "Reden van terugzending: beschadigde goederen"
+          defective: "Reden van terugzending: defecte goederen"
+          wrong_item: "Reden van terugzending: leveringsfout"
+          excess: "Reden van terugzending: te veel of onverkocht"
+          other: "Reden van terugzending: zie opmerkingen"
+      return_notes:
+        deducted: "Teruggezonden goederen in mindering gebracht: retourbonnen %{numbers}"
+        credited: "Creditnota voor teruggezonden goederen: retourbonnen %{numbers}"
     pdf:
       draft: "Ontwerp"
       number: "Nr."
@@ -204,6 +219,9 @@ nl:
         level2: "Goedendag,\n\nOndanks onze eerste herinnering blijft factuur %{number}, vervallen op %{due_date}, onbetaald voor %{balance} (%{days} dagen achterstand). Gelieve ze onverwijld te betalen.\n\nMet vriendelijke groeten,\n%{seller}"
         level3: "Geachte heer, mevrouw,\n\nFactuur %{number}, vervallen op %{due_date}, blijft ondanks onze herinneringen onbetaald voor %{balance}. Wij stellen u in gebreke om in totaal %{total} te betalen.\n\n%{seller}"
       penalties: "Verwijlintresten: %{interest}; forfaitaire vergoeding voor invorderingskosten: %{indemnity}; totaal verschuldigd: %{total}."
+      rejected:
+        subject: "Betaling geweigerd: factuur %{number}"
+        body: "Goeddag,\n\nUw betaling van %{paid_on} voor %{amount} op factuur %{number} werd door de bank onbetaald teruggestuurd (%{reason}). De factuur blijft verschuldigd voor %{balance}. Gelieve ze opnieuw te betalen.\n\nMet vriendelijke groeten,\n%{seller}"
     pdf_copy:
       banner: "Kopie — het origineel is de elektronische factuur verzonden via het erkende platform"
       file_suffix: "kopie"
@@ -223,6 +241,7 @@ nl:
       sales_journal: "Verkoopdagboek"
       csv_name: "verkopen-en-ontvangsten"
       archive_name: "facturen"
+      payment_rejected: "Geweigerde betaling"
     errors:
       settings:
         days: "Geef een aantal dagen tussen 0 en %{max}"
@@ -290,12 +309,24 @@ nl:
         issued: "Uitgereikt document: het kan niet gewijzigd of verwijderd worden; verbeter het met een creditnota"
         in_use: "Dit ontwerp wordt door een ander document vermeld"
         delivery_notes:
-          invoice_only: "Alleen een factuur neemt leveringsbonnen over"
+          invoice_only: "Alleen een factuur of een samenvattende creditnota neemt leveringsbonnen over"
           invalid: "Dit document is geen uitgereikte leveringsbon"
           other_customer: "Leveringsbon %{number} is van een andere klant"
           other_currency: "Leveringsbon %{number} is in een andere munt"
           already_billed: "Leveringsbon %{number} is al gefactureerd"
           in_draft: "Leveringsbon %{number} is al opgenomen in een ontwerpfactuur"
+        return_reason:
+          return_note_only: "Alleen een retourbon heeft een reden van terugzending"
+          invalid: "Onbekende reden van terugzending"
+        return_note:
+          origin_invalid: "De oorsprong van een retour moet een uitgegeven leveringsbon of factuur zijn"
+        return_notes:
+          invoice_or_credit_only: "Alleen een factuur of een creditnota neemt retourbonnen over"
+          invalid: "Dit document is geen uitgegeven retourbon"
+          other_customer: "Retourbon %{number} hoort bij een andere klant"
+          other_currency: "Retourbon %{number} is in een andere munt"
+          already_settled: "Retourbon %{number} is al verwerkt"
+          in_draft: "Retourbon %{number} zit al in een ontwerp"
       discount:
         kind: "Onbekend kortingstype"
         negative: "De korting kan niet negatief zijn"
@@ -338,7 +369,7 @@ nl:
         override_denied: "Kredietlimiet excl. btw van %{customer} overschreden met %{excess} %{currency}: afwijken vereist de rechten om van de kredietlimiet af te wijken"
         reason_too_long: "Reden van de afwijking: hoogstens %{max} tekens"
       dispatch:
-        kind: "Alleen een factuur of voorschotfactuur wordt met één klik uitgereikt en verzonden"
+        kind: "Alleen een factuur, een voorschotfactuur of een creditnota van het maandeinde wordt in één klik uitgegeven en verzonden"
       issue:
         already_issued: "Dit document is al uitgereikt"
         no_line: "Voeg minstens één lijn met bedrag toe"
@@ -349,6 +380,7 @@ nl:
         credit_before_invoice: "Een creditnota gaat de verbeterde factuur niet vooraf"
         future: "De uitgiftedatum mag niet na vandaag (%{date}) liggen: het toegekende nummer is definitief"
         customer_siren_required: "Klant %{customer} is een in Frankrijk gevestigde onderneming: vul het SIREN-nummer in op de fiche vóór de uitgifte"
+        return_reason_required: "Geef de reden van terugzending op voor de uitgifte"
       pdf_copy:
         not_platform: "Alleen een factuur verzonden via het erkende platform heeft een pdf-kopie"
         render_failed: "Pdf-kopie niet aangemaakt (PDF/A-3 niet conform): %{detail}"
@@ -401,3 +433,44 @@ nl:
           type: "Het logo moet een PNG- of JPEG-afbeelding zijn"
           not_found: "Logo niet gevonden"
         in_use: "Dit sjabloon wordt door documenten gebruikt"
+      return_note:
+        quantity_negative: "Een retourbon brengt positieve hoeveelheden terug"
+        exceeds_origin: "„%{description}”: retour boven de hoeveelheid van %{origin} (%{delivered}, al teruggezonden: %{returned})"
+      return_notes:
+        no_invoice_to_credit: "Geen enkele factuur van deze klant kan met deze retours gecrediteerd worden: kies de te crediteren factuur"
+      payment_rejection:
+        already_rejected: "Deze betaling is al geweigerd"
+        document:
+          invalid: "Alleen de betaling van een uitgegeven factuur kan geweigerd worden"
+        date:
+          before_payment: "De weigering gaat niet aan de betaling vooraf (%{date})"
+          future: "De datum van de weigering mag niet na vandaag liggen"
+        reason:
+          invalid: "Onbekende reden van weigering"
+        reason_text:
+          required: "Geef de reden op"
+          too_long: "Ten hoogste %{max} tekens"
+        fees:
+          negative: "De kosten kunnen niet negatief zijn"
+          scale: "Bedrag tot op de cent"
+          required: "Geef de door te rekenen kosten op"
+        fees_vat_rate:
+          required: "Kies het btw-tarief van de kostenfactuur"
+          invalid: "Btw-tarief niet gevonden of uitgeschakeld"
+    return_notes:
+      group_title: "Retourbon %{number} van %{date}"
+    return_reasons:
+      damaged: "Beschadigde goederen"
+      defective: "Defecte goederen"
+      wrong_item: "Leveringsfout"
+      excess: "Te veel of onverkocht"
+      other: "Andere reden"
+    rejection_reasons:
+      insufficient_funds: "Onvoldoende saldo"
+      account_closed: "Rekening opgeheven"
+      stopped: "Verzet of herroeping"
+      disputed: "Betwist door de schuldenaar"
+      invalid_details: "Foutieve bankgegevens"
+      other: "Andere reden"
+    payment_rejections:
+      fees_line: "Bankkosten voor de geweigerde betaling van %{date} (factuur %{number}, %{reason})"
